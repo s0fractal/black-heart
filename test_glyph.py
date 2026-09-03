@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Unit tests for glyph.py (SKIY Reduction Engine)
+Unit tests for glyph.py (SKIY Reduction Engine, Suspended Thunks, and SporeStore)
 """
 
 import unittest
 from glyph import (
-    parse, evaluate, tree_size, term_hash,
+    parse, evaluate, resume, tree_size, term_hash,
     K, I, S, Y, TRUE, FALSE, CHURCH_0, CHURCH_1,
-    BudgetExceededError, Var, App
+    BudgetExceededError, EvalStatus, SporeStore, SporeReceipt, Var, App
 )
 
 class TestGlyphCombinators(unittest.TestCase):
@@ -16,6 +16,7 @@ class TestGlyphCombinators(unittest.TestCase):
         # 🤍 x -> x
         expr = parse("🤍 (VarA)")
         res = evaluate(expr)
+        self.assertTrue(res.is_settled())
         self.assertEqual(str(res.normal_form), "VarA")
         self.assertEqual(res.atp_spent, 1)
 
@@ -23,6 +24,7 @@ class TestGlyphCombinators(unittest.TestCase):
         # 🖤 x y -> x
         expr = parse("🖤 First Second")
         res = evaluate(expr)
+        self.assertTrue(res.is_settled())
         self.assertEqual(str(res.normal_form), "First")
         self.assertEqual(res.atp_spent, 1)
 
@@ -30,6 +32,7 @@ class TestGlyphCombinators(unittest.TestCase):
         # 🌿 🖤 🖤 x -> (🖤 x) (🖤 x) -> x
         expr = parse("🌿 🖤 🖤 Target")
         res = evaluate(expr)
+        self.assertTrue(res.is_settled())
         self.assertEqual(str(res.normal_form), "Target")
         self.assertEqual(res.atp_spent, 2)
 
@@ -49,7 +52,12 @@ class TestGlyphCombinators(unittest.TestCase):
         # In glyphs: (🌿 🤍 🤍) (🌿 🤍 🤍)
         omega = parse("(🌿 🤍 🤍) (🌿 🤍 🤍)")
         with self.assertRaises(BudgetExceededError):
-            evaluate(omega, max_atp=50)
+            evaluate(omega, max_atp=50, raise_on_limit=True)
+
+        # Non-raising returns SUSPENDED
+        res = evaluate(omega, max_atp=50, raise_on_limit=False)
+        self.assertTrue(res.is_suspended())
+        self.assertEqual(res.atp_spent, 50)
 
     def test_deterministic_hash(self):
         expr1 = parse("🌿 🖤 🤍 Target")
@@ -59,6 +67,72 @@ class TestGlyphCombinators(unittest.TestCase):
         # Both reduce to 'Target'
         self.assertEqual(str(res1.normal_form), str(res2.normal_form))
         self.assertEqual(res1.hash, res2.hash)
+
+    def test_suspended_thunk_and_resume(self):
+        # Complex term: SKK Target takes 2 steps.
+        # Let us construct a 4-step reduction:
+        # 🤍 (🤍 (🌿 🖤 🖤 Target))
+        expr = parse("🤍 (🤍 (🌿 🖤 🖤 Target))")
+
+        # 1. Run with 1 ATP -> pauses as SUSPENDED
+        step1 = evaluate(expr, max_atp=1)
+        self.assertTrue(step1.is_suspended())
+        self.assertEqual(step1.atp_spent, 1)
+
+        # 2. Resume with 1 more ATP -> still SUSPENDED
+        step2 = resume(step1, additional_atp=1)
+        self.assertTrue(step2.is_suspended())
+        self.assertEqual(step2.atp_spent, 2)
+
+        # 3. Resume with 5 more ATP -> reaches normal form!
+        step3 = resume(step2, additional_atp=5)
+        self.assertTrue(step3.is_settled())
+        self.assertEqual(str(step3.normal_form), "Target")
+        self.assertEqual(step3.atp_spent, 4)  # exactly 4 steps total!
+
+        # Compare with 1-shot full evaluation
+        full = evaluate(expr, max_atp=100)
+        self.assertEqual(step3.hash, full.hash)
+        self.assertEqual(step3.atp_spent, full.atp_spent)
+
+    def test_spore_store_forward_cache(self):
+        store = SporeStore()
+        expr = parse("🌿 🖤 🖤 FastTarget")
+
+        # First run: computed
+        res1, was_cached1 = store.forward(expr, atp=100)
+        self.assertFalse(was_cached1)
+        self.assertTrue(res1.is_settled())
+        self.assertEqual(str(res1.normal_form), "FastTarget")
+
+        # Second run: instant cache hit O(1)
+        res2, was_cached2 = store.forward(expr, atp=100)
+        self.assertTrue(was_cached2)
+        self.assertEqual(res1.hash, res2.hash)
+
+    def test_spore_store_reverse_audit(self):
+        store = SporeStore()
+        expr = parse("🌿 🖤 🖤 AuditTarget")
+
+        # 1. Forward run creates legitimate receipt
+        res, _ = store.forward(expr, atp=100)
+        receipt = store._receipts[term_hash(expr)]
+
+        # 2. Honest audit passes
+        ok, msg = store.audit(expr, receipt)
+        self.assertTrue(ok)
+        self.assertEqual(msg, "AUDIT_VERIFIED_HONEST")
+
+        # 3. Forged receipt (tampered output hash) fails audit
+        fake_receipt = SporeReceipt(
+            input_hash=receipt.input_hash,
+            output_hash="0000000000000000000000000000000000000000000000000000000000000000",
+            atp_spent=receipt.atp_spent,
+            status=receipt.status
+        )
+        ok_fake, msg_fake = store.audit(expr, fake_receipt)
+        self.assertFalse(ok_fake)
+        self.assertIn("Output hash mismatch", msg_fake)
 
 if __name__ == "__main__":
     unittest.main()
