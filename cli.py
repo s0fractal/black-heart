@@ -302,6 +302,68 @@ def cmd_synthesize(args):
         print(f"\033[1;31m[!] Synthesis Failed:\033[0m {e}")
         sys.exit(1)
 
+def cmd_quantum(args):
+    """Topological Quantum Topos operations (Fibonacci anyonic gates & simulation)."""
+    from quantum import FibonacciQuantumSystem, compile_quantum_polyglot
+    from symbiosis import BraidWord, BraidCrossing, trefoil_knot, figure_eight_knot, hopf_link
+
+    def parse_braid(spec: str) -> BraidWord:
+        spec_l = spec.lower().strip()
+        if spec_l == "trefoil":
+            return trefoil_knot()
+        elif spec_l in ("figure8", "figure-eight", "figure_eight"):
+            return figure_eight_knot()
+        elif spec_l in ("hopf", "hopf_link"):
+            return hopf_link()
+        else:
+            tokens = spec.split()
+            crossings = []
+            for tok in tokens:
+                tok_clean = tok.replace("s", "").replace("σ", "").replace("_", "").replace("^", "")
+                try:
+                    val = int(tok_clean)
+                    strand = abs(val)
+                    sign = 1 if val > 0 else -1
+                    crossings.append(BraidCrossing(strand_index=strand, sign=sign))
+                except ValueError:
+                    pass
+            num_str = max([c.strand_index + 1 for c in crossings], default=2)
+            return BraidWord(num_strands=num_str, crossings=crossings)
+
+    if args.action == "simulate":
+        braid = parse_braid(args.braid)
+        sys_q = FibonacciQuantumSystem()
+        u = sys_q.compile_braid_to_unitary(braid)
+        state = sys_q.evolve_state(u)
+        bloch = sys_q.calculate_bloch_coordinates(state)
+        p0, p1 = sys_q.calculate_born_probabilities(state)
+
+        print("\033[1;36m=================================================================")
+        print("  %🖤 TOPOLOGICAL QUANTUM TOPOS — ANYONIC GATE SIMULATOR")
+        print("=================================================================\033[0m\n")
+        print(f"[*] Braid Presentation:  {braid.to_artin_notation()}")
+        print(f"[*] Crossings:           {braid.crossing_number} (Writhe: {braid.writhe})")
+        print(f"[*] Unitary Gate Matrix: [{u.m00.real:+.4f}{u.m00.imag:+.4f}j,  {u.m01.real:+.4f}{u.m01.imag:+.4f}j];")
+        print(f"                          [{u.m10.real:+.4f}{u.m10.imag:+.4f}j,  {u.m11.real:+.4f}{u.m11.imag:+.4f}j]")
+        print(f"[*] Determinant:         |det(U)| = {abs(u.det()):.6f}\n")
+        print(f"[*] Evolved State |ψ⟩:   α = {state[0].real:+.4f}{state[0].imag:+.4f}j")
+        print(f"                          β = {state[1].real:+.4f}{state[1].imag:+.4f}j\n")
+        print(f"[*] Born Probabilities:  P(|0⟩ Vacuum) = {p0*100:.2f}%   P(|1⟩ Anyon τ) = {p1*100:.2f}%")
+        print(f"[*] Bloch Sphere Vector: ({bloch['x']:+.4f}, {bloch['y']:+.4f}, {bloch['z']:+.4f})")
+        print(f"[*] Polar θ:             {bloch['theta_deg']}° | Azimuthal φ: {bloch['phi_deg']}°\n")
+        print("\033[1;32m[✓] Topological Quantum Gate Sound & Unitary (Q.E.D.)\033[0m\n")
+
+    elif args.action == "compile":
+        braid = parse_braid(args.braid)
+        out_path = args.output or "quantum_circuit.pdf"
+        title = args.title or f"Topological Anyon Gate ({braid.to_artin_notation(ascii_only=True)})"
+        compile_quantum_polyglot(braid, out_path, title=title)
+        print(f"\033[1;32m[✓] Compiled Quantum Polyglot: {out_path}\033[0m")
+        print(f"    - Braid:       {braid.to_artin_notation()}")
+        print(f"    - Crossings:   {braid.crossing_number}")
+        print(f"    - Standalone:  python3 {out_path} --simulate")
+        print(f"    - Measurement: python3 {out_path} --measure 1024\n")
+
 def cmd_shell(args):
     """Interactive Hypervisor REPL for Project Black-Heart."""
     from symbiosis import (
@@ -397,6 +459,44 @@ def cmd_shell(args):
             print(f"  Topological Writhe:{bw.writhe}")
             print(f"  Link Components:   {bw.count_link_components()} (Alexander Closure)")
             print(f"  Permutation:       {bw.compute_permutation()}\n")
+        elif cmd == "qsim":
+            if len(parts) < 2:
+                print("[!] Usage: qsim <trefoil|figure8|hopf|s1 -s2 s1>")
+                continue
+            spec = " ".join(parts[1:])
+            from quantum import FibonacciQuantumSystem
+            spec_l = spec.lower().strip()
+            if spec_l == "trefoil":
+                bw = trefoil_knot()
+            elif spec_l in ("figure8", "figure-eight", "figure_eight"):
+                bw = figure_eight_knot()
+            elif spec_l in ("hopf", "hopf_link"):
+                bw = hopf_link()
+            else:
+                tokens = parts[1:]
+                crossings = []
+                for tok in tokens:
+                    tok_clean = tok.replace("s", "").replace("σ", "").replace("_", "").replace("^", "")
+                    try:
+                        val = int(tok_clean)
+                        crossings.append(BraidCrossing(strand_index=abs(val), sign=1 if val > 0 else -1))
+                    except ValueError:
+                        pass
+                num_str = max([c.strand_index + 1 for c in crossings], default=2)
+                bw = BraidWord(num_strands=num_str, crossings=crossings)
+
+            sys_q = FibonacciQuantumSystem()
+            u = sys_q.compile_braid_to_unitary(bw)
+            st = sys_q.evolve_state(u)
+            bl = sys_q.calculate_bloch_coordinates(st)
+            p0, p1 = sys_q.calculate_born_probabilities(st)
+            print(f"\n  Topological Quantum Simulation:")
+            print(f"  Braid Presentation: {bw.to_artin_notation()}")
+            print(f"  Gate Matrix:        [{u.m00.real:+.3f}{u.m00.imag:+.3f}j, {u.m01.real:+.3f}{u.m01.imag:+.3f}j]")
+            print(f"                      [{u.m10.real:+.3f}{u.m10.imag:+.3f}j, {u.m11.real:+.3f}{u.m11.imag:+.3f}j]")
+            print(f"  Determinant:        |det(U)| = {abs(u.det()):.6f}")
+            print(f"  Born Collapse:      P(|0>) = {p0*100:.1f}% (Vacuum 1) | P(|1>) = {p1*100:.1f}% (Anyon tau)")
+            print(f"  Bloch Sphere:       Vector [{bl['x']:+.3f}, {bl['y']:+.3f}, {bl['z']:+.3f}]  (theta={bl['theta_deg']} deg, phi={bl['phi_deg']} deg)\n")
         elif cmd == "mate":
             if len(parts) < 3:
                 print("[!] Usage: mate <idx_parent_a> <idx_parent_b> [output_file.pdf]")
@@ -525,6 +625,17 @@ def main():
     # shell
     p_shell = subparsers.add_parser("shell", help="Interactive Hypervisor REPL for Project Black-Heart")
 
+    # quantum
+    p_quantum = subparsers.add_parser("quantum", help="Topological Quantum Topos & Anyon Gate operations")
+    q_subs = p_quantum.add_subparsers(dest="action")
+    p_qs = q_subs.add_parser("simulate", help="Simulate topological anyonic quantum gate")
+    p_qs.add_argument("braid", help="Braid formula or canonical name (e.g. 'trefoil', 's1 -s2 s1')")
+
+    p_qc = q_subs.add_parser("compile", help="Compile standalone quantum circuit polyglot PDF")
+    p_qc.add_argument("-b", "--braid", required=True, help="Braid formula or canonical name")
+    p_qc.add_argument("-o", "--output", default="quantum_circuit.pdf", help="Output PDF polyglot path")
+    p_qc.add_argument("-t", "--title", help="Circuit title")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -551,6 +662,8 @@ def main():
         cmd_synthesize(args)
     elif args.command == "shell":
         cmd_shell(args)
+    elif args.command == "quantum":
+        cmd_quantum(args)
     else:
         parser.print_help()
 

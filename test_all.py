@@ -30,6 +30,7 @@ SUITES = [
     ("P2P Polyglot Mesh Synchronization", "test_mesh"),
     ("Security Audit & Fail-Closed Controls", "test_security_audit"),
     ("Dialectical Symbiosis & Topological Knots", "test_symbiosis"),
+    ("Topological Quantum Topos & Anyons", "test_quantum"),
 ]
 
 def run_all_tests() -> bool:

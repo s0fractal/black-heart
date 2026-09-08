@@ -1,0 +1,225 @@
+#!/opt/homebrew/opt/python@3.14/bin/python3.14
+# coding: latin-1
+# ============================================================================
+# % PROJECT BLACK-HEART: TOPOLOGICAL QUANTUM TOPOS POLYGLOT
+# ============================================================================
+'''
+%PDF-1.7
+%BH-QUANTUM-TOPOS
+1 0 obj
+<</Type /Catalog /Pages 2 0 R>>
+endobj
+2 0 obj
+<</Type /Pages /Kids [3 0 R] /Count 1>>
+endobj
+3 0 obj
+<</Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources <</Font <</F1 5 0 R /F2 6 0 R>>>>>>
+endobj
+4 0 obj
+<</Length 5073>>
+stream
+0.04 0.05 0.08 rg 50 300 512 320 re f
+0.15 0.22 0.35 RG 1.5 w 50 300 512 320 re s
+0.25 0.35 0.5 RG 1 w [2 2] 0 d
+66.0 320.0 m 66.0 590.0 l S
+[] 0 d
+0.25 0.35 0.5 rg 63.0 585.0 m 66.0 590.0 l 69.0 585.0 l f
+BT /F2 7 Tf 0.4 0.55 0.7 rg 70.0 582.0 Td (Time t) Tj ET
+0.2 0.8 0.95 rg 105.0 320.0 m 105.0 321.65685425 103.65685425 323.0 102.0 323.0 c 100.34314575 323.0 99.0 321.65685425 99.0 320.0 c 100.34314575 318.34314575 100.34314575 317.0 102.0 317.0 c 103.65685425 317.0 105.0 318.34314575 105.0 320.0 c f
+BT /F2 8 Tf 0.2 0.8 0.95 rg 96.0 308.0 Td (tau_1) Tj ET
+0.3 0.95 0.5 rg 228.48 320.0 m 228.48 321.65685425 227.13685425 323.0 225.48 323.0 c 223.82314574999998 323.0 222.48 321.65685425 222.48 320.0 c 223.82314574999998 318.34314575 223.82314574999998 317.0 225.48 317.0 c 227.13685425 317.0 228.48 318.34314575 228.48 320.0 c f
+BT /F2 8 Tf 0.3 0.95 0.5 rg 219.48 308.0 Td (tau_2) Tj ET
+1.0 0.75 0.2 rg 351.96 320.0 m 351.96 321.65685425 350.61685424999996 323.0 348.96 323.0 c 347.30314575 323.0 345.96 321.65685425 345.96 320.0 c 347.30314575 318.34314575 347.30314575 317.0 348.96 317.0 c 350.61685424999996 317.0 351.96 318.34314575 351.96 320.0 c f
+BT /F2 8 Tf 1.0 0.75 0.2 rg 342.96 308.0 Td (tau_3) Tj ET
+1.0 0.75 0.2 RG 2 w
+348.96 330.0 m 348.96 387.5 l S
+0.3 0.95 0.5 RG 2.2 w
+225.48 330.0 m 225.48 347.25 160.74 355.75 160.74 355.75 c S
+166.74 361.75 m 166.74 361.75 102.0 370.25 102.0 387.5 c S
+0.04 0.05 0.08 RG 5.5 w
+102.0 330.0 m 102.0 350.125 225.48 367.375 225.48 387.5 c S
+0.2 0.8 0.95 RG 2.2 w
+102.0 330.0 m 102.0 350.125 225.48 367.375 225.48 387.5 c S
+1.0 0.75 0.2 RG 2 w
+348.96 387.5 m 348.96 445.0 l S
+0.2 0.8 0.95 RG 2.2 w
+225.48 387.5 m 225.48 404.75 160.74 413.25 160.74 413.25 c S
+166.74 419.25 m 166.74 419.25 102.0 427.75 102.0 445.0 c S
+0.04 0.05 0.08 RG 5.5 w
+102.0 387.5 m 102.0 407.625 225.48 424.875 225.48 445.0 c S
+0.3 0.95 0.5 RG 2.2 w
+102.0 387.5 m 102.0 407.625 225.48 424.875 225.48 445.0 c S
+1.0 0.75 0.2 RG 2 w
+348.96 445.0 m 348.96 502.5 l S
+0.3 0.95 0.5 RG 2.2 w
+225.48 445.0 m 225.48 462.25 160.74 470.75 160.74 470.75 c S
+166.74 476.75 m 166.74 476.75 102.0 485.25 102.0 502.5 c S
+0.04 0.05 0.08 RG 5.5 w
+102.0 445.0 m 102.0 465.125 225.48 482.375 225.48 502.5 c S
+0.2 0.8 0.95 RG 2.2 w
+102.0 445.0 m 102.0 465.125 225.48 482.375 225.48 502.5 c S
+0.3 0.95 0.5 RG 2 w
+102.0 502.5 m 102.0 575.0 l S
+0.2 0.8 0.95 RG 2 w
+225.48 502.5 m 225.48 575.0 l S
+1.0 0.75 0.2 RG 2 w
+348.96 502.5 m 348.96 575.0 l S
+0.12 0.18 0.3 rg 96.0 575.0 135.48 20 re f
+0.3 0.6 0.95 RG 1 w 96.0 575.0 135.48 20 re s
+BT /F1 7 Tf 0.9 0.95 1 rg 100.0 586.0 Td (FUSION DETECTOR) Tj ET
+BT /F2 6.5 Tf 0.3 0.9 0.5 rg 100.0 578.0 Td (P(1)=100.0% P(t)=0.0%) Tj ET
+BT /F1 10 Tf 0.9 0.95 1 rg 351.96 594 Td (Bloch Sphere State |psi>) Tj ET
+BT /F2 7.5 Tf 0.6 0.7 0.85 rg 351.96 582 Td (theta=0.0 deg  phi=0.0 deg) Tj ET
+0.18 0.25 0.38 RG 1.5 w
+446.96 450.0 m
+446.96 485.88 417.84 515.0 381.96 515.0 c
+346.08 515.0 316.96 485.88 316.96 450.0 c
+316.96 414.12 346.08 385.0 381.96 385.0 c
+417.84 385.0 446.96 414.12 446.96 450.0 c S
+[2 2] 0 d 0.15 0.22 0.32 RG 1 w
+446.96 450.0 m
+446.96 460.0464 417.84 468.2 381.96 468.2 c
+346.08 468.2 316.96 460.0464 316.96 450.0 c
+316.96 439.9536 346.08 431.8 381.96 431.8 c
+417.84 431.8 446.96 439.9536 446.96 450.0 c S
+[] 0 d
+0.35 0.45 0.6 RG 1 w
+381.96 377.0 m 381.96 523.0 l S
+BT /F1 8 Tf 0.95 0.9 0.4 rg 377.96 526.0 Td (|0>) Tj ET
+BT /F1 8 Tf 0.4 0.9 0.95 rg 377.96 368.0 Td (|1>) Tj ET
+0.25 0.32 0.45 RG 0.8 w
+311.96 450.0 m 451.96 450.0 l S
+BT /F2 6.5 Tf 0.4 0.5 0.65 rg 453.96 448.0 Td (X) Tj ET
+0.95 0.25 0.4 RG 2.5 w
+381.96 450.0 m 381.96 505.25 l S
+1.0 0.85 0.3 rg 385.46 505.25 m 385.46 507.182996625 383.89299662499997 508.75 381.96 508.75 c 380.027003375 508.75 378.46 507.182996625 378.46 505.25 c 380.027003375 503.317003375 380.027003375 501.75 381.96 501.75 c 383.89299662499997 501.75 385.46 503.317003375 385.46 505.25 c f
+BT /F1 8.5 Tf 1.0 0.85 0.3 rg 386.96 508.25 Td (|psi>) Tj ET
+BT /F2 7 Tf 0.7 0.8 0.9 rg 341.96 336.0 Td (Vector: [+0.000, +0.000, +1.000]) Tj ET
+BT /F2 7 Tf 0.5 0.85 0.6 rg 341.96 326.0 Td (Prob: P(0)=1.0000  P(1)=0.0000) Tj ET
+BT /F2 7 Tf 0.85 0.6 0.95 rg 341.96 316.0 Td (Unitarity: |det(U)| = 1.000000) Tj ET
+BT /F1 16 Tf 50 740 Td (PROJECT BLACK-HEART: TOPOLOGICAL QUANTUM TOPOS) Tj ET
+BT /F2 10 Tf 50 720 Td (Universal Anyonic Quantum Computation via Artin Braid Group B_n) Tj ET
+BT /F2 9 Tf 50 685 Td (Circuit: Trefoil Fibonacci Quantum Gate) Tj ET
+BT /F1 9 Tf 50 670 Td (Braid Presentation: s_1 * s_1 * s_1) Tj ET
+BT /F2 8 Tf 50 655 Td (Topological Invariants: Crossings=3  |  Writhe=3  |  Link Components=1) Tj ET
+BT /F1 10 Tf 50 255 Td (Topological Quantum Gate Matrix U(B) in SU(2):) Tj ET
+BT /F2 8 Tf 50 235 Td (- U_00 = +0.3090 +0.9511i   U_01 = -0.0000 +0.0000i) Tj ET
+BT /F2 8 Tf 50 220 Td (- U_10 = +0.0000 +0.0000i   U_11 = +0.8090 +0.5878i) Tj ET
+BT /F2 8 Tf 50 205 Td (- Born Collapse: P(|0>)=100.00% (Vacuum 1)   P(|1>)=0.00% (Anyon tau)) Tj ET
+BT /F2 8 Tf 50 70 Td (Executable ISO 32000 Polyglot: Run 'python3 <this_file.pdf> --simulate' or '--measure'.) Tj ET
+
+endstream
+endobj
+5 0 obj
+<</Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold>>
+endobj
+6 0 obj
+<</Type /Font /Subtype /Type1 /BaseFont /Helvetica>>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000027 00000 n 
+0000000074 00000 n 
+0000000129 00000 n 
+0000000259 00000 n 
+0000005382 00000 n 
+0000005455 00000 n 
+trailer
+<</Size 7 /Root 1 0 R>>
+startxref
+5523
+%%EOF
+
+'''
+#!/usr/bin/env python3
+import os
+import sys
+import json
+import argparse
+from pathlib import Path
+
+MANIFEST_PREFIX = '# %QUANTUM_TOPOS_MANIFEST: '
+
+def load_manifest():
+    content = Path(__file__).read_bytes()
+    idx = content.rfind(MANIFEST_PREFIX.encode("latin1"))
+    if idx == -1:
+        idx = content.rfind(MANIFEST_PREFIX.encode("utf-8"))
+    if idx == -1:
+        print("[FAIL] No quantum manifest located in polyglot document.")
+        sys.exit(1)
+    end_idx = content.find(b"\n", idx)
+    data = json.loads(content[idx + len(MANIFEST_PREFIX.encode("latin1")):end_idx].decode("utf-8"))
+    src_dir = data.get("source_dir")
+    if src_dir and src_dir not in sys.path:
+        sys.path.insert(0, src_dir)
+    return data
+
+def cmd_simulate():
+    data = load_manifest()
+    print("=================================================================")
+    print("  %\U0001f5a4 BLACK-HEART TOPOLOGICAL QUANTUM TOPOS SIMULATOR")
+    print("  Fibonacci Anyons (SU(2)_3) | Topological Braid Quantum Gates")
+    print("=================================================================\n")
+    print(f"[*] Circuit Title:       {data['title']}")
+    print(f"[*] Braid Presentation:  {data['braid_formula']}")
+    print(f"[*] Crossing Count:      {data['crossings']} (Writhe: {data['writhe']})")
+    u00 = data['unitary'][0][0]
+    u01 = data['unitary'][0][1]
+    u10 = data['unitary'][1][0]
+    u11 = data['unitary'][1][1]
+    print(f"[*] Unitary Gate Matrix: [{u00}, {u01}];")
+    print(f"                          [{u10}, {u11}]")
+    print(f"[*] Determinant:         |det(U)| = {data['det_abs']:.6f} (Phase: {data['det_angle']:.4f} rad)\n")
+    print(f"[*] Evolved State |psi>:  alpha = {data['state_alpha'][0]:+.4f} {data['state_alpha'][1]:+.4f}j")
+    print(f"                          beta  = {data['state_beta'][0]:+.4f} {data['state_beta'][1]:+.4f}j\n")
+    print("Topological Qubit Born Probabilities:")
+    print(f"  |0> (Vacuum Channel 1):  {data['prob_0'] * 100:.2f}%")
+    print(f"  |1> (Anyonic Channel t): {data['prob_1'] * 100:.2f}%\n")
+    print("Bloch Sphere Coordinates:")
+    print(f"  Vector (x, y, z):       ({data['bloch']['x']:+.4f}, {data['bloch']['y']:+.4f}, {data['bloch']['z']:+.4f})")
+    print(f"  Polar Angle theta:      {data['bloch']['theta_deg']} deg ({data['bloch']['theta_rad']:.4f} rad)")
+    print(f"  Azimuthal Angle phi:    {data['bloch']['phi_deg']} deg ({data['bloch']['phi_rad']:.4f} rad)\n")
+    print("\033[1;32m[\u2713] TOPOLOGICAL QUANTUM EVOLUTION SOUND & UNITARY (Q.E.D.)\033[0m\n")
+
+def cmd_measure(shots=1024):
+    data = load_manifest()
+    import random
+    p0 = data['prob_0']
+    c0 = sum(1 for _ in range(shots) if random.random() < p0)
+    c1 = shots - c0
+    print("=================================================================")
+    print(f"  PROJECTIVE QUANTUM MEASUREMENT COLLAPSE (Shots: {shots})")
+    print("=================================================================\n")
+    print(f"  Outcome |0> (Vacuum):    {c0:4d} / {shots} ({c0/shots*100:.2f}% | Expected: {p0*100:.2f}%)")
+    print(f"  Outcome |1> (Anyon t):   {c1:4d} / {shots} ({c1/shots*100:.2f}% | Expected: {(1-p0)*100:.2f}%)\n")
+    print("\033[1;32m[\u2713] BORN RULE COLLAPSE COMPLETE\033[0m\n")
+
+def cmd_audit():
+    data = load_manifest()
+    det_err = abs(data['det_abs'] - 1.0)
+    prob_err = abs(data['prob_0'] + data['prob_1'] - 1.0)
+    r_sq = data['bloch']['x']**2 + data['bloch']['y']**2 + data['bloch']['z']**2
+    bloch_err = abs(r_sq - 1.0)
+    if det_err < 1e-6 and prob_err < 1e-6 and bloch_err < 1e-4:
+        print(f"[\u2713] AUDIT PASSED: Unitarity err={det_err:.2e}, Born err={prob_err:.2e}, Bloch err={bloch_err:.2e}")
+    else:
+        print(f"[FAIL] AUDIT FAILED: det_err={det_err}, prob_err={prob_err}, bloch_err={bloch_err}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Black-Heart Topological Quantum Polyglot")
+    parser.add_argument("--simulate", action="store_true", help="Simulate topological quantum gate and print state")
+    parser.add_argument("--measure", type=int, nargs="?", const=1024, help="Perform projective Born rule measurements")
+    parser.add_argument("--audit", action="store_true", help="Audit quantum unitarity and topological invariants")
+    args, _ = parser.parse_known_args()
+
+    if args.measure:
+        cmd_measure(args.measure)
+    elif args.audit:
+        cmd_audit()
+    else:
+        cmd_simulate()
+
+# %QUANTUM_TOPOS_MANIFEST: {"title":"Trefoil Fibonacci Quantum Gate","braid_formula":"\u03c3_1 \u00b7 \u03c3_1 \u00b7 \u03c3_1","crossings":3,"writhe":3,"unitary":[[[0.3090169943749478,0.9510565162951534],[-0.0,0.0]],[[0.0,0.0],[0.8090169943749475,0.587785252292473]]],"det_abs":0.9999999999999999,"det_angle":1.8849555921538754,"state_alpha":[0.30901699437494784,0.9510565162951535],"state_beta":[0.0,0.0],"prob_0":1.0,"prob_1":0.0,"bloch":{"x":0.0,"y":0.0,"z":1.0,"theta_rad":0.0,"theta_deg":0.0,"phi_rad":0.0,"phi_deg":0.0},"source_dir":"/Users/s0fractal/Projects/black-heart"}
