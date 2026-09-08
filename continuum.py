@@ -204,6 +204,10 @@ def verify_checkpoint_computation(
             return False, f"Computational ATP accounting mismatch: actual reduction cost was {res.atp_spent} ATP, claimed {cp.atp_accumulated} ATP"
 
     elif cp.status == "SUSPENDED":
+        _, reduced = reduce_step(cur_term)
+        if not reduced:
+            return False, f"Checkpoint claims SUSPENDED but expression '{cp.current_expr}' is already in normal form (irreducible)"
+
         if cp.atp_accumulated == 0:
             if cp.initial_expr != cp.current_expr:
                 return False, f"Suspended checkpoint at 0 ATP has divergent expressions: initial='{cp.initial_expr}', current='{cp.current_expr}'"
@@ -522,6 +526,16 @@ def audit_self(filepath: str, expected_signer_pk=None):
                 sys.exit(1)
         parsed_cps.append(cp)
 
+        try:
+            from continuum import verify_checkpoint_computation
+            valid_comp, err_comp = verify_checkpoint_computation(cp)
+            if not valid_comp:
+                print(f"[FAIL] Checkpoint #{cp.height} failed computational authenticity verification: {err_comp}")
+                sys.exit(1)
+        except Exception as e:
+            print(f"[FAIL] Could not verify computational authenticity at #{cp.height}: {e}")
+            sys.exit(1)
+
     genesis_pk = parsed_cps[0].public_key_hex
     if expected_signer_pk is not None and genesis_pk != expected_signer_pk:
         print(f"[FAIL] Genesis signer mismatch: expected {expected_signer_pk}, got {genesis_pk or 'unsigned'}!")
@@ -539,16 +553,6 @@ def audit_self(filepath: str, expected_signer_pk=None):
     print(f"[*] Initial Term:       {latest.initial_expr}")
     print(f"[*] Current Term:       {latest.current_expr}")
     print(f"[*] Checkpoint Hash:    ⚓ {latest.checkpoint_hash}\n")
-
-    try:
-        from continuum import verify_checkpoint_computation
-        valid, err = verify_checkpoint_computation(latest)
-        if not valid:
-            print(f"[FAIL] {err}")
-            sys.exit(1)
-    except Exception as e:
-        print(f"[FAIL] Could not verify computational authenticity: {e}")
-        sys.exit(1)
 
     if latest.status == "SETTLED":
         print("\033[1;32m[✓] COMPUTATION REACHED NORMAL FORM (Q.E.D.)\033[0m\n")
@@ -627,12 +631,11 @@ def resume_computation_in_pdf(
             if cp.atp_accumulated != prev.atp_accumulated + cp.atp_spent_step:
                 raise ValueError(f"Continuum chain ATP delta mismatch at #{cp.height}: accumulated {cp.atp_accumulated} != prev ({prev.atp_accumulated}) + step ({cp.atp_spent_step})")
 
-    current = checkpoints[-1]
+        valid_comp, err_comp = verify_checkpoint_computation(cp)
+        if not valid_comp:
+            raise ValueError(f"Continuum chain computational authenticity failure at #{cp.height}: {err_comp}")
 
-    # Verify latest checkpoint computational validity before resuming or returning
-    valid, err = verify_checkpoint_computation(current)
-    if not valid:
-        raise ValueError(f"Continuum resume refused: latest checkpoint failed computational verification ({err})")
+    current = checkpoints[-1]
 
     if current.status == "SETTLED":
         print(f"[*] Computation already SETTLED at checkpoint #{current.height}. Nothing to reduce.")

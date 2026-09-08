@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import sys
 import io
+import stat
 import tarfile
 import gzip
 import hashlib
@@ -21,6 +22,19 @@ import shutil
 from typing import List, Tuple, Optional, Dict, Any
 
 VAULT_STREAM_PREFIX = "%🖤 EMBEDDED_VAULT: "
+
+class RollbackIncompleteError(OSError):
+    """
+    Raised when commit failure rollback cannot complete cleanly,
+    providing full diagnostic visibility into partially mutated filesystem state.
+    """
+    def __init__(self, commit_error: BaseException, rollback_errors: List[Tuple[str, str]]):
+        self.commit_error = commit_error
+        self.rollback_errors = rollback_errors
+        details = "; ".join(f"{path}: {err}" for path, err in rollback_errors)
+        super().__init__(
+            f"ROLLBACK_INCOMPLETE: Commit failed ({commit_error}) and rollback encountered errors: {details}"
+        )
 
 def pack_files_to_vault(file_paths: List[str], base_dir: str) -> Tuple[bytes, str, Dict[str, Any]]:
     """
@@ -83,8 +97,10 @@ def unpack_vault_bytes(vault_bytes: bytes, dest_dir: str) -> List[str]:
     - Two-phase extraction (preflight + temporary staging)
     - Destination symlink breakout prevention (refuses existing symlinks in target tree)
     - Transactional commit engine: preflights all target paths for symlinks and
-      collisions, tracks all mutations, and provides all-or-nothing rollback on any
-      I/O error, fault injection, or exception, guaranteeing zero mutation on failure.
+      collisions. On commit failure, rolls back file bytes, permissions (mode), and
+      timestamps, and cleans up created files/directories. If rollback itself
+      encounters errors, raises RollbackIncompleteError detailing affected paths
+      to prevent masking partial mutations.
     Returns: List of unpacked relative paths.
     """
     dest_real = os.path.realpath(dest_dir)
@@ -156,11 +172,11 @@ def unpack_vault_bytes(vault_bytes: bytes, dest_dir: str) -> List[str]:
                     if not real_dst_f.startswith(dest_real + os.sep) and real_dst_f != dest_real:
                         raise ValueError(f"Directory traversal detected in destination path: {dst_f}")
 
-            # Phase 3: Transactional commit engine with rollback on failure
+            # Phase 3: Transactional commit engine with metadata rollback on failure
             dest_existed = os.path.exists(dest_real)
             created_dirs: List[str] = []
             created_files: List[str] = []
-            backup_files: Dict[str, bytes] = {}
+            backup_files: Dict[str, Tuple[bytes, int, int, int]] = {}
 
             try:
                 if not dest_existed:
@@ -180,37 +196,57 @@ def unpack_vault_bytes(vault_bytes: bytes, dest_dir: str) -> List[str]:
 
                         if os.path.exists(dst_f):
                             if dst_f not in backup_files:
+                                st = os.stat(dst_f)
                                 with open(dst_f, "rb") as bf:
-                                    backup_files[dst_f] = bf.read()
+                                    data = bf.read()
+                                backup_files[dst_f] = (
+                                    data,
+                                    stat.S_IMODE(st.st_mode),
+                                    st.st_atime_ns,
+                                    st.st_mtime_ns
+                                )
                         else:
                             created_files.append(dst_f)
 
                         shutil.copy2(src_f, dst_f)
-            except BaseException:
-                # Rollback Phase: restore modified files to exact pre-commit bytes
-                for dst_f, orig_bytes in backup_files.items():
+            except BaseException as commit_err:
+                rollback_errors: List[Tuple[str, str]] = []
+
+                # Rollback Phase: restore modified files to exact pre-commit bytes, permissions, and timestamps
+                for dst_f, (orig_bytes, orig_mode, orig_atime_ns, orig_mtime_ns) in backup_files.items():
                     try:
                         with open(dst_f, "wb") as rf:
                             rf.write(orig_bytes)
-                    except Exception:
-                        pass
+                        os.chmod(dst_f, orig_mode)
+                        os.utime(dst_f, ns=(orig_atime_ns, orig_mtime_ns))
+                    except Exception as e:
+                        rollback_errors.append((dst_f, str(e)))
 
                 # Delete newly created files
                 for dst_f in created_files:
                     try:
                         if os.path.lexists(dst_f):
                             os.remove(dst_f)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        rollback_errors.append((dst_f, str(e)))
 
                 # Delete newly created directories (deepest first)
                 for d in reversed(created_dirs):
                     try:
                         if os.path.exists(d) and not os.listdir(d):
                             os.rmdir(d)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        rollback_errors.append((d, str(e)))
 
+                if not dest_existed and os.path.exists(dest_real):
+                    try:
+                        if not os.listdir(dest_real):
+                            os.rmdir(dest_real)
+                    except Exception as e:
+                        rollback_errors.append((dest_real, str(e)))
+
+                if rollback_errors:
+                    raise RollbackIncompleteError(commit_err, rollback_errors) from commit_err
                 raise
 
     return unpacked_paths

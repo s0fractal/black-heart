@@ -14,6 +14,8 @@ import tempfile
 import contextlib
 import hashlib
 import tarfile
+import stat
+import builtins
 import unittest
 from unittest.mock import patch
 from pathlib import Path
@@ -843,6 +845,156 @@ class TestSecurityAuditG1toG9(unittest.TestCase):
             self.assertEqual(len(calls), 2)
             self.assertEqual((dst / "a").read_text(), "old")
             self.assertEqual((dst / "b").read_text(), "old")
+
+    # ========================================================================
+    # H1: Full Chain Computational Provenance (Invalid Ancestor Rejected)
+    # ========================================================================
+    def test_h1_invalid_ancestor_rejected_despite_valid_tip(self):
+        """A valid tip must not mask a computationally invalid ancestor in chain audit or resume."""
+        with tempfile.TemporaryDirectory() as td:
+            t = Path(td)
+            bad = T.ThunkCheckpoint(
+                0, "2026-09-08", "I x", "Different", 0, 0, 3, "SUSPENDED", "0" * 64,
+                public_key_hex=self.pk
+            )
+            bad.sign(self.sk)
+
+            good = T.ThunkCheckpoint(
+                1, "2026-09-08", "I x", "x", 1, 1, 3, "SETTLED", bad.checkpoint_hash,
+                public_key_hex=self.pk
+            )
+            good.sign(self.sk)
+
+            pdf_path = t / "chain.pdf"
+            pdf_path.write_bytes(
+                T.CONTINUUM_MANIFEST_PREFIX.encode()
+                + json.dumps([bad.to_dict(), good.to_dict()]).encode()
+                + b"\n"
+            )
+
+            # audit_self must reject because ancestor #0 is computationally invalid
+            ns = {"__name__": "review_runner", "__file__": str(pdf_path)}
+            oldpath = list(sys.path)
+            try:
+                exec(compile(T.ResumableComputationPolyglot()._build_runner_script(), "<runner>", "exec"), ns)
+            finally:
+                sys.path[:] = oldpath
+
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                with self.assertRaises(SystemExit) as cm:
+                    ns["audit_self"](str(pdf_path), expected_signer_pk=self.pk)
+                self.assertEqual(cm.exception.code, 1)
+
+            self.assertIn("failed computational authenticity verification", out.getvalue())
+            self.assertNotIn("Q.E.D.", out.getvalue())
+
+            # resume_computation_in_pdf must also reject
+            with self.assertRaises(ValueError) as ctx:
+                T.resume_computation_in_pdf(str(pdf_path), 10, self.sk)
+            self.assertIn("computational authenticity failure", str(ctx.exception))
+
+    # ========================================================================
+    # H2: Vault Rollback Restores File Permissions (Mode) and Timestamps
+    # ========================================================================
+    def test_h2_vault_rollback_restores_file_permissions(self):
+        """Vault commit failure rollback must restore original file permissions (mode)."""
+        with tempfile.TemporaryDirectory() as td:
+            t = Path(td)
+            dest = t / "metadata"
+            dest.mkdir()
+            for n in ["a", "b"]:
+                (dest / n).write_text("old")
+                (dest / n).chmod(0o600)
+
+            def make_archive():
+                buf = io.BytesIO()
+                with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+                    for name in ["a", "b"]:
+                        m = tarfile.TarInfo(name)
+                        m.size = 3
+                        m.mode = 0o644
+                        m.mtime = 0
+                        tar.addfile(m, io.BytesIO(b"new"))
+                return buf.getvalue()
+
+            orig_copy = V.shutil.copy2
+            calls = []
+
+            def fail_second(src, dst, *args, **kw):
+                calls.append(str(dst))
+                if len(calls) == 2:
+                    raise OSError("INJECTED_COMMIT_FAILURE")
+                return orig_copy(src, dst, *args, **kw)
+
+            with patch.object(V.shutil, "copy2", side_effect=fail_second):
+                with self.assertRaises(OSError):
+                    V.unpack_vault_bytes(make_archive(), str(dest))
+
+            first = Path(calls[0])
+            self.assertEqual(first.read_text(), "old")
+            mode = stat.S_IMODE(first.stat().st_mode)
+            self.assertEqual(mode, 0o600)
+
+    # ========================================================================
+    # H3: Rollback Failure Raises RollbackIncompleteError
+    # ========================================================================
+    def test_h3_vault_rollback_failure_raises_rollback_incomplete_error(self):
+        """When rollback itself encounters errors, RollbackIncompleteError must be raised with details."""
+        with tempfile.TemporaryDirectory() as td:
+            t = Path(td)
+            dest = t / "rollback_io"
+            dest.mkdir()
+            for n in ["a", "b"]:
+                (dest / n).write_text("old")
+
+            def make_archive():
+                buf = io.BytesIO()
+                with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+                    for name in ["a", "b"]:
+                        m = tarfile.TarInfo(name)
+                        m.size = 3
+                        m.mtime = 0
+                        tar.addfile(m, io.BytesIO(b"new"))
+                return buf.getvalue()
+
+            orig_copy = V.shutil.copy2
+            calls = []
+            failed = [False]
+            orig_open = builtins.open
+
+            def copy(src, dst, *args, **kw):
+                calls.append(str(dst))
+                if len(calls) == 2:
+                    failed[0] = True
+                    raise OSError("INJECTED_COMMIT_FAILURE")
+                return orig_copy(src, dst, *args, **kw)
+
+            def controlled_open(file, mode="r", *args, **kw):
+                if failed[0] and mode == "wb" and str(file) == calls[0]:
+                    raise OSError("INJECTED_ROLLBACK_FAILURE")
+                return orig_open(file, mode, *args, **kw)
+
+            with patch.object(V.shutil, "copy2", side_effect=copy), patch("builtins.open", side_effect=controlled_open):
+                with self.assertRaises(V.RollbackIncompleteError) as ctx:
+                    V.unpack_vault_bytes(make_archive(), str(dest))
+
+            err_msg = str(ctx.exception)
+            self.assertIn("ROLLBACK_INCOMPLETE", err_msg)
+            self.assertIn("INJECTED_COMMIT_FAILURE", err_msg)
+            self.assertIn("INJECTED_ROLLBACK_FAILURE", err_msg)
+
+    # ========================================================================
+    # H4: Zero-ATP Irreducibility Check for SUSPENDED Status
+    # ========================================================================
+    def test_h4_zero_atp_normal_form_rejected_as_suspended(self):
+        """Zero-ATP checkpoint cannot claim SUSPENDED if expression is already in normal form."""
+        z = T.ThunkCheckpoint(0, "2026-09-08", "x", "x", 0, 0, 1, "SUSPENDED", "0" * 64, public_key_hex=self.pk)
+        z.sign(self.sk)
+
+        ok, err = T.verify_checkpoint_computation(z)
+        self.assertFalse(ok)
+        self.assertIn("already in normal form", err)
 
 if __name__ == "__main__":
     unittest.main()
