@@ -252,10 +252,17 @@ python3 cli.py repl
 python3 cli.py verify examples/service_agreement_polyglot.pdf
 python3 cli.py verify examples/living_ledger.pdf
 
-# 3. Generate fresh RFC 8032 Ed25519 keypairs:
+# 3. Bilateral Cross-Proof Adjudication between two independent PDFs:
+python3 cli.py adjudicate examples/bilateral_agreement.pdf examples/provider_telemetry_oracle.pdf
+
+# 4. Pack & Unpack ISO 32000 Embedded Code Vaults:
+python3 cli.py vault pack src_dir/ -o vault.pdf -t "Repository Snapshot"
+python3 cli.py vault unpack vault.pdf -d restored_dir/
+
+# 5. Generate fresh RFC 8032 Ed25519 keypairs:
 python3 cli.py keygen --json
 
-# 4. Compile a new proof-carrying document:
+# 6. Compile a new proof-carrying document:
 python3 cli.py compile -t "Autonomous Manifesto" -o manifesto.pdf
 ```
 
@@ -284,29 +291,59 @@ See formal specification: [GENOME.md](file:///Users/s0fractal/Projects/black-hea
 
 ---
 
-## 12. Comprehensive Test Suite
+## 12. Bilateral Interlocking Documents (`cross_proof.py`)
 
-Run all 31 unit tests across all six engines:
+Eliminating centralized webhooks and escrow servers:
+* **The Dual-Document Problem:** Traditional smart contracts rely on centralized cloud oracles. In Black-Heart, both the agreement (e.g. cloud SLA) and the telemetry oracle are independent self-verifying polyglot PDFs signed by their respective Ed25519 identities.
+* **Cross-Adjudication:** Running `cross_proof.py` (or executing `cli.py adjudicate`) allows the agreement PDF to ingest the telemetry oracle PDF, verify its Ed25519 signature against the agreed public key, evaluate combinator SLA equations, and compute deterministic financial adjustments.
+* **Joint Witness Anchor:** Produces a cryptographic dual-document digest $\mathcal{H}(D_{\text{agreement}} \mathbin{\Vert} D_{\text{oracle}} \mathbin{\Vert} \text{Resolution})$ ensuring neither party can retroactively substitute claims.
+
 ```bash
-python3 test_glyph.py
-python3 test_monad.py
-python3 test_living_ledger.py
-python3 test_interaction.py
-python3 test_organism.py
+# 1. Run bilateral settlement demo:
+python3 examples/bilateral_settlement_demo.py
+
+# 2. Adjudicate bilateral agreement against telemetry oracle:
+python3 cli.py adjudicate examples/bilateral_agreement.pdf examples/provider_telemetry_oracle.pdf
+```
+
+See formal specification: [CROSS_PROOF.md](file:///Users/s0fractal/Projects/black-heart/CROSS_PROOF.md).
+
+---
+
+## 13. ISO 32000 Embedded Code Vaults (`vault.py`)
+
+Turning proof-carrying PDF documents into portable, deterministic software vaults:
+* **Reproducibility Guarantee:** A paper or specification embeds its entire source tree, tests, and dependencies into an ISO 32000 EmbeddedFiles stream or polyglot binary payload.
+* **Self-Extraction:** Executing `python3 paper.pdf --unpack-vault <dir>` or `cli.py vault unpack paper.pdf` unpacks the bit-for-bit identical repository tree with SHA-256 verification.
+* **Mathematical Invariance:** The embedded archive is canonicalized with normalized timestamps and permissions for deterministic hashing.
+
+---
+
+## 14. Comprehensive Test Suite
+
+Run all 34 unit tests across all seven engines:
+```bash
+python3 test_glyph.py          # 9 tests: SKIY reduction, ATP ceilings, Church encoding
+python3 test_monad.py          # 7 tests: Dual trees, visual & semantic compilation, AST
+python3 test_living_ledger.py  # 5 tests: Incremental PDF updates, multi-block chains
+python3 test_interaction.py    # 6 tests: Symmetric interaction combinators, rewiring
+python3 test_organism.py       # 4 tests: Self-reproducing polyglot automata, quine
+python3 test_cross_proof.py    # 3 tests: Bilateral cross-proofs & embedded code vaults
 ```
 
 ---
 
-## 13. Specifications & Theory
+## 15. Specifications & Theory
 
 * [CONTINUUM.md](file:///Users/s0fractal/Projects/black-heart/CONTINUUM.md) — Suspended Thunks, Neutral Oracles & Merkle-Stream Continuity.
 * [MONAD.md](file:///Users/s0fractal/Projects/black-heart/MONAD.md) — The Literate Polyglot Monad, Dual Trees & Proof-Bearing Legal Contracts.
 * [INTERACTION.md](file:///Users/s0fractal/Projects/black-heart/INTERACTION.md) — Lafont's Symmetric Interaction Combinators on UTF-8 Glyphs.
 * [GENOME.md](file:///Users/s0fractal/Projects/black-heart/GENOME.md) — Autonomous Self-Replicating Polyglot Automata.
+* [CROSS_PROOF.md](file:///Users/s0fractal/Projects/black-heart/CROSS_PROOF.md) — Bilateral Interlocking Documents & Embedded Code Vaults.
 
 ---
 
-## 14. License
+## 16. License
 
-* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, `interaction.py`, `cli.py`, `organism.py`, tests):** AGPL-3.0-only
+* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, `interaction.py`, `organism.py`, `cross_proof.py`, `vault.py`, `cli.py`, tests):** AGPL-3.0-only
 * **Texts & Polyglot artifacts:** CC BY-SA 4.0

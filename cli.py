@@ -23,10 +23,12 @@ from polyglot import PolyglotDocument
 from monad import SelfVerifyingContractPolyglot
 from living_ledger import LivingLedger
 from interaction import InteractionNet, AGENT_CONSTRUCT, AGENT_DUPLICATE, AGENT_ERASE, PortRef, PORT_PRINCIPAL
+from vault import embed_vault_into_polyglot, extract_vault_from_pdf, pack_files_to_vault
+from cross_proof import adjudicate_bilateral
 
 BANNER = r"""
   %🖤  PROJECT BLACK-HEART — UNIFIED COMMAND SUITE
-  Combinatory Logic • Proof-Carrying Polyglots • Living Ledgers
+  Combinatory Logic • Proof-Carrying Polyglots • Living Ledgers • Vaults
 """
 
 def cmd_repl(args):
@@ -109,15 +111,20 @@ def cmd_verify(args):
     print("=" * 65 + "\033[0m\n")
 
     # Detect polyglot type
-    if "%🖤 CONTRACT_MANIFEST:".encode("utf-8") in content:
+    if "%🖤 BILATERAL_AGREEMENT_MANIFEST:".encode("utf-8") in content:
+        print("[*] Detected Bilateral Agreement Polyglot.")
+        os.system(f"{sys.executable} {target}")
+    elif "%🖤 TELEMETRY_ORACLE_MANIFEST:".encode("utf-8") in content:
+        print("[*] Detected Telemetry Oracle Polyglot.")
+        os.system(f"{sys.executable} {target}")
+    elif "%🖤 CONTRACT_MANIFEST:".encode("utf-8") in content:
         print("[*] Detected Proof-Carrying Contract Polyglot.")
-        # Execute contract audit runner directly via python
         os.system(f"{sys.executable} {target}")
     elif "%🖤 LEDGER_MANIFEST:".encode("utf-8") in content:
         print("[*] Detected Multi-Block Living Polyglot Ledger.")
         os.system(f"{sys.executable} {target}")
-    elif "%🖤 CLAIM:".encode("utf-8") in content:
-        print("[*] Detected Standard Black-Heart Polyglot.")
+    elif "%🖤 CLAIM:".encode("utf-8") in content or "%🖤 CODE_VAULT_MANIFEST:".encode("utf-8") in content:
+        print("[*] Detected Self-Verifying Black-Heart Polyglot / Vault.")
         os.system(f"{sys.executable} {target}")
     else:
         print("\033[1;31m[!] Not a recognized Black-Heart polyglot document.\033[0m")
@@ -132,6 +139,83 @@ def cmd_compile(args):
     doc.add_claim("CLAIM-01", "K-combinator drops the second argument", "🖤 Truth Mirage", "Truth")
     doc.compile(out)
     print(f"\033[1;32m[✓] Compiled polyglot PDF to: {out}\033[0m")
+
+def cmd_vault(args):
+    """Packs or unpacks an ISO 32000 embedded code vault."""
+    if args.vault_action == "pack":
+        src = os.path.abspath(args.source_dir)
+        out = args.output
+        if not os.path.isdir(src):
+            print(f"\033[1;31m[!] Error: Source directory not found: {src}\033[0m")
+            sys.exit(1)
+
+        # Gather files
+        file_list = []
+        for root, dirs, files in os.walk(src):
+            # Skip hidden and __pycache__
+            dirs[:] = [d for d in dirs if not d.startswith(".") and d != "__pycache__"]
+            for f in sorted(files):
+                if not f.startswith("."):
+                    file_list.append(os.path.relpath(os.path.join(root, f), src))
+
+        if not file_list:
+            print(f"\033[1;31m[!] Error: No eligible files found in {src}\033[0m")
+            sys.exit(1)
+
+        # Create base polyglot document if not existing
+        doc = PolyglotDocument(title=args.title or "EMBEDDED CODE VAULT", author=args.author or "s0fractal")
+        doc.add_section("1. Autonomous Code Vault")
+        doc.add_paragraph(f"This document embeds a cryptographic source vault containing {len(file_list)} files.")
+        for f in file_list[:10]:
+            doc.add_paragraph(f"- {f}")
+        if len(file_list) > 10:
+            doc.add_paragraph(f"... and {len(file_list) - 10} additional files.")
+        doc.compile(out)
+
+        vh = embed_vault_into_polyglot(out, file_list, src)
+        print(f"\033[1;32m[✓] Code vault packed ({len(file_list)} files, SHA-256: {vh[:16]}...) into: {out}\033[0m")
+
+    elif args.vault_action == "unpack":
+        pdf_file = args.file
+        dest = os.path.abspath(args.dest or ".")
+        if not os.path.exists(pdf_file):
+            print(f"\033[1;31m[!] Error: PDF not found: {pdf_file}\033[0m")
+            sys.exit(1)
+        try:
+            restored = extract_vault_from_pdf(pdf_file, dest)
+            print(f"\033[1;32m[✓] Successfully extracted vault to {dest} ({len(restored)} files restored)\033[0m")
+        except Exception as e:
+            print(f"\033[1;31m[!] Vault extraction failed: {e}\033[0m")
+            sys.exit(1)
+
+def cmd_adjudicate(args):
+    """Executes bilateral cross-document adjudication between agreement and oracle PDFs."""
+    agreement_pdf = args.agreement
+    oracle_pdf = args.oracle
+    for p in (agreement_pdf, oracle_pdf):
+        if not os.path.exists(p):
+            print(f"\033[1;31m[!] Error: File not found: {p}\033[0m")
+            sys.exit(1)
+
+    print("\033[1;36m" + "=" * 65)
+    print("  %🖤 BILATERAL CROSS-PROOF ADJUDICATION PROTOCOL")
+    print("=" * 65 + "\033[0m\n")
+    print(f"[*] Agreement Document: {agreement_pdf}")
+    print(f"[*] Telemetry Oracle:   {oracle_pdf}\n")
+
+    res = adjudicate_bilateral(agreement_pdf, oracle_pdf)
+    if res.status in ("SETTLED_COMPLIANT", "SETTLED_BREACH"):
+        status_color = "\033[1;32m" if res.status == "SETTLED_COMPLIANT" else "\033[1;33m"
+        print(f"{status_color}[✓] ADJUDICATION VERIFIED & SETTLED: {res.status}\033[0m")
+        print(f"    Joint Bilateral Anchor: ⚓ {res.joint_bilateral_digest}")
+        print(f"    Agreement:              {res.agreement_title}")
+        print(f"    Oracle:                 {res.oracle_name} ({res.oracle_pk_hex[:16]}...)")
+        print(f"    Measured Uptime:        {res.measured_uptime_percent:.2f}% (Target: {res.target_uptime_percent:.2f}%)")
+        print(f"    Net Service Due:        ${res.net_service_due_usd} USD (Penalty: ${res.penalty_due_usd} USD)")
+        print(f"    Timestamp UTC:          {res.timestamp_utc}\n")
+    else:
+        print(f"\033[1;31m[✗] ADJUDICATION FAILED: {res.status}\033[0m\n")
+        sys.exit(1)
 
 def main():
     parser = argparse.ArgumentParser(description="Black-Heart (%🖤) Command Suite")
@@ -154,6 +238,24 @@ def main():
     p_compile.add_argument("-t", "--title", help="Document Title", default="Black-Heart Polyglot")
     p_compile.add_argument("-a", "--author", help="Author", default="s0fractal")
 
+    # vault
+    p_vault = subparsers.add_parser("vault", help="ISO 32000 Embedded Code Vault management")
+    vault_subs = p_vault.add_subparsers(dest="vault_action")
+    p_vault_pack = vault_subs.add_parser("pack", help="Pack directory into self-extracting polyglot PDF")
+    p_vault_pack.add_argument("source_dir", help="Source directory containing code to vault")
+    p_vault_pack.add_argument("-o", "--output", required=True, help="Target PDF path")
+    p_vault_pack.add_argument("-t", "--title", default="EMBEDDED CODE VAULT", help="Vault title")
+    p_vault_pack.add_argument("-a", "--author", default="s0fractal", help="Vault author")
+
+    p_vault_unpack = vault_subs.add_parser("unpack", help="Unpack embedded code vault from PDF")
+    p_vault_unpack.add_argument("file", help="Target PDF polyglot")
+    p_vault_unpack.add_argument("-d", "--dest", default=".", help="Destination directory")
+
+    # adjudicate
+    p_adj = subparsers.add_parser("adjudicate", help="Bilateral cross-proof adjudication between contract and oracle PDFs")
+    p_adj.add_argument("agreement", help="Path to bilateral agreement PDF")
+    p_adj.add_argument("oracle", help="Path to telemetry oracle PDF")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -164,6 +266,10 @@ def main():
         cmd_verify(args)
     elif args.command == "compile":
         cmd_compile(args)
+    elif args.command == "vault":
+        cmd_vault(args)
+    elif args.command == "adjudicate":
+        cmd_adjudicate(args)
     else:
         parser.print_help()
 
