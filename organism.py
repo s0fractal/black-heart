@@ -85,6 +85,31 @@ class Organism:
         raw = json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
         return hashlib.sha256(raw).hexdigest()
 
+    def verify(self) -> bool:
+        """
+        Verifies the organism's structural, cryptographic, and metabolic soundness.
+        Returns True if completely sound; False otherwise.
+        """
+        if self.organism_hash:
+            if self.organism_hash != self.compute_hash():
+                return False
+        else:
+            self.organism_hash = self.compute_hash()
+
+        if not self.public_key_hex or len(self.public_key_hex) != 64:
+            return False
+
+        if self.secret_key_hex and len(self.secret_key_hex) == 64:
+            try:
+                derived_pk = public_key_from_secret(bytes.fromhex(self.secret_key_hex)).hex()
+                if derived_pk != self.public_key_hex:
+                    return False
+            except Exception:
+                return False
+
+        viable, _ = self.run_metabolism()
+        return viable
+
     def run_metabolism(self) -> Tuple[bool, int]:
         """
         Executes internal metabolic reduction of all chromosomes.
@@ -344,6 +369,10 @@ class PolyglotOrganismCompiler:
             org.chromosomes.append(Chromosome.from_dict(c_dict))
         return org
 
+def extract_organism_from_pdf(pdf_path: str) -> Organism:
+    """Extracts and parses an Organism genome from a polyglot PDF document."""
+    return PolyglotOrganismCompiler.load_from_polyglot(pdf_path)
+
 def _escape_pdf(text: str) -> str:
     return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
@@ -442,6 +471,44 @@ def main():
 if __name__ == "__main__":
     main()
 '''
+
+def create_genesis_organism(generation: int = 0) -> Organism:
+    """
+    Factory creating a sound, metabolically viable Genesis organism.
+    """
+    sk, pk = generate_keypair()
+    chromosomes = [
+        Chromosome(
+            gene_id="GENE-ID-01",
+            gene_name="Self-Preservation Identity Carrier",
+            expression="🌿 🖤 🖤 SovereignCore",
+            expected_normal_form="SovereignCore",
+            max_atp=50
+        ),
+        Chromosome(
+            gene_id="GENE-METAB-02",
+            gene_name="Black Cone Entropy Absorption",
+            expression="🖤 VitalNutrient EntropyNoise",
+            expected_normal_form="VitalNutrient",
+            max_atp=20
+        ),
+        Chromosome(
+            gene_id="GENE-BRANCH-03",
+            gene_name="Adaptive Decision Fork",
+            expression="(🖤 🤍) DormantBranch ExpressedBranch",
+            expected_normal_form="ExpressedBranch",
+            max_atp=30
+        )
+    ]
+    org = Organism(
+        generation=generation,
+        parent_hash="00" * 32,
+        public_key_hex=pk,
+        secret_key_hex=sk,
+        chromosomes=chromosomes
+    )
+    org.organism_hash = org.compute_hash()
+    return org
 
 if __name__ == "__main__":
     print("organism.py — Autonomous Polyglot Organism engine loaded.")

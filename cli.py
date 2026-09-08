@@ -278,6 +278,167 @@ def cmd_mesh(args):
             synced = sync_local_ledgers(args.peer, args.destination)
             print(f"\033[1;32m[✓] Synced {synced} block(s) from local peer file: {args.peer}\033[0m")
 
+def cmd_synthesize(args):
+    """Executes sexual recombination and topological knot synthesis between two parent organisms."""
+    from symbiosis import synthesize_polyglots
+    print("\033[1;36m=================================================================")
+    print("  %🖤 BLACK-HEART DIALECTICAL SYMBIOSIS & KNOT MORPHOGENESIS")
+    print("=================================================================\033[0m\n")
+    print(f"[*] Parent A (Thesis):     {args.parent_a}")
+    print(f"[*] Parent B (Antithesis): {args.parent_b}")
+    print(f"[*] Target Child:          {args.output}\n")
+
+    try:
+        child, braid = synthesize_polyglots(args.parent_a, args.parent_b, args.output)
+        print(f"\033[1;32m[✓ SUCCESS] Offspring Synthesized!\033[0m")
+        print(f"    - Child Generation:    #{child.generation:04d}")
+        print(f"    - Combined Lineage:    ⚓ {child.parent_hash[:32]}...")
+        print(f"    - Child Public Key:    {child.public_key_hex[:32]}...")
+        print(f"    - Topological Knot:    {braid.to_artin_notation()}")
+        print(f"    - Knot Invariants:     {braid.crossing_number} crossings, writhe={braid.writhe}, {braid.count_link_components()} component(s)")
+        print(f"    - Active Chromosomes:  {len(child.chromosomes)}")
+        print(f"\nAudit offspring standalone via: python3 {args.output} --lineage\n")
+    except Exception as e:
+        print(f"\033[1;31m[!] Synthesis Failed:\033[0m {e}")
+        sys.exit(1)
+
+def cmd_shell(args):
+    """Interactive Hypervisor REPL for Project Black-Heart."""
+    from symbiosis import (
+        BraidWord, BraidCrossing, trefoil_knot, figure_eight_knot, hopf_link,
+        dialectical_crossover, SymbiosisPolyglotCompiler
+    )
+    from organism import Organism, Chromosome, create_genesis_organism, PolyglotOrganismCompiler
+    from glyph import parse, evaluate
+
+    print("\033[1;36m" + BANNER + "\033[0m")
+    print("\033[1;35m  HYPERVISOR COGNITIVE REPL & TOPOLOGICAL KNOT PLAYGROUND\033[0m")
+    print("  Commands: status | organism <file> | genesis | knot <formula> | mate <a_idx> <b_idx> [out] | eval <expr> | help | quit\n")
+
+    loaded_organisms = []
+    g0 = create_genesis_organism(0)
+    loaded_organisms.append(g0)
+    print(f"[*] Hypervisor initialized with Genesis Organism [0] (Gen #0000, ⚓ {g0.organism_hash[:16]})\n")
+
+    while True:
+        try:
+            line = input(f"\033[1;36mblack-heart (orgs:{len(loaded_organisms)}) > \033[0m").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\nExiting hypervisor.")
+            break
+
+        if not line:
+            continue
+
+        parts = line.split()
+        cmd = parts[0].lower()
+
+        if cmd in ("exit", "quit", "q"):
+            print("Hypervisor halted.")
+            break
+        elif cmd == "help":
+            print("\nAvailable Hypervisor Commands:")
+            print("  status                       - Inspect hypervisor state and loaded organisms")
+            print("  organism <path.pdf>          - Load an organism polyglot from disk")
+            print("  genesis                      - Spawn a new genesis organism into pool")
+            print("  knot <spec>                  - Analyze knot (e.g. 'trefoil', 'figure8', 'hopf', or '1 -2 1')")
+            print("  mate <idx_a> <idx_b> [out]   - Sexually recombine two loaded organisms")
+            print("  eval <expr>                  - Evaluate SKIY combinator expression with ATP meter")
+            print("  exit / quit                  - Halts the hypervisor\n")
+        elif cmd == "status":
+            print(f"\n[*] Active Organisms in Hypervisor Pool: {len(loaded_organisms)}")
+            for idx, org in enumerate(loaded_organisms):
+                print(f"  [{idx}] Gen #{org.generation:04d} | Hash: {org.organism_hash[:20]}... | PK: {org.public_key_hex[:16]}... | Genes: {len(org.chromosomes)}")
+            print()
+        elif cmd == "genesis":
+            new_org = create_genesis_organism(len(loaded_organisms))
+            loaded_organisms.append(new_org)
+            print(f"[✓] Spawned Genesis Organism [{len(loaded_organisms)-1}]: Gen #{new_org.generation} ⚓ {new_org.organism_hash[:16]}")
+        elif cmd == "organism":
+            if len(parts) < 2:
+                print("[!] Usage: organism <path_to_pdf>")
+                continue
+            path = parts[1]
+            try:
+                org = PolyglotOrganismCompiler.load_from_polyglot(path)
+                loaded_organisms.append(org)
+                print(f"[✓] Loaded Organism [{len(loaded_organisms)-1}] from '{path}': Gen #{org.generation} ⚓ {org.organism_hash[:16]}")
+            except Exception as e:
+                print(f"[!] Failed to load organism from '{path}': {e}")
+        elif cmd == "knot":
+            if len(parts) < 2:
+                print("[!] Usage: knot <trefoil|figure8|hopf|1 -2 1>")
+                continue
+            spec = parts[1].lower()
+            if spec == "trefoil":
+                bw = trefoil_knot()
+            elif spec in ("figure8", "figure-eight", "figure_eight"):
+                bw = figure_eight_knot()
+            elif spec in ("hopf", "hopf_link"):
+                bw = hopf_link()
+            else:
+                tokens = parts[1:]
+                crossings = []
+                for tok in tokens:
+                    tok_clean = tok.replace("s", "").replace("σ", "").replace("_", "")
+                    try:
+                        val = int(tok_clean)
+                        strand = abs(val)
+                        sign = 1 if val > 0 else -1
+                        crossings.append(BraidCrossing(strand_index=strand, sign=sign))
+                    except ValueError:
+                        pass
+                num_str = max([c.strand_index + 1 for c in crossings], default=2)
+                bw = BraidWord(crossings=crossings, num_strands=num_str)
+
+            print(f"\n  Topological Knot Analysis:")
+            print(f"  Artin Formula:     {bw.to_artin_notation()}")
+            print(f"  Crossing Number:   {bw.crossing_number}")
+            print(f"  Topological Writhe:{bw.writhe}")
+            print(f"  Link Components:   {bw.count_link_components()} (Alexander Closure)")
+            print(f"  Permutation:       {bw.compute_permutation()}\n")
+        elif cmd == "mate":
+            if len(parts) < 3:
+                print("[!] Usage: mate <idx_parent_a> <idx_parent_b> [output_file.pdf]")
+                continue
+            try:
+                idx_a = int(parts[1])
+                idx_b = int(parts[2])
+                out_path = parts[3] if len(parts) > 3 else "symbiotic_child.pdf"
+                if idx_a < 0 or idx_a >= len(loaded_organisms) or idx_b < 0 or idx_b >= len(loaded_organisms):
+                    print(f"[!] Invalid index. Choose 0 to {len(loaded_organisms)-1}")
+                    continue
+                p_a = loaded_organisms[idx_a]
+                p_b = loaded_organisms[idx_b]
+                child, braid = dialectical_crossover(p_a, p_b)
+                compiler = SymbiosisPolyglotCompiler(child, p_a, p_b, braid)
+                pdf_bytes = compiler.compile_pdf()
+                with open(out_path, "wb") as f:
+                    f.write(pdf_bytes)
+                loaded_organisms.append(child)
+                print(f"\n\033[1;32m[✓ SUCCESS] Offspring Synthesized!\033[0m")
+                print(f"  Added to pool as [{len(loaded_organisms)-1}]")
+                print(f"  Saved polyglot to: {out_path}")
+                print(f"  Braid Presentation: {braid.to_artin_notation()}")
+                print(f"  Writhe: {braid.writhe} | Crossings: {braid.crossing_number}\n")
+            except Exception as e:
+                print(f"[!] Mating failed: {e}")
+        elif cmd == "eval":
+            expr = " ".join(parts[1:])
+            if not expr:
+                print("[!] Usage: eval <glyph_expr>")
+                continue
+            try:
+                t = parse(expr)
+                res = evaluate(t, max_atp=10_000)
+                print(f"  Normal Form: {res.term}")
+                print(f"  ATP Spent:   {res.atp_spent}")
+                print(f"  Settled:     {res.is_settled()}\n")
+            except Exception as e:
+                print(f"[!] Eval error: {e}\n")
+        else:
+            print(f"[!] Unknown command '{cmd}'. Type 'help' for available commands.")
+
 def main():
     parser = argparse.ArgumentParser(description="Black-Heart (%🖤) Command Suite")
     subparsers = parser.add_subparsers(dest="command")
@@ -355,6 +516,15 @@ def main():
     p_mesh_sync.add_argument("destination", help="Target local living ledger PDF to update")
     p_mesh_sync.add_argument("--peer", required=True, help="Peer PDF file path or remote http:// URL")
 
+    # synthesize
+    p_syn = subparsers.add_parser("synthesize", help="Dialectical sexual recombination of two polyglot organisms")
+    p_syn.add_argument("parent_a", help="Path to Parent A (Thesis) polyglot PDF")
+    p_syn.add_argument("parent_b", help="Path to Parent B (Antithesis) polyglot PDF")
+    p_syn.add_argument("-o", "--output", default="symbiotic_child.pdf", help="Output child polyglot PDF path")
+
+    # shell
+    p_shell = subparsers.add_parser("shell", help="Interactive Hypervisor REPL for Project Black-Heart")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -377,6 +547,10 @@ def main():
         cmd_zk(args)
     elif args.command == "mesh":
         cmd_mesh(args)
+    elif args.command == "synthesize":
+        cmd_synthesize(args)
+    elif args.command == "shell":
+        cmd_shell(args)
     else:
         parser.print_help()
 

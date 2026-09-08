@@ -259,15 +259,15 @@ def generate_pdf_embedded_file_objects(
 ) -> Tuple[bytes, bytes]:
     """
     Generates ISO 32000 objects:
-      1. EmbeddedFile stream object
+      1. EmbeddedFile stream object (with /Filter /ASCIIHexDecode to ensure zero null bytes for polyglots)
       2. Filespec dictionary object
     """
-    # 1. Stream object
+    hex_body = vault_bytes.hex().encode("ascii") + b">\n"
     stream_header = (
-        f"<</Type /EmbeddedFile /Subtype /application#2Fgzip "
-        f"/Length {len(vault_bytes)} /Params <</Size {len(vault_bytes)}>>>>\nstream\n"
+        f"<</Type /EmbeddedFile /Subtype /application#2Fgzip /Filter /ASCIIHexDecode "
+        f"/Length {len(hex_body)} /Params <</Size {len(vault_bytes)}>>>>\nstream\n"
     ).encode("latin1")
-    stream_obj = stream_header + vault_bytes + b"\nendstream"
+    stream_obj = stream_header + hex_body + b"endstream"
 
     # 2. Filespec object
     filespec_obj = (
@@ -277,6 +277,31 @@ def generate_pdf_embedded_file_objects(
     ).encode("latin1")
 
     return stream_obj, filespec_obj
+
+def extract_vault_bytes_from_pdf(pdf_path: str) -> Optional[bytes]:
+    """Extracts raw vault archive bytes from a polyglot PDF document."""
+    with open(pdf_path, "rb") as f:
+        content = f.read()
+
+    prefix = VAULT_STREAM_PREFIX.encode("utf-8")
+    idx = content.find(prefix)
+    if idx != -1:
+        end_idx = content.find(b"\n", idx)
+        hex_data = content[idx + len(prefix):end_idx if end_idx != -1 else len(content)].decode("ascii").strip()
+        return bytes.fromhex(hex_data)
+
+    ef_idx = content.find(b"/Type /EmbeddedFile")
+    if ef_idx != -1:
+        stream_start = content.find(b"stream\n", ef_idx) + len(b"stream\n")
+        stream_end = content.find(b"\nendstream", stream_start)
+        raw_stream = content[stream_start:stream_end].strip()
+        dict_header = content[ef_idx:stream_start]
+        if b"/Filter /ASCIIHexDecode" in dict_header or b"/ASCIIHexDecode" in dict_header:
+            hex_str = raw_stream.rstrip(b">").decode("ascii")
+            return bytes.fromhex("".join(hex_str.split()))
+        else:
+            return raw_stream
+    return None
 
 def embed_vault_into_polyglot(pdf_path: str, file_paths: List[str], base_dir: str) -> str:
     """
@@ -310,23 +335,12 @@ def extract_vault_from_pdf(
     Refuses extraction if VAULT_HASH marker is missing unless expected_vault_hash
     pin is provided or allow_unverified is explicitly True.
     """
+    vault_bytes = extract_vault_bytes_from_pdf(pdf_path)
+    if vault_bytes is None:
+        raise ValueError(f"No embedded code vault found in {pdf_path}")
+
     with open(pdf_path, "rb") as f:
         content = f.read()
-
-    prefix = VAULT_STREAM_PREFIX.encode("utf-8")
-    idx = content.find(prefix)
-    if idx == -1:
-        # Fallback: search for /Type /EmbeddedFile stream
-        ef_idx = content.find(b"/Type /EmbeddedFile")
-        if ef_idx == -1:
-            raise ValueError(f"No embedded code vault found in {pdf_path}")
-        stream_start = content.find(b"stream\n", ef_idx) + len(b"stream\n")
-        stream_end = content.find(b"\nendstream", stream_start)
-        vault_bytes = content[stream_start:stream_end]
-    else:
-        end_idx = content.find(b"\n", idx)
-        hex_data = content[idx + len(prefix):end_idx].decode("ascii")
-        vault_bytes = bytes.fromhex(hex_data)
 
     actual_hash = hashlib.sha256(vault_bytes).hexdigest()
 

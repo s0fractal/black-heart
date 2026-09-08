@@ -29,6 +29,7 @@ SUITES = [
     ("Ed25519 Zero-Knowledge Proofs", "test_zk_glyph"),
     ("P2P Polyglot Mesh Synchronization", "test_mesh"),
     ("Security Audit & Fail-Closed Controls", "test_security_audit"),
+    ("Dialectical Symbiosis & Topological Knots", "test_symbiosis"),
 ]
 
 def run_all_tests() -> bool:
