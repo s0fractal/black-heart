@@ -589,8 +589,8 @@ def cmd_audit():
     # 4. Probability bounds [0, 1] and sum = 1
     p0 = data.get('prob_0', None)
     p1 = data.get('prob_1', None)
-    if not (isinstance(p0, (int, float)) and isinstance(p1, (int, float))):
-        print("[FAIL] AUDIT FAILED: Invalid probability types")
+    if not (isinstance(p0, (int, float)) and isinstance(p1, (int, float)) and math.isfinite(p0) and math.isfinite(p1)):
+        print("[FAIL] AUDIT FAILED: Invalid or non-finite probability values")
         sys.exit(1)
 
     if p0 < 0.0 or p0 > 1.0 or p1 < 0.0 or p1 > 1.0:
@@ -598,7 +598,7 @@ def cmd_audit():
         sys.exit(1)
 
     prob_sum_err = abs(p0 + p1 - 1.0)
-    if prob_sum_err > 1e-5:
+    if not math.isfinite(prob_sum_err) or prob_sum_err > 1e-5:
         print(f"[FAIL] AUDIT FAILED: Probability sum violation: {p0} + {p1} != 1 (err={prob_sum_err:.2e})")
         sys.exit(1)
 
@@ -607,7 +607,7 @@ def cmd_audit():
     recomp_p1 = abs(m10)**2
     born_err0 = abs(p0 - recomp_p0)
     born_err1 = abs(p1 - recomp_p1)
-    if born_err0 > 1e-5 or born_err1 > 1e-5:
+    if not (math.isfinite(born_err0) and math.isfinite(born_err1)) or born_err0 > 1e-5 or born_err1 > 1e-5:
         print(f"[FAIL] AUDIT FAILED: Claimed probabilities diverge from matrix operands (err={max(born_err0, born_err1):.2e})")
         sys.exit(1)
 
@@ -617,12 +617,21 @@ def cmd_audit():
     by = 2.0 * (alpha.conjugate() * beta).imag
     bz = abs(alpha)**2 - abs(beta)**2
     bloch_claimed = data.get('bloch', {})
+    if not isinstance(bloch_claimed, dict):
+        print("[FAIL] AUDIT FAILED: Invalid bloch coordinates dictionary")
+        sys.exit(1)
+    for axis in ('x', 'y', 'z'):
+        val = bloch_claimed.get(axis, None)
+        if not (isinstance(val, (int, float)) and math.isfinite(val)):
+            print(f"[FAIL] AUDIT FAILED: Non-finite or missing bloch coordinate: {axis}")
+            sys.exit(1)
+
     bloch_err = max(
         abs(bloch_claimed.get('x', 0.0) - bx),
         abs(bloch_claimed.get('y', 0.0) - by),
         abs(bloch_claimed.get('z', 0.0) - bz)
     )
-    if bloch_err > 1e-4:
+    if not math.isfinite(bloch_err) or bloch_err > 1e-4:
         print(f"[FAIL] AUDIT FAILED: Bloch coordinates diverge from state vector (err={bloch_err:.2e})")
         sys.exit(1)
 

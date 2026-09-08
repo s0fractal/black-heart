@@ -1219,6 +1219,191 @@ class TestSecurityAuditG1toG9(unittest.TestCase):
         # Parameters and field must not be identically frozen
         self.assertTrue(p1.F != p2.F or p1.k != p2.k or f1.v != f2.v)
 
+    # ========================================================================
+    # K1: Transition Audit Rejects Unauthorized Chromosome Mutations
+    # ========================================================================
+    def test_k1_transition_audit_rejects_unauthorized_chromosome_mutation(self):
+        """Metamorphic transition audit must verify whole-genome invariance and reject off-target chromosome tampering."""
+        from organism import create_genesis_organism, Chromosome
+        from metamorphosis import contemplate_and_evolve, audit_metamorphic_transition, MetamorphicProvenanceError
+        import copy
+
+        p = create_genesis_organism()
+        p.chromosomes.append(Chromosome('OPT', 'Optimizer', '🌿 (🖤 (🌿 🤍)) 🤍', '🌿 🤍', 100))
+        p.chromosomes.append(Chromosome('LATE', 'Smaller gain', '🤍 x', 'x', 100))
+        p.organism_hash = p.compute_hash()
+
+        succ, log, receipt = contemplate_and_evolve(p)
+        self.assertIsNotNone(succ)
+        self.assertIsNotNone(receipt)
+
+        # Untampered transition passes
+        ok, msg = audit_metamorphic_transition(p, succ, receipt)
+        self.assertTrue(ok)
+        self.assertIn("TRANSITION VERIFIED", msg)
+
+        # Off-target chromosome corrupted in successor
+        tampered_succ = copy.deepcopy(succ)
+        tampered_receipt = copy.deepcopy(receipt)
+        off_target = next(c for c in tampered_succ.chromosomes if c.gene_id != receipt.gene_id)
+        off_target.expression = "corrupted"
+        off_target.expected_normal_form = "different"
+        tampered_succ.organism_hash = tampered_succ.compute_hash()
+        tampered_receipt.successor_hash = tampered_succ.organism_hash
+
+        with self.assertRaises(MetamorphicProvenanceError) as cm:
+            audit_metamorphic_transition(p, tampered_succ, tampered_receipt)
+        self.assertIn("altered in successor organism without authorization", str(cm.exception))
+
+    # ========================================================================
+    # K2: Transition Audit Rejects Unknown Rules and Forged Claims
+    # ========================================================================
+    def test_k2_transition_audit_rejects_unknown_rules_and_forged_receipt_claims(self):
+        """Metamorphic transition audit must reject unknown rules, false pre_terms, and fabricated size/ID claims."""
+        from organism import create_genesis_organism, Chromosome
+        from metamorphosis import contemplate_and_evolve, audit_metamorphic_transition, MetamorphicProvenanceError
+        import copy
+
+        p = create_genesis_organism()
+        p.chromosomes.append(Chromosome('OPT', 'Optimizer', '🌿 (🖤 (🌿 🤍)) 🤍', '🌿 🤍', 100))
+        p.organism_hash = p.compute_hash()
+
+        succ, log, receipt = contemplate_and_evolve(p)
+
+        # Unknown rule rejected
+        bad_rule = copy.deepcopy(receipt)
+        bad_rule.rule_name = "RULE_THAT_DOES_NOT_EXIST"
+        with self.assertRaises(MetamorphicProvenanceError) as cm:
+            audit_metamorphic_transition(p, succ, bad_rule)
+        self.assertIn("Unrecognized or unauthorized mutation rule", str(cm.exception))
+
+        # False pre-term claim rejected
+        bad_pre = copy.deepcopy(receipt)
+        bad_pre.pre_term = "false-history"
+        with self.assertRaises(MetamorphicProvenanceError) as cm:
+            audit_metamorphic_transition(p, succ, bad_pre)
+        self.assertIn("Claimed pre_term", str(cm.exception))
+
+        # Inflated size saved claim rejected
+        bad_size = copy.deepcopy(receipt)
+        bad_size.size_saved = 999999
+        with self.assertRaises(MetamorphicProvenanceError) as cm:
+            audit_metamorphic_transition(p, succ, bad_size)
+        self.assertIn("Claimed size_saved", str(cm.exception))
+
+        # Fabricated experiment ID rejected
+        bad_eid = copy.deepcopy(receipt)
+        bad_eid.experiment_id = "no-such-experiment"
+        with self.assertRaises(MetamorphicProvenanceError) as cm:
+            audit_metamorphic_transition(p, succ, bad_eid)
+        self.assertIn("Experiment ID derivation mismatch", str(cm.exception))
+
+    # ========================================================================
+    # K3: Frozen Evaluator Rejects Suspended Computations as Unsettled
+    # ========================================================================
+    def test_k3_frozen_evaluator_rejects_suspended_computations_as_unsettled(self):
+        """Computations running out of ATP budget must not receive semantic invariance or efficiency credit."""
+        from glyph import App, I, Y, Var, evaluate
+        from metamorphosis import FrozenEvaluator, MutationVerdict
+
+        y = App(Y, I)
+        orig = App(I, App(I, y))
+        ev = FrozenEvaluator([Var('x')], atp_budget_per_test=10)
+
+        res_a = evaluate(App(orig, Var('x')), max_atp=10)
+        res_b = evaluate(App(y, Var('x')), max_atp=10)
+        self.assertTrue(res_a.is_suspended())
+        self.assertTrue(res_b.is_suspended())
+
+        eval_receipt = ev.evaluate_transformation(orig, y)
+        self.assertFalse(eval_receipt.semantic_preserved)
+        self.assertEqual(eval_receipt.verdict, MutationVerdict.REJECTED_BUDGET_EXCEEDED)
+
+    # ========================================================================
+    # K4: Producer Binds Exact Winning Experiment Record
+    # ========================================================================
+    def test_k4_producer_binds_exact_winning_experiment_record(self):
+        """contemplate_and_evolve must link the exact winning candidate's experiment ID rather than last record."""
+        from organism import create_genesis_organism, Chromosome
+        from metamorphosis import contemplate_and_evolve
+
+        p = create_genesis_organism()
+        # Gene 1 has large ATP gain (15 ATP)
+        p.chromosomes.append(Chromosome('OPT', 'High gain optimizer', '🌿 (🖤 (🌿 🤍)) 🤍', '🌿 🤍', 100))
+        # Gene 2 has smaller ATP gain (1 ATP)
+        p.chromosomes.append(Chromosome('LATE', 'Low gain optimizer', '🤍 x', 'x', 100))
+        p.organism_hash = p.compute_hash()
+
+        succ, log, receipt = contemplate_and_evolve(p)
+        self.assertIsNotNone(receipt)
+
+        linked = next(x for x in log.records if x.experiment_id == receipt.experiment_id)
+        self.assertEqual(receipt.gene_id, "OPT")
+        self.assertEqual(linked.gene_id, "OPT")
+        self.assertEqual(linked.candidate_term, receipt.post_term)
+        self.assertEqual(linked.site_address, receipt.site_address)
+        self.assertEqual(linked.rule_name, receipt.rule_name)
+
+    # ========================================================================
+    # K5: Frozen Evaluator Rejects Empty Fixtures
+    # ========================================================================
+    def test_k5_frozen_evaluator_rejects_empty_fixtures(self):
+        """FrozenEvaluator with empty fixtures must not grant vacuous semantic credit."""
+        from glyph import App, I, Var
+        from metamorphosis import FrozenEvaluator, MutationVerdict
+
+        ev = FrozenEvaluator([])
+        z = ev.evaluate_transformation(App(I, I), Var('unrelated'))
+        self.assertFalse(z.semantic_preserved)
+        self.assertEqual(z.verdict, MutationVerdict.REJECTED_UNTESTED)
+        self.assertEqual(z.test_inputs_count, 0)
+
+    # ========================================================================
+    # K6: Quantum Audit Rejects NaN and Non-Finite Claims
+    # ========================================================================
+    def test_k6_quantum_audit_rejects_nan_and_nonfinite_claims(self):
+        """Topological quantum audit runner must reject NaN and non-finite probability/Bloch values."""
+        from quantum import QuantumPolyglotCompiler
+        from symbiosis import BraidWord
+        import copy, json, tempfile, io, contextlib
+        from pathlib import Path
+
+        q = QuantumPolyglotCompiler(BraidWord.from_generators(3, [1, 2, 1]))
+        blob = q.compile_pdf()
+        ns = {'__name__': 'trusted'}
+        exec(compile(q._build_runner_script(), "<runner>", "exec"), ns)
+        prefix = ns['MANIFEST_PREFIX'].encode('latin1')
+        start = blob.rfind(prefix)
+        end = blob.find(b'\n', start)
+        d = json.loads(blob[start + len(prefix):end].decode('utf-8'))
+
+        def run_qa(mutate_fn):
+            data = copy.deepcopy(d)
+            mutate_fn(data)
+            with tempfile.TemporaryDirectory() as td:
+                f = Path(td) / "subject.pdf"
+                f.write_bytes(blob[:start] + prefix + json.dumps(data).encode("utf-8") + blob[end:])
+                runner_ns = {'__name__': 'trusted', '__file__': str(f)}
+                exec(compile(q._build_runner_script(), "<runner>", "exec"), runner_ns)
+                buf = io.StringIO()
+                code = 0
+                with contextlib.redirect_stdout(buf):
+                    try:
+                        runner_ns['cmd_audit']()
+                    except SystemExit as se:
+                        code = se.code
+                return code, buf.getvalue()
+
+        # Legitimate passes
+        ok_code, ok_out = run_qa(lambda data: None)
+        self.assertEqual(ok_code, 0)
+        self.assertIn("AUDIT PASSED", ok_out)
+
+        # NaN probabilities fail
+        nan_code, nan_out = run_qa(lambda data: data.update(prob_0=float('nan'), prob_1=float('nan'), bloch={'x': float('nan'), 'y': float('nan'), 'z': float('nan')}))
+        self.assertEqual(nan_code, 1)
+        self.assertIn("AUDIT FAILED: Invalid or non-finite probability values", nan_out)
+
 if __name__ == "__main__":
     unittest.main()
 

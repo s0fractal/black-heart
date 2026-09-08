@@ -478,7 +478,7 @@ python3 successor.pdf --experiments
 
 ## 21. Comprehensive Test Suite
 
-Run all **108 unit tests** across all **14 engines** with a single command:
+Run all **114 unit tests** across all **14 engines** with a single command:
 ```bash
 # Unified test runner:
 python3 test_all.py
@@ -496,7 +496,7 @@ python3 test_cross_proof.py    # 3 tests: Bilateral cross-proofs & embedded code
 python3 test_continuum.py      # 4 tests: Suspended continuum thunks & incremental resumption
 python3 test_zk_glyph.py       # 5 tests: Pure-Python Ed25519 zero-knowledge proofs & NIZK
 python3 test_mesh.py           # 3 tests: Peer-to-peer living polyglot mesh sync & gossip
-python3 test_security_audit.py # 38 tests: Adversarial security audit, fail-closed verifiers (G1-G9, R1-R8, N1-N5, F1-F4, H1-H4, J1-J7)
+python3 test_security_audit.py # 44 tests: Adversarial security audit, fail-closed verifiers (G1-G9, R1-R8, N1-N5, F1-F4, H1-H4, J1-J7, K1-K6)
 python3 test_symbiosis.py      # 5 tests: Dialectical symbiosis & Artin braid group recombination
 python3 test_quantum.py        # 5 tests: Topological quantum computing, Fibonacci anyons, unitary audit
 python3 test_morphogenesis.py  # 7 tests: Gray-Scott PDEs, Turing bifurcation, marching squares
