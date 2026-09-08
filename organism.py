@@ -181,6 +181,15 @@ class Organism:
         child.organism_hash = child.compute_hash()
         return child
 
+    def generate_phenotype(self, steps: int = 300, grid_size: int = 36) -> Tuple[Any, Any]:
+        """Synthesizes the physical Turing reaction-diffusion morphogenetic phenotype for this organism."""
+        from morphogenesis import PhenotypeGenesis
+        return PhenotypeGenesis.from_hash(
+            hash_hex=self.organism_hash or self.compute_hash(),
+            steps=steps,
+            grid_size=grid_size
+        )
+
 # ============================================================================
 # COMPILER FOR POLYGLOT ORGANISM PDF
 # ============================================================================

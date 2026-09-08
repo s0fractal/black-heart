@@ -364,6 +364,43 @@ def cmd_quantum(args):
         print(f"    - Standalone:  python3 {out_path} --simulate")
         print(f"    - Measurement: python3 {out_path} --measure 1024\n")
 
+def cmd_morph(args):
+    """Generates Turing reaction-diffusion morphogenetic phenotype polyglots."""
+    from morphogenesis import PhenotypeGenesis, MorphogeneticPolyglotCompiler, TuringArchetype, PALETTES
+    import hashlib
+
+    seed_str = args.seed or f"black-heart:morph:{args.archetype}:{time.time()}"
+    seed_hash = hashlib.sha256(seed_str.encode("utf-8")).hexdigest()
+
+    print("\033[1;36m" + "=" * 68)
+    print("  %🖤 PROJECT BLACK-HEART — TURING MORPHOGENESIS ENGINE")
+    print("  \"The Chemical Basis of Morphogenesis\" (Alan Turing, 1952)")
+    print("=" * 68 + "\033[0m\n")
+
+    print(f"[*] Initializing {args.grid}x{args.grid} Torus (T^2) numerical PDE lattice...")
+    print(f"[*] Selected Archetype: {args.archetype.upper()}")
+    phenotype, field = PhenotypeGenesis.from_hash(
+        hash_hex=seed_hash,
+        steps=args.steps,
+        grid_size=args.grid,
+        forced_archetype=args.archetype
+    )
+
+    if args.palette and args.palette in PALETTES:
+        phenotype.palette_name = args.palette
+
+    print(f"[*] Simulating {args.steps} forward Euler steps (Du={phenotype.Du}, Dv={phenotype.Dv}, F={phenotype.F}, k={phenotype.k})...")
+    stats = phenotype.statistics
+    print(f"  [✓] Symmetry breaking: Var(V)={stats.get('var_v', 0.0):.6f}, V_max={stats.get('max_v', 0.0):.4f}")
+
+    print(f"[*] Compiling dual-layer executable PDF polyglot to: {args.output}...")
+    MorphogeneticPolyglotCompiler.compile_polyglot(phenotype, field, args.output)
+    size = os.path.getsize(args.output)
+    print(f"\033[1;32m[✓ SUCCESS] Synthesized Turing Morphogenesis Polyglot ({size} bytes)!\033[0m")
+    print(f"  View PDF:       open {args.output}")
+    print(f"  Execute Script: python3 {args.output} --info\n")
+
+
 def cmd_shell(args):
     """Interactive Hypervisor REPL for Project Black-Heart."""
     from symbiosis import (
@@ -634,7 +671,14 @@ def main():
     p_qc = q_subs.add_parser("compile", help="Compile standalone quantum circuit polyglot PDF")
     p_qc.add_argument("-b", "--braid", required=True, help="Braid formula or canonical name")
     p_qc.add_argument("-o", "--output", default="quantum_circuit.pdf", help="Output PDF polyglot path")
-    p_qc.add_argument("-t", "--title", help="Circuit title")
+    # morph
+    p_morph = subparsers.add_parser("morph", help="Turing Morphogenesis & Reaction-Diffusion Phenotypes")
+    p_morph.add_argument("-a", "--archetype", default="labyrinth", help="Archetype: spots, labyrinth, waves, holes, solitons, pulsars")
+    p_morph.add_argument("-s", "--steps", type=int, default=350, help="Simulation time steps (default: 350)")
+    p_morph.add_argument("-g", "--grid", type=int, default=40, help="Grid size on Torus T^2 (default: 40)")
+    p_morph.add_argument("-p", "--palette", default=None, help="Chromatic palette name")
+    p_morph.add_argument("-o", "--output", default="morphogenesis.pdf", help="Output polyglot PDF file")
+    p_morph.add_argument("--seed", default=None, help="Deterministic genome hash or seed string")
 
     args = parser.parse_args()
 
@@ -664,6 +708,8 @@ def main():
         cmd_shell(args)
     elif args.command == "quantum":
         cmd_quantum(args)
+    elif args.command == "morph":
+        cmd_morph(args)
     else:
         parser.print_help()
 

@@ -31,6 +31,7 @@ SUITES = [
     ("Security Audit & Fail-Closed Controls", "test_security_audit"),
     ("Dialectical Symbiosis & Topological Knots", "test_symbiosis"),
     ("Topological Quantum Topos & Anyons", "test_quantum"),
+    ("Turing Morphogenesis & Phenotypes", "test_morphogenesis"),
 ]
 
 def run_all_tests() -> bool:
