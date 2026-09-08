@@ -105,9 +105,20 @@ def _decode_point(s: bytes) -> Point:
         raise ValueError("Invalid point: fails curve equation")
     return (x, y)
 
-# ============================================================================
-# PUBLIC API: KEY DERIVATION, SIGN & VERIFY
-# ============================================================================
+def is_valid_public_key(pk_hex: str) -> bool:
+    """Validates that pk_hex is a valid 64-char hex string representing a canonical Ed25519 curve point in the prime-order subgroup."""
+    if not isinstance(pk_hex, str) or len(pk_hex) != 64:
+        return False
+    try:
+        raw = bytes.fromhex(pk_hex)
+        pt = _decode_point(raw)
+        if pt == (0, 1):
+            return False
+        if _scalar_mult(pt, L) != (0, 1):
+            return False
+        return True
+    except Exception:
+        return False
 
 def generate_keypair() -> Tuple[str, str]:
     """

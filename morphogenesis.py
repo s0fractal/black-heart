@@ -123,8 +123,28 @@ PALETTES: Dict[str, ChromaticPalette] = {
 
 def palette_from_hash(hash_hex: str) -> ChromaticPalette:
     keys = list(PALETTES.keys())
-    val = int(hash_hex[:8], 16) if hash_hex else 0
+    try:
+        raw = bytes.fromhex(hash_hex) if len(hash_hex) == 64 else hashlib.sha256(hash_hex.encode("utf-8")).digest()
+        val = sum(raw)
+    except Exception:
+        val = 0
     return PALETTES[keys[val % len(keys)]]
+
+def _fold_hash_entropy(hash_hex: str) -> int:
+    """Folds all 256 bits of a SHA-256 hash into a 64-bit integer seed."""
+    if not hash_hex:
+        return 1337
+    try:
+        raw = bytes.fromhex(hash_hex) if len(hash_hex) == 64 else hashlib.sha256(hash_hex.encode("utf-8")).digest()
+        w0 = int.from_bytes(raw[0:8], "little")
+        w1 = int.from_bytes(raw[8:16], "little")
+        w2 = int.from_bytes(raw[16:24], "little")
+        w3 = int.from_bytes(raw[24:32], "little")
+        # Mix 4 words with 64-bit coprime multipliers to prevent XOR cancellation on repetitive patterns
+        h = (w0 * 0x517cc1b727220a95 ^ w1 * 0x6c62272e07bb0142 ^ w2 * 0x62b821756295c58d ^ w3 * 0x43beae67) & 0xFFFFFFFFFFFFFFFF
+        return h if h != 0 else 1337
+    except Exception:
+        return 1337
 
 # ============================================================================
 # NUMERICAL REACTION-DIFFUSION PDE SOLVER (TOROIDAL MANIFOLD T^2)
@@ -178,9 +198,12 @@ class MorphogeneticField:
                     self.v[idx] = 0.25 - noise
 
     def seed_from_hash(self, hash_hex: str) -> None:
-        """Deterministically initializes perturbation seeds based on a SHA-256 hash."""
+        """
+        Deterministically initializes perturbation seeds based on full 256-bit SHA-256 entropy.
+        Note: Morphogenesis produces a continuous dynamical projection, not an injective commitment.
+        """
         w, h = self.width, self.height
-        val = int(hash_hex[:16], 16) if hash_hex else 1337
+        val = _fold_hash_entropy(hash_hex)
 
         # Initialize uniform substrate
         self.u = [1.0] * self.size
@@ -397,8 +420,8 @@ class PhenotypeGenesis:
         grid_size: int = 48,
         forced_archetype: Optional[str] = None
     ) -> Tuple[Phenotype, MorphogeneticField]:
-        """Translates a SHA-256 hash into a unique deterministic phenotype."""
-        val = int(hash_hex[:16], 16) if hash_hex else 1337
+        """Translates a SHA-256 hash into a deterministic continuous morphogenetic phenotype projection."""
+        val = _fold_hash_entropy(hash_hex)
 
         if forced_archetype:
             archetype = TuringArchetype.from_key(forced_archetype)

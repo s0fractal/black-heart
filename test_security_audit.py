@@ -996,5 +996,229 @@ class TestSecurityAuditG1toG9(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("already in normal form", err)
 
+    # ========================================================================
+    # J1: B4 / Unsupported Braid Profile Strictly Rejected
+    # ========================================================================
+    def test_j1_unsupported_b4_braid_rejected(self):
+        """Fibonacci 1-qubit system must strictly reject B4 or generator index > 2."""
+        from quantum import FibonacciQuantumSystem, UnsupportedBraidProfileError
+        from symbiosis import BraidWord
+
+        sys_q = FibonacciQuantumSystem()
+        # B3 relation holds within numerical tolerance: sigma_1 sigma_2 sigma_1 == sigma_2 sigma_1 sigma_2
+        u_b3_a = sys_q.compile_braid_to_unitary(BraidWord.from_generators(3, [1, 2, 1]))
+        u_b3_b = sys_q.compile_braid_to_unitary(BraidWord.from_generators(3, [2, 1, 2]))
+        diff = max(abs(getattr(u_b3_a, k) - getattr(u_b3_b, k)) for k in ("m00", "m01", "m10", "m11"))
+        self.assertLess(diff, 1e-12)
+
+        # B4 braid on 4 strands must be rejected
+        with self.assertRaises(UnsupportedBraidProfileError) as ctx:
+            sys_q.compile_braid_to_unitary(BraidWord.from_generators(4, [2, 3, 2]))
+        self.assertIn("only supports up to 3 strands", str(ctx.exception))
+
+        # Generator sigma_3 on any braid must be rejected
+        with self.assertRaises(UnsupportedBraidProfileError) as ctx2:
+            sys_q.generator_matrix(3, 1)
+        self.assertIn("only supports generators sigma_1 and sigma_2", str(ctx2.exception))
+
+    # ========================================================================
+    # J2: Strict Quantum Audit from Frozen Operands (Rejects Zero Matrix & Bad Probabilities)
+    # ========================================================================
+    def test_j2_quantum_audit_rejects_zero_matrix_and_invalid_probabilities(self):
+        """Standalone quantum runner cmd_audit must recompute invariants from operands and reject tampered state."""
+        from quantum import QuantumPolyglotCompiler, ComplexMatrix2x2, QUANTUM_MANIFEST_PREFIX
+        from symbiosis import BraidWord
+
+        q = QuantumPolyglotCompiler(BraidWord.from_generators(3, [1, 2, 1]))
+        qb = q.compile_pdf()
+
+        def execute_audit(blob, mutate_fn):
+            p = QUANTUM_MANIFEST_PREFIX.encode("latin1")
+            start = blob.rfind(p)
+            end = blob.find(b"\n", start)
+            data = json.loads(blob[start + len(p):end].decode("utf-8"))
+            mutate_fn(data)
+            with tempfile.TemporaryDirectory() as td:
+                path = Path(td) / "test_audit.pdf"
+                path.write_bytes(blob[:start] + QUANTUM_MANIFEST_PREFIX.encode("latin1") + json.dumps(data).encode("utf-8") + blob[end:])
+                ns = {"__name__": "audit_runner", "__file__": str(path)}
+                exec(compile(q._build_runner_script(), "<runner>", "exec"), ns)
+                out = io.StringIO()
+                try:
+                    with contextlib.redirect_stdout(out):
+                        ns["cmd_audit"]()
+                    code = 0
+                except SystemExit as se:
+                    code = se.code
+                return code, out.getvalue()
+
+        # Legitimate circuit must pass
+        code_ok, out_ok = execute_audit(qb, lambda d: None)
+        self.assertEqual(code_ok, 0)
+        self.assertIn("AUDIT PASSED", out_ok)
+
+        # Zero matrix must fail unitarity
+        code_zero, out_zero = execute_audit(qb, lambda d: d.update(unitary=ComplexMatrix2x2.zero().to_list()))
+        self.assertEqual(code_zero, 1)
+        self.assertIn("AUDIT FAILED", out_zero)
+        self.assertIn("Unitarity violation", out_zero)
+
+        # Negative probability must fail bounds
+        code_neg, out_neg = execute_audit(qb, lambda d: d.update(prob_0=-1, prob_1=2))
+        self.assertEqual(code_neg, 1)
+        self.assertIn("AUDIT FAILED", out_neg)
+        self.assertIn("Probability bounds violated", out_neg)
+
+    # ========================================================================
+    # J3: Organism Verification is Pure and Idempotent
+    # ========================================================================
+    def test_j3_organism_verification_is_pure_and_idempotent(self):
+        """Organism verify() must not mutate genomic hash or invalidate subsequent verification."""
+        from organism import create_genesis_organism
+
+        org = create_genesis_organism()
+        original_hash = org.organism_hash
+
+        first_verify = org.verify()
+        self.assertTrue(first_verify)
+        self.assertEqual(org.organism_hash, original_hash)
+        self.assertEqual(org.compute_hash(), original_hash)
+
+        # Repeated verify() calls must remain completely sound and idempotent
+        for _ in range(5):
+            self.assertTrue(org.verify())
+            self.assertEqual(org.organism_hash, original_hash)
+            self.assertEqual(org.compute_hash(), original_hash)
+
+    # ========================================================================
+    # J4: Organism Rejects Non-Hex or Off-Curve Public Key
+    # ========================================================================
+    def test_j4_organism_rejects_non_hex_or_off_curve_public_key(self):
+        """Organism verify() must fail if public_key_hex is not valid hex on the Ed25519 curve."""
+        from organism import Organism, Chromosome
+        from crypto import is_valid_public_key
+
+        # 'z'*64 is not valid hex
+        self.assertFalse(is_valid_public_key("z" * 64))
+        bogus_hex = Organism(0, "00" * 32, "z" * 64, "", [Chromosome("x", "x", "x", "x")])
+        self.assertFalse(bogus_hex.verify())
+
+        # '00'*32 is not in the prime-order subgroup
+        self.assertFalse(is_valid_public_key("00" * 32))
+        bogus_zero = Organism(0, "00" * 32, "00" * 32, "", [Chromosome("x", "x", "x", "x")])
+        self.assertFalse(bogus_zero.verify())
+
+    # ========================================================================
+    # J5: Dual-Vault Amalgamation Preserves Preexisting Namespaced Files
+    # ========================================================================
+    def test_j5_dual_vault_amalgamation_preserves_preexisting_namespaced_files(self):
+        """Vault amalgamation must never overwrite or destroy preexisting files from either parent."""
+        from symbiosis import amalgamate_dual_vaults
+
+        def make_vault(td, dirname, files_dict):
+            root = Path(td) / dirname
+            root.mkdir()
+            for name, val in files_dict.items():
+                p = root / name
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_bytes(val)
+            return V.pack_files_to_vault(list(files_dict), str(root))[0]
+
+        with tempfile.TemporaryDirectory() as td:
+            t = Path(td)
+            vault_a = make_vault(td, "a", {"x": b"A", "lineage_b/x": b"preexisting-A"})
+            vault_b = make_vault(td, "b", {"x": b"B"})
+
+            merged, _ = amalgamate_dual_vaults(vault_a, vault_b)
+            dest = t / "out"
+            dest.mkdir()
+            V.unpack_vault_bytes(merged, str(dest))
+
+            unpacked = {str(p.relative_to(dest)): p.read_bytes() for p in dest.rglob("*") if p.is_file()}
+
+            # Both original A files must be preserved exactly!
+            self.assertIn("x", unpacked)
+            self.assertEqual(unpacked["x"], b"A")
+            self.assertIn("lineage_b/x", unpacked)
+            self.assertEqual(unpacked["lineage_b/x"], b"preexisting-A")
+
+            # B's conflicting file must be disambiguated to lineage_b_2/x without loss!
+            self.assertIn("lineage_b_2/x", unpacked)
+            self.assertEqual(unpacked["lineage_b_2/x"], b"B")
+
+    # ========================================================================
+    # J6: Lineage Audit Rejects Forged Child or Parent Hashes
+    # ========================================================================
+    def test_j6_lineage_audit_rejects_forged_child_or_parent_hashes(self):
+        """Symbiotic polyglot audit_lineage must reject tampered child_hash or parent_hash."""
+        from symbiosis import SymbiosisPolyglotCompiler, SYMBIOSIS_MANIFEST_PREFIX, dialectical_crossover
+        from organism import create_genesis_organism
+
+        a = create_genesis_organism(0)
+        b = create_genesis_organism(1)
+        c, braid = dialectical_crossover(a, b)
+
+        sc = SymbiosisPolyglotCompiler(c, a, b, braid)
+        sb = sc.compile_pdf()
+
+        def execute_symb_audit(blob, mutate_fn):
+            p = SYMBIOSIS_MANIFEST_PREFIX.encode("latin1")
+            start = blob.rfind(p)
+            end = blob.find(b"\n", start)
+            data = json.loads(blob[start + len(p):end].decode("utf-8"))
+            mutate_fn(data)
+            with tempfile.TemporaryDirectory() as td:
+                path = Path(td) / "test_symb_audit.pdf"
+                path.write_bytes(blob[:start] + SYMBIOSIS_MANIFEST_PREFIX.encode("latin1") + json.dumps(data).encode("utf-8") + blob[end:])
+                ns = {"__name__": "audit_runner", "__file__": str(path)}
+                exec(compile(sc._build_runner_script(), "<runner>", "exec"), ns)
+                out = io.StringIO()
+                try:
+                    with contextlib.redirect_stdout(out):
+                        ns["audit_lineage"]()
+                    code = 0
+                except SystemExit as se:
+                    code = se.code
+                return code, out.getvalue()
+
+        # Legitimate symbiotic document must pass
+        code_ok, out_ok = execute_symb_audit(sb, lambda d: None)
+        self.assertEqual(code_ok, 0)
+        self.assertIn("METABOLIC REPLAY & GENOMIC INTEGRITY VERIFIED", out_ok)
+
+        # Forged child hash must fail
+        code_child, out_child = execute_symb_audit(sb, lambda d: d.update(child_hash="f" * 64))
+        self.assertEqual(code_child, 1)
+        self.assertIn("LINEAGE AUDIT FAILED", out_child)
+        self.assertIn("Child genomic hash mismatch", out_child)
+
+        # Forged parent hash must fail
+        code_parent, out_parent = execute_symb_audit(sb, lambda d: d.update(parent_a_hash="a" * 64))
+        self.assertEqual(code_parent, 1)
+        self.assertIn("LINEAGE AUDIT FAILED", out_parent)
+        self.assertIn("Parent derivation hash mismatch", out_parent)
+
+    # ========================================================================
+    # J7: Morphogenesis Full-Entropy Hash Dependence
+    # ========================================================================
+    def test_j7_morphogenesis_full_entropy_hash_dependence(self):
+        """Morphogenesis seed and parameters must fold full 256 bits of SHA-256 entropy."""
+        from morphogenesis import PhenotypeGenesis, _fold_hash_entropy
+
+        h1 = "123456789abcdef0" + "0" * 48
+        h2 = "123456789abcdef0" + "f" * 48
+
+        # Hashes sharing the first 16 hex chars have different 256-bit entropy folds
+        v1 = _fold_hash_entropy(h1)
+        v2 = _fold_hash_entropy(h2)
+        self.assertNotEqual(v1, v2)
+
+        p1, f1 = PhenotypeGenesis.from_hash(h1, steps=5, grid_size=16)
+        p2, f2 = PhenotypeGenesis.from_hash(h2, steps=5, grid_size=16)
+
+        # Parameters and field must not be identically frozen
+        self.assertTrue(p1.F != p2.F or p1.k != p2.k or f1.v != f2.v)
+
 if __name__ == "__main__":
     unittest.main()
+

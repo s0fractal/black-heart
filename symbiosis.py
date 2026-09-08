@@ -430,15 +430,38 @@ def amalgamate_dual_vaults(
             for root, _, files in os.walk(dir_b):
                 for f in files:
                     rel = os.path.relpath(os.path.join(root, f), dir_b)
-                    target = os.path.join(merged_files_dir, rel)
-                    # If conflict exists and content differs, store in lineage
-                    if os.path.exists(target):
-                        with open(target, "rb") as f1, open(os.path.join(root, f), "rb") as f2:
-                            if f1.read() != f2.read():
-                                target = os.path.join(merged_files_dir, "lineage_b", rel)
-                    os.makedirs(os.path.dirname(target), exist_ok=True)
-                    with open(os.path.join(root, f), "rb") as rf, open(target, "wb") as wf:
-                        wf.write(rf.read())
+                    b_path = os.path.join(root, f)
+                    with open(b_path, "rb") as rf:
+                        b_content = rf.read()
+
+                    cand_target = os.path.join(merged_files_dir, rel)
+                    if not os.path.exists(cand_target):
+                        target = cand_target
+                    else:
+                        # Existing file at target path. Check content:
+                        with open(cand_target, "rb") as ef:
+                            if ef.read() == b_content:
+                                # Identical content, safely deduplicate without collision
+                                continue
+                        # Content differs: find a non-colliding namespace target
+                        cand_idx = 1
+                        while True:
+                            prefix = "lineage_b" if cand_idx == 1 else f"lineage_b_{cand_idx}"
+                            cand_ns_target = os.path.join(merged_files_dir, prefix, rel)
+                            if not os.path.exists(cand_ns_target):
+                                target = cand_ns_target
+                                break
+                            # Check if existing in this namespace is identical
+                            with open(cand_ns_target, "rb") as ef:
+                                if ef.read() == b_content:
+                                    target = None  # Already present identically
+                                    break
+                            cand_idx += 1
+
+                    if target:
+                        os.makedirs(os.path.dirname(target), exist_ok=True)
+                        with open(target, "wb") as wf:
+                            wf.write(b_content)
 
         # Collect all merged files to pack
         packed_rel_paths = []
@@ -505,26 +528,59 @@ def audit_lineage():
     print("=================================================================")
     print("  %\\U0001f5a4 BLACK-HEART DIALECTICAL SYMBIOSIS LINEAGE AUDITOR")
     print("=================================================================\\n")
-    print(f"[*] Child Generation:    #{{data['generation']}}")
-    print(f"[*] Child Hash:          \\u2693 {{data['child_hash'][:32]}}...")
-    print(f"[*] Parent A (Thesis):   \\u2693 {{data['parent_a_hash'][:32]}}...")
+    print(f"[*] Child Generation:      #{{data['generation']}}")
+    print(f"[*] Claimed Child Hash:    \\u2693 {{data['child_hash'][:32]}}...")
+    print(f"[*] Parent A (Thesis):     \\u2693 {{data['parent_a_hash'][:32]}}...")
     print(f"[*] Parent B (Antithesis): \\u2693 {{data['parent_b_hash'][:32]}}...")
-    print(f"[*] Braid Presentation:  {{data['braid_formula']}}")
-    print(f"[*] Topological Writhe:  {{data['braid_writhe']}} (Crossings: {{data['braid_crossings']}})")
-    print(f"[*] Vital Chromosomes:   {{len(data['chromosomes'])}} active\\n")
+    print(f"[*] Braid Presentation:    {{data['braid_formula']}}")
+    print(f"[*] Vital Chromosomes:     {{len(data['chromosomes'])}} active\\n")
 
-    # Verify metabolism
+    # 1. Recompute and verify child's genomic identity hash
     try:
+        from organism import Organism, Chromosome
+        import hashlib
+        child_chroms = [Chromosome.from_dict(c) for c in data.get("chromosomes", [])]
+        child_org = Organism(
+            generation=data.get("generation", 0),
+            parent_hash=data.get("parent_hash", ""),
+            public_key_hex=data.get("public_key_hex", ""),
+            secret_key_hex="",
+            chromosomes=child_chroms,
+            birth_timestamp_utc=data.get("birth_timestamp_utc", "")
+        )
+        recomputed_child_hash = child_org.compute_hash()
+        claimed_child_hash = data.get("child_hash", "")
+        if claimed_child_hash != recomputed_child_hash:
+            print(f"[FAIL] LINEAGE AUDIT FAILED: Child genomic hash mismatch!")
+            print(f"       Claimed:    {{claimed_child_hash}}")
+            print(f"       Recomputed: {{recomputed_child_hash}}")
+            sys.exit(1)
+
+        # 2. Verify parental derivation hash
+        parent_a = data.get("parent_a_hash", "")
+        parent_b = data.get("parent_b_hash", "")
+        expected_parent_hash = hashlib.sha256(f"{{parent_a}}{{parent_b}}".encode("utf-8")).hexdigest()
+        if data.get("parent_hash") != expected_parent_hash:
+            print(f"[FAIL] LINEAGE AUDIT FAILED: Parent derivation hash mismatch!")
+            print(f"       Claimed parent_hash: {{data.get('parent_hash')}}")
+            print(f"       Expected derivation: {{expected_parent_hash}}")
+            sys.exit(1)
+
+        # 3. Verify metabolism
         from glyph import parse, evaluate
-        for chrom in data["chromosomes"]:
-            t = parse(chrom["expression"])
-            res = evaluate(t, max_atp=chrom.get("max_atp", 500))
-            if not res.is_settled() or str(res.term) != chrom["expected_normal_form"]:
-                print(f"[FAIL] Chromosome {{chrom['gene_id']}} metabolic divergence: expected '{{chrom['expected_normal_form']}}', got '{{res.term}}'")
+        for chrom in child_chroms:
+            t = parse(chrom.expression)
+            res = evaluate(t, max_atp=chrom.max_atp)
+            if not res.is_settled() or str(res.term) != chrom.expected_normal_form:
+                print(f"[FAIL] Chromosome {{chrom.gene_id}} metabolic divergence: expected '{{chrom.expected_normal_form}}', got '{{res.term}}'")
                 sys.exit(1)
-        print("\\033[1;32m[\\u2713] SYMBIOTIC LINEAGE & METABOLIC PROVENANCE VERIFIED (Q.E.D.)\\033[0m\\n")
+
+        print(f"[*] Child Genomic Integrity:   \\u2713 SOUND (Hash: {{recomputed_child_hash[:16]}}...)")
+        print(f"[*] Lineage Derivation Form:   \\u2713 SOUND (Parent Hash: {{expected_parent_hash[:16]}}...)")
+        print(f"[*] Metabolic Execution:       \\u2713 SOUND ({{len(child_chroms)}} chromosomes settled)")
+        print("\\033[1;32m[\\u2713] METABOLIC REPLAY & GENOMIC INTEGRITY VERIFIED\\033[0m\\n")
     except Exception as e:
-        print(f"[FAIL] Metabolic evaluation error: {{e}}")
+        print(f"[FAIL] Lineage audit error: {{e}}")
         sys.exit(1)
 
 if __name__ == "__main__":
@@ -569,6 +625,8 @@ if __name__ == "__main__":
         manifest_data = {
             "generation": self.child.generation,
             "child_hash": self.child.organism_hash,
+            "public_key_hex": self.child.public_key_hex,
+            "birth_timestamp_utc": self.child.birth_timestamp_utc,
             "parent_a_hash": self.parent_a.organism_hash,
             "parent_b_hash": self.parent_b.organism_hash,
             "parent_hash": self.child.parent_hash,

@@ -206,7 +206,7 @@ class TestDialecticalSymbiosis(unittest.TestCase):
         )
         self.assertEqual(proc.returncode, 0)
         self.assertIn("BLACK-HEART DIALECTICAL SYMBIOSIS LINEAGE AUDITOR", proc.stdout)
-        self.assertIn("SYMBIOTIC LINEAGE & METABOLIC PROVENANCE VERIFIED (Q.E.D.)", proc.stdout)
+        self.assertIn("METABOLIC REPLAY & GENOMIC INTEGRITY VERIFIED", proc.stdout)
 
 if __name__ == "__main__":
     unittest.main()

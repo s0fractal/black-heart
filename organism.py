@@ -52,6 +52,16 @@ class Chromosome:
             "vital": self.vital
         }
 
+    def genomic_dict(self) -> Dict[str, Any]:
+        """Immutable genetic constitution (independent of runtime execution state)."""
+        return {
+            "gene_id": self.gene_id,
+            "gene_name": self.gene_name,
+            "expression": self.expression,
+            "expected_normal_form": self.expected_normal_form,
+            "max_atp": self.max_atp
+        }
+
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> Chromosome:
         return cls(
@@ -75,12 +85,16 @@ class Organism:
     organism_hash: str = ""
 
     def compute_hash(self) -> str:
+        """
+        Computes immutable cryptographic genomic identity hash.
+        Only hashes the organism's invariant genetic constitution.
+        """
         data = {
             "generation": self.generation,
             "parent_hash": self.parent_hash,
             "public_key_hex": self.public_key_hex,
             "birth_timestamp_utc": self.birth_timestamp_utc,
-            "chromosomes": [c.to_dict() for c in self.chromosomes]
+            "chromosomes": [c.genomic_dict() for c in self.chromosomes]
         }
         raw = json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
         return hashlib.sha256(raw).hexdigest()
@@ -88,20 +102,26 @@ class Organism:
     def verify(self) -> bool:
         """
         Verifies the organism's structural, cryptographic, and metabolic soundness.
-        Returns True if completely sound; False otherwise.
+        Pure and idempotent: repeated verification never invalidates genomic identity.
         """
+        computed = self.compute_hash()
         if self.organism_hash:
-            if self.organism_hash != self.compute_hash():
+            if self.organism_hash != computed:
                 return False
         else:
-            self.organism_hash = self.compute_hash()
+            self.organism_hash = computed
 
-        if not self.public_key_hex or len(self.public_key_hex) != 64:
+        from crypto import is_valid_public_key, public_key_from_secret
+
+        if not is_valid_public_key(self.public_key_hex):
             return False
 
-        if self.secret_key_hex and len(self.secret_key_hex) == 64:
+        if self.secret_key_hex:
             try:
-                derived_pk = public_key_from_secret(bytes.fromhex(self.secret_key_hex)).hex()
+                sk_bytes = bytes.fromhex(self.secret_key_hex)
+                if len(sk_bytes) != 32:
+                    return False
+                derived_pk = public_key_from_secret(sk_bytes).hex()
                 if derived_pk != self.public_key_hex:
                     return False
             except Exception:

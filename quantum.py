@@ -112,11 +112,19 @@ class ComplexMatrix2x2:
 # 2. FIBONACCI ANYON QUANTUM TOPOS
 # ============================================================================
 
+class UnsupportedBraidProfileError(ValueError):
+    """Raised when a braid word contains generators or strands outside the supported representation."""
+    pass
+
 class FibonacciQuantumSystem:
     """
-    Topological Quantum Computer based on Fibonacci Anyons (SU(2)_3 Chern-Simons).
-    Fusion rule: τ ⊗ τ = 1 ⊕ τ
-    Quantum dimension: d_τ = φ = (1 + √5) / 2
+    Simulates topological quantum computing with Fibonacci anyons in the
+    SU(2)_3 Chern-Simons / Temperley-Lieb TL_3(q) modular tensor category.
+
+    Strict Profile:
+      - Multi-strand profile: Braid group B_3 (3 strands, 4 anyons with vacuum total charge).
+      - Qubit basis: |0> = ((1,2)->1), |1> = ((1,2)->tau).
+      - Generators: sigma_1, sigma_2 and their inverses.
     """
     PHI = (1.0 + math.sqrt(5.0)) / 2.0  # Golden Ratio ~1.6180339887
     INV_PHI = 1.0 / PHI                  # φ^(-1) ~0.6180339887
@@ -152,19 +160,31 @@ class FibonacciQuantumSystem:
         self.sigma2_inv = self.sigma2.dagger()
 
     def generator_matrix(self, strand_index: int, sign: int) -> ComplexMatrix2x2:
-        """Returns the unitary matrix corresponding to Artin generator σ_i or its inverse."""
+        """
+        Returns the unitary matrix corresponding to Artin generator σ_i or its inverse.
+        Strictly restricted to B3 generators sigma_1 and sigma_2.
+        """
         if strand_index == 1:
             return self.sigma1 if sign > 0 else self.sigma1_inv
         elif strand_index == 2:
             return self.sigma2 if sign > 0 else self.sigma2_inv
         else:
-            return ComplexMatrix2x2.identity()
+            raise UnsupportedBraidProfileError(
+                f"Fibonacci 1-qubit representation only supports generators sigma_1 and sigma_2 (B3). "
+                f"Received unsupported generator index sigma_{strand_index}."
+            )
 
     def compile_braid_to_unitary(self, braid: BraidWord) -> ComplexMatrix2x2:
         """
-        Compiles an arbitrary Artin braid word into an exact 2x2 unitary quantum gate matrix:
+        Compiles an Artin braid word into an exact 2x2 unitary quantum gate matrix:
         U(B) = ∏ ρ(σ_{i_k})^{s_k}
+        Validates that the braid strictly conforms to the B3 profile (strands <= 3).
         """
+        if braid.num_strands > 3:
+            raise UnsupportedBraidProfileError(
+                f"Fibonacci 1-qubit representation only supports up to 3 strands (B3). "
+                f"Received braid with {braid.num_strands} strands."
+            )
         u = ComplexMatrix2x2.identity()
         for crossing in braid.crossings:
             g = self.generator_matrix(crossing.strand_index, crossing.sign)
@@ -526,15 +546,87 @@ def cmd_measure(shots=1024):
 
 def cmd_audit():
     data = load_manifest()
-    det_err = abs(data['det_abs'] - 1.0)
-    prob_err = abs(data['prob_0'] + data['prob_1'] - 1.0)
-    r_sq = data['bloch']['x']**2 + data['bloch']['y']**2 + data['bloch']['z']**2
-    bloch_err = abs(r_sq - 1.0)
-    if det_err < 1e-6 and prob_err < 1e-6 and bloch_err < 1e-4:
-        print(f"[\u2713] AUDIT PASSED: Unitarity err={det_err:.2e}, Born err={prob_err:.2e}, Bloch err={bloch_err:.2e}")
-    else:
-        print(f"[FAIL] AUDIT FAILED: det_err={det_err}, prob_err={prob_err}, bloch_err={bloch_err}")
+    import math
+
+    # 1. Parse and validate unitary matrix operands directly from frozen data
+    u_raw = data.get('unitary')
+    if not u_raw or len(u_raw) != 2 or len(u_raw[0]) != 2 or len(u_raw[1]) != 2:
+        print("[FAIL] AUDIT FAILED: Malformed or missing unitary matrix operand")
         sys.exit(1)
+
+    try:
+        m00 = complex(u_raw[0][0][0], u_raw[0][0][1])
+        m01 = complex(u_raw[0][1][0], u_raw[0][1][1])
+        m10 = complex(u_raw[1][0][0], u_raw[1][0][1])
+        m11 = complex(u_raw[1][1][0], u_raw[1][1][1])
+    except Exception as e:
+        print(f"[FAIL] AUDIT FAILED: Non-numeric matrix entries: {e}")
+        sys.exit(1)
+
+    for c in (m00, m01, m10, m11):
+        if not (math.isfinite(c.real) and math.isfinite(c.imag)):
+            print("[FAIL] AUDIT FAILED: Non-finite matrix entries")
+            sys.exit(1)
+
+    # 2. Recompute Unitarity U_dagger*U = I
+    c00 = (abs(m00)**2 + abs(m10)**2).real
+    c01 = m00.conjugate() * m01 + m10.conjugate() * m11
+    c10 = m01.conjugate() * m00 + m11.conjugate() * m10
+    c11 = (abs(m01)**2 + abs(m11)**2).real
+
+    unitarity_err = max(abs(c00 - 1.0), abs(c01), abs(c10), abs(c11 - 1.0))
+    if unitarity_err > 1e-5:
+        print(f"[FAIL] AUDIT FAILED: Unitarity violation U_dagger*U != I (err={unitarity_err:.2e})")
+        sys.exit(1)
+
+    # 3. Determinant |det(U)| = 1
+    det = m00 * m11 - m01 * m10
+    det_err = abs(abs(det) - 1.0)
+    if det_err > 1e-5:
+        print(f"[FAIL] AUDIT FAILED: Determinant violation |det(U)| != 1 (err={det_err:.2e})")
+        sys.exit(1)
+
+    # 4. Probability bounds [0, 1] and sum = 1
+    p0 = data.get('prob_0', None)
+    p1 = data.get('prob_1', None)
+    if not (isinstance(p0, (int, float)) and isinstance(p1, (int, float))):
+        print("[FAIL] AUDIT FAILED: Invalid probability types")
+        sys.exit(1)
+
+    if p0 < 0.0 or p0 > 1.0 or p1 < 0.0 or p1 > 1.0:
+        print(f"[FAIL] AUDIT FAILED: Probability bounds violated: P(0)={p0}, P(1)={p1}")
+        sys.exit(1)
+
+    prob_sum_err = abs(p0 + p1 - 1.0)
+    if prob_sum_err > 1e-5:
+        print(f"[FAIL] AUDIT FAILED: Probability sum violation: {p0} + {p1} != 1 (err={prob_sum_err:.2e})")
+        sys.exit(1)
+
+    # 5. Recompute Born probabilities from state |psi> = U |0> = (m00, m10)
+    recomp_p0 = abs(m00)**2
+    recomp_p1 = abs(m10)**2
+    born_err0 = abs(p0 - recomp_p0)
+    born_err1 = abs(p1 - recomp_p1)
+    if born_err0 > 1e-5 or born_err1 > 1e-5:
+        print(f"[FAIL] AUDIT FAILED: Claimed probabilities diverge from matrix operands (err={max(born_err0, born_err1):.2e})")
+        sys.exit(1)
+
+    # 6. Recompute Bloch vector
+    alpha, beta = m00, m10
+    bx = 2.0 * (alpha.conjugate() * beta).real
+    by = 2.0 * (alpha.conjugate() * beta).imag
+    bz = abs(alpha)**2 - abs(beta)**2
+    bloch_claimed = data.get('bloch', {})
+    bloch_err = max(
+        abs(bloch_claimed.get('x', 0.0) - bx),
+        abs(bloch_claimed.get('y', 0.0) - by),
+        abs(bloch_claimed.get('z', 0.0) - bz)
+    )
+    if bloch_err > 1e-4:
+        print(f"[FAIL] AUDIT FAILED: Bloch coordinates diverge from state vector (err={bloch_err:.2e})")
+        sys.exit(1)
+
+    print(f"[\u2713] AUDIT PASSED: Unitarity err={unitarity_err:.2e}, Born err={prob_sum_err:.2e}, Bloch err={bloch_err:.2e}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Black-Heart Topological Quantum Polyglot")
