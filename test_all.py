@@ -32,6 +32,7 @@ SUITES = [
     ("Dialectical Symbiosis & Topological Knots", "test_symbiosis"),
     ("Topological Quantum Topos & Anyons", "test_quantum"),
     ("Turing Morphogenesis & Phenotypes", "test_morphogenesis"),
+    ("Autonomous Form Metamorphosis", "test_metamorphosis"),
 ]
 
 def run_all_tests() -> bool:

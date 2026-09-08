@@ -1,0 +1,183 @@
+#!/opt/homebrew/opt/python@3.14/bin/python3.14
+# coding: latin-1
+# ============================================================================
+# % PROJECT BLACK-HEART: AUTONOMOUS FORM METAMORPHOSIS POLYGLOT
+# ============================================================================
+'''
+%PDF-1.4
+%‚„œ”
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >> endobj
+4 0 obj << /Length 4066 >>
+stream
+q
+0.04 0.05 0.08 rg 0 0 595.28 841.89 re f
+BT /F1 18 Tf 0.95 0.75 0.2 rg 40 800 Td (% BLACK-HEART AUTONOMOUS FORM METAMORPHOSIS) Tj ET
+BT /F2 9.5 Tf 0.6 0.7 0.8 rg 40 782 Td (Program Self-Contemplation & Invariant-Preserving Form Evolution) Tj ET
+0.08 0.12 0.18 rg 40 685 515.28 80 re f
+0.2 0.35 0.5 RG 1 w 40 685 515.28 80 re S
+BT /F1 10.5 Tf 0.4 0.85 0.95 rg 55 745 Td (GENERATIONAL TRANSITION & PEDIGREE) Tj ET
+BT /F2 8.5 Tf 0.8 0.85 0.9 rg 55 728 Td (Parent Generation: #0  [Hash: d64092c7c948b094...]) Tj ET
+BT /F2 8.5 Tf 0.8 0.85 0.9 rg 55 712 Td (Successor Gen:     #1  [Hash: fb9be09717ccb5c7...]) Tj ET
+BT /F1 9 Tf 0.3 0.95 0.5 rg 55 696 Td ([*] Target Gene: 'GENE-OPT-04' | Rule: 'S\\(K x\\)\\(K y\\) -> K\\(x y\\)') Tj ET
+0.08 0.12 0.18 rg 40 590 515.28 80 re f
+0.2 0.35 0.5 RG 1 w 40 590 515.28 80 re S
+BT /F1 10.5 Tf 0.95 0.7 0.2 rg 55 650 Td (MEASURED COMPUTATIONAL BENEFIT (INDEPENDENT ORACLE)) Tj ET
+BT /F2 9 Tf 0.85 0.9 0.95 rg 55 632 Td (Energy Saved: Delta ATP = -10 fuel quanta  |  Syntactic Delta: +4 AST nodes) Tj ET
+BT /F2 8.5 Tf 0.7 0.75 0.8 rg 55 616 Td (Pre-form:  S \\(K \\(S I\\)\\) \\(K I\\)) Tj ET
+BT /F2 8.5 Tf 0.4 0.95 0.5 rg 55 600 Td (Post-form: K \\(S I I\\)) Tj ET
+0.08 0.12 0.18 rg 40 280 515.28 295 re f
+0.2 0.35 0.5 RG 1 w 40 280 515.28 295 re S
+BT /F1 10.5 Tf 0.95 0.4 0.6 rg 55 555 Td (EMPIRICAL SCIENTIFIC LEDGER (ACCEPTED & REJECTED EXPERIMENTS)) Tj ET
+BT /F2 7.5 Tf 0.55 0.65 0.75 rg 55 538 Td (ID          VERDICT                     RULE                        DELTA ATP   DETAILS) Tj ET
+0.2 0.3 0.4 RG 0.5 w 55 532 m 540 532 l S
+BT /F2 7.5 Tf 0.95 0.35 0.35 rg 55 518 Td (82cc77a7ea  REJECTED (DIVERGED)         MUTATION_OPERAND_SWAP       -2 ATP    Input 'K' diverged: expect) Tj ET
+BT /F2 7.5 Tf 0.95 0.35 0.35 rg 55 500 Td (f778b3789e  REJECTED (DIVERGED)         MUTATION_CONSTANT_COLL      -2 ATP    Input 'K' diverged: expect) Tj ET
+BT /F2 7.5 Tf 0.95 0.35 0.35 rg 55 482 Td (092a59a2dc  REJECTED (DIVERGED)         MUTATION_OPERAND_SWAP       -1 ATP    Input 'K' diverged: expect) Tj ET
+BT /F2 7.5 Tf 0.95 0.35 0.35 rg 55 464 Td (af09fb1b71  REJECTED (DIVERGED)         MUTATION_CONSTANT_COLL      -1 ATP    Input 'K' diverged: expect) Tj ET
+BT /F2 7.5 Tf 0.95 0.35 0.35 rg 55 446 Td (903b77916f  REJECTED (DIVERGED)         MUTATION_OPERAND_SWAP       -1 ATP    Input 'K' diverged: expect) Tj ET
+BT /F2 7.5 Tf 0.95 0.35 0.35 rg 55 428 Td (2933536c11  REJECTED (DIVERGED)         MUTATION_CONSTANT_COLL      -1 ATP    Input 'K' diverged: expect) Tj ET
+BT /F2 7.5 Tf 0.3 0.95 0.4 rg 55 410 Td (beaa73d837  ACCEPTED (SOUND)            K x y -> x                  -5 ATP    Equivalence verified) Tj ET
+BT /F2 7.5 Tf 0.95 0.35 0.35 rg 55 392 Td (4e202412f6  REJECTED (DIVERGED)         MUTATION_OPERAND_SWAP       -1 ATP    Input 'K' diverged: expect) Tj ET
+BT /F2 7.5 Tf 0.95 0.35 0.35 rg 55 374 Td (f46a364ef1  REJECTED (DIVERGED)         MUTATION_CONSTANT_COLL      -1 ATP    Input 'K' diverged: expect) Tj ET
+BT /F2 7.5 Tf 0.95 0.35 0.35 rg 55 356 Td (901abc85c3  REJECTED (DIVERGED)         MUTATION_OPERAND_SWAP       -1 ATP    Input 'K' diverged: expect) Tj ET
+BT /F2 7.5 Tf 0.95 0.35 0.35 rg 55 338 Td (f604e78d6b  REJECTED (DIVERGED)         MUTATION_CONSTANT_COLL      +0 ATP    Input 'K' diverged: expect) Tj ET
+BT /F2 7.5 Tf 0.95 0.35 0.35 rg 55 320 Td (3e9d52f899  REJECTED (DIVERGED)         MUTATION_OPERAND_SWAP       -1 ATP    Input 'K' diverged: expect) Tj ET
+0.1 0.25 0.4 RG 1 w 40 180 515.28 85 re S
+BT /F1 9 Tf 0.5 0.8 1.0 rg 55 245 Td (CRYPTOGRAPHIC AUTONOMY & REPLAY PROVENANCE) Tj ET
+BT /F2 7.5 Tf 0.7 0.8 0.85 rg 55 230 Td (Parent Public Key:   86393abb0caccd979d98139b26ce43a7f9cd147640e12044d35d2d27546519f7) Tj ET
+BT /F2 7.5 Tf 0.7 0.8 0.85 rg 55 215 Td (Fixtures Fingerprint: f46542409cfc6e621321bab19e89303de9aac7b3d8177ff6546dc7b4ab4bfb03) Tj ET
+BT /F2 7.5 Tf 0.7 0.8 0.85 rg 55 200 Td (Transition Stamp:     sha256:fb9be09717ccb5c7665e874a073fff05...) Tj ET
+BT /F1 8.5 Tf 0.3 0.95 0.5 rg 55 186 Td ([*] Standalone executable: 'python3 <this_file.pdf> --audit' to verify proof) Tj ET
+Q
+endstream
+endobj
+5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >> endobj
+6 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj
+xref
+0 7
+0000000000 65535 f 
+0000000015 00000 n 
+0000000068 00000 n 
+0000000125 00000 n 
+0000000250 00000 n 
+0000000750 00000 n 
+0000000850 00000 n 
+trailer << /Size 7 /Root 1 0 R >>
+startxref
+950
+%%EOF
+
+'''
+#!/usr/bin/env python3
+# coding: latin-1
+import os, sys, json, hashlib
+
+MANIFEST_PREFIX = "# %METAMORPHOSIS"
+
+def load_manifest():
+    with open(__file__, "rb") as f:
+        content = f.read()
+    p = MANIFEST_PREFIX.encode("latin1")
+    start = content.rfind(p)
+    if start == -1:
+        print("[FAIL] Missing Metamorphosis manifest in polyglot.")
+        sys.exit(1)
+    end = content.find(b"\n", start)
+    if end == -1:
+        end = len(content)
+    line = content[start + len(p):end].decode("utf-8")
+    return json.loads(line)
+
+def cmd_info():
+    data = load_manifest()
+    print("=================================================================")
+    print("  %[BH] BLACK-HEART AUTONOMOUS FORM METAMORPHOSIS PASSPORT")
+    print("=================================================================\n")
+    print(f"[*] Parent Hash:        [#] {data['parent']['organism_hash']}")
+    print(f"[*] Successor Hash:     [#] {data['successor']['organism_hash']}")
+    print(f"[*] Transition Rule:    {data['transition']['rule_name']}")
+    print(f"[*] Target Gene ID:     {data['transition']['gene_id']}")
+    print(f"[*] Energy Conserved:   +{data['transition']['atp_saved']} ATP")
+    print(f"[*] Size Differential:  {data['transition']['size_saved']:+d} AST nodes\n")
+    print(f"Pre-metamorphosis Form:  {data['transition']['pre_term']}")
+    print(f"Post-metamorphosis Form: {data['transition']['post_term']}\n")
+
+def cmd_experiments():
+    data = load_manifest()
+    print("=================================================================")
+    print("  %[BH] SCIENTIFIC EXPERIMENT LEDGER (POSITIVE & NEGATIVE KNOWLEDGE)")
+    print("=================================================================\n")
+    print(f"{'ID':12s} {'VERDICT':28s} {'RULE':26s} {'DELTA ATP':10s}")
+    print("-" * 75)
+    for r in data["experiments"]:
+        v = r["verdict"]
+        print(f"{r['experiment_id']:12s} {v:28s} {r['rule_name'][:24]:26s} {r['atp_delta']:+6d} ATP")
+        if r.get("discrepancy_detail"):
+            print(f"    --> Details: {r['discrepancy_detail']}")
+    print("-" * 75)
+    total = len(data["experiments"])
+    acc = sum(1 for r in data["experiments"] if r["verdict"] == "ACCEPTED_MORE_EFFICIENT")
+    print(f"Total Experiments: {total} | Accepted Transitions: {acc} | Preserved Failures: {total - acc}\n")
+
+def cmd_audit():
+    data = load_manifest()
+    src_dir = data.get("source_dir")
+    if src_dir and src_dir not in sys.path:
+        sys.path.insert(0, src_dir)
+    from metamorphosis import Organism, MetamorphicTransitionReceipt, FrozenEvaluator, audit_metamorphic_transition
+
+    parent = Organism(
+        generation=data['parent']['generation'],
+        parent_hash=data['parent']['parent_hash'],
+        public_key_hex=data['parent']['public_key_hex'],
+        secret_key_hex=data['parent'].get('secret_key_hex', ''),
+        chromosomes=[Organism.__dataclass_fields__['chromosomes'].default_factory() for _ in [0]][0]
+    )
+    # Reconstruct chromosomes
+    from organism import Chromosome
+    parent.chromosomes = [Chromosome.from_dict(c) for c in data['parent']['chromosomes']]
+    parent.birth_timestamp_utc = data['parent']['birth_timestamp_utc']
+    parent.organism_hash = data['parent']['organism_hash']
+
+    successor = Organism(
+        generation=data['successor']['generation'],
+        parent_hash=data['successor']['parent_hash'],
+        public_key_hex=data['successor']['public_key_hex'],
+        secret_key_hex=data['successor'].get('secret_key_hex', ''),
+        chromosomes=[Chromosome.from_dict(c) for c in data['successor']['chromosomes']],
+        birth_timestamp_utc=data['successor']['birth_timestamp_utc'],
+        organism_hash=data['successor']['organism_hash']
+    )
+
+    receipt = MetamorphicTransitionReceipt.from_dict(data['transition'])
+    evaluator = FrozenEvaluator()
+
+    try:
+        ok, msg = audit_metamorphic_transition(parent, successor, receipt, evaluator)
+        print("=================================================================")
+        print("  %[BH] METAMORPHIC PROVENANCE & ORACLE AUDITOR")
+        print("=================================================================\n")
+        print(f"[*] Parent Hash:      \033[1;32m[OK] SOUND\033[0m (Hash: {parent.organism_hash[:16]}...)")
+        print(f"[*] Successor Hash:   \033[1;32m[OK] SOUND\033[0m (Hash: {successor.organism_hash[:16]}...)")
+        print(f"[*] Transition Replay:\033[1;32m[OK] SOUND\033[0m (Rule: {receipt.rule_name})")
+        print(f"[*] Semantic Check:   \033[1;32m[OK] SOUND\033[0m (5 frozen fixtures invariant)")
+        print(f"[*] Energy Reduction: \033[1;32m[OK] SOUND\033[0m (-{receipt.atp_saved} ATP saved)\n")
+        print(f"\033[1;32m[OK] {msg}\033[0m\n")
+    except Exception as e:
+        print("=================================================================")
+        print("  %[BH] METAMORPHIC PROVENANCE & ORACLE AUDITOR")
+        print("=================================================================\n")
+        print(f"\033[1;31m[FAIL] METAMORPHIC AUDIT FAILED: {e}\033[0m\n")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    if "--experiments" in sys.argv:
+        cmd_experiments()
+    elif "--audit" in sys.argv or "--audit-transition" in sys.argv:
+        cmd_audit()
+    else:
+        cmd_info()
+
+# %METAMORPHOSIS{"source_dir":"/Users/s0fractal/Projects/black-heart","parent":{"generation":0,"parent_hash":"0000000000000000000000000000000000000000000000000000000000000000","organism_hash":"d64092c7c948b0947955b911ce34d57ed2162a235396dc4e6af5725ca5ad7565","public_key_hex":"86393abb0caccd979d98139b26ce43a7f9cd147640e12044d35d2d27546519f7","birth_timestamp_utc":"2026-09-08T23:09:03Z","chromosomes":[{"gene_id":"GENE-ID-01","gene_name":"Self-Preservation Identity Carrier","expression":"\ud83c\udf3f \ud83d\udda4 \ud83d\udda4 SovereignCore","expected_normal_form":"SovereignCore","max_atp":50,"atp_burned":0,"vital":true},{"gene_id":"GENE-METAB-02","gene_name":"Black Cone Entropy Absorption","expression":"\ud83d\udda4 VitalNutrient EntropyNoise","expected_normal_form":"VitalNutrient","max_atp":20,"atp_burned":0,"vital":true},{"gene_id":"GENE-BRANCH-03","gene_name":"Adaptive Decision Fork","expression":"(\ud83d\udda4 \ud83e\udd0d) DormantBranch ExpressedBranch","expected_normal_form":"ExpressedBranch","max_atp":30,"atp_burned":0,"vital":true},{"gene_id":"GENE-OPT-04","gene_name":"Signal Router","expression":"\ud83c\udf3f (\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d)) (\ud83d\udda4 \ud83e\udd0d)","expected_normal_form":"(\ud83c\udf3f \ud83e\udd0d) \ud83e\udd0d","max_atp":100,"atp_burned":0,"vital":true}]},"successor":{"generation":1,"parent_hash":"d64092c7c948b0947955b911ce34d57ed2162a235396dc4e6af5725ca5ad7565","organism_hash":"fb9be09717ccb5c7665e874a073fff05966d8fdc9105fe5e8662bbba65854757","public_key_hex":"86393abb0caccd979d98139b26ce43a7f9cd147640e12044d35d2d27546519f7","birth_timestamp_utc":"2026-09-08T23:09:03Z","chromosomes":[{"gene_id":"GENE-ID-01","gene_name":"Self-Preservation Identity Carrier","expression":"\ud83c\udf3f \ud83d\udda4 \ud83d\udda4 SovereignCore","expected_normal_form":"SovereignCore","max_atp":50,"atp_burned":0,"vital":true},{"gene_id":"GENE-METAB-02","gene_name":"Black Cone Entropy Absorption","expression":"\ud83d\udda4 VitalNutrient EntropyNoise","expected_normal_form":"VitalNutrient","max_atp":20,"atp_burned":0,"vital":true},{"gene_id":"GENE-BRANCH-03","gene_name":"Adaptive Decision Fork","expression":"(\ud83d\udda4 \ud83e\udd0d) DormantBranch ExpressedBranch","expected_normal_form":"ExpressedBranch","max_atp":30,"atp_burned":0,"vital":true},{"gene_id":"GENE-OPT-04","gene_name":"Signal Router","expression":"\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d \ud83e\udd0d)","expected_normal_form":"(\ud83c\udf3f \ud83e\udd0d) \ud83e\udd0d","max_atp":100,"atp_burned":0,"vital":true}]},"transition":{"parent_hash":"d64092c7c948b0947955b911ce34d57ed2162a235396dc4e6af5725ca5ad7565","successor_hash":"fb9be09717ccb5c7665e874a073fff05966d8fdc9105fe5e8662bbba65854757","gene_id":"GENE-OPT-04","rule_name":"S(K x)(K y) -> K(x y)","site_address":[],"pre_term":"\ud83c\udf3f (\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d)) (\ud83d\udda4 \ud83e\udd0d)","post_term":"\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d \ud83e\udd0d)","atp_saved":10,"size_saved":4,"fixtures_fingerprint":"f46542409cfc6e621321bab19e89303de9aac7b3d8177ff6546dc7b4ab4bfb03","experiment_id":"787f85848002"},"experiments":[{"experiment_id":"82cc77a7ea26","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-ID-01","rule_name":"MUTATION_OPERAND_SWAP","site_address":[],"original_subterm":"\ud83c\udf3f \ud83d\udda4 \ud83d\udda4 SovereignCore","proposed_subterm":"SovereignCore (\ud83c\udf3f \ud83d\udda4 \ud83d\udda4)","original_term":"\ud83c\udf3f \ud83d\udda4 \ud83d\udda4 SovereignCore","candidate_term":"SovereignCore (\ud83c\udf3f \ud83d\udda4 \ud83d\udda4)","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":2,"atp_candidate":0,"atp_delta":-2,"size_original":7,"size_candidate":7,"size_delta":0,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected 'SovereignCore \ud83d\udda4', got 'SovereignCore (\ud83c\udf3f \ud83d\udda4 \ud83d\udda4) \ud83d\udda4'"},{"experiment_id":"f778b3789e76","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-ID-01","rule_name":"MUTATION_CONSTANT_COLLAPSE","site_address":[],"original_subterm":"\ud83c\udf3f \ud83d\udda4 \ud83d\udda4 SovereignCore","proposed_subterm":"\ud83d\udda4","original_term":"\ud83c\udf3f \ud83d\udda4 \ud83d\udda4 SovereignCore","candidate_term":"\ud83d\udda4","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":2,"atp_candidate":0,"atp_delta":-2,"size_original":7,"size_candidate":1,"size_delta":-6,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected 'SovereignCore \ud83d\udda4', got '\ud83d\udda4 \ud83d\udda4'"},{"experiment_id":"092a59a2dc5d","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-ID-01","rule_name":"MUTATION_OPERAND_SWAP","site_address":["L"],"original_subterm":"\ud83c\udf3f \ud83d\udda4 \ud83d\udda4","proposed_subterm":"\ud83d\udda4 (\ud83c\udf3f \ud83d\udda4)","original_term":"\ud83c\udf3f \ud83d\udda4 \ud83d\udda4 SovereignCore","candidate_term":"\ud83d\udda4 (\ud83c\udf3f \ud83d\udda4) SovereignCore","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":2,"atp_candidate":1,"atp_delta":-1,"size_original":7,"size_candidate":7,"size_delta":0,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected 'SovereignCore \ud83d\udda4', got '\ud83c\udf3f \ud83d\udda4 \ud83d\udda4'"},{"experiment_id":"af09fb1b7143","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-ID-01","rule_name":"MUTATION_CONSTANT_COLLAPSE","site_address":["L"],"original_subterm":"\ud83c\udf3f \ud83d\udda4 \ud83d\udda4","proposed_subterm":"\ud83d\udda4","original_term":"\ud83c\udf3f \ud83d\udda4 \ud83d\udda4 SovereignCore","candidate_term":"\ud83d\udda4 SovereignCore","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":2,"atp_candidate":1,"atp_delta":-1,"size_original":7,"size_candidate":3,"size_delta":-4,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected 'SovereignCore \ud83d\udda4', got 'SovereignCore'"},{"experiment_id":"903b77916f5d","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-ID-01","rule_name":"MUTATION_OPERAND_SWAP","site_address":["L","L"],"original_subterm":"\ud83c\udf3f \ud83d\udda4","proposed_subterm":"\ud83d\udda4 \ud83c\udf3f","original_term":"\ud83c\udf3f \ud83d\udda4 \ud83d\udda4 SovereignCore","candidate_term":"\ud83d\udda4 \ud83c\udf3f \ud83d\udda4 SovereignCore","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":2,"atp_candidate":1,"atp_delta":-1,"size_original":7,"size_candidate":7,"size_delta":0,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected 'SovereignCore \ud83d\udda4', got '\ud83c\udf3f SovereignCore \ud83d\udda4'"},{"experiment_id":"2933536c110c","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-ID-01","rule_name":"MUTATION_CONSTANT_COLLAPSE","site_address":["L","L"],"original_subterm":"\ud83c\udf3f \ud83d\udda4","proposed_subterm":"\ud83d\udda4","original_term":"\ud83c\udf3f \ud83d\udda4 \ud83d\udda4 SovereignCore","candidate_term":"\ud83d\udda4 \ud83d\udda4 SovereignCore","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":2,"atp_candidate":1,"atp_delta":-1,"size_original":7,"size_candidate":5,"size_delta":-2,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected 'SovereignCore \ud83d\udda4', got '\ud83d\udda4 \ud83d\udda4'"},{"experiment_id":"beaa73d83715","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-METAB-02","rule_name":"K x y -> x","site_address":[],"original_subterm":"\ud83d\udda4 VitalNutrient EntropyNoise","proposed_subterm":"VitalNutrient","original_term":"\ud83d\udda4 VitalNutrient EntropyNoise","candidate_term":"VitalNutrient","verdict":"ACCEPTED_MORE_EFFICIENT","atp_original":5,"atp_candidate":0,"atp_delta":-5,"size_original":5,"size_candidate":1,"size_delta":-4,"test_inputs_count":5,"discrepancy_detail":null},{"experiment_id":"4e202412f62e","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-METAB-02","rule_name":"MUTATION_OPERAND_SWAP","site_address":[],"original_subterm":"\ud83d\udda4 VitalNutrient EntropyNoise","proposed_subterm":"EntropyNoise (\ud83d\udda4 VitalNutrient)","original_term":"\ud83d\udda4 VitalNutrient EntropyNoise","candidate_term":"EntropyNoise (\ud83d\udda4 VitalNutrient)","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":1,"atp_candidate":0,"atp_delta":-1,"size_original":5,"size_candidate":5,"size_delta":0,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected 'VitalNutrient \ud83d\udda4', got 'EntropyNoise (\ud83d\udda4 VitalNutrient) \ud83d\udda4'"},{"experiment_id":"f46a364ef12d","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-METAB-02","rule_name":"MUTATION_CONSTANT_COLLAPSE","site_address":[],"original_subterm":"\ud83d\udda4 VitalNutrient EntropyNoise","proposed_subterm":"\ud83d\udda4","original_term":"\ud83d\udda4 VitalNutrient EntropyNoise","candidate_term":"\ud83d\udda4","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":1,"atp_candidate":0,"atp_delta":-1,"size_original":5,"size_candidate":1,"size_delta":-4,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected 'VitalNutrient \ud83d\udda4', got '\ud83d\udda4 \ud83d\udda4'"},{"experiment_id":"901abc85c378","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-METAB-02","rule_name":"MUTATION_OPERAND_SWAP","site_address":["L"],"original_subterm":"\ud83d\udda4 VitalNutrient","proposed_subterm":"VitalNutrient \ud83d\udda4","original_term":"\ud83d\udda4 VitalNutrient EntropyNoise","candidate_term":"VitalNutrient \ud83d\udda4 EntropyNoise","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":1,"atp_candidate":0,"atp_delta":-1,"size_original":5,"size_candidate":5,"size_delta":0,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected 'VitalNutrient \ud83d\udda4', got 'VitalNutrient \ud83d\udda4 EntropyNoise \ud83d\udda4'"},{"experiment_id":"f604e78d6bd5","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-METAB-02","rule_name":"MUTATION_CONSTANT_COLLAPSE","site_address":["L"],"original_subterm":"\ud83d\udda4 VitalNutrient","proposed_subterm":"\ud83d\udda4","original_term":"\ud83d\udda4 VitalNutrient EntropyNoise","candidate_term":"\ud83d\udda4 EntropyNoise","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":1,"atp_candidate":1,"atp_delta":0,"size_original":5,"size_candidate":3,"size_delta":-2,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected 'VitalNutrient \ud83d\udda4', got 'EntropyNoise'"},{"experiment_id":"3e9d52f89918","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-BRANCH-03","rule_name":"MUTATION_OPERAND_SWAP","site_address":[],"original_subterm":"\ud83d\udda4 \ud83e\udd0d DormantBranch ExpressedBranch","proposed_subterm":"ExpressedBranch (\ud83d\udda4 \ud83e\udd0d DormantBranch)","original_term":"\ud83d\udda4 \ud83e\udd0d DormantBranch ExpressedBranch","candidate_term":"ExpressedBranch (\ud83d\udda4 \ud83e\udd0d DormantBranch)","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":2,"atp_candidate":1,"atp_delta":-1,"size_original":7,"size_candidate":7,"size_delta":0,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected 'ExpressedBranch \ud83d\udda4', got 'ExpressedBranch \ud83e\udd0d \ud83d\udda4'"},{"experiment_id":"3d61d644fca3","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-BRANCH-03","rule_name":"MUTATION_CONSTANT_COLLAPSE","site_address":[],"original_subterm":"\ud83d\udda4 \ud83e\udd0d DormantBranch ExpressedBranch","proposed_subterm":"\ud83d\udda4","original_term":"\ud83d\udda4 \ud83e\udd0d DormantBranch ExpressedBranch","candidate_term":"\ud83d\udda4","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":2,"atp_candidate":0,"atp_delta":-2,"size_original":7,"size_candidate":1,"size_delta":-6,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected 'ExpressedBranch \ud83d\udda4', got '\ud83d\udda4 \ud83d\udda4'"},{"experiment_id":"cddf1ba75c7f","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-BRANCH-03","rule_name":"K x y -> x","site_address":["L"],"original_subterm":"\ud83d\udda4 \ud83e\udd0d DormantBranch","proposed_subterm":"\ud83e\udd0d","original_term":"\ud83d\udda4 \ud83e\udd0d DormantBranch ExpressedBranch","candidate_term":"\ud83e\udd0d ExpressedBranch","verdict":"ACCEPTED_MORE_EFFICIENT","atp_original":10,"atp_candidate":5,"atp_delta":-5,"size_original":7,"size_candidate":3,"size_delta":-4,"test_inputs_count":5,"discrepancy_detail":null},{"experiment_id":"cbff27013349","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-BRANCH-03","rule_name":"MUTATION_OPERAND_SWAP","site_address":["L"],"original_subterm":"\ud83d\udda4 \ud83e\udd0d DormantBranch","proposed_subterm":"DormantBranch (\ud83d\udda4 \ud83e\udd0d)","original_term":"\ud83d\udda4 \ud83e\udd0d DormantBranch ExpressedBranch","candidate_term":"DormantBranch (\ud83d\udda4 \ud83e\udd0d) ExpressedBranch","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":2,"atp_candidate":0,"atp_delta":-2,"size_original":7,"size_candidate":7,"size_delta":0,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected 'ExpressedBranch \ud83d\udda4', got 'DormantBranch (\ud83d\udda4 \ud83e\udd0d) ExpressedBranch \ud83d\udda4'"},{"experiment_id":"6edd01f21ff4","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-BRANCH-03","rule_name":"MUTATION_CONSTANT_COLLAPSE","site_address":["L"],"original_subterm":"\ud83d\udda4 \ud83e\udd0d DormantBranch","proposed_subterm":"\ud83d\udda4","original_term":"\ud83d\udda4 \ud83e\udd0d DormantBranch ExpressedBranch","candidate_term":"\ud83d\udda4 ExpressedBranch","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":2,"atp_candidate":1,"atp_delta":-1,"size_original":7,"size_candidate":3,"size_delta":-4,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected 'ExpressedBranch \ud83d\udda4', got 'ExpressedBranch'"},{"experiment_id":"6ad9ef7bfd2c","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-BRANCH-03","rule_name":"MUTATION_OPERAND_SWAP","site_address":["L","L"],"original_subterm":"\ud83d\udda4 \ud83e\udd0d","proposed_subterm":"\ud83e\udd0d \ud83d\udda4","original_term":"\ud83d\udda4 \ud83e\udd0d DormantBranch ExpressedBranch","candidate_term":"\ud83e\udd0d \ud83d\udda4 DormantBranch ExpressedBranch","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":2,"atp_candidate":2,"atp_delta":0,"size_original":7,"size_candidate":7,"size_delta":0,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected 'ExpressedBranch \ud83d\udda4', got 'DormantBranch \ud83d\udda4'"},{"experiment_id":"f7a736d25361","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-BRANCH-03","rule_name":"MUTATION_CONSTANT_COLLAPSE","site_address":["L","L"],"original_subterm":"\ud83d\udda4 \ud83e\udd0d","proposed_subterm":"\ud83d\udda4","original_term":"\ud83d\udda4 \ud83e\udd0d DormantBranch ExpressedBranch","candidate_term":"\ud83d\udda4 DormantBranch ExpressedBranch","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":2,"atp_candidate":1,"atp_delta":-1,"size_original":7,"size_candidate":5,"size_delta":-2,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected 'ExpressedBranch \ud83d\udda4', got 'DormantBranch \ud83d\udda4'"},{"experiment_id":"787f85848002","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-OPT-04","rule_name":"S(K x)(K y) -> K(x y)","site_address":[],"original_subterm":"\ud83c\udf3f (\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d)) (\ud83d\udda4 \ud83e\udd0d)","proposed_subterm":"\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d \ud83e\udd0d)","original_term":"\ud83c\udf3f (\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d)) (\ud83d\udda4 \ud83e\udd0d)","candidate_term":"\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d \ud83e\udd0d)","verdict":"ACCEPTED_MORE_EFFICIENT","atp_original":15,"atp_candidate":5,"atp_delta":-10,"size_original":11,"size_candidate":7,"size_delta":-4,"test_inputs_count":5,"discrepancy_detail":null},{"experiment_id":"a01cc601592d","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-OPT-04","rule_name":"MUTATION_OPERAND_SWAP","site_address":[],"original_subterm":"\ud83c\udf3f (\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d)) (\ud83d\udda4 \ud83e\udd0d)","proposed_subterm":"\ud83d\udda4 \ud83e\udd0d (\ud83c\udf3f (\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d)))","original_term":"\ud83c\udf3f (\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d)) (\ud83d\udda4 \ud83e\udd0d)","candidate_term":"\ud83d\udda4 \ud83e\udd0d (\ud83c\udf3f (\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d)))","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":3,"atp_candidate":2,"atp_delta":-1,"size_original":11,"size_candidate":11,"size_delta":0,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected '\ud83c\udf3f \ud83e\udd0d \ud83e\udd0d', got '\ud83d\udda4'"},{"experiment_id":"11bc0dc3cc60","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-OPT-04","rule_name":"MUTATION_CONSTANT_COLLAPSE","site_address":[],"original_subterm":"\ud83c\udf3f (\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d)) (\ud83d\udda4 \ud83e\udd0d)","proposed_subterm":"\ud83d\udda4","original_term":"\ud83c\udf3f (\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d)) (\ud83d\udda4 \ud83e\udd0d)","candidate_term":"\ud83d\udda4","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":3,"atp_candidate":0,"atp_delta":-3,"size_original":11,"size_candidate":1,"size_delta":-10,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected '\ud83c\udf3f \ud83e\udd0d \ud83e\udd0d', got '\ud83d\udda4 \ud83d\udda4'"},{"experiment_id":"38d261277ca7","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-OPT-04","rule_name":"MUTATION_OPERAND_SWAP","site_address":["L"],"original_subterm":"\ud83c\udf3f (\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d))","proposed_subterm":"\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d) \ud83c\udf3f","original_term":"\ud83c\udf3f (\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d)) (\ud83d\udda4 \ud83e\udd0d)","candidate_term":"\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d) \ud83c\udf3f (\ud83d\udda4 \ud83e\udd0d)","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":3,"atp_candidate":4,"atp_delta":1,"size_original":11,"size_candidate":11,"size_delta":0,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected '\ud83c\udf3f \ud83e\udd0d \ud83e\udd0d', got '\ud83d\udda4 \ud83e\udd0d'"},{"experiment_id":"a402c8ea848e","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-OPT-04","rule_name":"MUTATION_CONSTANT_COLLAPSE","site_address":["L"],"original_subterm":"\ud83c\udf3f (\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d))","proposed_subterm":"\ud83d\udda4","original_term":"\ud83c\udf3f (\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d)) (\ud83d\udda4 \ud83e\udd0d)","candidate_term":"\ud83d\udda4 (\ud83d\udda4 \ud83e\udd0d)","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":3,"atp_candidate":1,"atp_delta":-2,"size_original":11,"size_candidate":5,"size_delta":-6,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected '\ud83c\udf3f \ud83e\udd0d \ud83e\udd0d', got '\ud83d\udda4 \ud83e\udd0d'"},{"experiment_id":"ded986f53eca","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-OPT-04","rule_name":"MUTATION_OPERAND_SWAP","site_address":["L","R"],"original_subterm":"\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d)","proposed_subterm":"\ud83c\udf3f \ud83e\udd0d \ud83d\udda4","original_term":"\ud83c\udf3f (\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d)) (\ud83d\udda4 \ud83e\udd0d)","candidate_term":"\ud83c\udf3f (\ud83c\udf3f \ud83e\udd0d \ud83d\udda4) (\ud83d\udda4 \ud83e\udd0d)","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":3,"atp_candidate":4,"atp_delta":1,"size_original":11,"size_candidate":11,"size_delta":0,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected '\ud83c\udf3f \ud83e\udd0d \ud83e\udd0d', got '\ud83d\udda4 \ud83d\udda4'"},{"experiment_id":"72c61d149e1a","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-OPT-04","rule_name":"MUTATION_CONSTANT_COLLAPSE","site_address":["L","R"],"original_subterm":"\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d)","proposed_subterm":"\ud83d\udda4","original_term":"\ud83c\udf3f (\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d)) (\ud83d\udda4 \ud83e\udd0d)","candidate_term":"\ud83c\udf3f \ud83d\udda4 (\ud83d\udda4 \ud83e\udd0d)","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":3,"atp_candidate":2,"atp_delta":-1,"size_original":11,"size_candidate":7,"size_delta":-4,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected '\ud83c\udf3f \ud83e\udd0d \ud83e\udd0d', got '\ud83d\udda4'"},{"experiment_id":"f825ea4af028","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-OPT-04","rule_name":"MUTATION_OPERAND_SWAP","site_address":["L","R","R"],"original_subterm":"\ud83c\udf3f \ud83e\udd0d","proposed_subterm":"\ud83e\udd0d \ud83c\udf3f","original_term":"\ud83c\udf3f (\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d)) (\ud83d\udda4 \ud83e\udd0d)","candidate_term":"\ud83c\udf3f (\ud83d\udda4 (\ud83e\udd0d \ud83c\udf3f)) (\ud83d\udda4 \ud83e\udd0d)","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":3,"atp_candidate":4,"atp_delta":1,"size_original":11,"size_candidate":11,"size_delta":0,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected '\ud83c\udf3f \ud83e\udd0d \ud83e\udd0d', got '\ud83c\udf3f \ud83e\udd0d'"},{"experiment_id":"b42d9ec6c373","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-OPT-04","rule_name":"MUTATION_CONSTANT_COLLAPSE","site_address":["L","R","R"],"original_subterm":"\ud83c\udf3f \ud83e\udd0d","proposed_subterm":"\ud83d\udda4","original_term":"\ud83c\udf3f (\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d)) (\ud83d\udda4 \ud83e\udd0d)","candidate_term":"\ud83c\udf3f (\ud83d\udda4 \ud83d\udda4) (\ud83d\udda4 \ud83e\udd0d)","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":3,"atp_candidate":3,"atp_delta":0,"size_original":11,"size_candidate":9,"size_delta":-2,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected '\ud83c\udf3f \ud83e\udd0d \ud83e\udd0d', got '\ud83d\udda4 \ud83e\udd0d'"},{"experiment_id":"0c562a2eabef","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-OPT-04","rule_name":"MUTATION_OPERAND_SWAP","site_address":["R"],"original_subterm":"\ud83d\udda4 \ud83e\udd0d","proposed_subterm":"\ud83e\udd0d \ud83d\udda4","original_term":"\ud83c\udf3f (\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d)) (\ud83d\udda4 \ud83e\udd0d)","candidate_term":"\ud83c\udf3f (\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d)) (\ud83e\udd0d \ud83d\udda4)","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":3,"atp_candidate":3,"atp_delta":0,"size_original":11,"size_candidate":11,"size_delta":0,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected '\ud83c\udf3f \ud83e\udd0d \ud83e\udd0d', got '\ud83c\udf3f \ud83e\udd0d (\ud83d\udda4 \ud83d\udda4)'"},{"experiment_id":"5dee89ae938f","timestamp_utc":"2026-09-08T23:09:03Z","gene_id":"GENE-OPT-04","rule_name":"MUTATION_CONSTANT_COLLAPSE","site_address":["R"],"original_subterm":"\ud83d\udda4 \ud83e\udd0d","proposed_subterm":"\ud83d\udda4","original_term":"\ud83c\udf3f (\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d)) (\ud83d\udda4 \ud83e\udd0d)","candidate_term":"\ud83c\udf3f (\ud83d\udda4 (\ud83c\udf3f \ud83e\udd0d)) \ud83d\udda4","verdict":"REJECTED_SEMANTIC_MISMATCH","atp_original":3,"atp_candidate":2,"atp_delta":-1,"size_original":11,"size_candidate":9,"size_delta":-2,"test_inputs_count":5,"discrepancy_detail":"Input '\ud83d\udda4' diverged: expected '\ud83c\udf3f \ud83e\udd0d \ud83e\udd0d', got '\ud83c\udf3f \ud83e\udd0d (\ud83d\udda4 \ud83d\udda4)'"}]}

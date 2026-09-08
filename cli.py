@@ -401,6 +401,60 @@ def cmd_morph(args):
     print(f"  Execute Script: python3 {args.output} --info\n")
 
 
+def cmd_metamorph(args):
+    """Executes program self-contemplation and compiles metamorphic polyglot."""
+    from organism import extract_organism_from_pdf, create_genesis_organism, Chromosome
+    from metamorphosis import MetamorphicPolyglotCompiler
+
+    print("\033[1;36m" + "=" * 68)
+    print("  %🖤 PROJECT BLACK-HEART — AUTONOMOUS FORM METAMORPHOSIS")
+    print("  Program Self-Contemplation & Invariant-Preserving Form Evolution")
+    print("=" * 68 + "\033[0m\n")
+
+    if args.organism and os.path.exists(args.organism):
+        print(f"[*] Extracting organism from polyglot: {args.organism}...")
+        org = extract_organism_from_pdf(args.organism)
+    else:
+        print("[*] Instantiating genesis organism with optimizable combinator chromosome...")
+        org = create_genesis_organism()
+        org.chromosomes.append(Chromosome(
+            gene_id="GENE-OPT-04",
+            gene_name="Signal Router",
+            expression="🌿 (🖤 (🌿 🤍)) (🖤 🤍)",
+            expected_normal_form="(🌿 🤍) 🤍",
+            max_atp=100
+        ))
+        org.organism_hash = org.compute_hash()
+
+    print(f"[*] Contemplating form for organism ⚓ {org.organism_hash[:16]}... (Gen #{org.generation})")
+    succ, log, receipt = org.contemplate_form()
+
+    if succ is None or receipt is None:
+        print("[-] Organism form is at a local pareto optimum. No advantageous mutation found.")
+        print(f"[*] Total candidate mutations evaluated: {len(log.records)} (all rejected or neutral)")
+        return
+
+    print("\n\033[1;32m[✓] BENEFICIAL METAMORPHIC TRANSITION DISCOVERED!\033[0m")
+    print(f"    Target Gene:    {receipt.gene_id}")
+    print(f"    Rewrite Rule:   {receipt.rule_name}")
+    print(f"    Pre-form:       {receipt.pre_term}")
+    print(f"    Post-form:      {receipt.post_term}")
+    print(f"    ATP Conserved:  +{receipt.atp_saved} fuel quanta")
+    print(f"    Syntactic Size: {receipt.size_saved:+d} AST nodes")
+    print(f"    Successor Hash: ⚓ {succ.organism_hash[:16]}... (Gen #{succ.generation})\n")
+
+    compiler = MetamorphicPolyglotCompiler(org, succ, receipt, log)
+    pdf_bytes = compiler.compile_pdf()
+    with open(args.output, "wb") as f:
+        f.write(pdf_bytes)
+
+    print(f"\033[1;32m[✓ SUCCESS] Synthesized Metamorphic Polyglot ({len(pdf_bytes)} bytes)!\033[0m")
+    print(f"  Output File:    {args.output}")
+    print(f"  Audit Proof:    python3 {args.output} --audit")
+    print(f"  Empirical Log:  python3 {args.output} --experiments")
+    print(f"  Scientific Log: {len(log.accepted_records())} accepted, {len(log.rejected_records())} rejected mutations recorded.\n")
+
+
 def cmd_shell(args):
     """Interactive Hypervisor REPL for Project Black-Heart."""
     from symbiosis import (
@@ -680,6 +734,11 @@ def main():
     p_morph.add_argument("-o", "--output", default="morphogenesis.pdf", help="Output polyglot PDF file")
     p_morph.add_argument("--seed", default=None, help="Deterministic genome hash or seed string")
 
+    # metamorph
+    p_meta = subparsers.add_parser("metamorph", help="Autonomous Form Metamorphosis & Program Self-Contemplation")
+    p_meta.add_argument("organism", nargs="?", default=None, help="Path to input polyglot organism PDF (optional)")
+    p_meta.add_argument("-o", "--output", default="metamorphic_organism.pdf", help="Output polyglot PDF path")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -710,6 +769,8 @@ def main():
         cmd_quantum(args)
     elif args.command == "morph":
         cmd_morph(args)
+    elif args.command == "metamorph":
+        cmd_metamorph(args)
     else:
         parser.print_help()
 

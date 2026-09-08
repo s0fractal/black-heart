@@ -210,6 +210,14 @@ class Organism:
             grid_size=grid_size
         )
 
+    def contemplate_form(self, evaluator: Any = None) -> Tuple[Any, Any, Any]:
+        """
+        Introspects own combinator programs and proposes an invariant-preserving
+        metamorphic transformation with measurable ATP cost reduction.
+        """
+        from metamorphosis import contemplate_and_evolve
+        return contemplate_and_evolve(self, evaluator=evaluator)
+
 # ============================================================================
 # COMPILER FOR POLYGLOT ORGANISM PDF
 # ============================================================================
