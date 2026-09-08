@@ -1,0 +1,350 @@
+# coding: utf-8
+r"""%PDF-1.7
+%🖤
+%🖤 ORGANISM_GENOME: {"birth_timestamp_utc":"2026-09-08T18:32:56Z","chromosomes":[{"atp_burned":0,"expected_normal_form":"SovereignCore","expression":"🌿 🖤 🖤 SovereignCore","gene_id":"GENE-ID-01","gene_name":"Self-Preservation Identity Carrier","max_atp":50,"vital":true},{"atp_burned":0,"expected_normal_form":"VitalNutrient","expression":"🖤 VitalNutrient EntropyNoise","gene_id":"GENE-METAB-02","gene_name":"Black Cone Entropy Absorption","max_atp":20,"vital":true},{"atp_burned":0,"expected_normal_form":"ExpressedBranch","expression":"(🖤 🤍) DormantBranch ExpressedBranch","gene_id":"GENE-BRANCH-03","gene_name":"Adaptive Decision Fork","max_atp":30,"vital":true}],"generation":0,"organism_hash":"9dc24cc373c8c015f6b90768859be845d16832acff95901d52fc992b67fb59ab","parent_hash":"0000000000000000000000000000000000000000000000000000000000000000","public_key_hex":"9769f5c87384c51bb79d11aee62356c9efec834d4b6c9e88c9b95d761e8274c8","secret_key_hex":"75e33ccd1869b8cfcece893a6606542c60246f4a745c5c04ee58b8869db3c0e2"}
+1 0 obj
+<</Type /Catalog /Pages 2 0 R>>
+endobj
+2 0 obj
+<</Type /Pages /Kids [3 0 R] /Count 1>>
+endobj
+3 0 obj
+<</Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources <</Font <</F1 5 0 R /F2 6 0 R /F3 7 0 R /F4 8 0 R>>>>>>
+endobj
+4 0 obj
+<</Length 6644>>
+stream
+BT /F1 18 Tf 0.49 0.63 0.46 rg 54 788 Td (BLACK-HEART AUTONOMOUS POLYGLOT ORGANISM) Tj 0 g ET
+BT /F3 10 Tf 0.3 0.35 0.45 rg 54 766 Td (Biological Digital Automata | Generation #0000 | Quine-Replicating Genome) Tj 0 g ET
+0.49 0.63 0.46 rg 54 752 487 2 re f 0 g
+0.97 0.98 0.99 rg 54 654 487 82 re f 0 g
+0.49 0.63 0.46 RG 1.5 w 54 654 487 82 re s 0 g
+BT /F1 11 Tf 0.1 0.2 0.35 rg 66 728 Td (Cellular Passport & Genetic Identity) Tj 0 g ET
+BT /F4 8 Tf 0.2 0.2 0.2 rg 66 715 Td (Organism Hash: 9dc24cc373c8c015f6b90768859be845d16832acff95901d52fc992b67fb59ab) Tj 0 g ET
+BT /F4 8 Tf 0.2 0.2 0.2 rg 66 703 Td (Parent Lineage: 00000000000000000000000000000000... | Born: 2026-09-08T18:32:56Z) Tj 0 g ET
+BT /F4 8 Tf 0.1 0.4 0.2 rg 66 691 Td (Ed25519 Gene PK: 9769f5c87384c51bb79d11aee62356c9... [GENETIC REPLICATION KEY]) Tj 0 g ET
+BT /F1 9 Tf 0.49 0.63 0.46 rg 66 679 Td (Chromosomes: 3 active genes | Metabolic State: VIABLE) Tj 0 g ET
+BT /F1 11 Tf 0.15 0.2 0.3 rg 54 634 Td (Chromosome GENE-ID-01: Self-Preservation Identity Carrier) Tj 0 g ET
+BT /F2 8 Tf 0.35 0.35 0.4 rg 54 620 Td (Gene Expr: S K K SovereignCore  -->  Target Normal Form: SovereignCore) Tj 0 g ET
+q
+0.98 0.98 0.99 rg
+0.8 0.83 0.88 RG 1 w
+54.00 483.00 487.00 125.00 re B
+0.93 0.94 0.96 rg
+54.00 588.00 487.00 20 re f
+BT /F1 9 Tf 0.2 0.25 0.35 rg 64.00 594.00 Td (Proof Net: GENE-ID-01 Metabolic Folding) Tj ET
+BT /F4 8 Tf 0.1 0.5 0.3 rg 451.00 594.00 Td (Cost: 1 ATP) Tj ET
+Q
+q
+1.5 w
+0.3 0.35 0.45 RG
+166.01 557.00 m
+166.01 552.00 146.01 552.00 146.01 547.00 c
+S
+Q
+q
+1.5 w
+0.3 0.35 0.45 RG
+146.01 525.00 m
+146.01 520.00 126.01 520.00 126.01 515.00 c
+S
+Q
+q
+1.5 w
+0.3 0.35 0.45 RG
+126.01 493.00 m
+126.01 488.00 106.01 488.00 106.01 483.00 c
+S
+Q
+q
+1.5 w
+0.3 0.35 0.45 RG
+126.01 493.00 m
+126.01 488.00 146.01 488.00 146.01 483.00 c
+S
+Q
+q
+1.5 w
+0.3 0.35 0.45 RG
+146.01 525.00 m
+146.01 520.00 186.01 520.00 186.01 515.00 c
+S
+Q
+q
+1.5 w
+0.3 0.35 0.45 RG
+166.01 557.00 m
+166.01 552.00 226.01 552.00 226.01 547.00 c
+S
+Q
+q
+0.9 0.92 0.95 rg
+0.35 0.45 0.6 RG 1.2 w
+174.26 568.00 m 174.26 572.56 170.57 576.25 166.01 576.25 c 161.45 576.25 157.76 572.56 157.76 568.00 c 157.76 563.44 161.45 559.75 166.01 559.75 c 170.57 559.75 174.26 563.44 174.26 568.00 c
+B
+BT /F2 8 Tf 0.2 0.3 0.5 rg 163.01 565.00 Td (@) Tj ET
+Q
+q
+0.9 0.92 0.95 rg
+0.35 0.45 0.6 RG 1.2 w
+154.26 536.00 m 154.26 540.56 150.57 544.25 146.01 544.25 c 141.45 544.25 137.76 540.56 137.76 536.00 c 137.76 531.44 141.45 527.75 146.01 527.75 c 150.57 527.75 154.26 531.44 154.26 536.00 c
+B
+BT /F2 8 Tf 0.2 0.3 0.5 rg 143.01 533.00 Td (@) Tj ET
+Q
+q
+0.9 0.92 0.95 rg
+0.35 0.45 0.6 RG 1.2 w
+134.26 504.00 m 134.26 508.56 130.57 512.25 126.01 512.25 c 121.45 512.25 117.76 508.56 117.76 504.00 c 117.76 499.44 121.45 495.75 126.01 495.75 c 130.57 495.75 134.26 499.44 134.26 504.00 c
+B
+BT /F2 8 Tf 0.2 0.3 0.5 rg 123.01 501.00 Td (@) Tj ET
+Q
+q
+0.1 0.55 0.28 rg
+0.05 0.35 0.18 RG 1.5 w
+117.01 472.00 m 117.01 478.08 112.09 483.00 106.01 483.00 c 99.93 483.00 95.01 478.08 95.01 472.00 c 95.01 465.92 99.93 461.00 106.01 461.00 c 112.09 461.00 117.01 465.92 117.01 472.00 c
+B
+BT /F1 11 Tf 1 1 1 rg 102.51 468.00 Td (S) Tj ET
+Q
+q
+0.08 0.08 0.12 rg
+0.85 0.65 0.15 RG 1.5 w
+157.01 472.00 m 157.01 478.08 152.09 483.00 146.01 483.00 c 139.93 483.00 135.01 478.08 135.01 472.00 c 135.01 465.92 139.93 461.00 146.01 461.00 c 152.09 461.00 157.01 465.92 157.01 472.00 c
+B
+BT /F1 11 Tf 1 1 1 rg 142.01 468.00 Td (K) Tj ET
+Q
+q
+0.08 0.08 0.12 rg
+0.85 0.65 0.15 RG 1.5 w
+197.01 504.00 m 197.01 510.08 192.09 515.00 186.01 515.00 c 179.93 515.00 175.01 510.08 175.01 504.00 c 175.01 497.92 179.93 493.00 186.01 493.00 c 192.09 493.00 197.01 497.92 197.01 504.00 c
+B
+BT /F1 11 Tf 1 1 1 rg 182.01 500.00 Td (K) Tj ET
+Q
+q
+0.94 0.95 0.97 rg
+0.5 0.55 0.65 RG 1 w
+200.01 528.00 52.00 16.00 re B
+BT /F2 8 Tf 0.1 0.1 0.1 rg 203.61 533.00 Td (Sovereig) Tj ET
+Q
+q
+2 w
+0.2 0.5 0.8 RG
+279.50 539.25 m 315.50 539.25 l S
+309.50 544.25 m 315.50 539.25 l 309.50 534.25 l S
+BT /F2 7 Tf 0.3 0.4 0.5 rg 283.50 547.25 Td (reduces) Tj ET
+Q
+q
+0.94 0.95 0.97 rg
+0.5 0.55 0.65 RG 1 w
+402.99 560.00 52.00 16.00 re B
+BT /F2 8 Tf 0.1 0.1 0.1 rg 406.59 565.00 Td (Sovereig) Tj ET
+Q
+BT /F1 11 Tf 0.15 0.2 0.3 rg 54 457 Td (Chromosome GENE-METAB-02: Black Cone Entropy Absorption) Tj 0 g ET
+BT /F2 8 Tf 0.35 0.35 0.4 rg 54 443 Td (Gene Expr: K VitalNutrient EntropyNoise  -->  Target Normal Form: VitalNutrient) Tj 0 g ET
+q
+0.98 0.98 0.99 rg
+0.8 0.83 0.88 RG 1 w
+54.00 306.00 487.00 125.00 re B
+0.93 0.94 0.96 rg
+54.00 411.00 487.00 20 re f
+BT /F1 9 Tf 0.2 0.25 0.35 rg 64.00 417.00 Td (Proof Net: GENE-METAB-02 Metabolic Folding) Tj ET
+BT /F4 8 Tf 0.1 0.5 0.3 rg 451.00 417.00 Td (Cost: 1 ATP) Tj ET
+Q
+q
+1.5 w
+0.3 0.35 0.45 RG
+166.01 380.00 m
+166.01 375.00 146.01 375.00 146.01 370.00 c
+S
+Q
+q
+1.5 w
+0.3 0.35 0.45 RG
+146.01 348.00 m
+146.01 343.00 126.01 343.00 126.01 338.00 c
+S
+Q
+q
+1.5 w
+0.3 0.35 0.45 RG
+146.01 348.00 m
+146.01 343.00 166.01 343.00 166.01 338.00 c
+S
+Q
+q
+1.5 w
+0.3 0.35 0.45 RG
+166.01 380.00 m
+166.01 375.00 206.01 375.00 206.01 370.00 c
+S
+Q
+q
+0.9 0.92 0.95 rg
+0.35 0.45 0.6 RG 1.2 w
+174.26 391.00 m 174.26 395.56 170.57 399.25 166.01 399.25 c 161.45 399.25 157.76 395.56 157.76 391.00 c 157.76 386.44 161.45 382.75 166.01 382.75 c 170.57 382.75 174.26 386.44 174.26 391.00 c
+B
+BT /F2 8 Tf 0.2 0.3 0.5 rg 163.01 388.00 Td (@) Tj ET
+Q
+q
+0.9 0.92 0.95 rg
+0.35 0.45 0.6 RG 1.2 w
+154.26 359.00 m 154.26 363.56 150.57 367.25 146.01 367.25 c 141.45 367.25 137.76 363.56 137.76 359.00 c 137.76 354.44 141.45 350.75 146.01 350.75 c 150.57 350.75 154.26 354.44 154.26 359.00 c
+B
+BT /F2 8 Tf 0.2 0.3 0.5 rg 143.01 356.00 Td (@) Tj ET
+Q
+q
+0.08 0.08 0.12 rg
+0.85 0.65 0.15 RG 1.5 w
+137.01 327.00 m 137.01 333.08 132.09 338.00 126.01 338.00 c 119.93 338.00 115.01 333.08 115.01 327.00 c 115.01 320.92 119.93 316.00 126.01 316.00 c 132.09 316.00 137.01 320.92 137.01 327.00 c
+B
+BT /F1 11 Tf 1 1 1 rg 122.01 323.00 Td (K) Tj ET
+Q
+q
+0.94 0.95 0.97 rg
+0.5 0.55 0.65 RG 1 w
+140.01 319.00 52.00 16.00 re B
+BT /F2 8 Tf 0.1 0.1 0.1 rg 143.61 324.00 Td (VitalNut) Tj ET
+Q
+q
+0.94 0.95 0.97 rg
+0.5 0.55 0.65 RG 1 w
+180.01 351.00 52.00 16.00 re B
+BT /F2 8 Tf 0.1 0.1 0.1 rg 183.61 356.00 Td (EntropyN) Tj ET
+Q
+q
+2 w
+0.2 0.5 0.8 RG
+279.50 362.25 m 315.50 362.25 l S
+309.50 367.25 m 315.50 362.25 l 309.50 357.25 l S
+BT /F2 7 Tf 0.3 0.4 0.5 rg 283.50 370.25 Td (reduces) Tj ET
+Q
+q
+0.94 0.95 0.97 rg
+0.5 0.55 0.65 RG 1 w
+402.99 383.00 52.00 16.00 re B
+BT /F2 8 Tf 0.1 0.1 0.1 rg 406.59 388.00 Td (VitalNut) Tj ET
+Q
+0.92 0.94 0.98 rg 54 69 487 24 re f 0 g
+BT /F1 9 Tf 0.1 0.3 0.2 rg 64 81 Td (Quine Replication: Run 'python3 <this_file>.pdf --reproduce' to synthesize next generation) Tj 0 g ET
+endstream
+endobj
+5 0 obj
+<</Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold>>
+endobj
+6 0 obj
+<</Type /Font /Subtype /Type1 /BaseFont /Helvetica>>
+endobj
+7 0 obj
+<</Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique>>
+endobj
+8 0 obj
+<</Type /Font /Subtype /Type1 /BaseFont /Courier>>
+endobj
+xref
+0 9
+0000000000 65535 f 
+0000001070 00000 n 
+0000001117 00000 n 
+0000001172 00000 n 
+0000001322 00000 n 
+0000008016 00000 n 
+0000008089 00000 n 
+0000008157 00000 n 
+0000008233 00000 n 
+trailer
+<</Size 9 /Root 1 0 R>>
+startxref
+8299
+%%EOF
+"""
+
+# --- BEGIN STANDALONE AUTONOMOUS ORGANISM REPLICATION RUNNER ---
+import os, sys, json, time, random, hashlib
+
+def main():
+    target_path = sys.argv[0]
+    args = sys.argv[1:]
+
+    with open(target_path, "rb") as f:
+        content = f.read()
+
+    prefix = "%🖤 ORGANISM_GENOME: ".encode("utf-8")
+    idx = content.find(prefix)
+    if idx == -1:
+        print("\033[1;31m[!] CRITICAL ERROR: ORGANISM_GENOME block missing!\033[0m")
+        sys.exit(1)
+
+    end_idx = content.find(b"\n", idx)
+    raw = content[idx + len(prefix):end_idx].decode("utf-8")
+    genome = json.loads(raw)
+
+    gen = genome["generation"]
+    org_hash = genome.get("organism_hash", "")[:16]
+
+    print("\033[1;36m" + "=" * 70)
+    print("  %🖤 BLACK-HEART — AUTONOMOUS SELF-REPRODUCING ORGANISM")
+    print(f"  Organism: Gen #{gen:04d} ⟨{org_hash}⟩ | File: {os.path.basename(target_path)}")
+    print("=" * 70 + "\033[0m\n")
+
+    if "--status" in args or not args:
+        print(f"\033[1;34m[*] Generation:      \033[0m #{gen:04d}")
+        print(f"\033[1;34m[*] Parent Hash:     \033[0m {genome['parent_hash']}")
+        print(f"\033[1;34m[*] Public Key:      \033[0m {genome['public_key_hex']}")
+        print(f"\033[1;34m[*] Born UTC:        \033[0m {genome['birth_timestamp_utc']}")
+        print(f"\033[1;34m[*] Active Genome:   \033[0m {len(genome['chromosomes'])} chromosomes\n")
+        for c in genome["chromosomes"]:
+            print(f"    - [{c['gene_id']}] {c['gene_name']}: {c['expression']} (Target: {c['expected_normal_form']})")
+        print("\n\033[0;37mCommands: Run with '--reproduce' to synthesize next-generation offspring.\033[0m")
+
+    if "--reproduce" in args:
+        print("\033[1;33m[*] INITIATING METABOLIC CHECK & QUINE REPRODUCTION...\033[0m")
+        # In a standalone polyglot, import organism compiler to spawn child
+        try:
+            target_dir = os.path.dirname(os.path.abspath(target_path))
+            parent_dir = os.path.dirname(target_dir)
+            for p in (target_dir, parent_dir):
+                if p not in sys.path:
+                    sys.path.insert(0, p)
+
+            # Reconstruct organism object and reproduce
+            from organism import Organism, Chromosome, PolyglotOrganismCompiler
+            org = Organism(
+                generation=genome["generation"],
+                parent_hash=genome["parent_hash"],
+                public_key_hex=genome["public_key_hex"],
+                secret_key_hex=genome["secret_key_hex"],
+                birth_timestamp_utc=genome["birth_timestamp_utc"],
+                organism_hash=genome["organism_hash"]
+            )
+            for cd in genome["chromosomes"]:
+                org.chromosomes.append(Chromosome.from_dict(cd))
+
+            viable, atp = org.run_metabolism()
+            if not viable:
+                print("\033[1;31m[✗ LETHAL MUTATION] Organism is sterile. Reproduction blocked!\033[0m")
+                sys.exit(1)
+
+            print(f"  \033[1;32m[✓ METABOLISM SOUND]\033[0m Burned {atp} ATP across {len(org.chromosomes)} chromosomes.")
+
+            # Spawn child
+            child = org.reproduce(mutation_rate=0.05)
+            child_dir = os.path.dirname(os.path.abspath(target_path))
+            child_filename = f"organism_gen{child.generation:04d}_{child.organism_hash[:8]}.pdf"
+            child_path = os.path.join(child_dir, child_filename)
+
+            PolyglotOrganismCompiler.compile(child, child_path)
+
+            print(f"\n\033[1;32m[⚓ SUCCESS] BORN OFFSPRING: Gen #{child.generation:04d}!\033[0m")
+            print(f"  Target File: \033[1;35m{child_path}\033[0m ({os.path.getsize(child_path)} bytes)")
+            print(f"  Parent Hash: {child.parent_hash[:24]}...")
+            print(f"  Child Key:   {child.public_key_hex[:24]}...")
+            print(f"  Visual Form: open {child_path}")
+            print(f"  Next Gen:    python3 {child_path} --reproduce\n")
+
+        except Exception as e:
+            print(f"\033[1;31m[!] Replication Error: {e}\033[0m")
+            sys.exit(1)
+
+    print("\033[1;36m" + "=" * 70 + "\033[0m")
+
+if __name__ == "__main__":
+    main()

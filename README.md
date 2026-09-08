@@ -261,27 +261,52 @@ python3 cli.py compile -t "Autonomous Manifesto" -o manifesto.pdf
 
 ---
 
-## 11. Comprehensive Test Suite
+## 11. Autonomous Self-Replicating Polyglot Organisms (`organism.py`)
 
-Run all 27 unit tests across all five engines:
+Implementing John von Neumann's Theory of Self-Reproducing Automata (1966) directly inside executable ISO 32000 PDF polyglots:
+* **Genotype:** Embedded SKIY combinator chromosomes (`%🖤 ORGANISM_GENOME: [...]`).
+* **Phenotype:** An authentic visual document displaying the cellular passport, membrane color derived from its Ed25519 identity, and vector proof nets of its chromosomes.
+* **Metabolic Selection:** Evaluates chromosome convergence against ATP limits. Only healthy, converging genomes survive to replicate.
+* **Quine Reproduction:**
+  ```bash
+  # 1. Spawn Genesis Organism (Gen #0000):
+  python3 examples/genesis_organism.py
+
+  # 2. View organism phenotype in PDF reader:
+  open examples/organism_gen0.pdf
+
+  # 3. Trigger autonomous quine-reproduction:
+  python3 examples/organism_gen0.pdf --reproduce
+  # Outputs: organism_gen0001_<child_hash>.pdf with newly derived Ed25519 keypair and mutations!
+  ```
+
+See formal specification: [GENOME.md](file:///Users/s0fractal/Projects/black-heart/GENOME.md).
+
+---
+
+## 12. Comprehensive Test Suite
+
+Run all 31 unit tests across all six engines:
 ```bash
 python3 test_glyph.py
 python3 test_monad.py
 python3 test_living_ledger.py
 python3 test_interaction.py
+python3 test_organism.py
 ```
 
 ---
 
-## 12. Specifications & Theory
+## 13. Specifications & Theory
 
 * [CONTINUUM.md](file:///Users/s0fractal/Projects/black-heart/CONTINUUM.md) — Suspended Thunks, Neutral Oracles & Merkle-Stream Continuity.
 * [MONAD.md](file:///Users/s0fractal/Projects/black-heart/MONAD.md) — The Literate Polyglot Monad, Dual Trees & Proof-Bearing Legal Contracts.
 * [INTERACTION.md](file:///Users/s0fractal/Projects/black-heart/INTERACTION.md) — Lafont's Symmetric Interaction Combinators on UTF-8 Glyphs.
+* [GENOME.md](file:///Users/s0fractal/Projects/black-heart/GENOME.md) — Autonomous Self-Replicating Polyglot Automata.
 
 ---
 
-## 13. License
+## 14. License
 
-* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, `interaction.py`, `cli.py`, tests):** AGPL-3.0-only
+* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, `interaction.py`, `cli.py`, `organism.py`, tests):** AGPL-3.0-only
 * **Texts & Polyglot artifacts:** CC BY-SA 4.0
