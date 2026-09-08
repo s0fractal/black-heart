@@ -456,9 +456,9 @@ python3 labyrinth.pdf --simulate --steps 300
 Empowering computational organisms to contemplate, inspect, and optimize their own source code:
 * **Addressable Program Zipper:** Traverses and mutates subterms via binary tree address paths $\tau \in \{'L', 'R'\}^*$ over pure SKIY combinator trees.
 * **Equational Algebraic Rewrites:** Discovers sound simplifications ($S(K x)(K y) \to K(xy)$, $S(K x)I \to x$, $I x \to x$, $K x y \to x$) that save runtime ATP reductions on every invocation.
-* **External Invariant Evaluator (`FrozenEvaluator`):** Decoupled test harness with frozen fixtures verifying $100\%$ functional equivalence while measuring energy conservation ($\Delta \text{ATP} < 0$) and syntactic compression ($\Delta \text{Size}$).
-* **Scientific Experiment Ledger (`ExperimentLog`):** Preserves both accepted transitions and rejected mutations (divergence counterexamples, neutral mutations) as permanent empirical records.
-* **Successor Minting & Replay Auditor:** Successor carries an immutable `MetamorphicTransitionReceipt`. The standalone auditor independently replays the transition from the parent payload and re-runs the oracle, failing closed on forged claims.
+* **External Invariant Evaluator (`FrozenEvaluator`):** Decoupled test harness with frozen fixtures verifying extensional equivalence across test vectors and closed metabolic reduction while measuring energy conservation ($\Delta \text{ATP} < 0$) and syntactic compression ($\Delta \text{Size}$).
+* **Scientific Experiment Ledger (`ExperimentLog`):** Preserves both accepted transitions and rejected mutations (divergence counterexamples, neutral mutations) within the standalone polyglot artifact.
+* **Successor Minting & Replay Auditor:** Successor carries an immutable `MetamorphicTransitionReceipt`. The standalone auditor independently replays the transition from the parent payload, verifies whole-genome invariance and metabolic viability, and re-runs the oracle, failing closed on forged claims.
 
 ```bash
 # Contemplate form and synthesize metamorphic successor:
@@ -478,7 +478,7 @@ python3 successor.pdf --experiments
 
 ## 21. Comprehensive Test Suite
 
-Run all **114 unit tests** across all **14 engines** with a single command:
+Run all **118 unit tests** across all **14 engines** with a single command:
 ```bash
 # Unified test runner:
 python3 test_all.py
@@ -496,7 +496,7 @@ python3 test_cross_proof.py    # 3 tests: Bilateral cross-proofs & embedded code
 python3 test_continuum.py      # 4 tests: Suspended continuum thunks & incremental resumption
 python3 test_zk_glyph.py       # 5 tests: Pure-Python Ed25519 zero-knowledge proofs & NIZK
 python3 test_mesh.py           # 3 tests: Peer-to-peer living polyglot mesh sync & gossip
-python3 test_security_audit.py # 44 tests: Adversarial security audit, fail-closed verifiers (G1-G9, R1-R8, N1-N5, F1-F4, H1-H4, J1-J7, K1-K6)
+python3 test_security_audit.py # 48 tests: Adversarial security audit, fail-closed verifiers (G1-G9, R1-R8, N1-N5, F1-F4, H1-H4, J1-J7, K1-K6, L1-L4)
 python3 test_symbiosis.py      # 5 tests: Dialectical symbiosis & Artin braid group recombination
 python3 test_quantum.py        # 5 tests: Topological quantum computing, Fibonacci anyons, unitary audit
 python3 test_morphogenesis.py  # 7 tests: Gray-Scott PDEs, Turing bifurcation, marching squares

@@ -647,6 +647,7 @@ ALLOWED_MUTATION_RULES: set[str] = {
     "S(K I) -> I",
     "I x -> x",
     "K x y -> x",
+    "MUTATION_OPERAND_SWAP",
     "MUTATION_CHILD_SWAP",
     "MUTATION_CONSTANT_COLLAPSE",
 }
@@ -676,11 +677,48 @@ def contemplate_and_evolve(
     best_candidate: Optional[Tuple[MutationProposal, EvaluationReceipt, Chromosome, ExperimentRecord]] = None
     best_savings = -1
 
+    parent_viable = organism.verify()
+
     for chrom in organism.chromosomes:
         proposals = propose_form_metamorphoses(chrom, include_exploratory=True)
         for prop in proposals:
             orig_term = parse(chrom.expression)
             receipt = evaluator.evaluate_transformation(orig_term, prop.candidate_term)
+
+            # L1: If parent is metabolically viable, candidate MUST preserve chromosome's metabolic reduction
+            if receipt.verdict == MutationVerdict.ACCEPTED_MORE_EFFICIENT and parent_viable:
+                try:
+                    cand_res = evaluate(prop.candidate_term, max_atp=chrom.max_atp)
+                    exp_res = evaluate(parse(chrom.expected_normal_form))
+                    if not cand_res.is_settled() or str(cand_res.term) != str(exp_res.term):
+                        receipt = EvaluationReceipt(
+                            verdict=MutationVerdict.REJECTED_SEMANTIC_MISMATCH,
+                            semantic_preserved=False,
+                            atp_original=receipt.atp_original,
+                            atp_candidate=receipt.atp_candidate,
+                            atp_delta=receipt.atp_delta,
+                            size_original=receipt.size_original,
+                            size_candidate=receipt.size_candidate,
+                            size_delta=receipt.size_delta,
+                            test_inputs_count=receipt.test_inputs_count,
+                            discrepancy_input="[METABOLIC_REDUCTION]",
+                            discrepancy_expected=str(exp_res.term),
+                            discrepancy_actual=str(cand_res.term) if cand_res.is_settled() else "UNSETTLED"
+                        )
+                except Exception as e:
+                    receipt = EvaluationReceipt(
+                        verdict=MutationVerdict.REJECTED_SEMANTIC_MISMATCH,
+                        semantic_preserved=False,
+                        atp_original=receipt.atp_original,
+                        atp_candidate=receipt.atp_candidate,
+                        atp_delta=receipt.atp_delta,
+                        size_original=receipt.size_original,
+                        size_candidate=receipt.size_candidate,
+                        size_delta=receipt.size_delta,
+                        test_inputs_count=receipt.test_inputs_count,
+                        discrepancy_actual=f"Metabolic reduction error: {e}"
+                    )
+
             rec = log.record_experiment(prop, receipt)
 
             if receipt.verdict == MutationVerdict.ACCEPTED_MORE_EFFICIENT:
@@ -823,7 +861,7 @@ def audit_metamorphic_transition(
 
         if matching_rewrite is not None:
             replayed_term = replace_subterm_at(parent_term, receipt.site_address, matching_rewrite[1])
-        elif receipt.rule_name == "MUTATION_CHILD_SWAP" and isinstance(subterm, App):
+        elif (receipt.rule_name == "MUTATION_OPERAND_SWAP" or receipt.rule_name == "MUTATION_CHILD_SWAP") and isinstance(subterm, App):
             replayed_term = replace_subterm_at(parent_term, receipt.site_address, App(subterm.right, subterm.left))
         elif receipt.rule_name == "MUTATION_CONSTANT_COLLAPSE":
             replayed_term = replace_subterm_at(parent_term, receipt.site_address, K)
@@ -847,7 +885,7 @@ def audit_metamorphic_transition(
             f"Claimed size_saved {receipt.size_saved} does not match actual difference {expected_size_saved}"
         )
 
-    # 11. Whole-genome invariance verification (K1)
+    # 11. Whole-genome invariance verification (K1, L1)
     for p_c, s_c in zip(parent.chromosomes, successor.chromosomes):
         if p_c.gene_id != receipt.gene_id:
             # Off-target chromosome MUST be strictly unmodified
@@ -861,22 +899,25 @@ def audit_metamorphic_transition(
                     f"Off-target chromosome '{p_c.gene_id}' was altered in successor organism without authorization"
                 )
         else:
-            # Target chromosome MUST have the exact replayed expression
+            # Target chromosome MUST have the exact replayed expression and preserved contract
             if (s_c.gene_id != p_c.gene_id or
                 s_c.gene_name != p_c.gene_name or
                 s_c.expression != str(replayed_term) or
+                s_c.expected_normal_form != p_c.expected_normal_form or
                 s_c.max_atp != p_c.max_atp or
                 s_c.vital != p_c.vital):
                 raise MetamorphicProvenanceError(
                     f"Target chromosome '{p_c.gene_id}' in successor does not match replayed transition"
                 )
 
-    # 12. Check successor cryptographic key validity and provenance
+    # 12. Check successor cryptographic key validity and metabolic viability (L1)
     from crypto import is_valid_public_key
     if not is_valid_public_key(successor.public_key_hex):
         raise MetamorphicProvenanceError("Successor public key is invalid or malformed")
     if successor.public_key_hex != parent.public_key_hex:
         raise MetamorphicProvenanceError("Successor public key diverges from parent public key")
+    if parent.verify() and not successor.verify():
+        raise MetamorphicProvenanceError("Successor organism failed metabolic verification despite viable parent")
 
     # 13. Re-evaluate on frozen fixtures
     if evaluator.fixtures_fingerprint != receipt.fixtures_fingerprint:
@@ -902,7 +943,7 @@ def audit_metamorphic_transition(
             f"Transition did not achieve measurable efficiency gain: {eval_receipt.verdict}"
         )
 
-    # 14. Verify experiment ID derivation and provenance (K2, K4)
+    # 14. Verify experiment ID derivation and provenance (K2, K4, L3)
     expected_exp_id = derive_experiment_id(
         receipt.gene_id,
         receipt.site_address,
@@ -921,13 +962,38 @@ def audit_metamorphic_transition(
             raise MetamorphicProvenanceError(
                 f"Claimed experiment_id '{receipt.experiment_id}' not found in provided experiment ledger"
             )
+        # 1. Verify record internal content derivation
+        rec_expected_eid = derive_experiment_id(
+            rec.gene_id,
+            rec.site_address,
+            rec.rule_name,
+            rec.original_term,
+            rec.candidate_term
+        )
+        if rec.experiment_id != rec_expected_eid:
+            raise MetamorphicProvenanceError(
+                f"Experiment record ID corrupted: '{rec.experiment_id}' does not match derivation '{rec_expected_eid}'"
+            )
+        # 2. Verify record operands match receipt
         if (rec.gene_id != receipt.gene_id or
+            rec.original_term != receipt.pre_term or
             rec.candidate_term != receipt.post_term or
             rec.site_address != receipt.site_address or
             rec.rule_name != receipt.rule_name or
             rec.verdict != MutationVerdict.ACCEPTED_MORE_EFFICIENT):
             raise MetamorphicProvenanceError(
                 "Experiment ledger record attributes diverge from transition receipt"
+            )
+        # 3. Verify record empirical measurements match verified oracle evaluation (L3)
+        if (rec.atp_original != eval_receipt.atp_original or
+            rec.atp_candidate != eval_receipt.atp_candidate or
+            rec.atp_delta != eval_receipt.atp_delta or
+            rec.size_original != eval_receipt.size_original or
+            rec.size_candidate != eval_receipt.size_candidate or
+            rec.size_delta != eval_receipt.size_delta or
+            rec.test_inputs_count != eval_receipt.test_inputs_count):
+            raise MetamorphicProvenanceError(
+                "Experiment ledger measurements diverge from independent oracle evaluation"
             )
 
     return True, f"TRANSITION VERIFIED: {receipt.rule_name} on gene '{receipt.gene_id}' saved {atp_saved_actual} ATP (Q.E.D.)"
@@ -1121,9 +1187,16 @@ def cmd_audit():
         organism_hash=data['successor']['organism_hash']
     )
 
+    if "experiments" not in data or not isinstance(data["experiments"], list) or len(data["experiments"]) == 0:
+        print("=================================================================")
+        print("  %[BH] METAMORPHIC PROVENANCE & ORACLE AUDITOR")
+        print("=================================================================\n")
+        print("\033[1;31m[FAIL] METAMORPHIC AUDIT FAILED: Missing or empty 'experiments' ledger in polyglot manifest\033[0m\n")
+        sys.exit(1)
+
     receipt = MetamorphicTransitionReceipt.from_dict(data['transition'])
     evaluator = FrozenEvaluator()
-    exp_log = ExperimentLog.from_list(data.get('experiments', [])) if 'experiments' in data else None
+    exp_log = ExperimentLog.from_list(data['experiments'])
 
     try:
         ok, msg = audit_metamorphic_transition(parent, successor, receipt, evaluator, experiment_log=exp_log)

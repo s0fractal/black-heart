@@ -1404,6 +1404,151 @@ class TestSecurityAuditG1toG9(unittest.TestCase):
         self.assertEqual(nan_code, 1)
         self.assertIn("AUDIT FAILED: Invalid or non-finite probability values", nan_out)
 
+    # ========================================================================
+    # L1: Transition Audit Rejects Tampered Target Expected Normal Form
+    # ========================================================================
+    def test_l1_transition_audit_rejects_tampered_target_expected_normal_form(self):
+        """Metamorphic transition audit must verify expected_normal_form on the target chromosome and successor viability."""
+        from organism import create_genesis_organism, Chromosome
+        from metamorphosis import contemplate_and_evolve, audit_metamorphic_transition, MetamorphicProvenanceError
+        import copy
+
+        p = create_genesis_organism()
+        p.chromosomes.append(Chromosome('OPT', 'Optimizer', '🌿 (🖤 (🌿 🤍)) 🤍', '🌿 🤍', 100))
+        p.organism_hash = p.compute_hash()
+
+        succ, log, receipt = contemplate_and_evolve(p)
+        self.assertIsNotNone(succ)
+        self.assertIsNotNone(receipt)
+
+        # Tamper expected_normal_form of target chromosome
+        tampered_succ = copy.deepcopy(succ)
+        tampered_receipt = copy.deepcopy(receipt)
+        target = next(c for c in tampered_succ.chromosomes if c.gene_id == receipt.gene_id)
+        target.expected_normal_form = "IMPOSSIBLE_RESULT"
+        tampered_succ.organism_hash = tampered_succ.compute_hash()
+        tampered_receipt.successor_hash = tampered_succ.organism_hash
+
+        with self.assertRaises(MetamorphicProvenanceError) as cm:
+            audit_metamorphic_transition(p, tampered_succ, tampered_receipt, experiment_log=log)
+        self.assertIn("does not match replayed transition", str(cm.exception))
+
+    # ========================================================================
+    # L2: Runner Audit Rejects Missing or Empty Experiments Ledger
+    # ========================================================================
+    def test_l2_runner_audit_rejects_missing_or_empty_experiments_ledger(self):
+        """Standalone metamorphic runner must require a non-empty experiments ledger in manifest."""
+        from organism import create_genesis_organism, Chromosome
+        from metamorphosis import contemplate_and_evolve, MetamorphicPolyglotCompiler
+        import copy, json, tempfile, io, contextlib
+        from pathlib import Path
+
+        p = create_genesis_organism()
+        p.chromosomes.append(Chromosome('OPT', 'Optimizer', '🌿 (🖤 (🌿 🤍)) 🤍', '🌿 🤍', 100))
+        p.organism_hash = p.compute_hash()
+
+        succ, log, receipt = contemplate_and_evolve(p)
+        compiler = MetamorphicPolyglotCompiler(p, succ, receipt, log)
+        blob = compiler.compile_pdf()
+
+        prefix = "# %METAMORPHOSIS".encode("latin1")
+        start = blob.rfind(prefix)
+        end = blob.find(b"\n", start)
+        d = json.loads(blob[start + len(prefix):end].decode("utf-8"))
+
+        def run_manifest_audit(mutate_fn):
+            data = copy.deepcopy(d)
+            mutate_fn(data)
+            with tempfile.TemporaryDirectory() as td:
+                f = Path(td) / "subject.pdf"
+                f.write_bytes(blob[:start] + prefix + json.dumps(data).encode("utf-8") + blob[end:])
+                runner_ns = {'__name__': 'trusted', '__file__': str(f)}
+                exec(compile(compiler._build_runner_script(), "<runner>", "exec"), runner_ns)
+                buf = io.StringIO()
+                code = 0
+                with contextlib.redirect_stdout(buf):
+                    try:
+                        runner_ns['cmd_audit']()
+                    except SystemExit as se:
+                        code = se.code
+                return code, buf.getvalue()
+
+        # Legitimate manifest passes
+        code_ok, out_ok = run_manifest_audit(lambda data: None)
+        self.assertEqual(code_ok, 0)
+        self.assertIn("METAMORPHIC PROVENANCE & ORACLE AUDITOR", out_ok)
+
+        # Missing experiments key fails closed
+        code_missing, out_missing = run_manifest_audit(lambda data: data.pop("experiments"))
+        self.assertEqual(code_missing, 1)
+        self.assertIn("Missing or empty 'experiments' ledger", out_missing)
+
+        # Empty experiments list fails closed
+        code_empty, out_empty = run_manifest_audit(lambda data: data.update(experiments=[]))
+        self.assertEqual(code_empty, 1)
+        self.assertIn("Missing or empty 'experiments' ledger", out_empty)
+
+    # ========================================================================
+    # L3: Transition Audit Rejects Tampered Ledger Record Measurements
+    # ========================================================================
+    def test_l3_transition_audit_rejects_tampered_ledger_record_measurements(self):
+        """Transition audit must verify all measurements and operands of the linked ledger record against oracle evaluation."""
+        from organism import create_genesis_organism, Chromosome
+        from metamorphosis import contemplate_and_evolve, audit_metamorphic_transition, MetamorphicProvenanceError
+        import copy
+
+        p = create_genesis_organism()
+        p.chromosomes.append(Chromosome('OPT', 'Optimizer', '🌿 (🖤 (🌿 🤍)) 🤍', '🌿 🤍', 100))
+        p.organism_hash = p.compute_hash()
+
+        succ, log, receipt = contemplate_and_evolve(p)
+
+        # 1. Tampered original_term diverges from derivation
+        l_orig = copy.deepcopy(log)
+        rec = next(x for x in l_orig.records if x.experiment_id == receipt.experiment_id)
+        rec.original_term = "invented_expression"
+        with self.assertRaises(MetamorphicProvenanceError) as cm:
+            audit_metamorphic_transition(p, succ, receipt, experiment_log=l_orig)
+        self.assertIn("Experiment record ID corrupted", str(cm.exception))
+
+        # 2. Tampered atp_original diverges from oracle evaluation
+        l_atp = copy.deepcopy(log)
+        rec = next(x for x in l_atp.records if x.experiment_id == receipt.experiment_id)
+        rec.atp_original = 999999
+        with self.assertRaises(MetamorphicProvenanceError) as cm:
+            audit_metamorphic_transition(p, succ, receipt, experiment_log=l_atp)
+        self.assertIn("measurements diverge from independent oracle evaluation", str(cm.exception))
+
+        # 3. Tampered test_inputs_count diverges from oracle evaluation
+        l_cnt = copy.deepcopy(log)
+        rec = next(x for x in l_cnt.records if x.experiment_id == receipt.experiment_id)
+        rec.test_inputs_count = 0
+        with self.assertRaises(MetamorphicProvenanceError) as cm:
+            audit_metamorphic_transition(p, succ, receipt, experiment_log=l_cnt)
+        self.assertIn("measurements diverge from independent oracle evaluation", str(cm.exception))
+
+    # ========================================================================
+    # L4: Unified Swap Rule Replay and Metabolic Gating
+    # ========================================================================
+    def test_l4_unified_swap_rule_replay_and_metabolic_gate(self):
+        """MUTATION_OPERAND_SWAP must be recognized, and swaps breaking closed metabolic reduction must be rejected."""
+        from organism import create_genesis_organism, Chromosome
+        from metamorphosis import contemplate_and_evolve, FrozenEvaluator, ALLOWED_MUTATION_RULES
+
+        self.assertIn("MUTATION_OPERAND_SWAP", ALLOWED_MUTATION_RULES)
+
+        # S (S K) S parent is viable, but swapping operands breaks unapplied normal form
+        p = create_genesis_organism()
+        p.chromosomes = [Chromosome('SWAP', 'Swap test', '🌿 (🌿 🖤) 🌿', '🌿 (🌿 🖤) 🌿', 100)]
+        p.organism_hash = p.compute_hash()
+        self.assertTrue(p.verify())
+
+        e = FrozenEvaluator(atp_budget_per_test=30)
+        # Because candidate breaks metabolic viability of viable parent, contemplate_and_evolve rejects it
+        s, log, r = contemplate_and_evolve(p, e)
+        self.assertIsNone(s, "Unviable swap should not be minted as successor")
+        self.assertIsNone(r)
+
 if __name__ == "__main__":
     unittest.main()
 
