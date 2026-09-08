@@ -28,6 +28,7 @@ SUITES = [
     ("Continuum Checkpointed Thunks", "test_continuum"),
     ("Ed25519 Zero-Knowledge Proofs", "test_zk_glyph"),
     ("P2P Polyglot Mesh Synchronization", "test_mesh"),
+    ("Security Audit & Fail-Closed Controls", "test_security_audit"),
 ]
 
 def run_all_tests() -> bool:
@@ -58,7 +59,7 @@ def run_all_tests() -> bool:
     total_time = time.time() - start_global
     print("\033[1;36m" + "=" * 70)
     if all_success:
-        print(f"  \033[1;32m[✓] TOTAL SOUNDNESS: {total_passed}/{total_ran} TESTS PASSING (100% SOUND) in {total_time:.2f}s\033[0m")
+        print(f"  \033[1;32m[✓] TOTAL SOUNDNESS: {total_passed}/{total_ran} TESTS PASSING (ALL VERIFIED SUITES SOUND) in {total_time:.2f}s\033[0m")
     else:
         print(f"  \033[1;31m[✗] TEST FAILURES DETECTED: {total_passed}/{total_ran} passed in {total_time:.2f}s\033[0m")
     print("\033[1;36m" + "=" * 70 + "\033[0m\n")

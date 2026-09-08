@@ -77,7 +77,9 @@ class ThunkCheckpoint:
         expected_hash = self.compute_hash()
         if self.checkpoint_hash != expected_hash:
             return False
-        if self.public_key_hex and self.signature_hex:
+        if self.public_key_hex:
+            if not self.signature_hex:
+                return False
             return verify_hex(self.public_key_hex, self.checkpoint_hash.encode("utf-8"), self.signature_hex)
         return True
 
@@ -126,7 +128,11 @@ def step_continuum(
     """
     Takes an existing thunk checkpoint, executes up to 'fuel' ATP reduction steps,
     and returns a new checkpoint (either SUSPENDED or SETTLED).
+    Refuses to step if current_thunk is invalid or tampered.
     """
+    if not current_thunk.verify():
+        raise ValueError("Refusing to step from invalid or tampered predecessor checkpoint")
+
     if current_thunk.status == "SETTLED":
         return current_thunk
 
@@ -335,7 +341,7 @@ def audit_self(filepath: str):
     prefix_bytes = PREFIX.encode("utf-8")
     idx = content.rfind(prefix_bytes)  # Find latest manifest
     if idx == -1:
-        print("[!] No continuum thunk manifest found.")
+        print("[FAIL] No continuum thunk manifest found.")
         sys.exit(1)
 
     end_idx = content.find(b"\n", idx)
@@ -347,15 +353,68 @@ def audit_self(filepath: str):
     print(f"  Target File: {os.path.basename(filepath)} ({len(content)} bytes)")
     print("=================================================================\n")
 
-    latest = checkpoints[-1]
-    print(f"[*] Checkpoint Height:  #{latest['height']}")
-    print(f"[*] Execution Status:   {latest['status']}")
-    print(f"[*] Cumulative ATP:     {latest['atp_accumulated']}")
-    print(f"[*] Initial Term:       {latest['initial_expr']}")
-    print(f"[*] Current Term:       {latest['current_expr']}")
-    print(f"[*] Checkpoint Hash:    ⚓ {latest['checkpoint_hash']}\n")
+    if not checkpoints:
+        print("[FAIL] Manifest contains no checkpoints.")
+        sys.exit(1)
 
-    if latest['status'] == "SETTLED":
+    try:
+        from continuum import ThunkCheckpoint
+        try:
+            from glyph import parse, reduce_step
+        except ImportError:
+            from sk_combinators import parse, reduce_step
+    except Exception as e:
+        print(f"[FAIL] Required runtime modules unavailable: {e}")
+        sys.exit(1)
+
+    parsed_cps = []
+    for i, cpd in enumerate(checkpoints):
+        try:
+            cp = ThunkCheckpoint.from_dict(cpd)
+        except Exception as e:
+            print(f"[FAIL] Malformed checkpoint entry #{i}: {e}")
+            sys.exit(1)
+        if not cp.verify():
+            print(f"[FAIL] Checkpoint #{cp.height} cryptographic/integrity verification failed.")
+            sys.exit(1)
+        if i == 0:
+            if cp.height != 0:
+                print(f"[FAIL] Genesis checkpoint must have height 0, got {cp.height}.")
+                sys.exit(1)
+            if cp.prev_hash != "0" * 64:
+                print(f"[FAIL] Genesis checkpoint prev_hash must be 64 zeros, got {cp.prev_hash}.")
+                sys.exit(1)
+        else:
+            prev = parsed_cps[i - 1]
+            if cp.height != prev.height + 1:
+                print(f"[FAIL] Sequence error at #{cp.height}: expected #{prev.height + 1}.")
+                sys.exit(1)
+            if cp.prev_hash != prev.checkpoint_hash:
+                print(f"[FAIL] Hash chaining broken at #{cp.height}: expected {prev.checkpoint_hash}, got {cp.prev_hash}.")
+                sys.exit(1)
+            if cp.initial_expr != prev.initial_expr:
+                print(f"[FAIL] Checkpoint #{cp.height} altered initial_expr.")
+                sys.exit(1)
+        parsed_cps.append(cp)
+
+    latest = parsed_cps[-1]
+    print(f"[*] Checkpoint Height:  #{latest.height}")
+    print(f"[*] Execution Status:   {latest.status}")
+    print(f"[*] Cumulative ATP:     {latest.atp_accumulated}")
+    print(f"[*] Initial Term:       {latest.initial_expr}")
+    print(f"[*] Current Term:       {latest.current_expr}")
+    print(f"[*] Checkpoint Hash:    ⚓ {latest.checkpoint_hash}\n")
+
+    if latest.status == "SETTLED":
+        try:
+            term = parse(latest.current_expr)
+            _, reduced = reduce_step(term)
+            if reduced:
+                print(f"[FAIL] Checkpoint claims SETTLED but expression '{latest.current_expr}' is reducible!")
+                sys.exit(1)
+        except Exception as e:
+            print(f"[FAIL] Could not verify normal form for SETTLED expression: {e}")
+            sys.exit(1)
         print("\033[1;32m[✓] COMPUTATION REACHED NORMAL FORM (Q.E.D.)\033[0m\n")
     else:
         print("\033[1;33m[⏳] COMPUTATION SUSPENDED (Ready for resumption)\033[0m")
@@ -385,8 +444,9 @@ def resume_computation_in_pdf(
 ) -> ThunkCheckpoint:
     """
     Loads an existing continuum polyglot PDF, extracts the latest checkpoint,
-    executes up to additional_atp steps, appends an incremental update block
-    (with new visual page and manifest), and updates the PDF in-place!
+    audits the entire history chain, executes up to additional_atp steps,
+    appends an incremental update block (with new visual page and manifest),
+    and updates the PDF in-place!
     """
     with open(pdf_path, "rb") as f:
         content = f.read()
@@ -398,7 +458,25 @@ def resume_computation_in_pdf(
 
     end_idx = content.find(b"\n", idx)
     checkpoints_data = json.loads(content[idx + len(prefix):end_idx].decode("utf-8"))
+    if not checkpoints_data:
+        raise ValueError(f"Continuum manifest in {pdf_path} is empty")
+
     checkpoints = [ThunkCheckpoint.from_dict(d) for d in checkpoints_data]
+    for i, cp in enumerate(checkpoints):
+        if cp.height != i:
+            raise ValueError(f"Continuum chain discontinuity: checkpoint #{cp.height} at index {i}")
+        if not cp.verify():
+            raise ValueError(f"Continuum chain integrity failure: checkpoint #{cp.height} failed verification")
+        if i == 0:
+            if cp.prev_hash != "0" * 64:
+                raise ValueError("Genesis checkpoint prev_hash must be 64 zeros")
+        else:
+            prev = checkpoints[i - 1]
+            if cp.prev_hash != prev.checkpoint_hash:
+                raise ValueError(f"Continuum chain hash broken at #{cp.height}: expected {prev.checkpoint_hash}, found {cp.prev_hash}")
+            if cp.initial_expr != prev.initial_expr:
+                raise ValueError(f"Continuum chain altered initial_expr at #{cp.height}")
+
     current = checkpoints[-1]
 
     if current.status == "SETTLED":

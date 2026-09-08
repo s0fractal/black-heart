@@ -374,7 +374,7 @@ python3 cli.py mesh sync peer_ledger.pdf --peer http://127.0.0.1:8765
 
 ## 17. Comprehensive Test Suite
 
-Run all 46 unit tests across all nine engines with a single command:
+Run all 57 unit tests across all ten engines with a single command:
 ```bash
 # Unified test runner:
 python3 test_all.py
@@ -389,9 +389,10 @@ python3 test_living_ledger.py  # 5 tests: Incremental PDF updates, multi-block c
 python3 test_interaction.py    # 6 tests: Symmetric interaction combinators, rewiring
 python3 test_organism.py       # 4 tests: Self-reproducing polyglot automata, quine
 python3 test_cross_proof.py    # 3 tests: Bilateral cross-proofs & embedded code vaults
-test_continuum.py              # 4 tests: Suspended continuum thunks & incremental resumption
-test_zk_glyph.py              # 5 tests: Pure-Python Ed25519 zero-knowledge proofs & NIZK
-test_mesh.py                  # 3 tests: Peer-to-peer living polyglot mesh sync & gossip
+python3 test_continuum.py      # 4 tests: Suspended continuum thunks & incremental resumption
+python3 test_zk_glyph.py       # 5 tests: Pure-Python Ed25519 zero-knowledge proofs & NIZK
+python3 test_mesh.py           # 3 tests: Peer-to-peer living polyglot mesh sync & gossip
+python3 test_security_audit.py # 11 tests: Fail-closed verifiers, RFC 8032 strict decoding, anti-tamper controls
 ```
 
 ---

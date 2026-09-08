@@ -171,8 +171,17 @@ class LiterateMonad(Generic[T]):
         Atomic step: registers a formal computable rule in the code spine
         and simultaneously attaches its legal clause to the visual spine.
         Returns the clause digest.
+        Validates atp_cost type, range, and budget before mutating state.
         """
+        if not isinstance(atp_cost, int) or isinstance(atp_cost, bool):
+            raise TypeError(f"atp_cost must be an integer, got {type(atp_cost).__name__}")
+        if atp_cost < 0:
+            raise ValueError(f"atp_cost cannot be negative: {atp_cost}")
+
         def run_step(state: MonadState) -> Tuple[str, MonadState]:
+            if state.atp_budget < atp_cost:
+                raise ValueError(f"Insufficient ATP budget: required {atp_cost}, available {state.atp_budget}")
+
             code_node = CodeSpineNode(
                 clause_id=clause_id,
                 predicate_name=predicate_name,
@@ -370,16 +379,26 @@ class SelfVerifyingContractPolyglot:
         )
 
         # Embedded Contract Manifest in PDF comments
+        params_hash = hashlib.sha256(json.dumps(self.parameters, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
+        evidence_hash = hashlib.sha256(json.dumps([e.__dict__ for e in self.evidence_log], sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
+        stream_hash = hashlib.sha256(content_stream_bytes).hexdigest()
+        contract_anchor = hashlib.sha256(f"{joint_h}:{params_hash}:{evidence_hash}:{stream_hash}".encode("utf-8")).hexdigest()
+
         manifest_data = {
             "title": self.title,
             "jurisdiction": self.jurisdiction,
             "parties": [p.__dict__ for p in self.parties],
             "parameters": self.parameters,
             "code_spine": [c.__dict__ for c in self.monad_state.dual_tree.code_nodes],
+            "visual_spine": [v.__dict__ for v in self.monad_state.dual_tree.visual_nodes],
             "evidence_log": [e.__dict__ for e in self.evidence_log],
             "code_root_hash": self.monad_state.dual_tree.code_root_hash(),
             "visual_root_hash": self.monad_state.dual_tree.visual_root_hash(),
-            "joint_anchor": joint_h
+            "parameters_hash": params_hash,
+            "evidence_hash": evidence_hash,
+            "stream_hash": stream_hash,
+            "joint_anchor": joint_h,
+            "contract_anchor": contract_anchor
         }
         manifest_json_str = json.dumps(manifest_data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
         comment_manifest = f"%🖤 CONTRACT_MANIFEST: {manifest_json_str}\n".encode("utf-8")
@@ -470,16 +489,52 @@ def main():
     declared_anchor = manifest.get("joint_anchor", "")
     print(f"\n\033[1;34m[*] Declared Dual-Spine Anchor:\033[0m {declared_anchor}")
 
-    # Verify Joint Merkle Anchor integrity
+    # 1. Verify Visual PDF Stream integrity
+    if manifest.get("stream_hash"):
+        s_marker = b"stream\n"
+        s_start = content.find(s_marker)
+        if s_start == -1:
+            print("\033[1;31m[✗ RED] INTEGRITY BREACH: PDF content stream missing!\033[0m")
+            sys.exit(1)
+        s_start += len(s_marker)
+        s_end = content.find(b"\nendstream", s_start)
+        if s_end == -1:
+            print("\033[1;31m[✗ RED] INTEGRITY BREACH: PDF content stream unterminated!\033[0m")
+            sys.exit(1)
+        actual_stream_bytes = content[s_start:s_end]
+        actual_stream_hash = hashlib.sha256(actual_stream_bytes).hexdigest()
+        if actual_stream_hash != manifest["stream_hash"]:
+            print("\033[1;31m[✗ RED] INTEGRITY BREACH: Visual PDF presentation text altered!\033[0m")
+            sys.exit(1)
+
+    # 2. Verify Code Spine
     code_nodes = manifest.get("code_spine", [])
     h_code = hashlib.sha256()
     for cn in code_nodes:
         raw = json.dumps(cn, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
         h_code.update(raw)
     computed_code_hash = h_code.hexdigest()
+    if manifest.get("code_root_hash") and computed_code_hash != manifest["code_root_hash"]:
+        print("\033[1;31m[✗ RED] INTEGRITY BREACH: Code spine modified!\033[0m")
+        sys.exit(1)
 
+    # 3. Verify Visual Spine
+    visual_nodes = manifest.get("visual_spine", [])
+    if visual_nodes:
+        h_vis = hashlib.sha256()
+        for vn in visual_nodes:
+            raw = json.dumps(vn, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+            h_vis.update(raw)
+        computed_vis_hash = h_vis.hexdigest()
+        if manifest.get("visual_root_hash") and computed_vis_hash != manifest["visual_root_hash"]:
+            print("\033[1;31m[✗ RED] INTEGRITY BREACH: Visual spine modified!\033[0m")
+            sys.exit(1)
+    else:
+        computed_vis_hash = manifest.get("visual_root_hash", "")
+
+    # 4. Verify Dual-Spine Anchor
     computed_anchor = hashlib.sha256(
-        computed_code_hash.encode("utf-8") + manifest["visual_root_hash"].encode("utf-8")
+        computed_code_hash.encode("utf-8") + computed_vis_hash.encode("utf-8")
     ).hexdigest()
 
     if computed_anchor != declared_anchor:
@@ -487,6 +542,29 @@ def main():
         print(f"  Expected: {declared_anchor}")
         print(f"  Computed: {computed_anchor}")
         sys.exit(1)
+
+    # 5. Verify Parameters & Evidence Hashes
+    params = manifest.get("parameters", {})
+    evidence_log = manifest.get("evidence_log", [])
+
+    computed_params_hash = hashlib.sha256(json.dumps(params, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
+    if manifest.get("parameters_hash") and computed_params_hash != manifest["parameters_hash"]:
+        print("\033[1;31m[✗ RED] INTEGRITY BREACH: Contract parameters altered!\033[0m")
+        sys.exit(1)
+
+    computed_evidence_hash = hashlib.sha256(json.dumps(evidence_log, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
+    if manifest.get("evidence_hash") and computed_evidence_hash != manifest["evidence_hash"]:
+        print("\033[1;31m[✗ RED] INTEGRITY BREACH: Evidence log altered!\033[0m")
+        sys.exit(1)
+
+    # 6. Verify Contract Anchor
+    if manifest.get("contract_anchor"):
+        expected_contract_anchor = hashlib.sha256(
+            f"{declared_anchor}:{computed_params_hash}:{computed_evidence_hash}:{manifest.get('stream_hash', '')}".encode("utf-8")
+        ).hexdigest()
+        if manifest["contract_anchor"] != expected_contract_anchor:
+            print("\033[1;31m[✗ RED] INTEGRITY BREACH: Contract anchor binding altered!\033[0m")
+            sys.exit(1)
 
     print(f"\033[1;32m[✓ GREEN] Document integrity sound. Dual-spine anchor verified.\033[0m\n")
 

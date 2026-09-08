@@ -286,7 +286,7 @@ def main():
     p_repl = subparsers.add_parser("repl", help="Interactive proof and combinator REPL")
 
     # test
-    p_test = subparsers.add_parser("test", help="Run full 46-test suite across all nine engines")
+    p_test = subparsers.add_parser("test", help="Run comprehensive test suite across all engines and security controls")
 
     # keygen
     p_keygen = subparsers.add_parser("keygen", help="Generate fresh Ed25519 keypair")

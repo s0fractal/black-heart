@@ -35,15 +35,27 @@ ZK_MANIFEST_PREFIX = "%🖤 ZK_PROOF_MANIFEST: "
 
 def _derive_generator_h() -> Point:
     """
-    Derives an independent curve generator H via deterministic hashing
-    to avoid discrete log trapdoors (Nothing-Up-My-Sleeve point).
+    Derives an independent curve generator H via deterministic Hash-to-Curve
+    (Nothing-Up-My-Sleeve point) where the discrete log with respect to
+    BASE_POINT B is computationally unknown.
+    Applies cofactor 8 multiplication to project candidate curve points
+    into the prime-order subgroup.
     """
-    seed = b"BLACK_HEART_CURVE25519_GENERATOR_H_SEED_2026"
-    h = hashlib.sha512(seed).digest()
-    scalar = int.from_bytes(h[:32], "little") % L
-    if scalar == 0:
-        scalar = 1
-    return _scalar_mult(BASE_POINT, scalar)
+    seed = b"BLACK_HEART_ED25519_NOTHING_UP_MY_SLEEVE_GENERATOR_H_2026_V1"
+    ctr = 0
+    while True:
+        h = hashlib.sha512(seed + ctr.to_bytes(4, "little")).digest()
+        y = int.from_bytes(h[:32], "little") % Q
+        ctr += 1
+        try:
+            from crypto import _x_recover, D
+            x = _x_recover(y)
+            if (-x * x + y * y - (1 + D * x * x % Q * (y * y % Q))) % Q == 0:
+                H = _scalar_mult((x, y), 8)
+                if H != (0, 1) and _scalar_mult(H, 8) != (0, 1):
+                    return H
+        except ValueError:
+            continue
 
 GENERATOR_H = _derive_generator_h()
 

@@ -1,7 +1,7 @@
 # coding: utf-8
 r"""%PDF-1.7
 %🖤
-%🖤 BILATERAL_MANIFEST: {"base_fee_usd":10000,"parties":[{"name":"Axiom Financial Technologies Inc.","public_key_hex":"44c5f3c93341dbd1087d3166353d76fbf972fa900438a0080bcaa57dec578c36","role":"CLIENT"},{"name":"Nebula Hypercloud Infrastructure Ltd.","public_key_hex":"9cf0dedd7cffbb654fdec1d94814db9d52bea6728ed0f0850d68d8196a10d090","role":"PROVIDER"}],"penalty_rate_usd":500,"target_uptime_percent":99.5,"title":"ENTERPRISE CLOUD INFRASTRUCTURE SLA & ESCROW AGREEMENT","trusted_oracle_pk_hex":"fcb8ef22879a432a2955d2afd3f51e5aa59945927d8fded9fdb55dc05d6a5a9f"}
+%🖤 BILATERAL_MANIFEST: {"agreement_author_pk_hex":"e23e05216172a392d6cc6401d870a5a5f24ef5e70167c6bd7b8e8f92bb8c0474","agreement_signature_hex":"4942e352861e55740548b0d5870768b712c1fe8b1748f7ff146d9b671979667bd046bda4c462c446169db9bdcc34ae870d4017dee9afabb98962ad772340990b","base_fee_usd":10000,"parties":[{"name":"Axiom Financial Technologies Inc.","public_key_hex":"c65d60ad084d682d5d90713a0c18e822f3d18a537865c3063e7734a668689161","role":"CLIENT"},{"name":"Nebula Hypercloud Infrastructure Ltd.","public_key_hex":"9f124c51236d2a4d1bd399ce23d2e3432da194e5048582fdc750e15dc9808adb","role":"PROVIDER"}],"penalty_rate_usd":500,"target_uptime_percent":99.5,"title":"ENTERPRISE CLOUD INFRASTRUCTURE SLA & ESCROW AGREEMENT","trusted_oracle_pk_hex":"c44851ff7c1c2580c7e3e9333c35bd3391acda993a75633263136b5a96503870"}
 1 0 obj
 <</Type /Catalog /Pages 2 0 R>>
 endobj
@@ -12,7 +12,7 @@ endobj
 <</Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources <</Font <</F1 5 0 R /F2 6 0 R /F3 7 0 R /F4 8 0 R>>>>>>
 endobj
 4 0 obj
-<</Length 925>>
+<</Length 969>>
 stream
 BT /F1 18 Tf 0.1 0.2 0.35 rg 54 788 Td (ENTERPRISE CLOUD INFRASTRUCTURE SLA & ESCROW AGREEMENT) Tj 0 g ET
 BT /F3 10 Tf 0.3 0.35 0.4 rg 54 766 Td (Bilateral Interlocking Proof-Bearing Contract | Target Uptime: 99.5%) Tj 0 g ET
@@ -20,9 +20,9 @@ BT /F3 10 Tf 0.3 0.35 0.4 rg 54 766 Td (Bilateral Interlocking Proof-Bearing Con
 0.97 0.98 0.99 rg 54 662 487 80 re f 0 g
 0.2 0.4 0.6 RG 1 w 54 662 487 80 re s 0 g
 BT /F1 11 Tf 0.1 0.25 0.5 rg 66 728 Td (Bilateral Terms & Expected Telemetry Oracle) Tj 0 g ET
-BT /F4 8 Tf 0.2 0.2 0.2 rg 66 716 Td (Trusted Oracle PK: fcb8ef22879a432a2955d2afd3f51e5a...) Tj 0 g ET
+BT /F4 8 Tf 0.2 0.2 0.2 rg 66 716 Td (Trusted Oracle PK: c44851ff7c1c2580c7e3e9333c35bd33...) Tj 0 g ET
 BT /F4 8 Tf 0.2 0.2 0.2 rg 66 703 Td (Base Monthly Service Fee: $10,000 USD | Penalty Rate: $500 / 0.1% outage) Tj 0 g ET
-BT /F1 9 Tf 0.1 0.45 0.2 rg 66 690 Td (Parties: 2 registered sovereign signatories) Tj 0 g ET
+BT /F1 9 Tf 0.1 0.45 0.2 rg 66 690 Td (Author PK: e23e05216172a392d6cc6401d870a5a5... | Signature: 4942e352861e55740548b0d5...) Tj 0 g ET
 0.92 0.94 0.97 rg 54 69 487 24 re f 0 g
 BT /F1 9 Tf 0.1 0.3 0.2 rg 64 81 Td (Adjudication: Run 'python3 <this_file>.pdf --adjudicate-with <oracle.pdf>') Tj 0 g ET
 endstream
@@ -42,18 +42,18 @@ endobj
 xref
 0 9
 0000000000 65535 f 
-0000000600 00000 n 
-0000000647 00000 n 
-0000000702 00000 n 
-0000000852 00000 n 
-0000001826 00000 n 
-0000001899 00000 n 
-0000001967 00000 n 
-0000002043 00000 n 
+0000000850 00000 n 
+0000000897 00000 n 
+0000000952 00000 n 
+0000001102 00000 n 
+0000002120 00000 n 
+0000002193 00000 n 
+0000002261 00000 n 
+0000002337 00000 n 
 trailer
 <</Size 9 /Root 1 0 R>>
 startxref
-2109
+2403
 %%EOF
 """
 

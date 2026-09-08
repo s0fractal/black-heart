@@ -238,7 +238,8 @@ class TelemetryOraclePolyglot:
 class BilateralAgreementPolyglot:
     """
     Compiles an SLA agreement that defines bilateral adjudication against
-    a trusted Telemetry Oracle.
+    a trusted Telemetry Oracle. Terms are cryptographically signed by the issuer
+    and registered parties.
     """
     def __init__(
         self,
@@ -246,22 +247,57 @@ class BilateralAgreementPolyglot:
         trusted_oracle_pk_hex: str,
         target_uptime_percent: float = 99.5,
         base_fee_usd: int = 10000,
-        penalty_rate_usd: int = 500
+        penalty_rate_usd: int = 500,
+        agreement_secret_key_hex: Optional[str] = None
     ):
         self.title = title
         self.trusted_oracle_pk_hex = trusted_oracle_pk_hex
         self.target_uptime_percent = target_uptime_percent
         self.base_fee_usd = base_fee_usd
         self.penalty_rate_usd = penalty_rate_usd
-        self.parties: List[Dict[str, str]] = []
+        self.parties: List[Dict[str, Any]] = []
+        if agreement_secret_key_hex:
+            self._sk = agreement_secret_key_hex
+            self._pk = public_key_from_secret(bytes.fromhex(agreement_secret_key_hex)).hex()
+        else:
+            self._sk, self._pk = generate_keypair()
 
-    def add_party(self, role: str, name: str, pk_hex: str):
-        self.parties.append({"role": role, "name": name, "public_key_hex": pk_hex})
+    def canonical_terms_bytes(self) -> bytes:
+        terms = {
+            "title": self.title,
+            "trusted_oracle_pk_hex": self.trusted_oracle_pk_hex,
+            "target_uptime_percent": self.target_uptime_percent,
+            "base_fee_usd": self.base_fee_usd,
+            "penalty_rate_usd": self.penalty_rate_usd,
+        }
+        return json.dumps(terms, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+    def add_party(self, role: str, name: str, pk_hex: str, secret_key_hex: Optional[str] = None):
+        self.parties.append({
+            "role": role,
+            "name": name,
+            "public_key_hex": pk_hex,
+            "secret_key_hex": secret_key_hex
+        })
 
     def compile(self, output_path: str) -> str:
         page_width, page_height = 595, 842
         margin = 54
         content_width = page_width - 2 * margin
+
+        terms_b = self.canonical_terms_bytes()
+        author_sig = sign_bytes(bytes.fromhex(self._sk), terms_b).hex()
+
+        compiled_parties = []
+        for p in self.parties:
+            cp = {
+                "role": p["role"],
+                "name": p["name"],
+                "public_key_hex": p["public_key_hex"]
+            }
+            if p.get("secret_key_hex"):
+                cp["signature_hex"] = sign_bytes(bytes.fromhex(p["secret_key_hex"]), terms_b).hex()
+            compiled_parties.append(cp)
 
         stream_lines = []
         y = page_height - margin
@@ -287,7 +323,7 @@ class BilateralAgreementPolyglot:
         y -= 13
         stream_lines.append(f"BT /F4 8 Tf 0.2 0.2 0.2 rg {margin + 12} {y} Td (Base Monthly Service Fee: ${self.base_fee_usd:,} USD | Penalty Rate: ${self.penalty_rate_usd} / 0.1% outage) Tj 0 g ET")
         y -= 13
-        stream_lines.append(f"BT /F1 9 Tf 0.1 0.45 0.2 rg {margin + 12} {y} Td (Parties: {len(self.parties)} registered sovereign signatories) Tj 0 g ET")
+        stream_lines.append(f"BT /F1 9 Tf 0.1 0.45 0.2 rg {margin + 12} {y} Td (Author PK: {self._pk[:32]}... | Signature: {author_sig[:24]}...) Tj 0 g ET")
         y -= 35
 
         # Footer Box
@@ -326,7 +362,9 @@ class BilateralAgreementPolyglot:
             "target_uptime_percent": self.target_uptime_percent,
             "base_fee_usd": self.base_fee_usd,
             "penalty_rate_usd": self.penalty_rate_usd,
-            "parties": self.parties
+            "agreement_author_pk_hex": self._pk,
+            "agreement_signature_hex": author_sig,
+            "parties": compiled_parties
         }
         manifest_str = json.dumps(manifest_data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
         manifest_comment = f"{AGREEMENT_MANIFEST_PREFIX}{manifest_str}\n".encode("utf-8")
@@ -362,13 +400,23 @@ class BilateralAgreementPolyglot:
 # CROSS-DOCUMENT ADJUDICATION ENGINE
 # ============================================================================
 
-def adjudicate_bilateral(agreement_pdf_path: str, oracle_pdf_path: str) -> BilateralSettlementReceipt:
+def adjudicate_bilateral(
+    agreement_pdf_path: str,
+    oracle_pdf_path: str,
+    expected_agreement_hash: Optional[str] = None
+) -> BilateralSettlementReceipt:
     """
     Executes bilateral adjudication between an Agreement Polyglot and an Oracle Polyglot.
+    Verifies mutual Ed25519 signatures, recomputed anchors, and identity constraints.
     """
     # 1. Read Agreement Polyglot
     with open(agreement_pdf_path, "rb") as f:
         ag_content = f.read()
+
+    if expected_agreement_hash:
+        actual_ag_anchor = hashlib.sha256(ag_content).hexdigest()
+        if actual_ag_anchor != expected_agreement_hash:
+            raise PermissionError(f"Agreement anchor mismatch: expected {expected_agreement_hash}, got {actual_ag_anchor}")
 
     ag_prefix = AGREEMENT_MANIFEST_PREFIX.encode("utf-8")
     ag_idx = ag_content.find(ag_prefix)
@@ -377,7 +425,33 @@ def adjudicate_bilateral(agreement_pdf_path: str, oracle_pdf_path: str) -> Bilat
     ag_end = ag_content.find(b"\n", ag_idx)
     ag_manifest = json.loads(ag_content[ag_idx + len(ag_prefix):ag_end].decode("utf-8"))
 
-    # 2. Read Oracle Polyglot
+    # 2. Verify Agreement Author Signature over canonical terms
+    terms_dict = {
+        "title": ag_manifest["title"],
+        "trusted_oracle_pk_hex": ag_manifest["trusted_oracle_pk_hex"],
+        "target_uptime_percent": ag_manifest["target_uptime_percent"],
+        "base_fee_usd": ag_manifest["base_fee_usd"],
+        "penalty_rate_usd": ag_manifest["penalty_rate_usd"],
+    }
+    terms_bytes = json.dumps(terms_dict, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+    author_pk = ag_manifest.get("agreement_author_pk_hex")
+    author_sig = ag_manifest.get("agreement_signature_hex")
+    if not author_pk or not author_sig:
+        raise PermissionError("Agreement is missing cryptographic signature! Untrusted agreement.")
+
+    if not verify_bytes(bytes.fromhex(author_pk), terms_bytes, bytes.fromhex(author_sig)):
+        raise PermissionError("Agreement terms altered or signature invalid! Refusing unverified agreement.")
+
+    # Also verify any registered party signatures if provided
+    for party in ag_manifest.get("parties", []):
+        if party.get("signature_hex"):
+            pk = bytes.fromhex(party["public_key_hex"])
+            sig = bytes.fromhex(party["signature_hex"])
+            if not verify_bytes(pk, terms_bytes, sig):
+                raise PermissionError(f"Party signature invalid for '{party.get('name')}'!")
+
+    # 3. Read Oracle Polyglot
     with open(oracle_pdf_path, "rb") as f:
         or_content = f.read()
 
@@ -386,9 +460,9 @@ def adjudicate_bilateral(agreement_pdf_path: str, oracle_pdf_path: str) -> Bilat
     if or_idx == -1:
         raise ValueError(f"No ORACLE_MANIFEST found in {oracle_pdf_path}")
     or_end = or_content.find(b"\n", or_idx)
-    or_manifest = json.loads(or_content[or_idx + len(or_prefix):or_end].decode("utf-8"))
+    or_manifest = json.loads(or_content[or_idx + len(or_prefix):end_idx if (end_idx := or_end) != -1 else len(or_content)].decode("utf-8"))
 
-    # 3. Verify Oracle's Ed25519 signature
+    # 4. Verify Oracle's Ed25519 signature
     oracle_pk_bytes = bytes.fromhex(or_manifest["public_key_hex"])
     oracle_sig_bytes = bytes.fromhex(or_manifest["signature_hex"])
     payload_data = or_manifest["payload"]
@@ -398,12 +472,20 @@ def adjudicate_bilateral(agreement_pdf_path: str, oracle_pdf_path: str) -> Bilat
     if not sig_ok:
         raise PermissionError("Oracle Ed25519 signature verification FAILED! Untrusted or tampered telemetry.")
 
-    # 4. Verify Oracle Identity Constraint
+    # 5. Recompute and verify Oracle anchor
+    computed_or_anchor = hashlib.sha256(payload_bytes + oracle_sig_bytes).hexdigest()
+    if or_manifest.get("oracle_anchor") != computed_or_anchor:
+        raise PermissionError(f"Oracle anchor mismatch! Embedded: {or_manifest.get('oracle_anchor')}, Computed: {computed_or_anchor}")
+
+    # 6. Verify Oracle Identity Constraint
     trusted_pk = ag_manifest["trusted_oracle_pk_hex"]
     if or_manifest["public_key_hex"] != trusted_pk:
         raise PermissionError(f"Oracle identity mismatch! Expected PK: {trusted_pk[:16]}..., got: {or_manifest['public_key_hex'][:16]}...")
 
-    # 5. Adjudicate SLA Formula against attested facts
+    # 7. Extract oracle_name STRICTLY from signed payload
+    oracle_name = payload_data.get("oracle_name", "UNKNOWN_ORACLE")
+
+    # 8. Adjudicate SLA Formula against attested facts
     actual_uptime = payload_data["measured_uptime_percent"]
     target_uptime = ag_manifest["target_uptime_percent"]
     base_fee = ag_manifest["base_fee_usd"]
@@ -418,9 +500,9 @@ def adjudicate_bilateral(agreement_pdf_path: str, oracle_pdf_path: str) -> Bilat
     status = "SETTLED_BREACH" if breach else "SETTLED_COMPLIANT"
     ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
-    # 6. Joint Bilateral Digest
+    # 9. Joint Bilateral Digest
     ag_anchor = hashlib.sha256(ag_content).hexdigest()
-    or_anchor = or_manifest["oracle_anchor"]
+    or_anchor = computed_or_anchor
 
     joint_payload = f"{ag_anchor}|{or_anchor}|{status}|{penalty_due}|{net_payable}|{ts}"
     joint_digest = hashlib.sha256(joint_payload.encode("utf-8")).hexdigest()
@@ -428,7 +510,7 @@ def adjudicate_bilateral(agreement_pdf_path: str, oracle_pdf_path: str) -> Bilat
     return BilateralSettlementReceipt(
         status=status,
         agreement_title=ag_manifest["title"],
-        oracle_name=or_manifest["oracle_name"],
+        oracle_name=oracle_name,
         oracle_pk_hex=or_manifest["public_key_hex"],
         measured_uptime_percent=actual_uptime,
         target_uptime_percent=target_uptime,
@@ -446,7 +528,8 @@ def _escape_pdf(text: str) -> str:
 def _generate_oracle_runner() -> str:
     return r'''
 # --- ORACLE STANDALONE AUDITOR ---
-import os, sys, json
+import os, sys, json, hashlib
+
 def main():
     target = sys.argv[0]
     print("\033[1;36m" + "=" * 65)
@@ -455,15 +538,48 @@ def main():
     with open(target, "rb") as f: content = f.read()
     prefix = "%🖤 ORACLE_MANIFEST: ".encode("utf-8")
     idx = content.find(prefix)
-    if idx == -1: print("[!] No ORACLE_MANIFEST block"); sys.exit(1)
+    if idx == -1:
+        print("[FAIL] No ORACLE_MANIFEST block found")
+        sys.exit(1)
     end_idx = content.find(b"\n", idx)
     man = json.loads(content[idx + len(prefix):end_idx].decode("utf-8"))
-    print(f"[*] Oracle:      {man['oracle_name']} ({man['oracle_role']})")
+
+    # Cryptographic verification
+    try:
+        from crypto import verify_bytes
+    except Exception:
+        d = os.path.dirname(os.path.abspath(target))
+        for p in (d, os.path.dirname(d), "/Users/s0fractal/Projects/black-heart"):
+            if os.path.isdir(p) and p not in sys.path:
+                sys.path.insert(0, p)
+        from crypto import verify_bytes
+
+    payload_data = man.get("payload", {})
+    payload_bytes = json.dumps(payload_data, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    try:
+        pk_bytes = bytes.fromhex(man["public_key_hex"])
+        sig_bytes = bytes.fromhex(man["signature_hex"])
+    except Exception as e:
+        print(f"[FAIL] Invalid public key or signature hex: {e}")
+        sys.exit(1)
+
+    if not verify_bytes(pk_bytes, payload_bytes, sig_bytes):
+        print("\033[1;31m[FAIL] RFC 8032 Signature verification FAILED! Invalid or forged telemetry.\033[0m")
+        sys.exit(1)
+
+    computed_anchor = hashlib.sha256(payload_bytes + sig_bytes).hexdigest()
+    if man.get("oracle_anchor") != computed_anchor:
+        print("[FAIL] Oracle anchor mismatch!")
+        sys.exit(1)
+
+    oracle_name = payload_data.get("oracle_name", man.get("oracle_name"))
+    print(f"[*] Oracle:      {oracle_name} ({man.get('oracle_role', 'ORACLE')})")
     print(f"[*] Public Key:  {man['public_key_hex']}")
     print(f"[*] Signature:   {man['signature_hex'][:32]}... [RFC 8032 VERIFIED]")
-    print(f"[*] Uptime Attested: {man['payload']['measured_uptime_percent']}% across {man['payload']['total_period_minutes']} min")
-    print(f"[*] Anchor:      ⚓ ⟨digest:{man['oracle_anchor'][:16]}⟩")
+    print(f"[*] Uptime Attested: {payload_data.get('measured_uptime_percent')}% across {payload_data.get('total_period_minutes')} min")
+    print(f"[*] Anchor:      ⚓ ⟨digest:{computed_anchor[:16]}⟩")
     print("\033[1;36m" + "=" * 65 + "\033[0m")
+
 if __name__ == "__main__": main()
 '''
 

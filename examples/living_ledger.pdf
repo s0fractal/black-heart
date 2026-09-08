@@ -1,7 +1,7 @@
 # coding: utf-8
 r"""%PDF-1.7
 %🖤
-%🖤 LEDGER_MANIFEST: {"block_count":3,"blocks":[{"action_type":"GENESIS","block_hash":"9dfa263b3af754c9152dbf2513652378c596565bcab9dee30ff08ec7fc1e131d","combinator_claim":{"atp":2,"expected":"GenesisInvariant","expr":"🌿 🖤 🖤 GenesisInvariant"},"description":"Genesis activation: Binding combinator closure to physical PDF stream.","height":0,"prev_hash":"0000000000000000000000000000000000000000000000000000000000000000","public_key_hex":"568c8cc38a5af14c289b94c8270ba298cd9d67afd368545db9ac047b004ba86e","signature_hex":"f1083e49976122b41755b74374b0d747b270bba8487de8f858980f4081e684e7938f69a7f9e29063e417d121ef4e83bef6c16d4299665181f7e78d37b8bf4201","signer_name":"Alice (Sovereign Node)","signer_role":"ORIGINATOR","timestamp_utc":"2026-09-08T18:19:43Z"},{"action_type":"ESCROW_DEPOSIT","block_hash":"bafb0e823fc993abc4211fc6e1204be7d066346215c494848e67d1055c92d0b4","combinator_claim":{"atp":1,"expected":"EscrowSound","expr":"🖤 EscrowSound SpeculativeRisk"},"description":"Escrow committed: 10,000 ATP locked for SLA guarantee.","height":1,"prev_hash":"9dfa263b3af754c9152dbf2513652378c596565bcab9dee30ff08ec7fc1e131d","public_key_hex":"c86631ee6f2747291c9239e37a7ed010230a028188f792cfc857d140e43de86a","signature_hex":"609b87896cc44992e371462a5522df57bbf5ad33e6c9b6c3f81ae44f56d7ab5f8523b3c905b89ba145542b29256bff7e6ad70480230900683a4db9d69d0dec0d","signer_name":"Bob (Settlement Arbiter)","signer_role":"ARBITER","timestamp_utc":"2026-09-08T18:19:43Z"},{"action_type":"SETTLEMENT_RELEASE","block_hash":"1545a1e71b60593785e9b613e520faceb98817c0d21d14ff64e3344faf57d232","combinator_claim":{"atp":2,"expected":"SettleBranch","expr":"(🖤 🤍) RefuseBranch SettleBranch"},"description":"Settlement adjudicated: Uptime verified 99.306%, releasing net payout.","height":2,"prev_hash":"bafb0e823fc993abc4211fc6e1204be7d066346215c494848e67d1055c92d0b4","public_key_hex":"568c8cc38a5af14c289b94c8270ba298cd9d67afd368545db9ac047b004ba86e","signature_hex":"18ed60559adc09f4e5d13cc32f85d439cc6bce9252d90fd1068039e632d751c11acb4d2c2d9405ebc722141da9d151af53b7bd6bf9d7c8eb929025606b179800","signer_name":"Alice (Sovereign Node)","signer_role":"ORIGINATOR","timestamp_utc":"2026-09-08T18:19:43Z"}],"chain_tip":"1545a1e71b60593785e9b613e520faceb98817c0d21d14ff64e3344faf57d232","title":"BLACK-HEART AUTONOMOUS LIVING LEDGER"}
+%🖤 LEDGER_MANIFEST: {"block_count":3,"blocks":[{"action_type":"GENESIS","block_hash":"b88e0b4843f4fb439d7d0ee5f1cb2e9667e2d95462a6bd483bceaee621c5e061","combinator_claim":{"atp":2,"expected":"GenesisInvariant","expr":"🌿 🖤 🖤 GenesisInvariant"},"description":"Genesis activation: Binding combinator closure to physical PDF stream.","height":0,"prev_hash":"0000000000000000000000000000000000000000000000000000000000000000","public_key_hex":"d591c6e4529b0814e6ad0a751d8bcd6eeecb44e4789735f215d012fbcf2e2662","signature_hex":"a85f473d7bdd516282e92f613398ba78b9699510b7fe0ed14a7af21688fbcb4abc1d2cbf15291f029516497cd4123b63b5da2336d417c41fe8c684e46d2d480f","signer_name":"Alice (Sovereign Node)","signer_role":"ORIGINATOR","timestamp_utc":"2026-09-08T19:33:15Z"},{"action_type":"ESCROW_DEPOSIT","block_hash":"1df948ed0f6482e5d36505d277c61370e0003466277b7aea10893c6c71baaeba","combinator_claim":{"atp":1,"expected":"EscrowSound","expr":"🖤 EscrowSound SpeculativeRisk"},"description":"Escrow committed: 10,000 ATP locked for SLA guarantee.","height":1,"prev_hash":"b88e0b4843f4fb439d7d0ee5f1cb2e9667e2d95462a6bd483bceaee621c5e061","public_key_hex":"b13446ee6a94b661340c933019de14e7870b33aab5a1e74543dafc8c788bd313","signature_hex":"1b844c4193f65a80fced49f6eb41949bea8339286b76a3480513bdbb375dce00c8608fb351568a2d67823cc99503703ea0d5d77a0b1aabe21389d39a81f4500c","signer_name":"Bob (Settlement Arbiter)","signer_role":"ARBITER","timestamp_utc":"2026-09-08T19:33:16Z"},{"action_type":"SETTLEMENT_RELEASE","block_hash":"956271dfd8554ee7fd2261dcd39b0fedc770e96871132de8c9513de1db3a3822","combinator_claim":{"atp":2,"expected":"SettleBranch","expr":"(🖤 🤍) RefuseBranch SettleBranch"},"description":"Settlement adjudicated: Uptime verified 99.306%, releasing net payout.","height":2,"prev_hash":"1df948ed0f6482e5d36505d277c61370e0003466277b7aea10893c6c71baaeba","public_key_hex":"d591c6e4529b0814e6ad0a751d8bcd6eeecb44e4789735f215d012fbcf2e2662","signature_hex":"f83926e62b08ef35bd41ccd982ad03d6bf24e62a694097649e518e782f3847409a5b9ad9d554551ce262f0d393bc331fa9e299a93d74f311acec85e65962690b","signer_name":"Alice (Sovereign Node)","signer_role":"ORIGINATOR","timestamp_utc":"2026-09-08T19:33:16Z"}],"chain_tip":"956271dfd8554ee7fd2261dcd39b0fedc770e96871132de8c9513de1db3a3822","title":"BLACK-HEART AUTONOMOUS LIVING LEDGER"}
 1 0 obj
 <</Type /Catalog /Pages 2 0 R>>
 endobj
@@ -20,10 +20,10 @@ BT /F3 9 Tf 0.3 0.35 0.45 rg 54 768 Td (ISO 32000 Polyglot Ledger | Block Height
 0.96 0.97 0.99 rg 54 655 487 86 re f 0 g
 0.7 0.75 0.85 RG 1 w 54 655 487 86 re s 0 g
 BT /F1 11 Tf 0.1 0.25 0.5 rg 66 732 Td (Block #0: Genesis activation: Binding combinator closure to physical PDF stream.) Tj 0 g ET
-BT /F4 8 Tf 0.2 0.2 0.2 rg 66 718 Td (Timestamp UTC: 2026-09-08T18:19:43Z | Prev Hash: 000000000000000000000000...) Tj 0 g ET
-BT /F4 8 Tf 0.2 0.2 0.2 rg 66 705 Td (Signer: Alice (Sovereign Node) [ORIGINATOR] | Ed25519 PK: 568c8cc38a5af14c289b94c8...) Tj 0 g ET
-BT /F4 8 Tf 0.1 0.45 0.2 rg 66 692 Td (Signature: f1083e49976122b41755b74374b0d747... [RFC 8032 VERIFIED]) Tj 0 g ET
-BT /F1 9 Tf 0.6 0.2 0.1 rg 66 679 Td (Block Digest: 9dfa263b3af754c9152dbf2513652378c596565bcab9dee30ff08ec7fc1e131d) Tj 0 g ET
+BT /F4 8 Tf 0.2 0.2 0.2 rg 66 718 Td (Timestamp UTC: 2026-09-08T19:33:15Z | Prev Hash: 000000000000000000000000...) Tj 0 g ET
+BT /F4 8 Tf 0.2 0.2 0.2 rg 66 705 Td (Signer: Alice (Sovereign Node) [ORIGINATOR] | Ed25519 PK: d591c6e4529b0814e6ad0a75...) Tj 0 g ET
+BT /F4 8 Tf 0.1 0.45 0.2 rg 66 692 Td (Signature: a85f473d7bdd516282e92f613398ba78... [RFC 8032 VERIFIED]) Tj 0 g ET
+BT /F1 9 Tf 0.6 0.2 0.1 rg 66 679 Td (Block Digest: b88e0b4843f4fb439d7d0ee5f1cb2e9667e2d95462a6bd483bceaee621c5e061) Tj 0 g ET
 BT /F1 12 Tf 0.1 0.2 0.3 rg 54 641 Td (Mathematical Verification & Combinator Proof Net) Tj 0 g ET
 BT /F2 9 Tf 0.3 0.3 0.3 rg 54 625 Td (Expression: S K K GenesisInvariant  -->  Expected Normal Form: GenesisInvariant) Tj 0 g ET
 q
@@ -155,10 +155,10 @@ BT /F3 9 Tf 0.3 0.35 0.45 rg 54 768 Td (ISO 32000 Polyglot Ledger | Block Height
 0.96 0.97 0.99 rg 54 655 487 86 re f 0 g
 0.7 0.75 0.85 RG 1 w 54 655 487 86 re s 0 g
 BT /F1 11 Tf 0.1 0.25 0.5 rg 66 732 Td (Block #1: Escrow committed: 10,000 ATP locked for SLA guarantee.) Tj 0 g ET
-BT /F4 8 Tf 0.2 0.2 0.2 rg 66 718 Td (Timestamp UTC: 2026-09-08T18:19:43Z | Prev Hash: 9dfa263b3af754c9152dbf25...) Tj 0 g ET
-BT /F4 8 Tf 0.2 0.2 0.2 rg 66 705 Td (Signer: Bob (Settlement Arbiter) [ARBITER] | Ed25519 PK: c86631ee6f2747291c9239e3...) Tj 0 g ET
-BT /F4 8 Tf 0.1 0.45 0.2 rg 66 692 Td (Signature: 609b87896cc44992e371462a5522df57... [RFC 8032 VERIFIED]) Tj 0 g ET
-BT /F1 9 Tf 0.6 0.2 0.1 rg 66 679 Td (Block Digest: bafb0e823fc993abc4211fc6e1204be7d066346215c494848e67d1055c92d0b4) Tj 0 g ET
+BT /F4 8 Tf 0.2 0.2 0.2 rg 66 718 Td (Timestamp UTC: 2026-09-08T19:33:16Z | Prev Hash: b88e0b4843f4fb439d7d0ee5...) Tj 0 g ET
+BT /F4 8 Tf 0.2 0.2 0.2 rg 66 705 Td (Signer: Bob (Settlement Arbiter) [ARBITER] | Ed25519 PK: b13446ee6a94b661340c9330...) Tj 0 g ET
+BT /F4 8 Tf 0.1 0.45 0.2 rg 66 692 Td (Signature: 1b844c4193f65a80fced49f6eb41949b... [RFC 8032 VERIFIED]) Tj 0 g ET
+BT /F1 9 Tf 0.6 0.2 0.1 rg 66 679 Td (Block Digest: 1df948ed0f6482e5d36505d277c61370e0003466277b7aea10893c6c71baaeba) Tj 0 g ET
 BT /F1 12 Tf 0.1 0.2 0.3 rg 54 641 Td (Mathematical Verification & Combinator Proof Net) Tj 0 g ET
 BT /F2 9 Tf 0.3 0.3 0.3 rg 54 625 Td (Expression: K EscrowSound SpeculativeRisk  -->  Expected Normal Form: EscrowSound) Tj 0 g ET
 q
@@ -261,10 +261,10 @@ BT /F3 9 Tf 0.3 0.35 0.45 rg 54 768 Td (ISO 32000 Polyglot Ledger | Block Height
 0.96 0.97 0.99 rg 54 655 487 86 re f 0 g
 0.7 0.75 0.85 RG 1 w 54 655 487 86 re s 0 g
 BT /F1 11 Tf 0.1 0.25 0.5 rg 66 732 Td (Block #2: Settlement adjudicated: Uptime verified 99.306%, releasing net payout.) Tj 0 g ET
-BT /F4 8 Tf 0.2 0.2 0.2 rg 66 718 Td (Timestamp UTC: 2026-09-08T18:19:43Z | Prev Hash: bafb0e823fc993abc4211fc6...) Tj 0 g ET
-BT /F4 8 Tf 0.2 0.2 0.2 rg 66 705 Td (Signer: Alice (Sovereign Node) [ORIGINATOR] | Ed25519 PK: 568c8cc38a5af14c289b94c8...) Tj 0 g ET
-BT /F4 8 Tf 0.1 0.45 0.2 rg 66 692 Td (Signature: 18ed60559adc09f4e5d13cc32f85d439... [RFC 8032 VERIFIED]) Tj 0 g ET
-BT /F1 9 Tf 0.6 0.2 0.1 rg 66 679 Td (Block Digest: 1545a1e71b60593785e9b613e520faceb98817c0d21d14ff64e3344faf57d232) Tj 0 g ET
+BT /F4 8 Tf 0.2 0.2 0.2 rg 66 718 Td (Timestamp UTC: 2026-09-08T19:33:16Z | Prev Hash: 1df948ed0f6482e5d36505d2...) Tj 0 g ET
+BT /F4 8 Tf 0.2 0.2 0.2 rg 66 705 Td (Signer: Alice (Sovereign Node) [ORIGINATOR] | Ed25519 PK: d591c6e4529b0814e6ad0a75...) Tj 0 g ET
+BT /F4 8 Tf 0.1 0.45 0.2 rg 66 692 Td (Signature: f83926e62b08ef35bd41ccd982ad03d6... [RFC 8032 VERIFIED]) Tj 0 g ET
+BT /F1 9 Tf 0.6 0.2 0.1 rg 66 679 Td (Block Digest: 956271dfd8554ee7fd2261dcd39b0fedc770e96871132de8c9513de1db3a3822) Tj 0 g ET
 BT /F1 12 Tf 0.1 0.2 0.3 rg 54 641 Td (Mathematical Verification & Combinator Proof Net) Tj 0 g ET
 BT /F2 9 Tf 0.3 0.3 0.3 rg 54 625 Td (Expression: \(K I\) RefuseBranch SettleBranch  -->  Expected Normal Form: SettleBranch) Tj 0 g ET
 q

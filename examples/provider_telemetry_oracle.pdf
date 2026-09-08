@@ -1,7 +1,7 @@
 # coding: utf-8
 r"""%PDF-1.7
 %🖤
-%🖤 ORACLE_MANIFEST: {"oracle_anchor":"c71b481c6cb0ea937d5fa1f1503bcdc2becc9d46d55a3c5f0c11ef2d7091e64d","oracle_name":"Cloudflare Global Observability Network","oracle_role":"INDEPENDENT_TELEMETRY_ORACLE","payload":{"incidents":[{"duration_minutes":180,"event_type":"Edge Transit Flapping","raw_evidence_hash":"8e5c2cc7841a8b1b17187196ec373285551f9dd6a477cf63e0a7515eeba11a01","record_id":"INC-01","timestamp_utc":"2026-09-02T04:15:00Z"},{"duration_minutes":120,"event_type":"Storage Consensus Partition","raw_evidence_hash":"bf5a8be292f76ff09696b8c2e4a936b966248ac1ae0306cee5b4e4dbe2f8872b","record_id":"INC-02","timestamp_utc":"2026-09-05T11:30:00Z"}],"measured_uptime_percent":99.3056,"oracle_name":"Cloudflare Global Observability Network","oracle_role":"INDEPENDENT_TELEMETRY_ORACLE","total_downtime_minutes":300,"total_period_minutes":43200},"public_key_hex":"fcb8ef22879a432a2955d2afd3f51e5aa59945927d8fded9fdb55dc05d6a5a9f","signature_hex":"e177aa2061d39130103570b85a8517b7970efa3314909263c6bec4f2a99e5ab2170ca921f03839d7af9abaa7d83c1b0832669bc1c980a840ada6b3b62c545504"}
+%🖤 ORACLE_MANIFEST: {"oracle_anchor":"4b3d98d5c699c57dcef5b2803038e1e0935298a73b00dbde8d78ac59e435fb3d","oracle_name":"Cloudflare Global Observability Network","oracle_role":"INDEPENDENT_TELEMETRY_ORACLE","payload":{"incidents":[{"duration_minutes":180,"event_type":"Edge Transit Flapping","raw_evidence_hash":"8e5c2cc7841a8b1b17187196ec373285551f9dd6a477cf63e0a7515eeba11a01","record_id":"INC-01","timestamp_utc":"2026-09-02T04:15:00Z"},{"duration_minutes":120,"event_type":"Storage Consensus Partition","raw_evidence_hash":"bf5a8be292f76ff09696b8c2e4a936b966248ac1ae0306cee5b4e4dbe2f8872b","record_id":"INC-02","timestamp_utc":"2026-09-05T11:30:00Z"}],"measured_uptime_percent":99.3056,"oracle_name":"Cloudflare Global Observability Network","oracle_role":"INDEPENDENT_TELEMETRY_ORACLE","total_downtime_minutes":300,"total_period_minutes":43200},"public_key_hex":"c44851ff7c1c2580c7e3e9333c35bd3391acda993a75633263136b5a96503870","signature_hex":"82442b03e7e66939686bcb6ce647b789d43923a4f8a6311adbba099bf3ce434f362366ece6fa769329f2fdc4cb2e7768e2fd721ba77d2c540d52f9747dd9e50a"}
 1 0 obj
 <</Type /Catalog /Pages 2 0 R>>
 endobj
@@ -20,9 +20,9 @@ BT /F3 10 Tf 0.3 0.35 0.4 rg 54 766 Td (Oracle: Cloudflare Global Observability 
 0.96 0.97 0.99 rg 54 667 487 75 re f 0 g
 0.3 0.5 0.7 RG 1 w 54 667 487 75 re s 0 g
 BT /F1 11 Tf 0.1 0.2 0.4 rg 66 728 Td (Attested Measurement: 99.306% Uptime across 43200 min) Tj 0 g ET
-BT /F4 8 Tf 0.2 0.2 0.2 rg 66 716 Td (Oracle PK: fcb8ef22879a432a2955d2afd3f51e5a... | Signature: e177aa2061d39130103570b8... [SOUND]) Tj 0 g ET
+BT /F4 8 Tf 0.2 0.2 0.2 rg 66 716 Td (Oracle PK: c44851ff7c1c2580c7e3e9333c35bd33... | Signature: 82442b03e7e66939686bcb6c... [SOUND]) Tj 0 g ET
 BT /F4 8 Tf 0.2 0.2 0.2 rg 66 703 Td (Total Incidents: 2 | Total Outage Duration: 300 minutes) Tj 0 g ET
-BT /F1 9 Tf 0.1 0.4 0.2 rg 66 690 Td (Oracle Merkle Anchor: c71b481c6cb0ea937d5fa1f1503bcdc2becc9d46d55a3c5f0c11ef2d7091e64d) Tj 0 g ET
+BT /F1 9 Tf 0.1 0.4 0.2 rg 66 690 Td (Oracle Merkle Anchor: 4b3d98d5c699c57dcef5b2803038e1e0935298a73b00dbde8d78ac59e435fb3d) Tj 0 g ET
 BT /F1 12 Tf 0.15 0.2 0.3 rg 54 655 Td (Attested Incident Event Log) Tj 0 g ET
 BT /F4 8 Tf 0.3 0.1 0.1 rg 64 639 Td ([INCIDENT] INC-01: Edge Transit Flapping (180 min) | Hash: 8e5c2cc7841a8b1b) Tj 0 g ET
 BT /F4 8 Tf 0.3 0.1 0.1 rg 64 626 Td ([INCIDENT] INC-02: Storage Consensus Partition (120 min) | Hash: bf5a8be292f76ff0) Tj 0 g ET
@@ -61,7 +61,8 @@ startxref
 """
 
 # --- ORACLE STANDALONE AUDITOR ---
-import os, sys, json
+import os, sys, json, hashlib
+
 def main():
     target = sys.argv[0]
     print("\033[1;36m" + "=" * 65)
@@ -70,13 +71,46 @@ def main():
     with open(target, "rb") as f: content = f.read()
     prefix = "%🖤 ORACLE_MANIFEST: ".encode("utf-8")
     idx = content.find(prefix)
-    if idx == -1: print("[!] No ORACLE_MANIFEST block"); sys.exit(1)
+    if idx == -1:
+        print("[FAIL] No ORACLE_MANIFEST block found")
+        sys.exit(1)
     end_idx = content.find(b"\n", idx)
     man = json.loads(content[idx + len(prefix):end_idx].decode("utf-8"))
-    print(f"[*] Oracle:      {man['oracle_name']} ({man['oracle_role']})")
+
+    # Cryptographic verification
+    try:
+        from crypto import verify_bytes
+    except Exception:
+        d = os.path.dirname(os.path.abspath(target))
+        for p in (d, os.path.dirname(d), "/Users/s0fractal/Projects/black-heart"):
+            if os.path.isdir(p) and p not in sys.path:
+                sys.path.insert(0, p)
+        from crypto import verify_bytes
+
+    payload_data = man.get("payload", {})
+    payload_bytes = json.dumps(payload_data, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    try:
+        pk_bytes = bytes.fromhex(man["public_key_hex"])
+        sig_bytes = bytes.fromhex(man["signature_hex"])
+    except Exception as e:
+        print(f"[FAIL] Invalid public key or signature hex: {e}")
+        sys.exit(1)
+
+    if not verify_bytes(pk_bytes, payload_bytes, sig_bytes):
+        print("\033[1;31m[FAIL] RFC 8032 Signature verification FAILED! Invalid or forged telemetry.\033[0m")
+        sys.exit(1)
+
+    computed_anchor = hashlib.sha256(payload_bytes + sig_bytes).hexdigest()
+    if man.get("oracle_anchor") != computed_anchor:
+        print("[FAIL] Oracle anchor mismatch!")
+        sys.exit(1)
+
+    oracle_name = payload_data.get("oracle_name", man.get("oracle_name"))
+    print(f"[*] Oracle:      {oracle_name} ({man.get('oracle_role', 'ORACLE')})")
     print(f"[*] Public Key:  {man['public_key_hex']}")
     print(f"[*] Signature:   {man['signature_hex'][:32]}... [RFC 8032 VERIFIED]")
-    print(f"[*] Uptime Attested: {man['payload']['measured_uptime_percent']}% across {man['payload']['total_period_minutes']} min")
-    print(f"[*] Anchor:      ⚓ ⟨digest:{man['oracle_anchor'][:16]}⟩")
+    print(f"[*] Uptime Attested: {payload_data.get('measured_uptime_percent')}% across {payload_data.get('total_period_minutes')} min")
+    print(f"[*] Anchor:      ⚓ ⟨digest:{computed_anchor[:16]}⟩")
     print("\033[1;36m" + "=" * 65 + "\033[0m")
+
 if __name__ == "__main__": main()

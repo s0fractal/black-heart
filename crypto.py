@@ -42,10 +42,12 @@ SQRT_M1 = pow(2, (Q - 1) // 4, Q)
 
 def _x_recover(y: int) -> int:
     """Recover x coordinate from y coordinate."""
-    xx = (y * y - 1) * _inv(D * y * y + 1)
+    xx = (y * y - 1) * _inv(D * y * y + 1) % Q
     x = pow(xx, (Q + 3) // 8, Q)
     if (x * x - xx) % Q != 0:
         x = (x * SQRT_M1) % Q
+    if (x * x - xx) % Q != 0:
+        raise ValueError("Invalid point: xx is not a quadratic residue")
     if x % 2 != 0:
         x = Q - x
     return x
@@ -86,11 +88,21 @@ def _encode_point(P: Point) -> bytes:
     return bytes([sum((bits[i * 8 + j] << j) for j in range(8)) for i in range(32)])
 
 def _decode_point(s: bytes) -> Point:
-    """Decode 32 bytes into a curve point."""
-    y = sum(2**i * ((s[i // 8] >> (i % 8)) & 1) for i in range(255))
+    """Decode 32 bytes into a curve point according to RFC 8032 §5.1.3."""
+    if len(s) != 32:
+        raise ValueError("Invalid point encoding: must be 32 bytes")
+    y_raw = int.from_bytes(s, "little")
+    x_0 = (y_raw >> 255) & 1
+    y = y_raw & ((1 << 255) - 1)
+    if y >= Q:
+        raise ValueError(f"Invalid point: non-canonical y >= Q ({y} >= {Q})")
     x = _x_recover(y)
-    if (x & 1) != ((s[31] >> 7) & 1):
-        x = Q - x
+    if x == 0 and x_0 == 1:
+        raise ValueError("Invalid point: x is 0 but sign bit is 1")
+    if (x & 1) != x_0:
+        x = (Q - x) % Q
+    if (-x * x + y * y - (1 + D * x * x % Q * (y * y % Q))) % Q != 0:
+        raise ValueError("Invalid point: fails curve equation")
     return (x, y)
 
 # ============================================================================
@@ -137,17 +149,27 @@ def sign_bytes(secret_key: bytes, message: bytes) -> bytes:
 def verify_bytes(public_key: bytes, message: bytes, signature: bytes) -> bool:
     """
     Verifies a 64-byte Ed25519 signature against 32-byte public key and message.
+    Fail-closed checks per RFC 8032:
+    - S < L
+    - Canonical point decoding
+    - Rejection of identity point (0, 1) and small-order points
     """
     if len(signature) != 64 or len(public_key) != 32:
         return False
     R_bytes = signature[:32]
     S = int.from_bytes(signature[32:], "little")
-    if S >= L:
+    if S >= L or S < 0:
         return False
     try:
         A = _decode_point(public_key)
         R = _decode_point(R_bytes)
     except Exception:
+        return False
+
+    # Reject identity point (0, 1) and small-order points for A and R
+    if A == (0, 1) or R == (0, 1):
+        return False
+    if _scalar_mult(A, 8) == (0, 1) or _scalar_mult(R, 8) == (0, 1):
         return False
 
     k = int.from_bytes(hashlib.sha512(R_bytes + public_key + message).digest(), "little") % L

@@ -62,21 +62,47 @@ def pack_files_to_vault(file_paths: List[str], base_dir: str) -> Tuple[bytes, st
     }
     return vault_bytes, vault_hash, manifest
 
+MAX_VAULT_FILES = 10_000
+MAX_VAULT_SIZE = 500 * 1024 * 1024  # 500 MB limit
+
 def unpack_vault_bytes(vault_bytes: bytes, dest_dir: str) -> List[str]:
     """
-    Unpacks a compressed vault into dest_dir.
+    Unpacks a compressed vault into dest_dir with strict security constraints:
+    - Path traversal prevention (no absolute paths, no .., boundary check)
+    - Rejection of symlinks, hardlinks, and device special files
+    - Protection against decompression bombs (max size & count limits)
     Returns: List of unpacked relative paths.
     """
-    os.makedirs(dest_dir, exist_ok=True)
+    dest_real = os.path.realpath(dest_dir)
+    os.makedirs(dest_real, exist_ok=True)
     buf = io.BytesIO(vault_bytes)
     unpacked_paths = []
+    total_size = 0
 
     with tarfile.open(fileobj=buf, mode="r:gz") as tar:
-        for member in tar.getmembers():
+        members = tar.getmembers()
+        if len(members) > MAX_VAULT_FILES:
+            raise ValueError(f"Vault contains {len(members)} files, exceeding limit of {MAX_VAULT_FILES}")
+
+        for member in members:
             # Security check: avoid path traversal
-            if os.path.isabs(member.name) or ".." in member.name:
-                continue
-            tar.extract(member, path=dest_dir)
+            parts = member.name.replace("\\", "/").split("/")
+            if os.path.isabs(member.name) or ".." in parts or any(p.startswith("~") for p in parts):
+                raise ValueError(f"Insecure archive member path rejected: {member.name}")
+
+            # Reject symlinks, hard links, device nodes, and fifos
+            if member.issym() or member.islnk() or member.isdev() or member.ischr() or member.isfifo():
+                raise ValueError(f"Insecure archive member type rejected: {member.name}")
+
+            total_size += member.size
+            if total_size > MAX_VAULT_SIZE:
+                raise ValueError(f"Vault uncompressed size exceeds maximum allowed limit ({MAX_VAULT_SIZE} bytes)")
+
+            target_path = os.path.realpath(os.path.join(dest_real, member.name))
+            if not target_path.startswith(dest_real + os.sep) and target_path != dest_real:
+                raise ValueError(f"Directory traversal detected: {member.name}")
+
+            tar.extract(member, path=dest_real)
             unpacked_paths.append(member.name)
 
     return unpacked_paths
@@ -127,9 +153,11 @@ def embed_vault_into_polyglot(pdf_path: str, file_paths: List[str], base_dir: st
 
     return vault_hash
 
-def extract_vault_from_pdf(pdf_path: str, dest_dir: str) -> List[str]:
+def extract_vault_from_pdf(pdf_path: str, dest_dir: str, expected_vault_hash: Optional[str] = None) -> List[str]:
     """
     Extracts the embedded source vault from a Black-Heart polyglot PDF.
+    Enforces cryptographic hash verification against embedded VAULT_HASH
+    and optional expected_vault_hash pin.
     """
     with open(pdf_path, "rb") as f:
         content = f.read()
@@ -148,6 +176,21 @@ def extract_vault_from_pdf(pdf_path: str, dest_dir: str) -> List[str]:
         end_idx = content.find(b"\n", idx)
         hex_data = content[idx + len(prefix):end_idx].decode("ascii")
         vault_bytes = bytes.fromhex(hex_data)
+
+    actual_hash = hashlib.sha256(vault_bytes).hexdigest()
+
+    # Verify embedded VAULT_HASH marker if present
+    vh_marker = "%🖤 VAULT_HASH: ".encode("utf-8")
+    vh_idx = content.find(vh_marker)
+    if vh_idx != -1:
+        vh_end = content.find(b"\n", vh_idx)
+        embedded_hash = content[vh_idx + len(vh_marker):vh_end if vh_end != -1 else len(content)].decode("ascii").strip()
+        if actual_hash != embedded_hash:
+            raise ValueError(f"Vault integrity violation: computed hash {actual_hash} does not match embedded VAULT_HASH {embedded_hash}")
+
+    if expected_vault_hash is not None:
+        if actual_hash != expected_vault_hash:
+            raise ValueError(f"Vault pin verification failed: computed hash {actual_hash} != expected {expected_vault_hash}")
 
     return unpack_vault_bytes(vault_bytes, dest_dir)
 
