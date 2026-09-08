@@ -321,10 +321,17 @@ Turning proof-carrying PDF documents into portable, deterministic software vault
 
 ## 14. Comprehensive Test Suite
 
-Run all 34 unit tests across all seven engines:
+Run all 34 unit tests with a single command:
 ```bash
+# Unified test runner:
+python3 test_all.py
+
+# Or via CLI:
+python3 cli.py test
+
+# Or individually:
 python3 test_glyph.py          # 9 tests: SKIY reduction, ATP ceilings, Church encoding
-python3 test_monad.py          # 7 tests: Dual trees, visual & semantic compilation, AST
+python3 test_monad.py          # 7 tests: Dual trees, visual/semantic compilation, AST
 python3 test_living_ledger.py  # 5 tests: Incremental PDF updates, multi-block chains
 python3 test_interaction.py    # 6 tests: Symmetric interaction combinators, rewiring
 python3 test_organism.py       # 4 tests: Self-reproducing polyglot automata, quine

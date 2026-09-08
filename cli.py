@@ -212,9 +212,15 @@ def cmd_adjudicate(args):
         print(f"    Oracle:                 {res.oracle_name} ({res.oracle_pk_hex[:16]}...)")
         print(f"    Measured Uptime:        {res.measured_uptime_percent:.2f}% (Target: {res.target_uptime_percent:.2f}%)")
         print(f"    Net Service Due:        ${res.net_service_due_usd} USD (Penalty: ${res.penalty_due_usd} USD)")
-        print(f"    Timestamp UTC:          {res.timestamp_utc}\n")
     else:
         print(f"\033[1;31m[✗] ADJUDICATION FAILED: {res.status}\033[0m\n")
+        sys.exit(1)
+
+def cmd_test(args):
+    """Executes the full test suite across all engines."""
+    from test_all import run_all_tests
+    success = run_all_tests()
+    if not success:
         sys.exit(1)
 
 def main():
@@ -223,6 +229,9 @@ def main():
 
     # repl
     p_repl = subparsers.add_parser("repl", help="Interactive proof and combinator REPL")
+
+    # test
+    p_test = subparsers.add_parser("test", help="Run full 34-test suite across all engines")
 
     # keygen
     p_keygen = subparsers.add_parser("keygen", help="Generate fresh Ed25519 keypair")
@@ -260,6 +269,8 @@ def main():
 
     if args.command == "repl":
         cmd_repl(args)
+    elif args.command == "test":
+        cmd_test(args)
     elif args.command == "keygen":
         cmd_keygen(args)
     elif args.command == "verify":
