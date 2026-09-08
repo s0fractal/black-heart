@@ -224,25 +224,64 @@ python3 examples/living_ledger.pdf
 
 ---
 
-## 9. Comprehensive Test Suite
+## 9. Symmetric Interaction Combinators (`interaction.py`)
 
-Run all 21 unit tests across all four engines:
+In 1990, Yves Lafont discovered that universal Turing-complete computation requires only three symmetric 2-port / 1-principal agents interacting via local graph rewiring:
+* **Construct / Seed (`🌱` / $\gamma$):** Pairs data structures.
+* **Duplicate / Clone (`👥` / $\delta$):** Distributes signals and clones environments.
+* **Erase / Void (`🕳️` / $\epsilon$):** Absorbs signals and frees resources.
+
+### Key Invariants:
+* **Strictly Constant-Time:** Every graph rewiring step takes $O(1)$ time and burns exactly 1 ATP.
+* **No Variable Capture:** Completely eliminates $\alpha$-conversion, de Bruijn indices, and global environments.
+* **Annihilation ($\alpha \bowtie \alpha$), Commutation ($\gamma \bowtie \delta$), and Erasure ($\alpha \bowtie \epsilon$).**
+
+See formal specification: [INTERACTION.md](file:///Users/s0fractal/Projects/black-heart/INTERACTION.md).
+
+---
+
+## 10. Unified Command Suite & Proof REPL (`cli.py`)
+
+Black-Heart includes a complete command-line toolkit for interactive research and automated polyglot verification:
+
 ```bash
-python3 test_glyph.py
-python3 test_monad.py
-python3 test_living_ledger.py
+# 1. Interactive combinator REPL with live ATP meter:
+python3 cli.py repl
+
+# 2. Audit and verify any proof-bearing polyglot PDF:
+python3 cli.py verify examples/service_agreement_polyglot.pdf
+python3 cli.py verify examples/living_ledger.pdf
+
+# 3. Generate fresh RFC 8032 Ed25519 keypairs:
+python3 cli.py keygen --json
+
+# 4. Compile a new proof-carrying document:
+python3 cli.py compile -t "Autonomous Manifesto" -o manifesto.pdf
 ```
 
 ---
 
-## 10. Specifications & Theory
+## 11. Comprehensive Test Suite
 
-* [CONTINUUM.md](file:///Users/s0fractal/Projects/black-heart/CONTINUUM.md) — Suspended Thunks, Neutral Oracles & Merkle-Stream Continuity.
-* [MONAD.md](file:///Users/s0fractal/Projects/black-heart/MONAD.md) — The Literate Polyglot Monad, Dual Trees & Proof-Bearing Legal Contracts.
+Run all 27 unit tests across all five engines:
+```bash
+python3 test_glyph.py
+python3 test_monad.py
+python3 test_living_ledger.py
+python3 test_interaction.py
+```
 
 ---
 
-## 11. License
+## 12. Specifications & Theory
 
-* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, tests):** AGPL-3.0-only
+* [CONTINUUM.md](file:///Users/s0fractal/Projects/black-heart/CONTINUUM.md) — Suspended Thunks, Neutral Oracles & Merkle-Stream Continuity.
+* [MONAD.md](file:///Users/s0fractal/Projects/black-heart/MONAD.md) — The Literate Polyglot Monad, Dual Trees & Proof-Bearing Legal Contracts.
+* [INTERACTION.md](file:///Users/s0fractal/Projects/black-heart/INTERACTION.md) — Lafont's Symmetric Interaction Combinators on UTF-8 Glyphs.
+
+---
+
+## 13. License
+
+* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, `interaction.py`, `cli.py`, tests):** AGPL-3.0-only
 * **Texts & Polyglot artifacts:** CC BY-SA 4.0
