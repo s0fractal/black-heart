@@ -73,10 +73,16 @@ class ThunkCheckpoint:
         self.checkpoint_hash = self.compute_hash()
         self.signature_hex = sign_hex(secret_key_hex, self.checkpoint_hash.encode("utf-8"))
 
-    def verify(self) -> bool:
+    def verify(self, expected_public_key_hex: Optional[str] = None) -> bool:
         expected_hash = self.compute_hash()
         if self.checkpoint_hash != expected_hash:
             return False
+        if expected_public_key_hex is not None:
+            if self.public_key_hex != expected_public_key_hex:
+                return False
+            if not self.signature_hex:
+                return False
+            return verify_hex(self.public_key_hex, self.checkpoint_hash.encode("utf-8"), self.signature_hex)
         if self.public_key_hex:
             if not self.signature_hex:
                 return False
@@ -129,6 +135,8 @@ def step_continuum(
     Takes an existing thunk checkpoint, executes up to 'fuel' ATP reduction steps,
     and returns a new checkpoint (either SUSPENDED or SETTLED).
     Refuses to step if current_thunk is invalid or tampered.
+    If current_thunk was signed, requires matching secret_key_hex to sign the successor,
+    or produces an explicitly unsigned successor without claiming predecessor's key.
     """
     if not current_thunk.verify():
         raise ValueError("Refusing to step from invalid or tampered predecessor checkpoint")
@@ -145,6 +153,16 @@ def step_continuum(
     peak = max(current_thunk.peak_size, result.peak_size)
     now_utc = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
+    # Signer continuity: if predecessor was signed, successor is signed if secret key is provided,
+    # or explicitly unsigned (public_key_hex="") if no secret key is provided.
+    if secret_key_hex:
+        from crypto import public_key_from_secret
+        next_pk = public_key_from_secret(bytes.fromhex(secret_key_hex)).hex()
+        if current_thunk.public_key_hex and next_pk != current_thunk.public_key_hex:
+            raise ValueError(f"Secret key mismatch: expected {current_thunk.public_key_hex}, got {next_pk}")
+    else:
+        next_pk = ""
+
     next_cp = ThunkCheckpoint(
         height=current_thunk.height + 1,
         timestamp_utc=now_utc,
@@ -155,7 +173,7 @@ def step_continuum(
         peak_size=peak,
         status=new_status,
         prev_hash=current_thunk.checkpoint_hash,
-        public_key_hex=current_thunk.public_key_hex,
+        public_key_hex=next_pk,
     )
 
     if secret_key_hex:
@@ -334,7 +352,7 @@ for candidate in [os.getcwd(), current_dir, os.path.dirname(current_dir), "/User
 
 PREFIX = "%" + "🖤" + " CONTINUUM_THUNK: "
 
-def audit_self(filepath: str):
+def audit_self(filepath: str, expected_signer_pk=None):
     with open(filepath, "rb") as f:
         content = f.read()
 
@@ -397,6 +415,16 @@ def audit_self(filepath: str):
                 sys.exit(1)
         parsed_cps.append(cp)
 
+    genesis_pk = parsed_cps[0].public_key_hex
+    if expected_signer_pk is not None and genesis_pk != expected_signer_pk:
+        print(f"[FAIL] Genesis signer mismatch: expected {expected_signer_pk}, got {genesis_pk or 'unsigned'}!")
+        sys.exit(1)
+    if genesis_pk:
+        for cp in parsed_cps:
+            if cp.public_key_hex != genesis_pk or not cp.signature_hex:
+                print(f"[FAIL] Signer continuity breach at checkpoint #{cp.height}: missing or altered signer key!")
+                sys.exit(1)
+
     latest = parsed_cps[-1]
     print(f"[*] Checkpoint Height:  #{latest.height}")
     print(f"[*] Execution Status:   {latest.status}")
@@ -407,13 +435,21 @@ def audit_self(filepath: str):
 
     if latest.status == "SETTLED":
         try:
+            from glyph import evaluate
             term = parse(latest.current_expr)
             _, reduced = reduce_step(term)
             if reduced:
                 print(f"[FAIL] Checkpoint claims SETTLED but expression '{latest.current_expr}' is reducible!")
                 sys.exit(1)
+
+            # Replay computation from initial_expr to verify reduction transition authenticity
+            init_term = parse(latest.initial_expr)
+            replay_res = evaluate(init_term, max_atp=max(latest.atp_accumulated, 100_000), raise_on_limit=False)
+            if not replay_res.is_settled() or str(replay_res.term) != latest.current_expr:
+                print(f"[FAIL] Computational transition mismatch: replaying initial_expr '{latest.initial_expr}' yielded '{replay_res.term}', not claimed '{latest.current_expr}'!")
+                sys.exit(1)
         except Exception as e:
-            print(f"[FAIL] Could not verify normal form for SETTLED expression: {e}")
+            print(f"[FAIL] Could not verify normal form or replay transition for SETTLED expression: {e}")
             sys.exit(1)
         print("\033[1;32m[✓] COMPUTATION REACHED NORMAL FORM (Q.E.D.)\033[0m\n")
     else:
@@ -444,9 +480,9 @@ def resume_computation_in_pdf(
 ) -> ThunkCheckpoint:
     """
     Loads an existing continuum polyglot PDF, extracts the latest checkpoint,
-    audits the entire history chain, executes up to additional_atp steps,
-    appends an incremental update block (with new visual page and manifest),
-    and updates the PDF in-place!
+    audits the entire history chain (including signer continuity), executes up to
+    additional_atp steps, appends an incremental update block (with new visual
+    page and manifest), and updates the PDF in-place!
     """
     with open(pdf_path, "rb") as f:
         content = f.read()
@@ -462,9 +498,14 @@ def resume_computation_in_pdf(
         raise ValueError(f"Continuum manifest in {pdf_path} is empty")
 
     checkpoints = [ThunkCheckpoint.from_dict(d) for d in checkpoints_data]
+    genesis_pk = checkpoints[0].public_key_hex
+
     for i, cp in enumerate(checkpoints):
         if cp.height != i:
             raise ValueError(f"Continuum chain discontinuity: checkpoint #{cp.height} at index {i}")
+        if genesis_pk:
+            if cp.public_key_hex != genesis_pk or not cp.signature_hex:
+                raise ValueError(f"Continuum chain signer continuity failure: checkpoint #{cp.height} missing or altered signature under {genesis_pk}")
         if not cp.verify():
             raise ValueError(f"Continuum chain integrity failure: checkpoint #{cp.height} failed verification")
         if i == 0:
@@ -482,6 +523,9 @@ def resume_computation_in_pdf(
     if current.status == "SETTLED":
         print(f"[*] Computation already SETTLED at checkpoint #{current.height}. Nothing to reduce.")
         return current
+
+    if genesis_pk and secret_key_hex is None:
+        raise ValueError("Cannot resume signed continuum polyglot without secret_key_hex: chain signer continuity required.")
 
     # Step computation
     next_cp = step_continuum(current, additional_atp, secret_key_hex)

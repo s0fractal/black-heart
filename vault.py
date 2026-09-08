@@ -16,6 +16,8 @@ import io
 import tarfile
 import gzip
 import hashlib
+import tempfile
+import shutil
 from typing import List, Tuple, Optional, Dict, Any
 
 VAULT_STREAM_PREFIX = "%🖤 EMBEDDED_VAULT: "
@@ -23,40 +25,43 @@ VAULT_STREAM_PREFIX = "%🖤 EMBEDDED_VAULT: "
 def pack_files_to_vault(file_paths: List[str], base_dir: str) -> Tuple[bytes, str, Dict[str, Any]]:
     """
     Packs a list of files into a deterministic, compressed tar.gz byte stream.
-    Returns: (vault_bytes, sha256_hash, manifest_dict)
+    Computes cryptographic SHA-256 hash of the vault archive and builds manifest.
     """
     buf = io.BytesIO()
     manifest_entries = []
 
-    # Sort files for canonical reproducibility
-    sorted_paths = sorted(file_paths)
+    # Sort file paths for reproducible canonical archive ordering
+    sorted_files = sorted(file_paths)
 
-    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-        for rel_path in sorted_paths:
-            full_path = os.path.join(base_dir, rel_path)
-            if not os.path.isfile(full_path):
-                continue
-            with open(full_path, "rb") as f:
+    with tarfile.open(fileobj=buf, mode="w:gz", format=tarfile.PAX_FORMAT) as tar:
+        for rel_path in sorted_files:
+            abs_path = os.path.join(base_dir, rel_path)
+            if not os.path.isfile(abs_path):
+                raise FileNotFoundError(f"Vault member file not found: {abs_path}")
+
+            with open(abs_path, "rb") as f:
                 content = f.read()
 
-            file_hash = hashlib.sha256(content).hexdigest()
-            ti = tarfile.TarInfo(name=rel_path)
-            ti.size = len(content)
-            ti.mtime = 0
-            ti.mode = 0o644
-            tar.addfile(ti, io.BytesIO(content))
-
+            f_hash = hashlib.sha256(content).hexdigest()
             manifest_entries.append({
                 "path": rel_path,
                 "size": len(content),
-                "hash": file_hash
+                "sha256": f_hash
             })
+
+            # Create deterministic tarinfo
+            ti = tarfile.TarInfo(name=rel_path)
+            ti.size = len(content)
+            ti.mtime = 1772419200  # Fixed epoch for reproducibility
+            ti.mode = 0o644
+            ti.uname = "blackheart"
+            ti.gname = "blackheart"
+            tar.addfile(ti, io.BytesIO(content))
 
     vault_bytes = buf.getvalue()
     vault_hash = hashlib.sha256(vault_bytes).hexdigest()
     manifest = {
         "vault_hash": vault_hash,
-        "compressed_size": len(vault_bytes),
         "file_count": len(manifest_entries),
         "files": manifest_entries
     }
@@ -71,12 +76,12 @@ def unpack_vault_bytes(vault_bytes: bytes, dest_dir: str) -> List[str]:
     - Path traversal prevention (no absolute paths, no .., boundary check)
     - Rejection of symlinks, hardlinks, and device special files
     - Protection against decompression bombs (max size & count limits)
+    - Two-phase extraction (preflight + temporary staging) to guarantee destination
+      integrity: no files in dest_dir are created or modified if extraction fails.
     Returns: List of unpacked relative paths.
     """
     dest_real = os.path.realpath(dest_dir)
-    os.makedirs(dest_real, exist_ok=True)
     buf = io.BytesIO(vault_bytes)
-    unpacked_paths = []
     total_size = 0
 
     with tarfile.open(fileobj=buf, mode="r:gz") as tar:
@@ -84,6 +89,7 @@ def unpack_vault_bytes(vault_bytes: bytes, dest_dir: str) -> List[str]:
         if len(members) > MAX_VAULT_FILES:
             raise ValueError(f"Vault contains {len(members)} files, exceeding limit of {MAX_VAULT_FILES}")
 
+        # Phase 1: Preflight validation across all members before touching filesystem
         for member in members:
             # Security check: avoid path traversal
             parts = member.name.replace("\\", "/").split("/")
@@ -98,12 +104,32 @@ def unpack_vault_bytes(vault_bytes: bytes, dest_dir: str) -> List[str]:
             if total_size > MAX_VAULT_SIZE:
                 raise ValueError(f"Vault uncompressed size exceeds maximum allowed limit ({MAX_VAULT_SIZE} bytes)")
 
-            target_path = os.path.realpath(os.path.join(dest_real, member.name))
-            if not target_path.startswith(dest_real + os.sep) and target_path != dest_real:
+            # Boundary preflight check
+            norm = os.path.normpath(member.name)
+            if norm.startswith("..") or os.path.isabs(norm):
                 raise ValueError(f"Directory traversal detected: {member.name}")
 
-            tar.extract(member, path=dest_real)
-            unpacked_paths.append(member.name)
+        # Phase 2: Extract into isolated temporary staging directory
+        unpacked_paths = []
+        with tempfile.TemporaryDirectory() as staging_dir:
+            staging_real = os.path.realpath(staging_dir)
+            for member in members:
+                target_path = os.path.realpath(os.path.join(staging_real, member.name))
+                if not target_path.startswith(staging_real + os.sep) and target_path != staging_real:
+                    raise ValueError(f"Directory traversal detected: {member.name}")
+                tar.extract(member, path=staging_real)
+                unpacked_paths.append(member.name)
+
+            # Phase 3: Only after full archive passes and unpacks cleanly, apply to dest_dir
+            os.makedirs(dest_real, exist_ok=True)
+            for root, dirs, files in os.walk(staging_real):
+                rel_dir = os.path.relpath(root, staging_real)
+                target_sub = os.path.join(dest_real, rel_dir) if rel_dir != "." else dest_real
+                os.makedirs(target_sub, exist_ok=True)
+                for f in files:
+                    src_f = os.path.join(root, f)
+                    dst_f = os.path.join(target_sub, f)
+                    shutil.copy2(src_f, dst_f)
 
     return unpacked_paths
 
@@ -153,11 +179,18 @@ def embed_vault_into_polyglot(pdf_path: str, file_paths: List[str], base_dir: st
 
     return vault_hash
 
-def extract_vault_from_pdf(pdf_path: str, dest_dir: str, expected_vault_hash: Optional[str] = None) -> List[str]:
+def extract_vault_from_pdf(
+    pdf_path: str,
+    dest_dir: str,
+    expected_vault_hash: Optional[str] = None,
+    allow_unverified: bool = False
+) -> List[str]:
     """
     Extracts the embedded source vault from a Black-Heart polyglot PDF.
     Enforces cryptographic hash verification against embedded VAULT_HASH
     and optional expected_vault_hash pin.
+    Refuses extraction if VAULT_HASH marker is missing unless expected_vault_hash
+    pin is provided or allow_unverified is explicitly True.
     """
     with open(pdf_path, "rb") as f:
         content = f.read()
@@ -179,7 +212,7 @@ def extract_vault_from_pdf(pdf_path: str, dest_dir: str, expected_vault_hash: Op
 
     actual_hash = hashlib.sha256(vault_bytes).hexdigest()
 
-    # Verify embedded VAULT_HASH marker if present
+    # Enforce hash verification: either embedded VAULT_HASH marker or expected_vault_hash pin
     vh_marker = "%🖤 VAULT_HASH: ".encode("utf-8")
     vh_idx = content.find(vh_marker)
     if vh_idx != -1:
@@ -187,6 +220,9 @@ def extract_vault_from_pdf(pdf_path: str, dest_dir: str, expected_vault_hash: Op
         embedded_hash = content[vh_idx + len(vh_marker):vh_end if vh_end != -1 else len(content)].decode("ascii").strip()
         if actual_hash != embedded_hash:
             raise ValueError(f"Vault integrity violation: computed hash {actual_hash} does not match embedded VAULT_HASH {embedded_hash}")
+    else:
+        if expected_vault_hash is None and not allow_unverified:
+            raise ValueError(f"No VAULT_HASH marker found in {pdf_path}. Refusing unverified extraction without explicit expected_vault_hash pin.")
 
     if expected_vault_hash is not None:
         if actual_hash != expected_vault_hash:

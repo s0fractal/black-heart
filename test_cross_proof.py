@@ -46,7 +46,7 @@ class TestBilateralCrossProof(unittest.TestCase):
                 base_fee_usd=10000,
                 penalty_rate_usd=500
             )
-            agreement.add_party("CLIENT", "Test Client", self.client_pk)
+            agreement.add_party("CLIENT", "Test Client", self.client_pk, secret_key_hex=self.client_sk)
             agreement.compile(agreement_pdf)
             self.assertTrue(os.path.exists(agreement_pdf))
 

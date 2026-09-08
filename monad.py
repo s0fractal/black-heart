@@ -489,48 +489,62 @@ def main():
     declared_anchor = manifest.get("joint_anchor", "")
     print(f"\n\033[1;34m[*] Declared Dual-Spine Anchor:\033[0m {declared_anchor}")
 
-    # 1. Verify Visual PDF Stream integrity
-    if manifest.get("stream_hash"):
-        s_marker = b"stream\n"
-        s_start = content.find(s_marker)
-        if s_start == -1:
-            print("\033[1;31m[✗ RED] INTEGRITY BREACH: PDF content stream missing!\033[0m")
-            sys.exit(1)
-        s_start += len(s_marker)
-        s_end = content.find(b"\nendstream", s_start)
-        if s_end == -1:
-            print("\033[1;31m[✗ RED] INTEGRITY BREACH: PDF content stream unterminated!\033[0m")
-            sys.exit(1)
-        actual_stream_bytes = content[s_start:s_end]
-        actual_stream_hash = hashlib.sha256(actual_stream_bytes).hexdigest()
-        if actual_stream_hash != manifest["stream_hash"]:
-            print("\033[1;31m[✗ RED] INTEGRITY BREACH: Visual PDF presentation text altered!\033[0m")
+    # Enforce Closed Schema: all security fields are strictly mandatory
+    REQUIRED_INTEGRITY_FIELDS = [
+        "stream_hash",
+        "parameters_hash",
+        "evidence_hash",
+        "code_root_hash",
+        "visual_root_hash",
+        "joint_anchor",
+        "contract_anchor",
+        "visual_spine",
+        "code_spine"
+    ]
+    for field_name in REQUIRED_INTEGRITY_FIELDS:
+        val = manifest.get(field_name)
+        if val is None or (isinstance(val, str) and not val.strip()):
+            print(f"\033[1;31m[✗ RED] INTEGRITY BREACH: Missing required security field '{field_name}'!\033[0m")
             sys.exit(1)
 
+    # 1. Verify Visual PDF Stream integrity
+    s_marker = b"stream\n"
+    s_start = content.find(s_marker)
+    if s_start == -1:
+        print("\033[1;31m[✗ RED] INTEGRITY BREACH: PDF content stream missing!\033[0m")
+        sys.exit(1)
+    s_start += len(s_marker)
+    s_end = content.find(b"\nendstream", s_start)
+    if s_end == -1:
+        print("\033[1;31m[✗ RED] INTEGRITY BREACH: PDF content stream unterminated!\033[0m")
+        sys.exit(1)
+    actual_stream_bytes = content[s_start:s_end]
+    actual_stream_hash = hashlib.sha256(actual_stream_bytes).hexdigest()
+    if actual_stream_hash != manifest["stream_hash"]:
+        print("\033[1;31m[✗ RED] INTEGRITY BREACH: Visual PDF presentation text altered!\033[0m")
+        sys.exit(1)
+
     # 2. Verify Code Spine
-    code_nodes = manifest.get("code_spine", [])
+    code_nodes = manifest["code_spine"]
     h_code = hashlib.sha256()
     for cn in code_nodes:
         raw = json.dumps(cn, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
         h_code.update(raw)
     computed_code_hash = h_code.hexdigest()
-    if manifest.get("code_root_hash") and computed_code_hash != manifest["code_root_hash"]:
+    if computed_code_hash != manifest["code_root_hash"]:
         print("\033[1;31m[✗ RED] INTEGRITY BREACH: Code spine modified!\033[0m")
         sys.exit(1)
 
     # 3. Verify Visual Spine
-    visual_nodes = manifest.get("visual_spine", [])
-    if visual_nodes:
-        h_vis = hashlib.sha256()
-        for vn in visual_nodes:
-            raw = json.dumps(vn, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-            h_vis.update(raw)
-        computed_vis_hash = h_vis.hexdigest()
-        if manifest.get("visual_root_hash") and computed_vis_hash != manifest["visual_root_hash"]:
-            print("\033[1;31m[✗ RED] INTEGRITY BREACH: Visual spine modified!\033[0m")
-            sys.exit(1)
-    else:
-        computed_vis_hash = manifest.get("visual_root_hash", "")
+    visual_nodes = manifest["visual_spine"]
+    h_vis = hashlib.sha256()
+    for vn in visual_nodes:
+        raw = json.dumps(vn, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        h_vis.update(raw)
+    computed_vis_hash = h_vis.hexdigest()
+    if computed_vis_hash != manifest["visual_root_hash"]:
+        print("\033[1;31m[✗ RED] INTEGRITY BREACH: Visual spine modified!\033[0m")
+        sys.exit(1)
 
     # 4. Verify Dual-Spine Anchor
     computed_anchor = hashlib.sha256(
@@ -548,23 +562,22 @@ def main():
     evidence_log = manifest.get("evidence_log", [])
 
     computed_params_hash = hashlib.sha256(json.dumps(params, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
-    if manifest.get("parameters_hash") and computed_params_hash != manifest["parameters_hash"]:
+    if computed_params_hash != manifest["parameters_hash"]:
         print("\033[1;31m[✗ RED] INTEGRITY BREACH: Contract parameters altered!\033[0m")
         sys.exit(1)
 
     computed_evidence_hash = hashlib.sha256(json.dumps(evidence_log, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
-    if manifest.get("evidence_hash") and computed_evidence_hash != manifest["evidence_hash"]:
+    if computed_evidence_hash != manifest["evidence_hash"]:
         print("\033[1;31m[✗ RED] INTEGRITY BREACH: Evidence log altered!\033[0m")
         sys.exit(1)
 
     # 6. Verify Contract Anchor
-    if manifest.get("contract_anchor"):
-        expected_contract_anchor = hashlib.sha256(
-            f"{declared_anchor}:{computed_params_hash}:{computed_evidence_hash}:{manifest.get('stream_hash', '')}".encode("utf-8")
-        ).hexdigest()
-        if manifest["contract_anchor"] != expected_contract_anchor:
-            print("\033[1;31m[✗ RED] INTEGRITY BREACH: Contract anchor binding altered!\033[0m")
-            sys.exit(1)
+    expected_contract_anchor = hashlib.sha256(
+        f"{declared_anchor}:{computed_params_hash}:{computed_evidence_hash}:{manifest['stream_hash']}".encode("utf-8")
+    ).hexdigest()
+    if manifest["contract_anchor"] != expected_contract_anchor:
+        print("\033[1;31m[✗ RED] INTEGRITY BREACH: Contract anchor binding altered!\033[0m")
+        sys.exit(1)
 
     print(f"\033[1;32m[✓ GREEN] Document integrity sound. Dual-spine anchor verified.\033[0m\n")
 

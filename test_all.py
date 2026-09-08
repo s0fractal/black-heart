@@ -59,7 +59,7 @@ def run_all_tests() -> bool:
     total_time = time.time() - start_global
     print("\033[1;36m" + "=" * 70)
     if all_success:
-        print(f"  \033[1;32m[✓] TOTAL SOUNDNESS: {total_passed}/{total_ran} TESTS PASSING (ALL VERIFIED SUITES SOUND) in {total_time:.2f}s\033[0m")
+        print(f"  \033[1;32m[✓] {total_passed}/{total_ran} tests passed in {total_time:.2f}s\033[0m")
     else:
         print(f"  \033[1;31m[✗] TEST FAILURES DETECTED: {total_passed}/{total_ran} passed in {total_time:.2f}s\033[0m")
     print("\033[1;36m" + "=" * 70 + "\033[0m\n")

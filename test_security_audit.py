@@ -260,10 +260,12 @@ class TestSecurityAuditG1toG9(unittest.TestCase):
         noncanonical = (C.Q + 1).to_bytes(32, "little")
         self.assertFalse(C.verify_bytes(noncanonical, b"arbitrary", forged), "Non-canonical y >= Q was accepted!")
 
-        # S >= L rejection
-        valid_sig = C.sign_bytes(bytes(range(32)), b"msg")
+        # S >= L rejection: valid public key and valid R point, but S scalar >= L
+        valid_sk = bytes(range(32))
+        valid_pk = C.public_key_from_secret(valid_sk)
+        valid_sig = C.sign_bytes(valid_sk, b"msg")
         bad_s_sig = valid_sig[:32] + (C.L + 5).to_bytes(32, "little")
-        self.assertFalse(C.verify_bytes(self.pk.encode()[:32], b"msg", bad_s_sig))
+        self.assertFalse(C.verify_bytes(valid_pk, b"msg", bad_s_sig))
 
     # ========================================================================
     # G7: Atomic Monad Step & Budget Validation
@@ -286,6 +288,7 @@ class TestSecurityAuditG1toG9(unittest.TestCase):
     # ========================================================================
     def test_g8_vault_hash_mismatch_and_traversal_refused(self):
         """extract_vault_from_pdf must verify VAULT_HASH; unpack_vault_bytes must prevent traversal."""
+        import tarfile
         with tempfile.TemporaryDirectory() as td:
             t = Path(td)
             src = t / "src"
@@ -313,6 +316,25 @@ class TestSecurityAuditG1toG9(unittest.TestCase):
             self.assertEqual(files, ["hello.txt"])
             self.assertEqual((t / "out/hello.txt").read_text(), "fixture")
 
+            # Traversal rejection and destination integrity:
+            # An archive containing valid file followed by traversal '../forbidden' must be refused
+            # without overwriting or modifying files in dest directory!
+            buf = io.BytesIO()
+            with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+                a = tarfile.TarInfo("existing.txt")
+                a.size = 3
+                tar.addfile(a, io.BytesIO(b"new"))
+                b = tarfile.TarInfo("../forbidden")
+                b.size = 0
+                tar.addfile(b, io.BytesIO())
+
+            dest = t / "dest_traversal"
+            dest.mkdir()
+            (dest / "existing.txt").write_text("old")
+            with self.assertRaises(ValueError):
+                V.unpack_vault_bytes(buf.getvalue(), str(dest))
+            self.assertEqual((dest / "existing.txt").read_text(), "old", "Destination was modified despite traversal refusal!")
+
     # ========================================================================
     # G9: Independent Generator H with Unknown Discrete Log
     # ========================================================================
@@ -326,6 +348,238 @@ class TestSecurityAuditG1toG9(unittest.TestCase):
         self.assertEqual(C._scalar_mult(Z.GENERATOR_H, C.L), (0, 1))
         self.assertNotEqual(Z.GENERATOR_H, C.BASE_POINT)
         self.assertNotEqual(Z.GENERATOR_H, (0, 1))
+
+    # ========================================================================
+    # R1: Continuum Signer Stripping & Chain Continuity Enforcement
+    # ========================================================================
+    def test_r1_continuum_signer_stripping_and_continuity_refusal(self):
+        """Continuum chain audit must refuse checkpoints where key and signature were stripped."""
+        with tempfile.TemporaryDirectory() as td:
+            pdf_path = Path(td) / "continuum.pdf"
+            poly = T.ResumableComputationPolyglot("TEST CONTINUUM")
+            poly.initialize("I x", 100, self.sk, self.pk)
+            poly.compile(str(pdf_path))
+
+            # Modify checkpoint 0 by erasing public key and signature
+            raw = pdf_path.read_bytes()
+            prefix = T.CONTINUUM_MANIFEST_PREFIX.encode("utf-8")
+            start = raw.index(prefix) + len(prefix)
+            end = raw.index(b"\n", start)
+            cps = json.loads(raw[start:end])
+            cps[0]["current_expr"] = "altered"
+            cps[0]["public_key_hex"] = ""
+            cps[0]["signature_hex"] = ""
+            fake_cp = T.ThunkCheckpoint.from_dict(cps[0])
+            cps[0]["checkpoint_hash"] = fake_cp.compute_hash()
+
+            pdf_path.write_bytes(raw[:start] + json.dumps(cps).encode() + raw[end:])
+
+            # Verify with expected signer pk
+            self.assertFalse(fake_cp.verify(expected_public_key_hex=self.pk))
+
+            # Auditor must reject
+            cn = {"__name__": "review_runner", "__file__": str(pdf_path)}
+            exec(compile(T.ResumableComputationPolyglot()._build_runner_script(), "<continuum runner>", "exec"), cn)
+            with self.assertRaises(SystemExit) as cm:
+                cn["audit_self"](str(pdf_path), expected_signer_pk=self.pk)
+            self.assertEqual(cm.exception.code, 1)
+
+    # ========================================================================
+    # R2: Settled Checkpoint Reduction Transition Verification
+    # ========================================================================
+    def test_r2_settled_checkpoint_false_reduction_transition_refused(self):
+        """Settled checkpoint with normal form 'Different' but initial 'I x' must fail transition replay."""
+        with tempfile.TemporaryDirectory() as td:
+            pdf_path = Path(td) / "false_transition.pdf"
+            forged = T.ThunkCheckpoint(
+                0, "2026-09-08", "I x", "Different", 0, 0, 3, "SETTLED", "0" * 64,
+                public_key_hex=self.pk
+            )
+            forged.sign(self.sk)
+            self.assertTrue(forged.verify())
+
+            pdf_path.write_bytes(T.CONTINUUM_MANIFEST_PREFIX.encode() + json.dumps([forged.to_dict()]).encode() + b"\n")
+
+            cn = {"__name__": "review_runner", "__file__": str(pdf_path)}
+            exec(compile(T.ResumableComputationPolyglot()._build_runner_script(), "<continuum runner>", "exec"), cn)
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                with self.assertRaises(SystemExit) as cm:
+                    cn["audit_self"](str(pdf_path))
+                self.assertEqual(cm.exception.code, 1)
+
+            self.assertNotIn("Q.E.D.", out.getvalue())
+            self.assertIn("Computational transition mismatch", out.getvalue())
+
+    # ========================================================================
+    # R3: Closed Security Schema Enforcement in Monad Polyglots
+    # ========================================================================
+    def test_r3_monad_missing_security_fields_aborts(self):
+        """Contract runner must abort with code 1 if required security hashes are deleted (closed schema)."""
+        with tempfile.TemporaryDirectory() as td:
+            pdf_path = Path(td) / "contract.pdf"
+            c = M.SelfVerifyingContractPolyglot("TEST")
+            c.add_clause("C", "Pay", "Provider pays 100 USD", "p", "TRUE", "TRUE")
+            c.attach_evidence("E", "2026-09-01", "outage", 300, "fixture")
+            c.compile(str(pdf_path))
+
+            # Alter contract by stripping stream_hash and evidence_hash
+            raw = pdf_path.read_bytes()
+            prefix = "%🖤 CONTRACT_MANIFEST: ".encode("utf-8")
+            start = raw.index(prefix) + len(prefix)
+            end = raw.index(b"\n", start)
+            man = json.loads(raw[start:end])
+            del man["stream_hash"]
+            del man["evidence_hash"]
+            pdf_path.write_bytes(raw[:start] + json.dumps(man).encode() + raw[end:])
+
+            ns = {"__name__": "review_runner", "__file__": str(pdf_path)}
+            exec(compile(M._generate_contract_runner(), "<contract runner>", "exec"), ns)
+            old_argv = sys.argv
+            sys.argv = [str(pdf_path)]
+            out = io.StringIO()
+            try:
+                with contextlib.redirect_stdout(out):
+                    with self.assertRaises(SystemExit) as cm:
+                        ns["main"]()
+                    self.assertEqual(cm.exception.code, 1)
+            finally:
+                sys.argv = old_argv
+
+            self.assertIn("Missing required security field", out.getvalue())
+
+    # ========================================================================
+    # R4 & R5: Bilateral Agreement Roster & Author Binding Enforcement
+    # ========================================================================
+    def test_r4_and_r5_agreement_roster_and_author_binding(self):
+        """Bilateral adjudication must require registered party signatures and author pin."""
+        with tempfile.TemporaryDirectory() as td:
+            t = Path(td)
+            oracle_pdf = t / "oracle.pdf"
+            agreement_pdf = t / "agreement.pdf"
+
+            o = X.TelemetryOraclePolyglot("Oracle")
+            o.add_incident("I", "2026-09-01", "outage", 300)
+            o.compile(str(oracle_pdf), self.sk)
+
+            client_sk, client_pk = C.generate_keypair()
+            ag = X.BilateralAgreementPolyglot("Agreement", self.pk, agreement_secret_key_hex=self.sk)
+            ag.add_party("CLIENT", "Client", client_pk, secret_key_hex=client_sk)
+            ag.compile(str(agreement_pdf))
+
+            # Baseline adjudication with pin
+            pin = hashlib.sha256(agreement_pdf.read_bytes()).hexdigest()
+            rcpt = X.adjudicate_bilateral(str(agreement_pdf), str(oracle_pdf), expected_agreement_hash=pin)
+            self.assertEqual(rcpt.net_service_due_usd, 9500)
+            self.assertEqual(rcpt.trust_status, "AUTHENTICATED_PINNED")
+
+            # R5: Popping party signature must be rejected
+            raw = agreement_pdf.read_bytes()
+            prefix = X.AGREEMENT_MANIFEST_PREFIX.encode("utf-8")
+            start = raw.index(prefix) + len(prefix)
+            end = raw.index(b"\n", start)
+            m = json.loads(raw[start:end])
+            del m["parties"][0]["signature_hex"]
+            agreement_pdf.write_bytes(raw[:start] + json.dumps(m).encode() + raw[end:])
+            with self.assertRaises(PermissionError):
+                X.adjudicate_bilateral(str(agreement_pdf), str(oracle_pdf))
+
+            # R4: Author replacement with attacker key must be rejected when expected author is pinned
+            attacker_sk, attacker_pk = C.generate_keypair()
+            m["base_fee_usd"] = 90000
+            m["agreement_author_pk_hex"] = attacker_pk
+            terms_dict = {
+                "base_fee_usd": 90000,
+                "parties": [{"name": p["name"], "public_key_hex": p["public_key_hex"], "role": p["role"]} for p in m["parties"]],
+                "penalty_rate_usd": m["penalty_rate_usd"],
+                "target_uptime_percent": m["target_uptime_percent"],
+                "title": m["title"],
+                "trusted_oracle_pk_hex": m["trusted_oracle_pk_hex"],
+            }
+            raw_terms = json.dumps(terms_dict, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+            m["agreement_signature_hex"] = C.sign_bytes(bytes.fromhex(attacker_sk), raw_terms).hex()
+            # Even if party signs new terms:
+            m["parties"][0]["signature_hex"] = C.sign_bytes(bytes.fromhex(client_sk), raw_terms).hex()
+            agreement_pdf.write_bytes(raw[:start] + json.dumps(m).encode() + raw[end:])
+
+            # Adjudication with expected author pin MUST raise PermissionError
+            with self.assertRaises(PermissionError):
+                X.adjudicate_bilateral(str(agreement_pdf), str(oracle_pdf), expected_author_pk_hex=self.pk)
+
+    # ========================================================================
+    # R6: Missing VAULT_HASH Marker Rejection
+    # ========================================================================
+    def test_r6_missing_vault_hash_marker_refused(self):
+        """extract_vault_from_pdf must refuse extraction if %🖤 VAULT_HASH: is missing without explicit pin."""
+        with tempfile.TemporaryDirectory() as td:
+            t = Path(td)
+            src = t / "src"
+            src.mkdir()
+            (src / "x.txt").write_text("data")
+            pdf = t / "vault.pdf"
+            pdf.write_bytes(b"%PDF-1.7\n%%EOF\n")
+
+            V.embed_vault_into_polyglot(str(pdf), ["x.txt"], str(src))
+
+            # Strip %🖤 VAULT_HASH: line
+            raw = pdf.read_bytes()
+            vh_prefix = "%🖤 VAULT_HASH:".encode("utf-8")
+            lines = [l for l in raw.split(b"\n") if not l.startswith(vh_prefix)]
+            pdf.write_bytes(b"\n".join(lines))
+
+            # Without pin, must refuse
+            with self.assertRaises(ValueError):
+                V.extract_vault_from_pdf(str(pdf), str(t / "out"))
+
+    # ========================================================================
+    # R7: Atomic Vault Extraction Preserves Destination on Failure
+    # ========================================================================
+    def test_r7_atomic_vault_extraction_preserves_destination_on_failure(self):
+        """Failed vault extraction must not modify existing files in destination directory."""
+        import tarfile
+        with tempfile.TemporaryDirectory() as td:
+            t = Path(td)
+            buf = io.BytesIO()
+            with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+                a = tarfile.TarInfo("existing.txt")
+                a.size = 3
+                tar.addfile(a, io.BytesIO(b"new"))
+                b = tarfile.TarInfo("../forbidden")
+                b.size = 0
+                tar.addfile(b, io.BytesIO())
+
+            dest = t / "dest"
+            dest.mkdir()
+            (dest / "existing.txt").write_text("original_content")
+
+            with self.assertRaises(ValueError):
+                V.unpack_vault_bytes(buf.getvalue(), str(dest))
+
+            self.assertEqual((dest / "existing.txt").read_text(), "original_content")
+
+    # ========================================================================
+    # R8: Continuum Step Checkpoint Validity
+    # ========================================================================
+    def test_r8_continuum_step_validity(self):
+        """step_continuum on a signed checkpoint must produce a successor that passes its own verify()."""
+        cp = T.ThunkCheckpoint(
+            0, "2026-09-08", "I x", "I x", 0, 0, 3, "SUSPENDED", "0" * 64,
+            public_key_hex=self.pk
+        )
+        cp.sign(self.sk)
+        self.assertTrue(cp.verify())
+
+        # 1. Step with secret key produces valid signed checkpoint
+        signed_next = T.step_continuum(cp, 10, secret_key_hex=self.sk)
+        self.assertTrue(signed_next.verify())
+        self.assertEqual(signed_next.public_key_hex, self.pk)
+        self.assertTrue(bool(signed_next.signature_hex))
+
+        # 2. Step without secret key produces valid unsigned checkpoint (no claimed predecessor key)
+        unsigned_next = T.step_continuum(cp, 10)
+        self.assertTrue(unsigned_next.verify(), "Unsigned successor failed its own verify()!")
+        self.assertEqual(unsigned_next.public_key_hex, "")
+        self.assertEqual(unsigned_next.signature_hex, "")
 
 if __name__ == "__main__":
     unittest.main()

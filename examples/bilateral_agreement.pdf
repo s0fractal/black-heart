@@ -1,7 +1,7 @@
 # coding: utf-8
 r"""%PDF-1.7
 %🖤
-%🖤 BILATERAL_MANIFEST: {"agreement_author_pk_hex":"e23e05216172a392d6cc6401d870a5a5f24ef5e70167c6bd7b8e8f92bb8c0474","agreement_signature_hex":"4942e352861e55740548b0d5870768b712c1fe8b1748f7ff146d9b671979667bd046bda4c462c446169db9bdcc34ae870d4017dee9afabb98962ad772340990b","base_fee_usd":10000,"parties":[{"name":"Axiom Financial Technologies Inc.","public_key_hex":"c65d60ad084d682d5d90713a0c18e822f3d18a537865c3063e7734a668689161","role":"CLIENT"},{"name":"Nebula Hypercloud Infrastructure Ltd.","public_key_hex":"9f124c51236d2a4d1bd399ce23d2e3432da194e5048582fdc750e15dc9808adb","role":"PROVIDER"}],"penalty_rate_usd":500,"target_uptime_percent":99.5,"title":"ENTERPRISE CLOUD INFRASTRUCTURE SLA & ESCROW AGREEMENT","trusted_oracle_pk_hex":"c44851ff7c1c2580c7e3e9333c35bd3391acda993a75633263136b5a96503870"}
+%🖤 BILATERAL_MANIFEST: {"agreement_author_pk_hex":"ccf37ab1c270c33a5aa3ae3abb989f56cb5804d86643a50336f92acb55bea243","agreement_signature_hex":"4f23a2bd761750178fcf9f7cb208edb8ed9aebeba58222b4301b706af23ca03309c25e215fda9165fba61e3e8c5af1e4b50ba793429f3892cb5b2c65e0d16907","base_fee_usd":10000,"parties":[{"name":"Axiom Financial Technologies Inc.","public_key_hex":"14c92491a11935bbce744dcbb39826d955bc7a190c1fc03c551469ead6698c83","role":"CLIENT","signature_hex":"661aadaa968bbfafec7294169db3b48c34e7da1c8564dab0b467588d63db630a804c02ef2873d225fa7a9db0e5c1eea8ab5db0591ae96202fa873834cf04f90a"},{"name":"Nebula Hypercloud Infrastructure Ltd.","public_key_hex":"64bfb9e7a4908785fb37b7a3641194b4f52207bedd9432ebb6adafb62d73cd96","role":"PROVIDER","signature_hex":"6fc2a4c316fc89c81816c58f69eabfbc8c46be55049463cd4ec8faf571212779038daeb815fc6c09c39649ed1abab03ca0a154a2b8684e12ed3c7da5ac05d30e"}],"penalty_rate_usd":500,"target_uptime_percent":99.5,"title":"ENTERPRISE CLOUD INFRASTRUCTURE SLA & ESCROW AGREEMENT","trusted_oracle_pk_hex":"d77065d0903a5ae8c0eb782c829da42845bb9123e1fbab4a01c5c5f6b8a8148b"}
 1 0 obj
 <</Type /Catalog /Pages 2 0 R>>
 endobj
@@ -20,9 +20,9 @@ BT /F3 10 Tf 0.3 0.35 0.4 rg 54 766 Td (Bilateral Interlocking Proof-Bearing Con
 0.97 0.98 0.99 rg 54 662 487 80 re f 0 g
 0.2 0.4 0.6 RG 1 w 54 662 487 80 re s 0 g
 BT /F1 11 Tf 0.1 0.25 0.5 rg 66 728 Td (Bilateral Terms & Expected Telemetry Oracle) Tj 0 g ET
-BT /F4 8 Tf 0.2 0.2 0.2 rg 66 716 Td (Trusted Oracle PK: c44851ff7c1c2580c7e3e9333c35bd33...) Tj 0 g ET
+BT /F4 8 Tf 0.2 0.2 0.2 rg 66 716 Td (Trusted Oracle PK: d77065d0903a5ae8c0eb782c829da428...) Tj 0 g ET
 BT /F4 8 Tf 0.2 0.2 0.2 rg 66 703 Td (Base Monthly Service Fee: $10,000 USD | Penalty Rate: $500 / 0.1% outage) Tj 0 g ET
-BT /F1 9 Tf 0.1 0.45 0.2 rg 66 690 Td (Author PK: e23e05216172a392d6cc6401d870a5a5... | Signature: 4942e352861e55740548b0d5...) Tj 0 g ET
+BT /F1 9 Tf 0.1 0.45 0.2 rg 66 690 Td (Author PK: ccf37ab1c270c33a5aa3ae3abb989f56... | Signature: 4f23a2bd761750178fcf9f7c...) Tj 0 g ET
 0.92 0.94 0.97 rg 54 69 487 24 re f 0 g
 BT /F1 9 Tf 0.1 0.3 0.2 rg 64 81 Td (Adjudication: Run 'python3 <this_file>.pdf --adjudicate-with <oracle.pdf>') Tj 0 g ET
 endstream
@@ -42,23 +42,26 @@ endobj
 xref
 0 9
 0000000000 65535 f 
-0000000850 00000 n 
-0000000897 00000 n 
-0000000952 00000 n 
-0000001102 00000 n 
-0000002120 00000 n 
-0000002193 00000 n 
-0000002261 00000 n 
-0000002337 00000 n 
+0000001144 00000 n 
+0000001191 00000 n 
+0000001246 00000 n 
+0000001396 00000 n 
+0000002414 00000 n 
+0000002487 00000 n 
+0000002555 00000 n 
+0000002631 00000 n 
 trailer
 <</Size 9 /Root 1 0 R>>
 startxref
-2403
+2697
 %%EOF
 """
 
 # --- BILATERAL AGREEMENT STANDALONE ADJUDICATOR ---
 import os, sys, json
+
+PINNED_AUTHOR_PK = "ccf37ab1c270c33a5aa3ae3abb989f56cb5804d86643a50336f92acb55bea243"
+
 def main():
     target = sys.argv[0]
     args = sys.argv[1:]
@@ -81,9 +84,11 @@ def main():
 
         from cross_proof import adjudicate_bilateral
         try:
-            rcpt = adjudicate_bilateral(target, oracle_pdf)
+            rcpt = adjudicate_bilateral(target, oracle_pdf, expected_author_pk_hex=PINNED_AUTHOR_PK or None)
             print("\033[1;32m[✓ GREEN] BILATERAL CROSS-VERIFICATION SOUND & COMPLETED.\033[0m")
             print(f"  Contract:         {rcpt.agreement_title}")
+            print(f"  Trust Status:     {rcpt.trust_status}")
+            print(f"  Author PK:        {rcpt.agreement_author_pk_hex[:16]}...")
             print(f"  Oracle Source:    {rcpt.oracle_name} ({rcpt.oracle_pk_hex[:16]}...)")
             print(f"  Measured Uptime:  {rcpt.measured_uptime_percent}% (Target: {rcpt.target_uptime_percent}%)")
             print(f"  Status:           \033[1;31m{rcpt.status}\033[0m" if rcpt.status == "SETTLED_BREACH" else f"  Status: \033[1;32m{rcpt.status}\033[0m")

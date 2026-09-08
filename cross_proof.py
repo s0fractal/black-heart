@@ -62,6 +62,8 @@ class BilateralSettlementReceipt:
     oracle_anchor: str
     joint_bilateral_digest: str
     timestamp_utc: str
+    agreement_author_pk_hex: str = ""
+    trust_status: str = "TRUSTED"
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -76,7 +78,9 @@ class BilateralSettlementReceipt:
             "agreement_anchor": self.agreement_anchor,
             "oracle_anchor": self.oracle_anchor,
             "joint_bilateral_digest": self.joint_bilateral_digest,
-            "timestamp_utc": self.timestamp_utc
+            "timestamp_utc": self.timestamp_utc,
+            "agreement_author_pk_hex": self.agreement_author_pk_hex,
+            "trust_status": self.trust_status,
         }
 
 # ============================================================================
@@ -264,11 +268,19 @@ class BilateralAgreementPolyglot:
 
     def canonical_terms_bytes(self) -> bytes:
         terms = {
+            "base_fee_usd": self.base_fee_usd,
+            "parties": [
+                {
+                    "name": p["name"],
+                    "public_key_hex": p["public_key_hex"],
+                    "role": p["role"],
+                }
+                for p in self.parties
+            ],
+            "penalty_rate_usd": self.penalty_rate_usd,
+            "target_uptime_percent": self.target_uptime_percent,
             "title": self.title,
             "trusted_oracle_pk_hex": self.trusted_oracle_pk_hex,
-            "target_uptime_percent": self.target_uptime_percent,
-            "base_fee_usd": self.base_fee_usd,
-            "penalty_rate_usd": self.penalty_rate_usd,
         }
         return json.dumps(terms, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
@@ -388,7 +400,7 @@ class BilateralAgreementPolyglot:
             f"trailer\n<</Size {len(objs)+1} /Root 1 0 R>>\nstartxref\n{xstart}\n%%EOF\n\"\"\"\n".encode("latin1")
         )
 
-        runner = _generate_agreement_runner()
+        runner = _generate_agreement_runner(author_pk_hex=self._pk)
         body.extend(runner.encode("utf-8"))
 
         with open(output_path, "wb") as f:
@@ -403,11 +415,13 @@ class BilateralAgreementPolyglot:
 def adjudicate_bilateral(
     agreement_pdf_path: str,
     oracle_pdf_path: str,
-    expected_agreement_hash: Optional[str] = None
+    expected_agreement_hash: Optional[str] = None,
+    expected_author_pk_hex: Optional[str] = None,
 ) -> BilateralSettlementReceipt:
     """
     Executes bilateral adjudication between an Agreement Polyglot and an Oracle Polyglot.
-    Verifies mutual Ed25519 signatures, recomputed anchors, and identity constraints.
+    Verifies mutual Ed25519 signatures, recomputed anchors, identity constraints,
+    author authenticity pin, and mandatory registered party signatures.
     """
     # 1. Read Agreement Polyglot
     with open(agreement_pdf_path, "rb") as f:
@@ -425,13 +439,22 @@ def adjudicate_bilateral(
     ag_end = ag_content.find(b"\n", ag_idx)
     ag_manifest = json.loads(ag_content[ag_idx + len(ag_prefix):ag_end].decode("utf-8"))
 
-    # 2. Verify Agreement Author Signature over canonical terms
+    # 2. Verify Agreement Author Signature over canonical terms (including parties roster)
+    parties = ag_manifest.get("parties", [])
     terms_dict = {
+        "base_fee_usd": ag_manifest["base_fee_usd"],
+        "parties": [
+            {
+                "name": p["name"],
+                "public_key_hex": p["public_key_hex"],
+                "role": p["role"],
+            }
+            for p in parties
+        ],
+        "penalty_rate_usd": ag_manifest["penalty_rate_usd"],
+        "target_uptime_percent": ag_manifest["target_uptime_percent"],
         "title": ag_manifest["title"],
         "trusted_oracle_pk_hex": ag_manifest["trusted_oracle_pk_hex"],
-        "target_uptime_percent": ag_manifest["target_uptime_percent"],
-        "base_fee_usd": ag_manifest["base_fee_usd"],
-        "penalty_rate_usd": ag_manifest["penalty_rate_usd"],
     }
     terms_bytes = json.dumps(terms_dict, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
@@ -440,16 +463,22 @@ def adjudicate_bilateral(
     if not author_pk or not author_sig:
         raise PermissionError("Agreement is missing cryptographic signature! Untrusted agreement.")
 
+    if expected_author_pk_hex is not None:
+        if author_pk != expected_author_pk_hex:
+            raise PermissionError(f"Agreement author PK mismatch: expected {expected_author_pk_hex}, got {author_pk}")
+
     if not verify_bytes(bytes.fromhex(author_pk), terms_bytes, bytes.fromhex(author_sig)):
         raise PermissionError("Agreement terms altered or signature invalid! Refusing unverified agreement.")
 
-    # Also verify any registered party signatures if provided
-    for party in ag_manifest.get("parties", []):
-        if party.get("signature_hex"):
-            pk = bytes.fromhex(party["public_key_hex"])
-            sig = bytes.fromhex(party["signature_hex"])
-            if not verify_bytes(pk, terms_bytes, sig):
-                raise PermissionError(f"Party signature invalid for '{party.get('name')}'!")
+    # 3. Mandatory verification of all registered party signatures
+    for party in parties:
+        sig_hex = party.get("signature_hex")
+        if not sig_hex:
+            raise PermissionError(f"Missing required signature for registered party '{party.get('name')}' ({party.get('role')})!")
+        pk = bytes.fromhex(party["public_key_hex"])
+        sig = bytes.fromhex(sig_hex)
+        if not verify_bytes(pk, terms_bytes, sig):
+            raise PermissionError(f"Party signature invalid for '{party.get('name')}'!")
 
     # 3. Read Oracle Polyglot
     with open(oracle_pdf_path, "rb") as f:
@@ -507,6 +536,8 @@ def adjudicate_bilateral(
     joint_payload = f"{ag_anchor}|{or_anchor}|{status}|{penalty_due}|{net_payable}|{ts}"
     joint_digest = hashlib.sha256(joint_payload.encode("utf-8")).hexdigest()
 
+    trust_status = "AUTHENTICATED_PINNED" if (expected_agreement_hash or expected_author_pk_hex) else "UNTRUSTED_ISSUER_EVALUATION"
+
     return BilateralSettlementReceipt(
         status=status,
         agreement_title=ag_manifest["title"],
@@ -519,7 +550,9 @@ def adjudicate_bilateral(
         agreement_anchor=ag_anchor,
         oracle_anchor=or_anchor,
         joint_bilateral_digest=joint_digest,
-        timestamp_utc=ts
+        timestamp_utc=ts,
+        agreement_author_pk_hex=author_pk,
+        trust_status=trust_status,
     )
 
 def _escape_pdf(text: str) -> str:
@@ -583,21 +616,24 @@ def main():
 if __name__ == "__main__": main()
 '''
 
-def _generate_agreement_runner() -> str:
-    return r'''
+def _generate_agreement_runner(author_pk_hex: str = "") -> str:
+    return f'''
 # --- BILATERAL AGREEMENT STANDALONE ADJUDICATOR ---
 import os, sys, json
+
+PINNED_AUTHOR_PK = "{author_pk_hex}"
+
 def main():
     target = sys.argv[0]
     args = sys.argv[1:]
-    print("\033[1;36m" + "=" * 70)
+    print("\\033[1;36m" + "=" * 70)
     print("  %🖤 BLACK-HEART — BILATERAL INTERLOCKING CONTRACT RUNNER")
-    print("=" * 70 + "\033[0m\n")
+    print("=" * 70 + "\\033[0m\\n")
 
     if "--adjudicate-with" in args:
         idx = args.index("--adjudicate-with")
         if idx + 1 >= len(args):
-            print("\033[1;31m[!] Missing oracle PDF path!\033[0m")
+            print("\\033[1;31m[!] Missing oracle PDF path!\\033[0m")
             sys.exit(1)
         oracle_pdf = args[idx + 1]
 
@@ -609,23 +645,25 @@ def main():
 
         from cross_proof import adjudicate_bilateral
         try:
-            rcpt = adjudicate_bilateral(target, oracle_pdf)
-            print("\033[1;32m[✓ GREEN] BILATERAL CROSS-VERIFICATION SOUND & COMPLETED.\033[0m")
-            print(f"  Contract:         {rcpt.agreement_title}")
-            print(f"  Oracle Source:    {rcpt.oracle_name} ({rcpt.oracle_pk_hex[:16]}...)")
-            print(f"  Measured Uptime:  {rcpt.measured_uptime_percent}% (Target: {rcpt.target_uptime_percent}%)")
-            print(f"  Status:           \033[1;31m{rcpt.status}\033[0m" if rcpt.status == "SETTLED_BREACH" else f"  Status: \033[1;32m{rcpt.status}\033[0m")
-            print(f"  Penalty Due:      \033[1;31m${rcpt.penalty_due_usd:,} USD\033[0m")
-            print(f"  Net Service Due:  \033[1;32m${rcpt.net_service_due_usd:,} USD\033[0m")
-            print(f"\n  Joint Bilateral Witness Anchor:")
-            print(f"  \033[1;35m⚓ ⟨digest:{rcpt.joint_bilateral_digest}⟩\033[0m\n")
+            rcpt = adjudicate_bilateral(target, oracle_pdf, expected_author_pk_hex=PINNED_AUTHOR_PK or None)
+            print("\\033[1;32m[✓ GREEN] BILATERAL CROSS-VERIFICATION SOUND & COMPLETED.\\033[0m")
+            print(f"  Contract:         {{rcpt.agreement_title}}")
+            print(f"  Trust Status:     {{rcpt.trust_status}}")
+            print(f"  Author PK:        {{rcpt.agreement_author_pk_hex[:16]}}...")
+            print(f"  Oracle Source:    {{rcpt.oracle_name}} ({{rcpt.oracle_pk_hex[:16]}}...)")
+            print(f"  Measured Uptime:  {{rcpt.measured_uptime_percent}}% (Target: {{rcpt.target_uptime_percent}}%)")
+            print(f"  Status:           \\033[1;31m{{rcpt.status}}\\033[0m" if rcpt.status == "SETTLED_BREACH" else f"  Status: \\033[1;32m{{rcpt.status}}\\033[0m")
+            print(f"  Penalty Due:      \\033[1;31m${{rcpt.penalty_due_usd:,}} USD\\033[0m")
+            print(f"  Net Service Due:  \\033[1;32m${{rcpt.net_service_due_usd:,}} USD\\033[0m")
+            print(f"\\n  Joint Bilateral Witness Anchor:")
+            print(f"  \\033[1;35m⚓ ⟨digest:{{rcpt.joint_bilateral_digest}}⟩\\033[0m\\n")
         except Exception as e:
-            print(f"\033[1;31m[✗ REFUTED] Bilateral Adjudication Blocked: {e}\033[0m")
+            print(f"\\033[1;31m[✗ REFUTED] Bilateral Adjudication Blocked: {{e}}\\033[0m")
             sys.exit(1)
     else:
         print("[*] To adjudicate this contract against attested oracle telemetry, run:")
-        print(f"    python3 {os.path.basename(target)} --adjudicate-with <telemetry_oracle.pdf>")
-    print("\033[1;36m" + "=" * 70 + "\033[0m")
+        print(f"    python3 {{os.path.basename(target)}} --adjudicate-with <telemetry_oracle.pdf>")
+    print("\\033[1;36m" + "=" * 70 + "\\033[0m")
 if __name__ == "__main__": main()
 '''
 

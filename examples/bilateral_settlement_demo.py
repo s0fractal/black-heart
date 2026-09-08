@@ -54,8 +54,8 @@ def run_demo():
         base_fee_usd=10000,
         penalty_rate_usd=500
     )
-    agreement.add_party("CLIENT", "Axiom Financial Technologies Inc.", client_pk)
-    agreement.add_party("PROVIDER", "Nebula Hypercloud Infrastructure Ltd.", provider_pk)
+    agreement.add_party("CLIENT", "Axiom Financial Technologies Inc.", client_pk, secret_key_hex=client_sk)
+    agreement.add_party("PROVIDER", "Nebula Hypercloud Infrastructure Ltd.", provider_pk, secret_key_hex=provider_sk)
     agreement.compile(agreement_pdf)
     print(f"    [✓] Created Bilateral Agreement: {agreement_pdf}")
 
