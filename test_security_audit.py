@@ -14,6 +14,7 @@ import tempfile
 import contextlib
 import hashlib
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 import crypto as C
@@ -580,6 +581,132 @@ class TestSecurityAuditG1toG9(unittest.TestCase):
         self.assertTrue(unsigned_next.verify(), "Unsigned successor failed its own verify()!")
         self.assertEqual(unsigned_next.public_key_hex, "")
         self.assertEqual(unsigned_next.signature_hex, "")
+
+    # ========================================================================
+    # N1: Vault Destination Symlink Breakout Prevention
+    # ========================================================================
+    def test_n1_destination_symlink_traversal_refused(self):
+        """Unpacking a vault into a destination containing symlinks pointing outside must fail and leave outside intact."""
+        import tarfile
+        with tempfile.TemporaryDirectory() as td:
+            t = Path(td)
+            dst = t / "symlink_dest"
+            dst.mkdir()
+            outside = t / "outside.txt"
+            outside.write_text("original_outside_content")
+
+            # Create symlink inside destination pointing outside
+            (dst / "target_link").symlink_to(outside)
+
+            # Archive contains a regular file matching the symlink name
+            buf = io.BytesIO()
+            with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+                m = tarfile.TarInfo("target_link")
+                m.size = 7
+                tar.addfile(m, io.BytesIO(b"malicious"))
+
+            with self.assertRaises(ValueError):
+                V.unpack_vault_bytes(buf.getvalue(), str(dst))
+
+            self.assertEqual(outside.read_text(), "original_outside_content", "Outside file was overwritten through symlink!")
+
+    # ========================================================================
+    # N2: Vault Commit Collision Leaves Destination Intact (Transactional)
+    # ========================================================================
+    def test_n2_commit_collision_leaves_destination_intact(self):
+        """A type collision on a later member must abort during preflight before modifying earlier files."""
+        import tarfile
+        with tempfile.TemporaryDirectory() as td:
+            t = Path(td)
+            dst = t / "commit_collision"
+            dst.mkdir()
+            (dst / "first").write_text("initial_first")
+            (dst / "blocked").write_text("existing_regular_file")
+
+            buf = io.BytesIO()
+            with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+                m1 = tarfile.TarInfo("first")
+                m1.size = 3
+                tar.addfile(m1, io.BytesIO(b"new"))
+                m2 = tarfile.TarInfo("blocked/child")
+                m2.size = 4
+                tar.addfile(m2, io.BytesIO(b"data"))
+
+            with self.assertRaises(FileExistsError):
+                V.unpack_vault_bytes(buf.getvalue(), str(dst))
+
+            self.assertEqual((dst / "first").read_text(), "initial_first", "Earlier file was overwritten despite later collision!")
+
+    # ========================================================================
+    # N3: Deterministic Vault Packing Independent of Wall-Clock Time
+    # ========================================================================
+    def test_n3_deterministic_vault_gzip_packing(self):
+        """pack_files_to_vault must produce byte-identical archives regardless of system clock."""
+        with tempfile.TemporaryDirectory() as td:
+            t = Path(td)
+            src = t / "src"
+            src.mkdir()
+            (src / "sample.py").write_text("print('hello deterministic world')")
+
+            with patch("time.time", return_value=1700000000):
+                archive_a, hash_a, _ = V.pack_files_to_vault(["sample.py"], str(src))
+
+            with patch("time.time", return_value=1700000001):
+                archive_b, hash_b, _ = V.pack_files_to_vault(["sample.py"], str(src))
+
+            self.assertEqual(archive_a, archive_b, "Gzip archives differ across different timestamps!")
+            self.assertEqual(hash_a, hash_b, "Vault hashes differ across different timestamps!")
+            self.assertEqual(archive_a[4:8], b"\x00\x00\x00\x00", "Gzip header does not have mtime=0!")
+
+    # ========================================================================
+    # N4: Replay Verifies Actual ATP Fuel Accounting
+    # ========================================================================
+    def test_n4_atp_accounting_mismatch_refused(self):
+        """audit_self must refuse checkpoints where claimed ATP does not match actual fuel spent."""
+        with tempfile.TemporaryDirectory() as td:
+            t = Path(td)
+            # 'I x' requires 1 ATP reduction step to reach 'x', but checkpoint claims atp_accumulated=0
+            cp = T.ThunkCheckpoint(
+                0, "2026-09-08", "I x", "x", 0, 0, 3, "SETTLED", "0" * 64,
+                public_key_hex=self.pk
+            )
+            cp.sign(self.sk)
+
+            pdf_path = t / "cp.pdf"
+            pdf_path.write_bytes(T.CONTINUUM_MANIFEST_PREFIX.encode() + json.dumps([cp.to_dict()]).encode() + b"\n")
+
+            ns = {"__name__": "review_runner", "__file__": str(pdf_path)}
+            exec(compile(T.ResumableComputationPolyglot()._build_runner_script(), "<pinned runner>", "exec"), ns)
+
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                with self.assertRaises(SystemExit) as cm:
+                    ns["audit_self"](str(pdf_path), expected_signer_pk=self.pk)
+                self.assertEqual(cm.exception.code, 1)
+
+            self.assertIn("Computational ATP accounting mismatch", out.getvalue())
+            self.assertNotIn("Q.E.D.", out.getvalue())
+
+    # ========================================================================
+    # N5: Shared Computational Gate Refuses False SETTLED in Resume
+    # ========================================================================
+    def test_n5_resume_computation_rejects_false_settled(self):
+        """resume_computation_in_pdf must reject false settled checkpoint through shared computational verifier."""
+        with tempfile.TemporaryDirectory() as td:
+            t = Path(td)
+            forged = T.ThunkCheckpoint(
+                0, "2026-09-08", "I x", "Different", 0, 0, 3, "SETTLED", "0" * 64,
+                public_key_hex=self.pk
+            )
+            forged.sign(self.sk)
+
+            pdf_path = t / "forged_settled.pdf"
+            pdf_path.write_bytes(T.CONTINUUM_MANIFEST_PREFIX.encode() + json.dumps([forged.to_dict()]).encode() + b"\n")
+
+            with self.assertRaises(ValueError) as ctx:
+                T.resume_computation_in_pdf(str(pdf_path), 10, self.sk)
+
+            self.assertIn("Computational transition mismatch", str(ctx.exception))
 
 if __name__ == "__main__":
     unittest.main()

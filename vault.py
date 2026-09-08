@@ -25,6 +25,8 @@ VAULT_STREAM_PREFIX = "%🖤 EMBEDDED_VAULT: "
 def pack_files_to_vault(file_paths: List[str], base_dir: str) -> Tuple[bytes, str, Dict[str, Any]]:
     """
     Packs a list of files into a deterministic, compressed tar.gz byte stream.
+    Explicitly enforces mtime=0 in both gzip wrapper and tar member metadata
+    to guarantee byte-identical, reproducible archives regardless of system clock.
     Computes cryptographic SHA-256 hash of the vault archive and builds manifest.
     """
     buf = io.BytesIO()
@@ -33,30 +35,32 @@ def pack_files_to_vault(file_paths: List[str], base_dir: str) -> Tuple[bytes, st
     # Sort file paths for reproducible canonical archive ordering
     sorted_files = sorted(file_paths)
 
-    with tarfile.open(fileobj=buf, mode="w:gz", format=tarfile.PAX_FORMAT) as tar:
-        for rel_path in sorted_files:
-            abs_path = os.path.join(base_dir, rel_path)
-            if not os.path.isfile(abs_path):
-                raise FileNotFoundError(f"Vault member file not found: {abs_path}")
+    # Wrap in explicit GzipFile with fixed mtime=0 and empty filename for true determinism
+    with gzip.GzipFile(filename="", mode="wb", fileobj=buf, mtime=0) as gz:
+        with tarfile.open(fileobj=gz, mode="w", format=tarfile.PAX_FORMAT) as tar:
+            for rel_path in sorted_files:
+                abs_path = os.path.join(base_dir, rel_path)
+                if not os.path.isfile(abs_path):
+                    raise FileNotFoundError(f"Vault member file not found: {abs_path}")
 
-            with open(abs_path, "rb") as f:
-                content = f.read()
+                with open(abs_path, "rb") as f:
+                    content = f.read()
 
-            f_hash = hashlib.sha256(content).hexdigest()
-            manifest_entries.append({
-                "path": rel_path,
-                "size": len(content),
-                "sha256": f_hash
-            })
+                f_hash = hashlib.sha256(content).hexdigest()
+                manifest_entries.append({
+                    "path": rel_path,
+                    "size": len(content),
+                    "sha256": f_hash
+                })
 
-            # Create deterministic tarinfo
-            ti = tarfile.TarInfo(name=rel_path)
-            ti.size = len(content)
-            ti.mtime = 1772419200  # Fixed epoch for reproducibility
-            ti.mode = 0o644
-            ti.uname = "blackheart"
-            ti.gname = "blackheart"
-            tar.addfile(ti, io.BytesIO(content))
+                # Create deterministic tarinfo with fixed epoch mtime=0
+                ti = tarfile.TarInfo(name=rel_path)
+                ti.size = len(content)
+                ti.mtime = 0
+                ti.mode = 0o644
+                ti.uname = "blackheart"
+                ti.gname = "blackheart"
+                tar.addfile(ti, io.BytesIO(content))
 
     vault_bytes = buf.getvalue()
     vault_hash = hashlib.sha256(vault_bytes).hexdigest()
@@ -74,10 +78,12 @@ def unpack_vault_bytes(vault_bytes: bytes, dest_dir: str) -> List[str]:
     """
     Unpacks a compressed vault into dest_dir with strict security constraints:
     - Path traversal prevention (no absolute paths, no .., boundary check)
-    - Rejection of symlinks, hardlinks, and device special files
+    - Rejection of symlinks, hardlinks, and device special files in archive
     - Protection against decompression bombs (max size & count limits)
-    - Two-phase extraction (preflight + temporary staging) to guarantee destination
-      integrity: no files in dest_dir are created or modified if extraction fails.
+    - Two-phase extraction (preflight + temporary staging)
+    - Destination symlink breakout prevention (refuses existing symlinks in target tree)
+    - Transactional destination conflict preflight: verifies all target directories and
+      files before writing, guaranteeing zero mutation on collision/failure.
     Returns: List of unpacked relative paths.
     """
     dest_real = os.path.realpath(dest_dir)
@@ -120,7 +126,36 @@ def unpack_vault_bytes(vault_bytes: bytes, dest_dir: str) -> List[str]:
                 tar.extract(member, path=staging_real)
                 unpacked_paths.append(member.name)
 
-            # Phase 3: Only after full archive passes and unpacks cleanly, apply to dest_dir
+            # Phase 2.5: Destination conflict & symlink preflight (Transactional Gate)
+            # Collect all staging directories and files to validate against destination
+            # BEFORE making any changes to dest_real!
+            for root, dirs, files in os.walk(staging_real):
+                rel_dir = os.path.relpath(root, staging_real)
+                target_sub = os.path.join(dest_real, rel_dir) if rel_dir != "." else dest_real
+
+                # Check intermediate path components for symlinks or type collisions
+                curr = dest_real
+                parts = rel_dir.split(os.sep) if rel_dir != "." else []
+                for part in parts:
+                    curr = os.path.join(curr, part)
+                    if os.path.islink(curr):
+                        raise ValueError(f"Insecure destination: existing symlink detected at directory component {curr}")
+                    if os.path.exists(curr) and not os.path.isdir(curr):
+                        raise FileExistsError(f"Destination collision: path component {curr} exists and is not a directory")
+
+                # Check each target file
+                for f in files:
+                    dst_f = os.path.join(target_sub, f)
+                    if os.path.islink(dst_f):
+                        raise ValueError(f"Insecure destination: existing symlink detected at target file {dst_f}")
+                    if os.path.isdir(dst_f) and not os.path.islink(dst_f):
+                        raise IsADirectoryError(f"Destination collision: target path {dst_f} exists and is a directory")
+                    # Ensure realpath of destination file does not escape dest_real
+                    real_dst_f = os.path.realpath(dst_f)
+                    if not real_dst_f.startswith(dest_real + os.sep) and real_dst_f != dest_real:
+                        raise ValueError(f"Directory traversal detected in destination path: {dst_f}")
+
+            # Phase 3: All preflight gates passed soundly. Apply files into dest_dir
             os.makedirs(dest_real, exist_ok=True)
             for root, dirs, files in os.walk(staging_real):
                 rel_dir = os.path.relpath(root, staging_real)

@@ -123,8 +123,75 @@ class ThunkCheckpoint:
         )
 
 # ============================================================================
-# CONTINUUM REDUCER
+# CONTINUUM COMPUTATIONAL VERIFIER & REDUCER
 # ============================================================================
+
+DEFAULT_MAX_AUDIT_ATP = 100_000
+
+def verify_checkpoint_computation(
+    cp: ThunkCheckpoint,
+    max_verifier_atp: int = DEFAULT_MAX_AUDIT_ATP
+) -> Tuple[bool, str]:
+    """
+    Independently verifies the computational authenticity of a continuum checkpoint:
+    1. Validates syntactic structure of expressions.
+    2. Enforces valid non-negative ATP accounting within bounded verifier budget.
+    3. Replays deterministic combinatory reduction from initial_expr.
+    4. For SETTLED checkpoints:
+       - Enforces that current_expr is genuinely irreducible (normal form).
+       - Enforces that replayed reduction reaches normal form.
+       - Enforces that replayed term strictly matches claimed current_expr.
+       - Enforces that replayed fuel consumed strictly matches claimed atp_accumulated.
+    5. For SUSPENDED checkpoints:
+       - Enforces that replayed fuel consumed matches claimed atp_accumulated.
+       - Enforces that replayed term matches claimed current_expr.
+    Returns: (is_valid: bool, reason: str)
+    """
+    if cp.atp_accumulated < 0 or cp.atp_spent_step < 0:
+        return False, f"Negative ATP accounting claimed: spent_step={cp.atp_spent_step}, atp_accumulated={cp.atp_accumulated}"
+
+    if cp.atp_accumulated > max_verifier_atp:
+        return False, f"Claimed ATP {cp.atp_accumulated} exceeds verifier budget limit {max_verifier_atp} (BUDGET_EXHAUSTED)"
+
+    try:
+        from glyph import parse, reduce_step, evaluate
+    except ImportError:
+        try:
+            from sk_combinators import parse, reduce_step, evaluate
+        except Exception as e:
+            return False, f"Combinatory logic runtime unavailable: {e}"
+
+    try:
+        cur_term = parse(cp.current_expr)
+        init_term = parse(cp.initial_expr)
+    except Exception as e:
+        return False, f"Syntax parsing failure: {e}"
+
+    if cp.status == "SETTLED":
+        _, reduced = reduce_step(cur_term)
+        if reduced:
+            return False, f"Checkpoint claims SETTLED but expression '{cp.current_expr}' is reducible"
+
+        res = evaluate(init_term, max_atp=max_verifier_atp, raise_on_limit=False)
+        if not res.is_settled():
+            return False, f"Replay did not settle within verifier budget {max_verifier_atp} (BUDGET_EXHAUSTED)"
+
+        if str(res.term) != cp.current_expr:
+            return False, f"Computational transition mismatch: replaying '{cp.initial_expr}' produced '{res.term}', not claimed '{cp.current_expr}'"
+
+        if res.atp_spent != cp.atp_accumulated:
+            return False, f"Computational ATP accounting mismatch: actual reduction cost was {res.atp_spent} ATP, claimed {cp.atp_accumulated} ATP"
+
+    elif cp.status == "SUSPENDED":
+        if cp.atp_accumulated == 0:
+            if cp.initial_expr != cp.current_expr:
+                return False, f"Suspended checkpoint at 0 ATP has divergent expressions: initial='{cp.initial_expr}', current='{cp.current_expr}'"
+        else:
+            res = evaluate(init_term, max_atp=cp.atp_accumulated, raise_on_limit=False)
+            if res.atp_spent != cp.atp_accumulated or str(res.term) != cp.current_expr:
+                return False, f"Computational transition mismatch for suspended thunk: replaying '{cp.initial_expr}' for {cp.atp_accumulated} ATP yielded '{res.term}' ({res.atp_spent} ATP), not claimed '{cp.current_expr}'"
+
+    return True, "SOUND"
 
 def step_continuum(
     current_thunk: ThunkCheckpoint,
@@ -142,6 +209,9 @@ def step_continuum(
         raise ValueError("Refusing to step from invalid or tampered predecessor checkpoint")
 
     if current_thunk.status == "SETTLED":
+        valid, err = verify_checkpoint_computation(current_thunk)
+        if not valid:
+            raise ValueError(f"Cannot step invalid settled checkpoint: {err}")
         return current_thunk
 
     term = parse(current_thunk.current_expr)
@@ -433,24 +503,17 @@ def audit_self(filepath: str, expected_signer_pk=None):
     print(f"[*] Current Term:       {latest.current_expr}")
     print(f"[*] Checkpoint Hash:    ⚓ {latest.checkpoint_hash}\n")
 
-    if latest.status == "SETTLED":
-        try:
-            from glyph import evaluate
-            term = parse(latest.current_expr)
-            _, reduced = reduce_step(term)
-            if reduced:
-                print(f"[FAIL] Checkpoint claims SETTLED but expression '{latest.current_expr}' is reducible!")
-                sys.exit(1)
-
-            # Replay computation from initial_expr to verify reduction transition authenticity
-            init_term = parse(latest.initial_expr)
-            replay_res = evaluate(init_term, max_atp=max(latest.atp_accumulated, 100_000), raise_on_limit=False)
-            if not replay_res.is_settled() or str(replay_res.term) != latest.current_expr:
-                print(f"[FAIL] Computational transition mismatch: replaying initial_expr '{latest.initial_expr}' yielded '{replay_res.term}', not claimed '{latest.current_expr}'!")
-                sys.exit(1)
-        except Exception as e:
-            print(f"[FAIL] Could not verify normal form or replay transition for SETTLED expression: {e}")
+    try:
+        from continuum import verify_checkpoint_computation
+        valid, err = verify_checkpoint_computation(latest)
+        if not valid:
+            print(f"[FAIL] {err}")
             sys.exit(1)
+    except Exception as e:
+        print(f"[FAIL] Could not verify computational authenticity: {e}")
+        sys.exit(1)
+
+    if latest.status == "SETTLED":
         print("\033[1;32m[✓] COMPUTATION REACHED NORMAL FORM (Q.E.D.)\033[0m\n")
     else:
         print("\033[1;33m[⏳] COMPUTATION SUSPENDED (Ready for resumption)\033[0m")
@@ -519,6 +582,11 @@ def resume_computation_in_pdf(
                 raise ValueError(f"Continuum chain altered initial_expr at #{cp.height}")
 
     current = checkpoints[-1]
+
+    # Verify latest checkpoint computational validity before resuming or returning
+    valid, err = verify_checkpoint_computation(current)
+    if not valid:
+        raise ValueError(f"Continuum resume refused: latest checkpoint failed computational verification ({err})")
 
     if current.status == "SETTLED":
         print(f"[*] Computation already SETTLED at checkpoint #{current.height}. Nothing to reduce.")
