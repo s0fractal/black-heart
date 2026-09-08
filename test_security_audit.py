@@ -13,6 +13,7 @@ import copy
 import tempfile
 import contextlib
 import hashlib
+import tarfile
 import unittest
 from unittest.mock import patch
 from pathlib import Path
@@ -707,6 +708,141 @@ class TestSecurityAuditG1toG9(unittest.TestCase):
                 T.resume_computation_in_pdf(str(pdf_path), 10, self.sk)
 
             self.assertIn("Computational transition mismatch", str(ctx.exception))
+
+    # ========================================================================
+    # F1: Closed Checkpoint Status Set & Typed Refusal for Unknown Status
+    # ========================================================================
+    def test_f1_unknown_status_fails_closed(self):
+        """Unknown checkpoint status must be rejected across helper, audit, and resume."""
+        with tempfile.TemporaryDirectory() as td:
+            t = Path(td)
+            u = T.ThunkCheckpoint(
+                0, "2026-09-08", "I x", "Different", 0, 0, 3, "TYPO", "0" * 64,
+                public_key_hex=self.pk
+            )
+            u.sign(self.sk)
+
+            ok, err = T.verify_checkpoint_computation(u)
+            self.assertFalse(ok)
+            self.assertIn("Invalid or unrecognized checkpoint status", err)
+
+            pdf_path = t / "unknown_status.pdf"
+            pdf_path.write_bytes(T.CONTINUUM_MANIFEST_PREFIX.encode() + json.dumps([u.to_dict()]).encode() + b"\n")
+
+            # Public auditor must reject with exit code 1
+            ns = {"__name__": "review_runner", "__file__": str(pdf_path)}
+            oldpath = list(sys.path)
+            try:
+                exec(compile(T.ResumableComputationPolyglot()._build_runner_script(), "<runner>", "exec"), ns)
+            finally:
+                sys.path[:] = oldpath
+
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                with self.assertRaises(SystemExit) as cm:
+                    ns["audit_self"](str(pdf_path), expected_signer_pk=self.pk)
+                self.assertEqual(cm.exception.code, 1)
+
+            self.assertIn("invalid status", out.getvalue().lower())
+            self.assertNotIn("COMPUTATION SUSPENDED", out.getvalue())
+            self.assertNotIn("Q.E.D.", out.getvalue())
+
+            # Resume must also reject
+            with self.assertRaises(ValueError) as ctx:
+                T.resume_computation_in_pdf(str(pdf_path), 10, self.sk)
+            self.assertIn("invalid status", str(ctx.exception).lower())
+
+    # ========================================================================
+    # F2: step_continuum Refuses Computationally Invalid SUSPENDED Checkpoints
+    # ========================================================================
+    def test_f2_step_continuum_refuses_invalid_suspended_predecessor(self):
+        """step_continuum must verify predecessor computational validity even when SUSPENDED."""
+        s = T.ThunkCheckpoint(
+            0, "2026-09-08", "I x", "I Different", 0, 0, 3, "SUSPENDED", "0" * 64,
+            public_key_hex=self.pk
+        )
+        s.sign(self.sk)
+
+        ok, err = T.verify_checkpoint_computation(s)
+        self.assertFalse(ok)
+
+        with self.assertRaises(ValueError) as ctx:
+            T.step_continuum(s, 10, self.sk)
+
+        self.assertIn("input checkpoint failed computational verification", str(ctx.exception))
+
+    # ========================================================================
+    # F3: Strict Integer Typing, Budget Invariants, and Chain Delta Accounting
+    # ========================================================================
+    def test_f3_atp_spent_step_invariants_and_chain_delta(self):
+        """ATP step and accumulated fields must be strictly typed, bounded, and chain-consistent."""
+        # Step exceeds total
+        cp_exceed = T.ThunkCheckpoint(
+            1, "2026-09-08", "I x", "x", 999, 1, 3, "SETTLED", "0" * 64,
+            public_key_hex=self.pk
+        )
+        cp_exceed.sign(self.sk)
+        ok, err = T.verify_checkpoint_computation(cp_exceed)
+        self.assertFalse(ok)
+        self.assertIn("exceeds accumulated total", err)
+
+        # Genesis step != accumulated
+        cp_genesis = T.ThunkCheckpoint(
+            0, "2026-09-08", "I x", "x", 0, 1, 3, "SETTLED", "0" * 64,
+            public_key_hex=self.pk
+        )
+        cp_genesis.sign(self.sk)
+        ok, err = T.verify_checkpoint_computation(cp_genesis)
+        self.assertFalse(ok)
+        self.assertIn("Genesis checkpoint (height 0) step ATP", err)
+
+        # Non-integer boolean type rejected
+        cp_bool = T.ThunkCheckpoint(
+            0, "2026-09-08", "I x", "x", True, True, 3, "SETTLED", "0" * 64,  # type: ignore
+            public_key_hex=self.pk
+        )
+        ok, err = T.verify_checkpoint_computation(cp_bool)
+        self.assertFalse(ok)
+        self.assertIn("strict integers", err)
+
+    # ========================================================================
+    # F4: Vault Commit Engine Rollback on Mid-Extraction I/O Failure
+    # ========================================================================
+    def test_f4_vault_commit_failure_rolls_back_cleanly(self):
+        """Vault commit failure must cleanly roll back all modified and created files."""
+        with tempfile.TemporaryDirectory() as td:
+            t = Path(td)
+            dst = t / "io-failure"
+            dst.mkdir()
+            (dst / "a").write_text("old")
+            (dst / "b").write_text("old")
+
+            def make_archive(entries):
+                buf = io.BytesIO()
+                with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+                    for name, data in entries:
+                        m = tarfile.TarInfo(name)
+                        m.size = len(data)
+                        tar.addfile(m, io.BytesIO(data))
+                return buf.getvalue()
+
+            original_copy = V.shutil.copy2
+            calls = []
+
+            def fail_second(src, dest, *args, **kw):
+                calls.append(str(dest))
+                if len(calls) == 2:
+                    raise OSError("REVIEW_INJECTED_SECOND_COPY_FAILURE")
+                return original_copy(src, dest, *args, **kw)
+
+            with patch.object(V.shutil, "copy2", side_effect=fail_second):
+                with self.assertRaises(OSError) as ctx:
+                    V.unpack_vault_bytes(make_archive([("a", b"new"), ("b", b"new")]), str(dst))
+                self.assertEqual(str(ctx.exception), "REVIEW_INJECTED_SECOND_COPY_FAILURE")
+
+            self.assertEqual(len(calls), 2)
+            self.assertEqual((dst / "a").read_text(), "old")
+            self.assertEqual((dst / "b").read_text(), "old")
 
 if __name__ == "__main__":
     unittest.main()

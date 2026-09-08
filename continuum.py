@@ -128,6 +128,8 @@ class ThunkCheckpoint:
 
 DEFAULT_MAX_AUDIT_ATP = 100_000
 
+ALLOWED_CHECKPOINT_STATUSES = frozenset({"SETTLED", "SUSPENDED"})
+
 def verify_checkpoint_computation(
     cp: ThunkCheckpoint,
     max_verifier_atp: int = DEFAULT_MAX_AUDIT_ATP
@@ -135,20 +137,39 @@ def verify_checkpoint_computation(
     """
     Independently verifies the computational authenticity of a continuum checkpoint:
     1. Validates syntactic structure of expressions.
-    2. Enforces valid non-negative ATP accounting within bounded verifier budget.
-    3. Replays deterministic combinatory reduction from initial_expr.
-    4. For SETTLED checkpoints:
+    2. Enforces strict typing and non-negative ATP accounting within bounded verifier budget.
+    3. Enforces single-checkpoint invariants (step <= accumulated, genesis step == accumulated).
+    4. Enforces closed status set (SETTLED or SUSPENDED).
+    5. Replays deterministic combinatory reduction from initial_expr.
+    6. For SETTLED checkpoints:
        - Enforces that current_expr is genuinely irreducible (normal form).
        - Enforces that replayed reduction reaches normal form.
        - Enforces that replayed term strictly matches claimed current_expr.
        - Enforces that replayed fuel consumed strictly matches claimed atp_accumulated.
-    5. For SUSPENDED checkpoints:
-       - Enforces that replayed fuel consumed matches claimed atp_accumulated.
-       - Enforces that replayed term matches claimed current_expr.
+    7. For SUSPENDED checkpoints:
+       - If atp_accumulated == 0, initial_expr must equal current_expr and atp_spent_step must be 0.
+       - If atp_accumulated > 0, replaying for atp_accumulated must match current_expr and atp_spent.
+       - Enforces that replayed term is not already settled (cannot claim SUSPENDED if irreducible).
     Returns: (is_valid: bool, reason: str)
     """
-    if cp.atp_accumulated < 0 or cp.atp_spent_step < 0:
-        return False, f"Negative ATP accounting claimed: spent_step={cp.atp_spent_step}, atp_accumulated={cp.atp_accumulated}"
+    # Strict integer types for numeric fields (reject bool, float, str, None, etc.)
+    if (type(cp.height) is not int or 
+        type(cp.atp_spent_step) is not int or 
+        type(cp.atp_accumulated) is not int or 
+        type(cp.peak_size) is not int):
+        return False, "Checkpoint numeric fields must be strict integers"
+
+    if cp.height < 0 or cp.atp_spent_step < 0 or cp.atp_accumulated < 0 or cp.peak_size < 0:
+        return False, f"Negative numeric values claimed: height={cp.height}, spent_step={cp.atp_spent_step}, accumulated={cp.atp_accumulated}"
+
+    if cp.atp_spent_step > cp.atp_accumulated:
+        return False, f"Step ATP ({cp.atp_spent_step}) exceeds accumulated total ATP ({cp.atp_accumulated})"
+
+    if cp.height == 0 and cp.atp_spent_step != cp.atp_accumulated:
+        return False, f"Genesis checkpoint (height 0) step ATP ({cp.atp_spent_step}) must equal accumulated ATP ({cp.atp_accumulated})"
+
+    if not isinstance(cp.status, str) or cp.status not in ALLOWED_CHECKPOINT_STATUSES:
+        return False, f"Invalid or unrecognized checkpoint status: {cp.status!r}"
 
     if cp.atp_accumulated > max_verifier_atp:
         return False, f"Claimed ATP {cp.atp_accumulated} exceeds verifier budget limit {max_verifier_atp} (BUDGET_EXHAUSTED)"
@@ -190,6 +211,8 @@ def verify_checkpoint_computation(
             res = evaluate(init_term, max_atp=cp.atp_accumulated, raise_on_limit=False)
             if res.atp_spent != cp.atp_accumulated or str(res.term) != cp.current_expr:
                 return False, f"Computational transition mismatch for suspended thunk: replaying '{cp.initial_expr}' for {cp.atp_accumulated} ATP yielded '{res.term}' ({res.atp_spent} ATP), not claimed '{cp.current_expr}'"
+            if res.is_settled():
+                return False, f"Checkpoint claims SUSPENDED but computation settled into normal form '{res.term}' at {res.atp_spent} ATP"
 
     return True, "SOUND"
 
@@ -208,10 +231,11 @@ def step_continuum(
     if not current_thunk.verify():
         raise ValueError("Refusing to step from invalid or tampered predecessor checkpoint")
 
+    valid, err = verify_checkpoint_computation(current_thunk)
+    if not valid:
+        raise ValueError(f"Continuum step refused: input checkpoint failed computational verification ({err})")
+
     if current_thunk.status == "SETTLED":
-        valid, err = verify_checkpoint_computation(current_thunk)
-        if not valid:
-            raise ValueError(f"Cannot step invalid settled checkpoint: {err}")
         return current_thunk
 
     term = parse(current_thunk.current_expr)
@@ -250,6 +274,10 @@ def step_continuum(
         next_cp.sign(secret_key_hex)
     else:
         next_cp.checkpoint_hash = next_cp.compute_hash()
+
+    ok_succ, err_succ = verify_checkpoint_computation(next_cp)
+    if not ok_succ:
+        raise ValueError(f"Continuum step produced computationally invalid successor: {err_succ}")
 
     return next_cp
 
@@ -465,12 +493,18 @@ def audit_self(filepath: str, expected_signer_pk=None):
         if not cp.verify():
             print(f"[FAIL] Checkpoint #{cp.height} cryptographic/integrity verification failed.")
             sys.exit(1)
+        if cp.status not in ("SETTLED", "SUSPENDED"):
+            print(f"[FAIL] Checkpoint #{cp.height} has invalid status: {cp.status!r}")
+            sys.exit(1)
         if i == 0:
             if cp.height != 0:
                 print(f"[FAIL] Genesis checkpoint must have height 0, got {cp.height}.")
                 sys.exit(1)
             if cp.prev_hash != "0" * 64:
                 print(f"[FAIL] Genesis checkpoint prev_hash must be 64 zeros, got {cp.prev_hash}.")
+                sys.exit(1)
+            if cp.atp_spent_step != cp.atp_accumulated:
+                print(f"[FAIL] Genesis checkpoint step ATP ({cp.atp_spent_step}) != accumulated ATP ({cp.atp_accumulated}).")
                 sys.exit(1)
         else:
             prev = parsed_cps[i - 1]
@@ -482,6 +516,9 @@ def audit_self(filepath: str, expected_signer_pk=None):
                 sys.exit(1)
             if cp.initial_expr != prev.initial_expr:
                 print(f"[FAIL] Checkpoint #{cp.height} altered initial_expr.")
+                sys.exit(1)
+            if cp.atp_accumulated != prev.atp_accumulated + cp.atp_spent_step:
+                print(f"[FAIL] ATP chain delta mismatch at #{cp.height}: accumulated {cp.atp_accumulated} != prev ({prev.atp_accumulated}) + step ({cp.atp_spent_step})")
                 sys.exit(1)
         parsed_cps.append(cp)
 
@@ -515,9 +552,12 @@ def audit_self(filepath: str, expected_signer_pk=None):
 
     if latest.status == "SETTLED":
         print("\033[1;32m[✓] COMPUTATION REACHED NORMAL FORM (Q.E.D.)\033[0m\n")
-    else:
+    elif latest.status == "SUSPENDED":
         print("\033[1;33m[⏳] COMPUTATION SUSPENDED (Ready for resumption)\033[0m")
         print("     To resume: run with '--fuel <N>' or use Black-Heart CLI.\n")
+    else:
+        print(f"[FAIL] Invalid or unrecognized checkpoint status: {latest.status!r}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Black-Heart Continuum Polyglot")
@@ -566,6 +606,8 @@ def resume_computation_in_pdf(
     for i, cp in enumerate(checkpoints):
         if cp.height != i:
             raise ValueError(f"Continuum chain discontinuity: checkpoint #{cp.height} at index {i}")
+        if cp.status not in ("SETTLED", "SUSPENDED"):
+            raise ValueError(f"Continuum chain invalid status at #{cp.height}: {cp.status!r}")
         if genesis_pk:
             if cp.public_key_hex != genesis_pk or not cp.signature_hex:
                 raise ValueError(f"Continuum chain signer continuity failure: checkpoint #{cp.height} missing or altered signature under {genesis_pk}")
@@ -574,12 +616,16 @@ def resume_computation_in_pdf(
         if i == 0:
             if cp.prev_hash != "0" * 64:
                 raise ValueError("Genesis checkpoint prev_hash must be 64 zeros")
+            if cp.atp_spent_step != cp.atp_accumulated:
+                raise ValueError(f"Genesis checkpoint step ATP ({cp.atp_spent_step}) != accumulated ATP ({cp.atp_accumulated})")
         else:
             prev = checkpoints[i - 1]
             if cp.prev_hash != prev.checkpoint_hash:
                 raise ValueError(f"Continuum chain hash broken at #{cp.height}: expected {prev.checkpoint_hash}, found {cp.prev_hash}")
             if cp.initial_expr != prev.initial_expr:
                 raise ValueError(f"Continuum chain altered initial_expr at #{cp.height}")
+            if cp.atp_accumulated != prev.atp_accumulated + cp.atp_spent_step:
+                raise ValueError(f"Continuum chain ATP delta mismatch at #{cp.height}: accumulated {cp.atp_accumulated} != prev ({prev.atp_accumulated}) + step ({cp.atp_spent_step})")
 
     current = checkpoints[-1]
 

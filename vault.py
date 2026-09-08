@@ -82,8 +82,9 @@ def unpack_vault_bytes(vault_bytes: bytes, dest_dir: str) -> List[str]:
     - Protection against decompression bombs (max size & count limits)
     - Two-phase extraction (preflight + temporary staging)
     - Destination symlink breakout prevention (refuses existing symlinks in target tree)
-    - Transactional destination conflict preflight: verifies all target directories and
-      files before writing, guaranteeing zero mutation on collision/failure.
+    - Transactional commit engine: preflights all target paths for symlinks and
+      collisions, tracks all mutations, and provides all-or-nothing rollback on any
+      I/O error, fault injection, or exception, guaranteeing zero mutation on failure.
     Returns: List of unpacked relative paths.
     """
     dest_real = os.path.realpath(dest_dir)
@@ -155,16 +156,62 @@ def unpack_vault_bytes(vault_bytes: bytes, dest_dir: str) -> List[str]:
                     if not real_dst_f.startswith(dest_real + os.sep) and real_dst_f != dest_real:
                         raise ValueError(f"Directory traversal detected in destination path: {dst_f}")
 
-            # Phase 3: All preflight gates passed soundly. Apply files into dest_dir
-            os.makedirs(dest_real, exist_ok=True)
-            for root, dirs, files in os.walk(staging_real):
-                rel_dir = os.path.relpath(root, staging_real)
-                target_sub = os.path.join(dest_real, rel_dir) if rel_dir != "." else dest_real
-                os.makedirs(target_sub, exist_ok=True)
-                for f in files:
-                    src_f = os.path.join(root, f)
-                    dst_f = os.path.join(target_sub, f)
-                    shutil.copy2(src_f, dst_f)
+            # Phase 3: Transactional commit engine with rollback on failure
+            dest_existed = os.path.exists(dest_real)
+            created_dirs: List[str] = []
+            created_files: List[str] = []
+            backup_files: Dict[str, bytes] = {}
+
+            try:
+                if not dest_existed:
+                    os.makedirs(dest_real, exist_ok=True)
+                    created_dirs.append(dest_real)
+
+                for root, dirs, files in os.walk(staging_real):
+                    rel_dir = os.path.relpath(root, staging_real)
+                    target_sub = os.path.join(dest_real, rel_dir) if rel_dir != "." else dest_real
+                    if not os.path.exists(target_sub):
+                        os.makedirs(target_sub, exist_ok=True)
+                        created_dirs.append(target_sub)
+
+                    for f in files:
+                        src_f = os.path.join(root, f)
+                        dst_f = os.path.join(target_sub, f)
+
+                        if os.path.exists(dst_f):
+                            if dst_f not in backup_files:
+                                with open(dst_f, "rb") as bf:
+                                    backup_files[dst_f] = bf.read()
+                        else:
+                            created_files.append(dst_f)
+
+                        shutil.copy2(src_f, dst_f)
+            except BaseException:
+                # Rollback Phase: restore modified files to exact pre-commit bytes
+                for dst_f, orig_bytes in backup_files.items():
+                    try:
+                        with open(dst_f, "wb") as rf:
+                            rf.write(orig_bytes)
+                    except Exception:
+                        pass
+
+                # Delete newly created files
+                for dst_f in created_files:
+                    try:
+                        if os.path.lexists(dst_f):
+                            os.remove(dst_f)
+                    except Exception:
+                        pass
+
+                # Delete newly created directories (deepest first)
+                for d in reversed(created_dirs):
+                    try:
+                        if os.path.exists(d) and not os.listdir(d):
+                            os.rmdir(d)
+                    except Exception:
+                        pass
+
+                raise
 
     return unpacked_paths
 
