@@ -4,7 +4,14 @@
 
 **Black-Heart** is an experimental laboratory for:
 1. **Glyph Combinatory Logic (`glyph.py`):** Pure SKIY calculus defined on UTF-8 glyphs (`🖤`, `🤍`, `🌿`, `🔁`, `⚓`) with deterministic ATP budgets and content-addressed normal form hashing.
-2. **Self-Executing Proof-Carrying PDF Polyglots (`polyglot.py`):** A compiler producing files that are simultaneously **100% valid ISO 32000 PDF documents** (rendering in macOS Preview, Chrome, Acrobat) and **100% valid executable Python scripts** (`python3 document.pdf`).
+2. **Self-Executing Proof-Carrying PDF Polyglots (`polyglot.py`, `monad.py`):** Compilers producing files that are simultaneously **100% valid ISO 32000 PDF documents** (rendering in macOS Preview, Chrome, Acrobat) and **100% valid executable Python scripts** (`python3 document.pdf`).
+3. **Living Ledgers & Consensus Chains (`living_ledger.py`, `mesh.py`):** Append-only ISO 32000 incremental update chains with cryptographic settlement seals and peer-to-peer gossip mesh synchronization.
+4. **Sovereign Pure-Python Cryptography (`crypto.py`, `zk_glyph.py`):** Strict RFC 8032 Ed25519 signatures, zero-knowledge proofs (Schnorr & Chaum-Pedersen DLog), and non-malleable fail-closed decoding.
+5. **Symmetric Interaction Combinators (`interaction.py`, `vector_net.py`):** Optimal graph-rewriting evaluation nets with vector PostScript geometry generation.
+6. **Autonomous Organisms & Symbiosis (`organism.py`, `symbiosis.py`):** Self-reproducing quine polyglots, Artin braid group recombination, and safe lineage amalgamation.
+7. **Topological Quantum Topos (`quantum.py`):** Universal $B_3$ braid profile, non-Abelian Fibonacci anyons, Born measurement collapse, and standalone unitary invariance auditing.
+8. **Turing Morphogenesis (`morphogenesis.py`):** Gray-Scott reaction-diffusion PDEs on $\mathbb{T}^2$, 256-bit coprime entropy folding, and native vector contour rendering.
+9. **Form Metamorphosis & Self-Contemplation (`metamorphosis.py`):** Binary AST zipper rewriting, frozen invariant oracle evaluation, empirical experiment ledgers, and tamper-evident transition replay receipts.
 
 ---
 
@@ -264,6 +271,18 @@ python3 cli.py keygen --json
 
 # 6. Compile a new proof-carrying document:
 python3 cli.py compile -t "Autonomous Manifesto" -o manifesto.pdf
+
+# 7. Synthesize offspring via dialectical symbiosis:
+python3 cli.py synthesize examples/parent_a.pdf examples/parent_b.pdf -o child.pdf
+
+# 8. Simulate non-Abelian Fibonacci anyon quantum braiding:
+python3 cli.py quantum simulate "trefoil"
+
+# 9. Synthesize Turing reaction-diffusion morphogenetic phenotype:
+python3 cli.py morph --archetype labyrinth --steps 350 -o labyrinth.pdf
+
+# 10. Contemplate organism form and mint metamorphic successor:
+python3 cli.py metamorph examples/organism_gen0.pdf -o successor.pdf
 ```
 
 ---
@@ -372,9 +391,94 @@ python3 cli.py mesh sync peer_ledger.pdf --peer http://127.0.0.1:8765
 
 ---
 
-## 17. Comprehensive Test Suite
+## 17. Dialectical Symbiosis & Topological Knots (`symbiosis.py`)
 
-Run all 57 unit tests across all ten engines with a single command:
+Realizing the autonomous sexual recombination and evolutionary synthesis of polyglot organisms:
+* **Artin Braid Group ($B_n$):** Full algebraic modeling with Artin generators $\sigma_1, \dots, \sigma_{n-1}$, braid relations ($\sigma_i \sigma_{i+1} \sigma_i = \sigma_{i+1} \sigma_i \sigma_{i+1}$), and topological knot invariants (crossing number, writhe, Alexander closure components). Includes canonical knots: Trefoil ($3_1$), Figure-eight ($4_1$), Hopf link ($2_1^2$), and Whitehead link ($5_1^2$).
+* **Dialectical Synthesis:** Combines Thesis and Antithesis parent genomes via genetic crossover, generating non-trivial topological braids encoding their lineage.
+* **Safe Vault Amalgamation:** Content-addressable deduplication of identical files, and dynamic conflict disambiguation (`lineage_b/{rel}`, `lineage_b_2/{rel}`, etc.) preventing any existing files from either parent from being overwritten.
+* **Lineage Provenance Auditor:** Standalone runner verifying child genomic integrity against embedded chromosomes, parent derivation hashes, and chromosome metabolism with honest reporting (`METABOLIC REPLAY & GENOMIC INTEGRITY VERIFIED`).
+
+```bash
+# Synthesize offspring from two parent polyglots:
+python3 cli.py synthesize examples/parent_a.pdf examples/parent_b.pdf -o child.pdf
+
+# Audit lineage provenance:
+python3 child.pdf --lineage
+```
+
+---
+
+## 18. Topological Quantum Topos & Fibonacci Anyons (`quantum.py`)
+
+Universal topological quantum computation in the non-Abelian quantum Hall regime with ZERO external dependencies:
+* **SU(2)_3 Chern-Simons & Fibonacci Anyons:** Models non-Abelian anyon braiding where quantum gates correspond to topological braids in $B_3$.
+* **Strict Single-Qubit Profile:** Restricted strictly to $B_3$ profile ($n \le 3$, generators $\sigma_1, \sigma_2$), raising `UnsupportedBraidProfileError` on higher strands to preserve mathematical group homomorphisms.
+* **Born Rule & Bloch Sphere Mapping:** Calculates state vector $|\psi\rangle = \alpha |0\rangle + \beta |1\rangle$, Born measurement collapse probabilities, and 3D Bloch sphere coordinates $(\theta, \phi)$.
+* **Rigorous Standalone Quantum Auditor:** Recomputes and verifies all unitary invariants from frozen matrix operands ($U^\dagger U = I$, $\|\det(U)\| = 1$, Born rule $P(0), P(1) \in [0, 1]$, $P(0)+P(1)=1$, Bloch vector), failing closed on invalid matrices.
+
+```bash
+# Simulate topological anyonic quantum gate:
+python3 cli.py quantum simulate "trefoil"
+
+# Compile standalone quantum circuit polyglot PDF:
+python3 cli.py quantum compile -b "trefoil" -o quantum_circuit.pdf
+
+# Audit quantum unitary invariants and projective Born collapse:
+python3 quantum_circuit.pdf --audit
+python3 quantum_circuit.pdf --measure 1024
+```
+
+---
+
+## 19. Turing Morphogenesis & Reaction-Diffusion Phenotypes (`morphogenesis.py`)
+
+Endowing every autonomous polyglot organism with an organic, visual **Morphogenetic Phenotype**:
+* **Alan Turing (1952) / Gray-Scott (1983) PDEs:** Solves continuous non-linear reaction-diffusion equations on a discrete 2D toroidal lattice $\mathbb{T}^2$ with guaranteed physical concentration clamping $[0.0, 1.0]$.
+* **Six Spontaneous Symmetry-Breaking Archetypes:** Leopard Spots (Pearson $\alpha$), Labyrinthine Gyri (Class $\lambda$), Zebrafish Waves (Class $\theta$), Honeycomb Holes (Class $\gamma$), Soliton Droplets (Class $\delta$), Mitotic Pulsars (Class $\mu$).
+* **Full 256-Bit Entropy Folding:** Folds all 256 bits of SHA-256 hashes using coprime 64-bit mixing into perturbation seeds and parameter drift, avoiding XOR cancellation on repetitive bit patterns.
+* **Native ISO 32000 Vector PostScript Compilation:** Generates circular vesicle meshes and marching-squares isoline contours directly via PostScript operators inside standalone executable polyglots.
+
+```bash
+# Synthesize Turing morphogenesis phenotype PDF:
+python3 cli.py morph --archetype labyrinth --steps 350 --grid 40 -o labyrinth.pdf
+python3 cli.py morph --archetype spots --palette BIOLUMINESCENT_CYAN -o leopard.pdf
+
+# View PDF and execute embedded simulation:
+open labyrinth.pdf
+python3 labyrinth.pdf --simulate --steps 300
+```
+
+---
+
+## 20. Autonomous Form Metamorphosis & Program Self-Contemplation (`metamorphosis.py`)
+
+Empowering computational organisms to contemplate, inspect, and optimize their own source code:
+* **Addressable Program Zipper:** Traverses and mutates subterms via binary tree address paths $\tau \in \{'L', 'R'\}^*$ over pure SKIY combinator trees.
+* **Equational Algebraic Rewrites:** Discovers sound simplifications ($S(K x)(K y) \to K(xy)$, $S(K x)I \to x$, $I x \to x$, $K x y \to x$) that save runtime ATP reductions on every invocation.
+* **External Invariant Evaluator (`FrozenEvaluator`):** Decoupled test harness with frozen fixtures verifying $100\%$ functional equivalence while measuring energy conservation ($\Delta \text{ATP} < 0$) and syntactic compression ($\Delta \text{Size}$).
+* **Scientific Experiment Ledger (`ExperimentLog`):** Preserves both accepted transitions and rejected mutations (divergence counterexamples, neutral mutations) as permanent empirical records.
+* **Successor Minting & Replay Auditor:** Successor carries an immutable `MetamorphicTransitionReceipt`. The standalone auditor independently replays the transition from the parent payload and re-runs the oracle, failing closed on forged claims.
+
+```bash
+# Contemplate form and synthesize metamorphic successor:
+python3 cli.py metamorph [organism.pdf] -o successor.pdf
+
+# Inspect transition passport and energy savings:
+python3 successor.pdf --info
+
+# Audit transition replay and oracle invariants:
+python3 successor.pdf --audit
+
+# View full positive and negative experiment ledger:
+python3 successor.pdf --experiments
+```
+
+---
+
+## 21. Comprehensive Test Suite
+
+Run all **108 unit tests** across all **14 engines** with a single command:
 ```bash
 # Unified test runner:
 python3 test_all.py
@@ -387,17 +491,21 @@ python3 test_glyph.py          # 9 tests: SKIY reduction, ATP ceilings, Church e
 python3 test_monad.py          # 7 tests: Dual trees, visual/semantic compilation, AST
 python3 test_living_ledger.py  # 5 tests: Incremental PDF updates, multi-block chains
 python3 test_interaction.py    # 6 tests: Symmetric interaction combinators, rewiring
-python3 test_organism.py       # 4 tests: Self-reproducing polyglot automata, quine
+python3 test_organism.py       # 4 tests: Self-reproducing polyglot automata, quines
 python3 test_cross_proof.py    # 3 tests: Bilateral cross-proofs & embedded code vaults
 python3 test_continuum.py      # 4 tests: Suspended continuum thunks & incremental resumption
 python3 test_zk_glyph.py       # 5 tests: Pure-Python Ed25519 zero-knowledge proofs & NIZK
 python3 test_mesh.py           # 3 tests: Peer-to-peer living polyglot mesh sync & gossip
-python3 test_security_audit.py # 11 tests: Fail-closed verifiers, RFC 8032 strict decoding, anti-tamper controls
+python3 test_security_audit.py # 38 tests: Adversarial security audit, fail-closed verifiers (G1-G9, R1-R8, N1-N5, F1-F4, H1-H4, J1-J7)
+python3 test_symbiosis.py      # 5 tests: Dialectical symbiosis & Artin braid group recombination
+python3 test_quantum.py        # 5 tests: Topological quantum computing, Fibonacci anyons, unitary audit
+python3 test_morphogenesis.py  # 7 tests: Gray-Scott PDEs, Turing bifurcation, marching squares
+python3 test_metamorphosis.py  # 7 tests: Program self-contemplation, frozen evaluator, transition replay
 ```
 
 ---
 
-## 18. Specifications & Theory
+## 22. Specifications & Theory
 
 * [CONTINUUM.md](file:///Users/s0fractal/Projects/black-heart/CONTINUUM.md) — Suspended Thunks, Neutral Oracles & Merkle-Stream Continuity.
 * [MONAD.md](file:///Users/s0fractal/Projects/black-heart/MONAD.md) — The Literate Polyglot Monad, Dual Trees & Proof-Bearing Legal Contracts.
@@ -407,7 +515,8 @@ python3 test_security_audit.py # 11 tests: Fail-closed verifiers, RFC 8032 stric
 
 ---
 
-## 19. License
+## 23. License
 
-* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, `interaction.py`, `organism.py`, `cross_proof.py`, `vault.py`, `continuum.py`, `zk_glyph.py`, `mesh.py`, `cli.py`, tests):** AGPL-3.0-only
+* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, `interaction.py`, `organism.py`, `cross_proof.py`, `vault.py`, `continuum.py`, `zk_glyph.py`, `mesh.py`, `symbiosis.py`, `quantum.py`, `morphogenesis.py`, `metamorphosis.py`, `cli.py`, tests):** AGPL-3.0-only
 * **Texts & Polyglot artifacts:** CC BY-SA 4.0
+
