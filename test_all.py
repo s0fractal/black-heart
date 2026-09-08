@@ -2,13 +2,16 @@
 """
 test_all.py — Unified Test Suite Runner for Project Black-Heart (%🖤).
 
-Runs all 34 mathematical and polyglot tests across all engines:
-  - test_glyph.py: SKIY combinators, ATP fuel budgets, Church booleans
-  - test_monad.py: Dual trees, visual & semantic streams, AST compilation
-  - test_living_ledger.py: Incremental PDF updates, multi-block chains
-  - test_interaction.py: Symmetric interaction combinators, O(1) rewiring
-  - test_organism.py: Self-reproducing polyglot automata, quines
-  - test_cross_proof.py: Bilateral cross-proofs & embedded code vaults
+Runs all 46 mathematical and polyglot tests across all nine engines:
+  - test_glyph.py: SKIY combinators, ATP fuel budgets, Church booleans (9 tests)
+  - test_monad.py: Dual trees, visual & semantic streams, AST compilation (7 tests)
+  - test_living_ledger.py: Incremental PDF updates, multi-block chains (5 tests)
+  - test_interaction.py: Symmetric interaction combinators, O(1) rewiring (6 tests)
+  - test_organism.py: Self-reproducing polyglot automata, quines (4 tests)
+  - test_cross_proof.py: Bilateral cross-proofs & embedded code vaults (3 tests)
+  - test_continuum.py: Suspended continuum thunks & incremental resumption (4 tests)
+  - test_zk_glyph.py: Pure-Python Ed25519 zero-knowledge proofs & NIZK (5 tests)
+  - test_mesh.py: Peer-to-peer living polyglot mesh sync & gossip (3 tests)
 """
 
 import sys
@@ -22,6 +25,9 @@ SUITES = [
     ("Interaction Combinators", "test_interaction"),
     ("Autonomous Organisms", "test_organism"),
     ("Bilateral Cross-Proofs & Vaults", "test_cross_proof"),
+    ("Continuum Checkpointed Thunks", "test_continuum"),
+    ("Ed25519 Zero-Knowledge Proofs", "test_zk_glyph"),
+    ("P2P Polyglot Mesh Synchronization", "test_mesh"),
 ]
 
 def run_all_tests() -> bool:

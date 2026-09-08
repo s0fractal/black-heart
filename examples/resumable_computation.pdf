@@ -1,0 +1,186 @@
+# coding: utf-8
+r"""%PDF-1.7
+%🖤
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 1141 >>
+stream
+q
+0.08 0.12 0.25 rg
+50 780 495 40 re f
+1 1 1 rg
+BT /F1 16 Tf 65 795 Td (BLACK-HEART CONTINUUM COMPUTATION) Tj ET
+0.7 0.8 1 rg
+BT /F1 9 Tf 65 785 Td (ISO 32000 Resumable Polyglot Thunk Engine) Tj ET
+0.85 0.45 0.1 rg
+50 735 495 28 re f
+1 1 1 rg
+BT /F1 12 Tf 65 744 Td (STATE: SUSPENDED (IN PROGRESS)  |  HEIGHT: #0) Tj ET
+0.9 0.92 0.95 rg
+50 700 495 16 re f
+0.85 0.45 0.1 rg
+50 700 10 16 re f
+0.3 0.3 0.3 RG 1 w
+50 700 495 16 re S
+0.96 0.97 0.99 rg
+50 490 495 190 re f
+0.75 0.8 0.9 RG 1 w
+50 490 495 190 re S
+0.1 0.1 0.1 rg
+BT /F1 10 Tf 65 655 Td (Initial Expr:     🌿 (🖤 (🖤 🤍)) (🖤 🤍) Alpha Beta) Tj ET
+BT /F1 10 Tf 65 635 Td (Current State:    🖤 🤍 (🖤 🤍 Alpha) Beta) Tj ET
+BT /F1 10 Tf 65 615 Td (Cumulative ATP:  2 fuel burned) Tj ET
+BT /F1 10 Tf 65 595 Td (Peak AST Nodes:   15) Tj ET
+BT /F1 10 Tf 65 575 Td (Checkpoint Hash:  95b7c28530a5b3cfa877f3485183b100...) Tj ET
+BT /F1 10 Tf 65 555 Td (Signer Public PK: f4aa642ceca1fea377fb88aa90da4fa1...) Tj ET
+BT /F1 10 Tf 65 535 Td (Timestamp UTC:    2026-09-08T19:14:15Z) Tj ET
+BT /F1 9 Tf 65 505 Td (Resume via CLI:   'python3 <this_file>.pdf --fuel 5000') Tj ET
+Q
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000035 00000 n 
+0000000084 00000 n 
+0000000141 00000 n 
+0000000267 00000 n 
+0000001460 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1530
+%%EOF
+6 0 obj
+<< /Type /Page /Parent 8 0 R /MediaBox [0 0 595 842] /Contents 7 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+7 0 obj
+<< /Length 1109 >>
+stream
+q
+0.08 0.12 0.25 rg
+50 780 495 40 re f
+1 1 1 rg
+BT /F1 16 Tf 65 795 Td (BLACK-HEART CONTINUUM COMPUTATION) Tj ET
+0.7 0.8 1 rg
+BT /F1 9 Tf 65 785 Td (ISO 32000 Resumable Polyglot Thunk Engine) Tj ET
+0.15 0.65 0.25 rg
+50 735 495 28 re f
+1 1 1 rg
+BT /F1 12 Tf 65 744 Td (STATE: SETTLED (Q.E.D.)  |  HEIGHT: #1) Tj ET
+0.9 0.92 0.95 rg
+50 700 495 16 re f
+0.15 0.65 0.25 rg
+50 700 495 16 re f
+0.3 0.3 0.3 RG 1 w
+50 700 495 16 re S
+0.96 0.97 0.99 rg
+50 490 495 190 re f
+0.75 0.8 0.9 RG 1 w
+50 490 495 190 re S
+0.1 0.1 0.1 rg
+BT /F1 10 Tf 65 655 Td (Initial Expr:     🌿 (🖤 (🖤 🤍)) (🖤 🤍) Alpha Beta) Tj ET
+BT /F1 10 Tf 65 635 Td (Current State:    Beta) Tj ET
+BT /F1 10 Tf 65 615 Td (Cumulative ATP:  4 fuel burned) Tj ET
+BT /F1 10 Tf 65 595 Td (Peak AST Nodes:   15) Tj ET
+BT /F1 10 Tf 65 575 Td (Checkpoint Hash:  a2f4b467863359816fc35a8fd0d536e1...) Tj ET
+BT /F1 10 Tf 65 555 Td (Signer Public PK: f4aa642ceca1fea377fb88aa90da4fa1...) Tj ET
+BT /F1 10 Tf 65 535 Td (Timestamp UTC:    2026-09-08T19:14:15Z) Tj ET
+BT /F1 9 Tf 65 505 Td (Resume via CLI:   'python3 <this_file>.pdf --fuel 5000') Tj ET
+Q
+endstream
+endobj
+8 0 obj
+<< /Type /Pages /Kids [3 0 R 6 0 R] /Count 2 >>
+endobj
+9 0 obj
+<< /Type /Catalog /Pages 8 0 R >>
+endobj
+xref
+6 1
+0000001714 00000 n 
+7 1
+0000001840 00000 n 
+8 1
+0000003001 00000 n 
+9 1
+0000003064 00000 n 
+trailer
+<< /Size 10 /Root 9 0 R /Prev 1530 >>
+startxref
+3113
+%%EOF
+
+%🖤 CONTINUUM_THUNK: [{"height": 0, "timestamp_utc": "2026-09-08T19:14:15Z", "initial_expr": "🌿 (🖤 (🖤 🤍)) (🖤 🤍) Alpha Beta", "current_expr": "🖤 🤍 (🖤 🤍 Alpha) Beta", "atp_spent_step": 2, "atp_accumulated": 2, "peak_size": 15, "status": "SUSPENDED", "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000", "checkpoint_hash": "95b7c28530a5b3cfa877f3485183b10034a0141a56a2e2c57164dadea3ab0239", "public_key_hex": "f4aa642ceca1fea377fb88aa90da4fa1c42f5e388c42c9ae31d8834bb2e5d00a", "signature_hex": "dc7c0977763c03ee67d58e1d30b3f583a569d6e98113bd165df6fefafcaee01a6d20cf57084801f8f579a1950ffb6aa0098d58db630e8882c7c9e2a2ea6e9608"}, {"height": 1, "timestamp_utc": "2026-09-08T19:14:15Z", "initial_expr": "🌿 (🖤 (🖤 🤍)) (🖤 🤍) Alpha Beta", "current_expr": "Beta", "atp_spent_step": 2, "atp_accumulated": 4, "peak_size": 15, "status": "SETTLED", "prev_hash": "95b7c28530a5b3cfa877f3485183b10034a0141a56a2e2c57164dadea3ab0239", "checkpoint_hash": "a2f4b467863359816fc35a8fd0d536e1786b6e184bba53137addcc8ee44c2152", "public_key_hex": "f4aa642ceca1fea377fb88aa90da4fa1c42f5e388c42c9ae31d8834bb2e5d00a", "signature_hex": "9f7607d9683f19e8f99adfd4f1925f9e0e3a0d4effcf4a7f4c60fd29fd28913c64e881818831a400dfe76444db082ad779ab2e9b8fe1d7eb747891bad37a2d03"}]
+
+"""
+
+import os
+import sys
+import json
+import argparse
+import hashlib
+import time
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+for candidate in [os.getcwd(), current_dir, os.path.dirname(current_dir), "/Users/s0fractal/Projects/black-heart"]:
+    if os.path.isdir(candidate) and candidate not in sys.path:
+        sys.path.insert(0, candidate)
+
+PREFIX = "%" + "🖤" + " CONTINUUM_THUNK: "
+
+def audit_self(filepath: str):
+    with open(filepath, "rb") as f:
+        content = f.read()
+
+    prefix_bytes = PREFIX.encode("utf-8")
+    idx = content.rfind(prefix_bytes)  # Find latest manifest
+    if idx == -1:
+        print("[!] No continuum thunk manifest found.")
+        sys.exit(1)
+
+    end_idx = content.find(b"\n", idx)
+    raw_json = content[idx + len(prefix_bytes):end_idx].decode("utf-8")
+    checkpoints = json.loads(raw_json)
+
+    print("=================================================================")
+    print("  %🖤 BLACK-HEART CONTINUUM COMPUTATION AUDITOR")
+    print(f"  Target File: {os.path.basename(filepath)} ({len(content)} bytes)")
+    print("=================================================================\n")
+
+    latest = checkpoints[-1]
+    print(f"[*] Checkpoint Height:  #{latest['height']}")
+    print(f"[*] Execution Status:   {latest['status']}")
+    print(f"[*] Cumulative ATP:     {latest['atp_accumulated']}")
+    print(f"[*] Initial Term:       {latest['initial_expr']}")
+    print(f"[*] Current Term:       {latest['current_expr']}")
+    print(f"[*] Checkpoint Hash:    ⚓ {latest['checkpoint_hash']}\n")
+
+    if latest['status'] == "SETTLED":
+        print("\033[1;32m[✓] COMPUTATION REACHED NORMAL FORM (Q.E.D.)\033[0m\n")
+    else:
+        print("\033[1;33m[⏳] COMPUTATION SUSPENDED (Ready for resumption)\033[0m")
+        print("     To resume: run with '--fuel <N>' or use Black-Heart CLI.\n")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Black-Heart Continuum Polyglot")
+    parser.add_argument("--fuel", type=int, help="Additional ATP fuel to evaluate")
+    parser.add_argument("--secret-key", help="Optional secret key hex to sign next checkpoint")
+    args, _ = parser.parse_known_args()
+
+    if args.fuel:
+        from continuum import resume_computation_in_pdf
+        resume_computation_in_pdf(sys.argv[0], additional_atp=args.fuel, secret_key_hex=args.secret_key)
+    else:
+        audit_self(sys.argv[0])

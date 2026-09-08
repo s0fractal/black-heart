@@ -1,0 +1,117 @@
+# coding: utf-8
+r"""%PDF-1.7
+%🖤
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 874 >>
+stream
+q
+0.1 0.15 0.3 rg
+50 780 495 40 re f
+1 1 1 rg
+BT /F1 15 Tf 65 795 Td (CONFIDENTIAL ENTERPRISE PROCUREMENT AGREEMENT) Tj ET
+0.7 0.8 1 rg
+BT /F1 9 Tf 65 785 Td (Black-Heart Zero-Knowledge Proof Verification Engine) Tj ET
+0.15 0.65 0.3 rg
+50 735 495 30 re f
+1 1 1 rg
+BT /F1 11 Tf 65 745 Td (ZERO-KNOWLEDGE SOUNDNESS: ED25519 NIZK VERIFIED) Tj ET
+0.96 0.97 0.99 rg
+50 560 495 160 re f
+0.75 0.8 0.9 RG 1 w
+50 560 495 160 re S
+0.1 0.1 0.1 rg
+BT /F1 10 Tf 65 690 Td (Schnorr Identity Proofs:        1 registered) Tj ET
+BT /F1 10 Tf 65 670 Td (Chaum-Pedersen DLog Equality:  1 registered) Tj ET
+BT /F1 10 Tf 65 650 Td (Cryptographic Curve:            Twisted Edwards GF(2^255 - 19)) Tj ET
+BT /F1 10 Tf 65 630 Td (Confidentiality Level:          Zero Secrets Disclosed (Full NIZK)) Tj ET
+BT /F1 10 Tf 65 610 Td (Execution Audit:                 'python3 <this_document>.pdf') Tj ET
+Q
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000035 00000 n 
+0000000084 00000 n 
+0000000141 00000 n 
+0000000267 00000 n 
+0000001192 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1262
+%%EOF
+%🖤 ZK_PROOF_MANIFEST: {"title": "CONFIDENTIAL ENTERPRISE PROCUREMENT AGREEMENT", "author": "s0fractal", "timestamp_utc": "2026-09-08T19:14:15Z", "schnorr_proofs": [{"type": "SchnorrZKP", "prover_pk_hex": "0816210b996e099c349c1df0d86af679100d0767888f659e16bbfba431bf3116", "commitment_R_hex": "3785888dcb3b09bd1a30d883466d6424f53cf6d401dd8391d2c797911800ce09", "response_z_hex": "f9926cc66932963e9eec7874e052afa438bd6c0f5875c2ab8761ba63b11b7109", "context": "ENTERPRISE_PROCUREMENT_CLEARANCE_2026"}], "chaum_pedersen_proofs": [{"type": "ChaumPedersenZKP", "point_P1_hex": "d3b06cc8326a210654f17221f078bfca8c62ec7c5e8b26c0e239ec3a0070cc26", "point_P2_hex": "4ea3794e653c9a93b5375c24c7a9ad10e6a764c59da7641ddd179fde7648a505", "commitment_R1_hex": "b039ae4ad1994658d90708afe86968e1ae445677341e76951845c72ee19f9162", "commitment_R2_hex": "9f87ff9c2af247c0586c0f1d54a6f73740ea0a0f3d146ea31613955efe8b235d", "response_z_hex": "fc2c0d5d7804fdbfbb5d6f4486d864345b9225b0e79d001de281b924e20d5c07", "context": "SOLVENCY_RESERVE_PROOF"}]}
+
+"""
+
+import os
+import sys
+import json
+
+# Ensure project root is in sys.path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+for candidate in [os.getcwd(), current_dir, os.path.dirname(current_dir), "/Users/s0fractal/Projects/black-heart"]:
+    if os.path.isdir(candidate) and candidate not in sys.path:
+        sys.path.insert(0, candidate)
+
+ZK_PREFIX = "%" + "🖤" + " ZK_PROOF_MANIFEST: "
+
+def audit_zkp(filepath: str):
+    with open(filepath, "rb") as f:
+        content = f.read()
+
+    prefix_bytes = ZK_PREFIX.encode("utf-8")
+    idx = content.find(prefix_bytes)
+    if idx == -1:
+        print("[!] No ZK proof manifest found.")
+        sys.exit(1)
+
+    end_idx = content.find(b"\n", idx)
+    manifest = json.loads(content[idx + len(prefix_bytes):end_idx].decode("utf-8"))
+
+    print("=================================================================")
+    print("  %🖤 BLACK-HEART ZERO-KNOWLEDGE AUDIT ENGINE")
+    print(f"  Target File: {os.path.basename(filepath)} ({len(content)} bytes)")
+    print("=================================================================\n")
+
+    from zk_glyph import SchnorrProof, schnorr_verify, ChaumPedersenProof, chaum_pedersen_verify
+
+    s_proofs = [SchnorrProof.from_dict(d) for d in manifest.get("schnorr_proofs", [])]
+    cp_proofs = [ChaumPedersenProof.from_dict(d) for d in manifest.get("chaum_pedersen_proofs", [])]
+
+    print(f"[*] Auditing {len(s_proofs)} Schnorr ZK proofs...")
+    for i, sp in enumerate(s_proofs, 1):
+        ok = schnorr_verify(sp)
+        status = "\033[1;32m[PASS]\033[0m" if ok else "\033[1;31m[FAIL]\033[0m"
+        print(f"    Proof #{i}: Prover PK: {sp.prover_pk_hex[:16]}... Context: '{sp.context}' -> {status}")
+        if not ok:
+            print("[!] Schnorr proof verification failed!")
+            sys.exit(1)
+
+    print(f"\n[*] Auditing {len(cp_proofs)} Chaum-Pedersen DLog Equality ZK proofs...")
+    for i, cp in enumerate(cp_proofs, 1):
+        ok = chaum_pedersen_verify(cp)
+        status = "\033[1;32m[PASS]\033[0m" if ok else "\033[1;31m[FAIL]\033[0m"
+        print(f"    Proof #{i}: P1: {cp.point_P1_hex[:16]}... P2: {cp.point_P2_hex[:16]}... -> {status}")
+        if not ok:
+            print("[!] Chaum-Pedersen proof verification failed!")
+            sys.exit(1)
+
+    print("\n\033[1;32m[✓] ALL ZERO-KNOWLEDGE PROOFS VERIFIED MATHEMATICALLY.\033[0m")
+    print("    Soundness: 100% | Zero Private Secrets Disclosed.\n")
+
+if __name__ == "__main__":
+    audit_zkp(sys.argv[0])

@@ -117,11 +117,20 @@ def cmd_verify(args):
     elif "%🖤 TELEMETRY_ORACLE_MANIFEST:".encode("utf-8") in content:
         print("[*] Detected Telemetry Oracle Polyglot.")
         os.system(f"{sys.executable} {target}")
+    elif "%🖤 CONTINUUM_THUNK:".encode("utf-8") in content:
+        print("[*] Detected Continuum Resumable Thunk Polyglot.")
+        os.system(f"{sys.executable} {target}")
+    elif "%🖤 ZK_PROOF_MANIFEST:".encode("utf-8") in content:
+        print("[*] Detected Zero-Knowledge Proof-Carrying Contract.")
+        os.system(f"{sys.executable} {target}")
     elif "%🖤 CONTRACT_MANIFEST:".encode("utf-8") in content:
         print("[*] Detected Proof-Carrying Contract Polyglot.")
         os.system(f"{sys.executable} {target}")
     elif "%🖤 LEDGER_MANIFEST:".encode("utf-8") in content:
         print("[*] Detected Multi-Block Living Polyglot Ledger.")
+        os.system(f"{sys.executable} {target}")
+    elif "%🖤 ORGANISM_GENOME:".encode("utf-8") in content:
+        print("[*] Detected Autonomous Self-Reproducing Polyglot Automaton.")
         os.system(f"{sys.executable} {target}")
     elif "%🖤 CLAIM:".encode("utf-8") in content or "%🖤 CODE_VAULT_MANIFEST:".encode("utf-8") in content:
         print("[*] Detected Self-Verifying Black-Heart Polyglot / Vault.")
@@ -223,6 +232,52 @@ def cmd_test(args):
     if not success:
         sys.exit(1)
 
+def cmd_continuum(args):
+    """Continuum Resumable Thunk operations."""
+    from continuum import ResumableComputationPolyglot, resume_computation_in_pdf
+    if args.action == "compile":
+        sk, pk = generate_keypair()
+        poly = ResumableComputationPolyglot(args.title or "BLACK-HEART CONTINUUM COMPUTATION")
+        cp = poly.initialize(args.expr, initial_fuel=args.fuel, secret_key_hex=sk, public_key_hex=pk)
+        poly.compile(args.output)
+        print(f"\033[1;32m[✓] Continuum Polyglot compiled to: {args.output}\033[0m")
+        print(f"    Status: {cp.status} | Height: #{cp.height} | Checkpoint: ⚓ {cp.checkpoint_hash[:16]}...")
+    elif args.action == "resume":
+        res = resume_computation_in_pdf(args.file, additional_atp=args.fuel)
+        print(f"\033[1;32m[✓] Resumed: {res.status} | Cumulative ATP: {res.atp_accumulated}\033[0m")
+
+def cmd_zk(args):
+    """Zero-Knowledge Proof operations on Ed25519."""
+    from zk_glyph import schnorr_prove, schnorr_verify, chaum_pedersen_prove, chaum_pedersen_verify
+    if args.action == "prove-identity":
+        sp = schnorr_prove(args.secret_key, context=args.context or "AUTH")
+        print(json.dumps(sp.to_dict(), indent=2))
+    elif args.action == "prove-dlog":
+        cpp = chaum_pedersen_prove(int(args.scalar), context=args.context or "DLOG")
+        print(json.dumps(cpp.to_dict(), indent=2))
+
+def cmd_mesh(args):
+    """Peer-to-peer Living Polyglot Mesh sync operations."""
+    from mesh import start_ledger_daemon, sync_local_ledgers, sync_from_remote_peer
+    if args.action == "serve":
+        port = args.port or 8765
+        print(f"[*] Starting Black-Heart Ledger Node on port {port}...")
+        daemon = start_ledger_daemon(args.file, port=port)
+        print(f"\033[1;32m[✓] Serving {args.file} on http://127.0.0.1:{port}\033[0m (Press Ctrl+C to stop)")
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            daemon.shutdown()
+            print("\nDaemon stopped.")
+    elif args.action == "sync":
+        if args.peer.startswith("http://") or args.peer.startswith("https://"):
+            synced = sync_from_remote_peer(args.destination, args.peer)
+            print(f"\033[1;32m[✓] Synced {synced} block(s) from remote peer: {args.peer}\033[0m")
+        else:
+            synced = sync_local_ledgers(args.peer, args.destination)
+            print(f"\033[1;32m[✓] Synced {synced} block(s) from local peer file: {args.peer}\033[0m")
+
 def main():
     parser = argparse.ArgumentParser(description="Black-Heart (%🖤) Command Suite")
     subparsers = parser.add_subparsers(dest="command")
@@ -231,7 +286,7 @@ def main():
     p_repl = subparsers.add_parser("repl", help="Interactive proof and combinator REPL")
 
     # test
-    p_test = subparsers.add_parser("test", help="Run full 34-test suite across all engines")
+    p_test = subparsers.add_parser("test", help="Run full 46-test suite across all nine engines")
 
     # keygen
     p_keygen = subparsers.add_parser("keygen", help="Generate fresh Ed25519 keypair")
@@ -265,6 +320,41 @@ def main():
     p_adj.add_argument("agreement", help="Path to bilateral agreement PDF")
     p_adj.add_argument("oracle", help="Path to telemetry oracle PDF")
 
+    # continuum
+    p_cont = subparsers.add_parser("continuum", help="Suspended Continuum Thunk polyglot operations")
+    cont_subs = p_cont.add_subparsers(dest="action")
+    p_cp = cont_subs.add_parser("compile", help="Compile initial resumable computation PDF")
+    p_cp.add_argument("--expr", required=True, help="Initial SKIY combinator expression")
+    p_cp.add_argument("--fuel", type=int, default=10, help="Initial ATP fuel budget")
+    p_cp.add_argument("-o", "--output", default="resumable_thunk.pdf", help="Target PDF file")
+    p_cp.add_argument("-t", "--title", default="CONTINUUM COMPUTATION", help="Document title")
+
+    p_cr = cont_subs.add_parser("resume", help="Resume computation in existing PDF")
+    p_cr.add_argument("file", help="Target continuum PDF file")
+    p_cr.add_argument("--fuel", type=int, default=100, help="Additional ATP fuel")
+
+    # zk
+    p_zk = subparsers.add_parser("zk", help="Zero-Knowledge Proofs on Ed25519")
+    zk_subs = p_zk.add_subparsers(dest="action")
+    p_zk_id = zk_subs.add_parser("prove-identity", help="Generate Schnorr ZKP of secret key possession")
+    p_zk_id.add_argument("--secret-key", required=True, help="Secret key in hex")
+    p_zk_id.add_argument("--context", default="IDENTITY_AUTH", help="Fiat-Shamir context string")
+
+    p_zk_eq = zk_subs.add_parser("prove-dlog", help="Generate Chaum-Pedersen DLog equality proof")
+    p_zk_eq.add_argument("--scalar", required=True, help="Secret scalar integer")
+    p_zk_eq.add_argument("--context", default="DLOG_EQUALITY", help="Fiat-Shamir context string")
+
+    # mesh
+    p_mesh = subparsers.add_parser("mesh", help="P2P Swarm Living Polyglot sync")
+    mesh_subs = p_mesh.add_subparsers(dest="action")
+    p_mesh_srv = mesh_subs.add_parser("serve", help="Serve a living ledger PDF over HTTP daemon")
+    p_mesh_srv.add_argument("file", help="Target living ledger PDF file")
+    p_mesh_srv.add_argument("-p", "--port", type=int, default=8765, help="Port to bind daemon")
+
+    p_mesh_sync = mesh_subs.add_parser("sync", help="Synchronize living ledger PDF with another peer")
+    p_mesh_sync.add_argument("destination", help="Target local living ledger PDF to update")
+    p_mesh_sync.add_argument("--peer", required=True, help="Peer PDF file path or remote http:// URL")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -281,6 +371,12 @@ def main():
         cmd_vault(args)
     elif args.command == "adjudicate":
         cmd_adjudicate(args)
+    elif args.command == "continuum":
+        cmd_continuum(args)
+    elif args.command == "zk":
+        cmd_zk(args)
+    elif args.command == "mesh":
+        cmd_mesh(args)
     else:
         parser.print_help()
 

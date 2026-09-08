@@ -183,6 +183,10 @@ class LivingLedger:
         self.blocks.append(block)
         return block
 
+    def append_existing_block(self, block: LedgerBlock) -> None:
+        """Appends an already verified, signed block from a network peer."""
+        self.blocks.append(block)
+
     def compile(self, output_path: str) -> str:
         """Compiles the full multi-block ledger into an executable PDF polyglot."""
         page_width, page_height = 595, 842 # A4

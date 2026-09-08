@@ -319,9 +319,62 @@ Turning proof-carrying PDF documents into portable, deterministic software vault
 
 ---
 
-## 14. Comprehensive Test Suite
+---
 
-Run all 34 unit tests with a single command:
+## 14. Suspended Continuum Computations (`continuum.py`)
+
+Fulfilling [CONTINUUM.md](file:///Users/s0fractal/Projects/black-heart/CONTINUUM.md):
+* **Non-Destructive Reduction:** Eliminates "Out of Gas" crashes. When the ATP budget runs out, the computation pauses gracefully into a **Suspended Thunk** with an immutable checkpoint digest.
+* **Resumable Polyglot PDFs:** A single ISO 32000 PDF document displays an active ATP fuel gauge and execution progress.
+* **Incremental Resumption:** Running `python3 computation.pdf --fuel <N>` evaluates $N$ additional steps, appends an incremental update block (ISO 32000 §7.5.6) with a new page, and updates the checkpoint on disk! When normal form is reached, a final Q.E.D. settlement seal is rendered.
+
+```bash
+# Run continuum thunk demo:
+python3 examples/continuum_thunk_demo.py
+
+# Resume directly on the PDF:
+python3 examples/resumable_computation.pdf --fuel 5000
+```
+
+---
+
+## 15. Pure-Python Zero-Knowledge Proofs on Ed25519 (`zk_glyph.py`)
+
+Bringing Non-Interactive Zero-Knowledge Proofs (NIZK) to documents with ZERO external dependencies:
+* **Schnorr Identity Proofs:** Proves possession of a sovereign Ed25519 secret key ($P = s \cdot B$) in zero knowledge via Fiat-Shamir heuristics ($R = r \cdot B, \; z = r + e \cdot s$).
+* **Chaum-Pedersen DLog Equality:** Proves that two public points across independent generators share the same secret exponent without revealing the exponent ($P_1 = s \cdot G, \; P_2 = s \cdot H$).
+* **Confidential Procurement Contracts:** Enables parties to verify credentials, solvency reserves, and compliance thresholds in $< 5\text{ms}$ while keeping underlying data confidential.
+
+```bash
+# Run zero-knowledge contract demo:
+python3 examples/zk_contract_demo.py
+
+# Audit the ZK contract PDF:
+python3 examples/confidential_procurement_contract.pdf
+```
+
+---
+
+## 16. P2P Polyglot Mesh Synchronization (`mesh.py`)
+
+Turning Living Polyglot Ledgers into autonomous, gossip-capable network nodes:
+* **Decentralized Synchronization:** Multiple instances of a living ledger document synchronize missing blocks over HTTP or local files without central servers or databases.
+* **Direct PDF Ingestion:** Received blocks are validated against their Ed25519 signatures and appended directly into the local physical PDF binary file using ISO 32000 §7.5.6.
+* **Fork & Byzantine Resistance:** Automatically detects and rejects conflicting chains or forged block signatures.
+
+```bash
+# Serve ledger node over HTTP:
+python3 cli.py mesh serve my_ledger.pdf --port 8765
+
+# Sync another ledger PDF from peer:
+python3 cli.py mesh sync peer_ledger.pdf --peer http://127.0.0.1:8765
+```
+
+---
+
+## 17. Comprehensive Test Suite
+
+Run all 46 unit tests across all nine engines with a single command:
 ```bash
 # Unified test runner:
 python3 test_all.py
@@ -336,11 +389,14 @@ python3 test_living_ledger.py  # 5 tests: Incremental PDF updates, multi-block c
 python3 test_interaction.py    # 6 tests: Symmetric interaction combinators, rewiring
 python3 test_organism.py       # 4 tests: Self-reproducing polyglot automata, quine
 python3 test_cross_proof.py    # 3 tests: Bilateral cross-proofs & embedded code vaults
+test_continuum.py              # 4 tests: Suspended continuum thunks & incremental resumption
+test_zk_glyph.py              # 5 tests: Pure-Python Ed25519 zero-knowledge proofs & NIZK
+test_mesh.py                  # 3 tests: Peer-to-peer living polyglot mesh sync & gossip
 ```
 
 ---
 
-## 15. Specifications & Theory
+## 18. Specifications & Theory
 
 * [CONTINUUM.md](file:///Users/s0fractal/Projects/black-heart/CONTINUUM.md) — Suspended Thunks, Neutral Oracles & Merkle-Stream Continuity.
 * [MONAD.md](file:///Users/s0fractal/Projects/black-heart/MONAD.md) — The Literate Polyglot Monad, Dual Trees & Proof-Bearing Legal Contracts.
@@ -350,7 +406,7 @@ python3 test_cross_proof.py    # 3 tests: Bilateral cross-proofs & embedded code
 
 ---
 
-## 16. License
+## 19. License
 
-* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, `interaction.py`, `organism.py`, `cross_proof.py`, `vault.py`, `cli.py`, tests):** AGPL-3.0-only
+* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, `interaction.py`, `organism.py`, `cross_proof.py`, `vault.py`, `continuum.py`, `zk_glyph.py`, `mesh.py`, `cli.py`, tests):** AGPL-3.0-only
 * **Texts & Polyglot artifacts:** CC BY-SA 4.0
