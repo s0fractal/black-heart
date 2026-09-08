@@ -180,14 +180,69 @@ Output:
 
 ---
 
-## 6. Specifications & Theory
+## 6. Zero-Dependency Ed25519 Cryptography (`crypto.py`)
+
+To ensure complete self-containment without supply chain risks or platform-specific binaries, **Black-Heart** includes a pure-Python implementation of **RFC 8032 Ed25519**:
+* **Pure Integer Arithmetic:** Operates directly over the prime field $\mathbb{F}_{2^{255}-19}$ and twisted Edwards curve $-x^2 + y^2 = 1 - \frac{121665}{121666} x^2 y^2$.
+* **Zero Dependencies:** Requires only Python's built-in `hashlib.sha512` and `os.urandom`.
+* **Tamper-Evident Seals:** Provides `CryptographicSeal` to bind public keys, digital signatures, and content digests into document manifests.
+
+---
+
+## 7. Native PDF Vector Proof Nets (`vector_net.py`)
+
+Rather than treating documents as plain text with comments, `vector_net.py` compiles SKIY combinatory reduction expressions directly into **PostScript 2D vector graphics streams**:
+* **Visual Semantics:**
+  - `🖤` (K / Black Cone): Obsidian filled circle with golden border and branch absorption mark.
+  - `🤍` (I / White Cone): Pearl circle with through-flow wire.
+  - `🌿` (S / Spore): Emerald green node with mycelial branching wires.
+  - `🔁` (Y / Fixpoint): Royal indigo loop.
+  - `@` (App): Slate application junction ring.
+* **Vector Proof Cards:** Renders reduction steps $\text{LHS} \xrightarrow{\text{ATP}} \text{RHS}$ using native PDF operators (`m`, `l`, `c`, `re`, `B`, `S`).
+
+---
+
+## 8. The Living Polyglot Ledger (`living_ledger.py`)
+
+Using **ISO 32000-1 §7.5.6 (Incremental Updates)**, `living_ledger.py` implements an append-only verifiable ledger file:
+* **The Living Document:** A single file `living_ledger.pdf` starts with Genesis (Block 0) and grows across time as network participants append signed transactions and proof nets.
+* **Dual Nature:**
+  - **In Preview / Acrobat:** Renders as an authentic multi-page ledger with vector proof net diagrams, timestamps, and Ed25519 cryptographic seals on each page.
+  - **In Python:** Run `python3 living_ledger.pdf` to audit the entire hash chain from Genesis to tip and verify all Ed25519 signatures.
+
+### Quickstart: Compile & Audit Living Ledger
+```bash
+# 1. Compile multi-block living ledger:
+python3 examples/living_ledger_demo.py
+
+# 2. View as visual document:
+open examples/living_ledger.pdf
+
+# 3. Audit directly as executable code:
+python3 examples/living_ledger.pdf
+```
+
+---
+
+## 9. Comprehensive Test Suite
+
+Run all 21 unit tests across all four engines:
+```bash
+python3 test_glyph.py
+python3 test_monad.py
+python3 test_living_ledger.py
+```
+
+---
+
+## 10. Specifications & Theory
 
 * [CONTINUUM.md](file:///Users/s0fractal/Projects/black-heart/CONTINUUM.md) — Suspended Thunks, Neutral Oracles & Merkle-Stream Continuity.
 * [MONAD.md](file:///Users/s0fractal/Projects/black-heart/MONAD.md) — The Literate Polyglot Monad, Dual Trees & Proof-Bearing Legal Contracts.
 
 ---
 
-## 7. License
+## 11. License
 
-* **Code (`glyph.py`, `polyglot.py`, `monad.py`, tests):** AGPL-3.0-only
+* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, tests):** AGPL-3.0-only
 * **Texts & Polyglot artifacts:** CC BY-SA 4.0
