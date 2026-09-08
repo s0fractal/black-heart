@@ -107,7 +107,87 @@ Document integrity & proof verification: 100% SOUND.
 
 ---
 
-## 4. License
+## 4. The Literate Polyglot Monad & Dual Trees (`monad.py`)
 
-* **Code (`glyph.py`, `polyglot.py`, tests):** AGPL-3.0-only
+A fundamental limitation of classical literate programming and smart contracts is **Documentation Drift** and the loss of human context:
+* Smart contracts discarded human legal language and judicial jurisdiction.
+* Conventional digital signatures (DocuSign, SaaS PDFs) are inert raster images detached from executable rules.
+
+**Black-Heart** resolves this via the **Literate Polyglot Monad** and **Dual-Spine Trees**:
+$$\mathcal{M}(A) = \langle S_{\text{comp}}, \; P_{\text{doc}}, \; A \rangle$$
+
+* **Dual-Ended Stream Writing:** Interpreters (Python) read sequentially from byte offset 0 (`head-seeking`), while ISO 32000 PDF readers parse backward from `%%EOF` via `startxref` (`tail-seeking`). Both programs reside in the exact same file without offset collisions.
+* **Dual-Spine Trees (`DualTree`):**
+  - **Code Spine:** AST / DAG of computable contract rules, predicates, and ATP gas budgets ($H_{\text{code}}$).
+  - **Visual Spine:** Document Object Model of the PDF page, legal articles, and typography ($H_{\text{visual}}$).
+  - **Joint Merkle Anchor:** $H_{\text{dual}} = \text{SHA-256}(H_{\text{code}} \mathbin{\Vert} H_{\text{visual}})$. Any tampering with text or code breaks the anchor.
+* **Anti-Drift Invariant:** Every monadic step ($\gg=$) atomically advances both the computational predicate and the visual presentation page ($\Delta S \iff \Delta P$).
+
+See formal specification: [MONAD.md](file:///Users/s0fractal/Projects/black-heart/MONAD.md).
+
+---
+
+## 5. Self-Verifying Proof-Bearing Contracts
+
+A proof-bearing contract polyglot compiled with `monad.py`:
+1. Opens in standard PDF viewers (Preview, Acrobat, Chrome) as an authentic legal agreement.
+2. Directly executes in Python: `python3 contract.pdf`.
+3. Reads its embedded legal predicates, checks incident evidence logs (aligned with `warrant`), verifies the dual-spine anchor, and prints a deterministic settlement receipt `⚓`.
+
+### Running the Contract Polyglot:
+
+#### 1. Run all unit tests (Glyph Calculus + Monad Laws):
+```bash
+python3 test_glyph.py
+python3 test_monad.py
+```
+
+#### 2. Compile and run the Cloud SLA Agreement:
+```bash
+python3 examples/service_agreement_polyglot.py
+python3 examples/service_agreement_polyglot.pdf
+```
+
+Output:
+```text
+======================================================================
+  %🖤 BLACK-HEART — SELF-VERIFYING PROOF-BEARING CONTRACT ADJUDICATOR
+  Target File: service_agreement_polyglot.pdf (10146 bytes)
+======================================================================
+
+[*] Document Title: CLOUD SERVICE LEVEL AGREEMENT & ESCROW PROTOCOL
+[*] Jurisdiction:   Ukraine / International Commercial Arbitration
+    - PROVIDER: Nebula Hypercloud Infrastructure Ltd. (ed25519:e4f1a8c9b2010874ff)
+    - CLIENT: Axiom Financial Technologies Inc. (ed25519:7b03df129c8e541a02)
+    - ADJUDICATOR: Autonomous Black-Heart Settlement Arbiter (ed25519:c991823abf1055de77)
+
+[*] Declared Dual-Spine Anchor: cfaf765e73ff29d1f79520b59bfd06a00b8210f1e4b0784848d9c85b130a63d4
+[✓ GREEN] Document integrity sound. Dual-spine anchor verified.
+
+[*] ADJUDICATING EVIDENCE LOG:
+    [INCIDENT] INC-2026-09-02: Edge Gateway DNS Blackhole (180 min) | Hash: 2cd24f397ca91f0d
+    [INCIDENT] INC-2026-09-05: NVMe Storage Fabric Degradation (120 min) | Hash: b651c519a72b61aa
+
+    Total Downtime: 300 minutes (Period: 43200 min)
+    Measured Uptime: 99.306% (Target: >=99.5%)
+----------------------------------------------------------------------
+[⚓ SETTLED: SLA BREACH CONFIRMED]
+  Penalty Assessed:   $500 USD (1 x 0.1% brackets below SLA)
+  Net Service Due:    $9,500 USD (Base: $10,000 USD)
+  Receipt Digest:     ⚓ ⟨atp:42, digest:5ab543d0523ea023⟩
+======================================================================
+```
+
+---
+
+## 6. Specifications & Theory
+
+* [CONTINUUM.md](file:///Users/s0fractal/Projects/black-heart/CONTINUUM.md) — Suspended Thunks, Neutral Oracles & Merkle-Stream Continuity.
+* [MONAD.md](file:///Users/s0fractal/Projects/black-heart/MONAD.md) — The Literate Polyglot Monad, Dual Trees & Proof-Bearing Legal Contracts.
+
+---
+
+## 7. License
+
+* **Code (`glyph.py`, `polyglot.py`, `monad.py`, tests):** AGPL-3.0-only
 * **Texts & Polyglot artifacts:** CC BY-SA 4.0
