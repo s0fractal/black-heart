@@ -840,6 +840,10 @@ class EUFUnionRecord:
     old_parent: int
     old_rank: int
     justification_literal: Optional[int]
+    edge_x: int = 0
+    edge_y: int = 0
+    had_congruence: bool = False
+    old_parents_y: List[Tuple[EUFNode, int]] = field(default_factory=list)
 
 
 class EUFTheorySolver:
@@ -956,7 +960,11 @@ class EUFTheorySolver:
             survivor_id=root_x,
             old_parent=self.parents[root_y],
             old_rank=self.ranks[root_x],
-            justification_literal=lit
+            justification_literal=lit,
+            edge_x=x,
+            edge_y=y,
+            had_congruence=False,
+            old_parents_y=list(self.parents_of_class[root_y])
         )
         self.undo_stack.append(rec)
 
@@ -973,6 +981,7 @@ class EUFTheorySolver:
             if node_x and node_y and len(node_x.args) == len(node_y.args):
                 self.congruence_reasons[(x, y)] = list(zip(node_x.args, node_y.args))
                 self.congruence_reasons[(y, x)] = list(zip(node_y.args, node_x.args))
+                rec.had_congruence = True
 
         old_parents_y = list(self.parents_of_class[root_y])
         self.parents_of_class[root_x].update(old_parents_y)
@@ -1039,6 +1048,16 @@ class EUFTheorySolver:
             if rec.level > level:
                 self.parents[rec.absorbed_id] = rec.old_parent
                 self.ranks[rec.survivor_id] = rec.old_rank
+                x, y, lit = rec.edge_x, rec.edge_y, rec.justification_literal
+                if (y, lit) in self.justification_adj.get(x, []):
+                    self.justification_adj[x].remove((y, lit))
+                if (x, lit) in self.justification_adj.get(y, []):
+                    self.justification_adj[y].remove((x, lit))
+                if rec.had_congruence:
+                    self.congruence_reasons.pop((x, y), None)
+                    self.congruence_reasons.pop((y, x), None)
+                for py in rec.old_parents_y:
+                    self.parents_of_class[rec.survivor_id].discard(py)
             else:
                 kept.append(rec)
         self.undo_stack = list(reversed(kept))

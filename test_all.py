@@ -50,6 +50,7 @@ SUITES = [
     ("Sovereign SMT Kernel & First-Order DPLL(T) Verifier", "test_smt_kernel"),
     ("Counterexample-Guided Inductive Synthesis (CEGIS)", "test_cegis_kernel"),
     ("Scoped Re-Admission & Conditional Reopening", "test_scoped_admission"),
+    ("Dialectical Discovery & Automated Hypothesis Generation", "test_dialectic_kernel"),
 ]
 
 

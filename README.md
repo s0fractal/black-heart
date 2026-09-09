@@ -949,7 +949,7 @@ python3 test_autopoiesis.py    # 10 tests: Autopoietic quine evolution, append-o
 
 **Unified Test Runner:**
 ```bash
-python3 test_all.py  # 210/210 green unit tests across all 22 engines in ~30s
+python3 test_all.py  # 302/302 green unit tests across all engines in ~8.9s
 ```
 
 ---
@@ -1005,6 +1005,7 @@ To address the security boundaries of executable documents, Project Black-Heart 
 * [SMT.md](SMT.md) — Sovereign SMT Kernel & First-Order DPLL(T) Verifier, Propositional CDCL & T_EUF Congruence Closure (SMT-0.1 / Engine #29).
 * [CEGIS.md](CEGIS.md) — Counterexample-Guided Inductive Synthesis & SMT-Driven Superoptimizer (CEGIS-0.1 / Engine #30).
 * [SCOPED_ADMISSION.md](SCOPED_ADMISSION.md) — Scoped Re-Admission & Conditional Reopening of Possibilities (SCOPED_ADMISSION-0.1 / Codex & s0fractal).
+* [DIALECTIC.md](DIALECTIC.md) — Dialectical Discovery & Automated Hypothesis Generation (DIALECTIC-0.1 / Engine #31).
 
 
 * [CONTINUUM.md](CONTINUUM.md) — Suspended Thunks, Neutral Oracles & Merkle-Stream Continuity.

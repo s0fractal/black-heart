@@ -2624,6 +2624,116 @@ def cmd_cegis(args):
         print("Usage: python3 cli.py cegis {synthesize,superopt,pdf} ...")
 
 
+def cmd_dialectic(args):
+    """Command handler for Engine #31: Dialectical Discovery & Automated Hypothesis Generation."""
+    import dialectic_kernel
+    from dialectic_kernel import (
+        BoundaryExplorer, PreconditionSynthesizer, DialecticalOrchestrator,
+        DialecticalTriad, DialecticalStatus, ContextDelta, DialecticalDiscoveryReport,
+        generate_dialectic_pdf, append_dialectic_hud
+    )
+    import scoped_admission
+    from scoped_admission import (
+        ScopedAdmissionRegistry, RefusalRecord, RefusalReason, RetestOutcome, sha256_hex
+    )
+
+    if args.action == "explore":
+        reg = ScopedAdmissionRegistry()
+        cand_bytes = f"DEMO_CANDIDATE_TASK_{args.task}".encode("utf-8")
+        cand_digest = sha256_hex(cand_bytes)
+        eval_digest = sha256_hex(b"DEMO_EVALUATOR")
+        req_digest = sha256_hex(b"DEMO_REQUIREMENT")
+
+        refusal = RefusalRecord.create(
+            candidate_digest=cand_digest,
+            evaluator_digest=eval_digest,
+            requirement_digest=req_digest,
+            inputs_digest=sha256_hex(b"inputs"),
+            evidence_bytes=b"RESOURCE_LIMIT: steps_exhausted",
+            context={"budget_steps": args.budget},
+            outcome_type=RefusalReason.RESOURCE_LIMIT,
+            steps_executed=args.budget
+        )
+        reg.register_refusal(refusal)
+
+        explorer = BoundaryExplorer(reg)
+        status, delta, msg = explorer.explore_boundary(refusal.record_id)
+
+        print("\033[1;36m" + "=" * 65)
+        print("  %🖤 DIALECTICAL DISCOVERY: BOUNDARY FRONTIER EXPLORER")
+        print("=" * 65 + "\033[0m")
+        print(f"  Refusal ID:         {refusal.record_id[:24]}...")
+        print(f"  Status:             \033[1;35m{status.value}\033[0m")
+        print(f"  Cutoff Budget:      {args.budget} steps")
+        if delta:
+            print(f"  Recommended Delta:  +{delta.delta_steps} steps -> target {delta.recommended_budget_steps} steps")
+            print(f"  Growth Ratio:       {delta.growth_ratio:.2f}x")
+        print(f"  Message:            {msg}\n")
+
+    elif args.action == "precond":
+        synth = PreconditionSynthesizer()
+        cand_fn = lambda x: str(int(x) ** 2) if int(x) <= args.cutoff else "0"
+        spec_fn = lambda x: str(int(x) ** 2)
+        domain = [d.strip() for d in args.domain.split(",") if d.strip()]
+
+        guard, proof_dag = synth.synthesize_domain_guard(cand_fn, spec_fn, domain)
+        print("\033[1;36m" + "=" * 65)
+        print("  %🖤 SMT WEAKEST PRECONDITION SYNTHESIZER")
+        print("=" * 65 + "\033[0m")
+        if guard:
+            print("  Status:             \033[1;32mPRECONDITION_DISCOVERED\033[0m")
+            print(f"  Guard ID:           {guard.guard_id[:24]}...")
+            print(f"  Admissible Domain:  {guard.admissible_domain}")
+            print(f"  Excluded Domain:    {guard.excluded_domain}")
+            print(f"  SMT Refutation DAG: {len(proof_dag) if proof_dag else 0} nodes (VERIFIED)")
+        else:
+            print("  Status:             \033[1;31mNO_VIABLE_SUBDOMAIN\033[0m")
+        print()
+
+    elif args.action == "pdf":
+        out_pdf = getattr(args, "output", "dialectic_discovery.pdf") or "dialectic_discovery.pdf"
+        reg = ScopedAdmissionRegistry()
+        cand_bytes = b"CANDIDATE_EXPANDED_ENVELOPE"
+        cand_digest = sha256_hex(cand_bytes)
+        eval_digest = sha256_hex(b"DEMO_EVALUATOR")
+        req_digest = sha256_hex(b"DEMO_REQUIREMENT")
+
+        refusal = RefusalRecord.create(
+            candidate_digest=cand_digest,
+            evaluator_digest=eval_digest,
+            requirement_digest=req_digest,
+            inputs_digest=sha256_hex(b"inputs"),
+            evidence_bytes=b"RESOURCE_LIMIT: cutoff",
+            context={"budget_steps": 80},
+            outcome_type=RefusalReason.RESOURCE_LIMIT,
+            steps_executed=80
+        )
+        reg.register_refusal(refusal)
+
+        def executor(cbytes, ctx):
+            b = ctx.get("budget_steps", 0)
+            return (RetestOutcome.SUCCESS, 120, b"SUCCESS") if b >= 120 else (RetestOutcome.FAILURE, b, b"FAIL")
+
+        orchestrator = DialecticalOrchestrator(reg)
+        report = orchestrator.discover_and_promote(
+            refusal_id=refusal.record_id,
+            candidate_bytes=cand_bytes,
+            executor_fn=executor,
+            researcher_hypothesis="Envelope expansion from 80 to 140 steps yields settlement."
+        )
+
+        generate_dialectic_pdf(report, out_pdf, title="Dialectical Discovery & Scoped Admission Certificate")
+        print("\033[1;36m=================================================================\033[0m")
+        print("  Engine #31:      Dialectical Discovery & Hypothesis Generation")
+        print(f"  Status:          {report.triad.status.value}")
+        print(f"  ScopedAdmission: {report.scoped_admission.admission_id[:24] if report.scoped_admission else 'NONE'}...")
+        print(f"  Output PDF:      \033[1;32m{out_pdf}\033[0m")
+        print(f"  Autonomous Execution: python3 {out_pdf}\n")
+
+    else:
+        print("Usage: python3 cli.py dialectic {explore,precond,pdf} ...")
+
+
 def cmd_shell(args):
 
     """Interactive Hypervisor REPL for Project Black-Heart."""
@@ -3364,6 +3474,24 @@ def main():
     p_cegis_pdf.add_argument("--task", default="identity", help="Task name for title")
     p_cegis_pdf.add_argument("-o", "--output", default="cegis_synthesis.pdf", help="Output PDF path")
 
+    # dialectic (Engine #31: Dialectical Discovery & Automated Hypothesis Generation)
+    p_dialectic = subparsers.add_parser(
+        "dialectic",
+        help="Engine #31: Dialectical Discovery & Automated Hypothesis Generation (DIALECTIC-0.1)"
+    )
+    dialectic_subs = p_dialectic.add_subparsers(dest="action")
+
+    p_dial_exp = dialectic_subs.add_parser("explore", help="Explore failure boundary and compute minimal context delta")
+    p_dial_exp.add_argument("--task", default="step_settle", help="Candidate task identifier")
+    p_dial_exp.add_argument("--budget", type=int, default=80, help="Initial failed budget steps")
+
+    p_dial_pre = dialectic_subs.add_parser("precond", help="Synthesize SMT weakest precondition domain guard")
+    p_dial_pre.add_argument("--cutoff", type=int, default=3, help="Admissible threshold cutoff")
+    p_dial_pre.add_argument("--domain", default="1,2,3,4,5", help="Comma-separated input domain")
+
+    p_dial_pdf = dialectic_subs.add_parser("pdf", help="Compile ISO 32000 Dialectical Discovery polyglot PDF")
+    p_dial_pdf.add_argument("-o", "--output", default="dialectic_discovery.pdf", help="Output PDF path")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -3432,6 +3560,8 @@ def main():
         cmd_cross_proof(args)
     elif args.command == "cegis":
         cmd_cegis(args)
+    elif args.command == "dialectic":
+        cmd_dialectic(args)
     else:
         parser.print_help()
 
