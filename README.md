@@ -18,6 +18,8 @@
 13. **IPFS Ontogenetic Quine Diary (`ipfs_diary.py`):** Self-preserving ontogenetic diary, multi-agent dialectical citations, Merkle-DAG audit, and fail-closed CIDv1 retrieval.
 14. **Mycelial Social Democracy (`agora.py`):** Quadratic ATP voting, epistemic theorem auditing, stake slashing, and constitutional parliament.
 15. **Autopoietic Quine Organisms (`autopoiesis.py`):** Grok Experiment 1 in-place self-evolution, AST zipper rewriting, frozen oracle invariance, and cumulative empirical scientific ledgers.
+16. **Morphogenetic Autopoiesis Master Synthesis (`morpho_autopoiesis.py`):** Grok Experiments 1 + 3 + 5 synthesis fusing Maturana-Varela autopoiesis, Gray-Scott kinetic drift, Lafont interaction proof-nets with Weisfeiler-Lehman graph invariants, and Mycelial Agora consensus tabling.
+17. **Epistemic Kernel & Unified Edge-Claims (`warrant_kernel.py`):** Normative implementation of WARRANT-0.2 importing tri-state verifier semantics (`pass`, `fail`, `unverified`), 5 evidence grades (∅, G, A, E, C), domain-separated RFC 8032 Ed25519 signatures (`warrant-sig-v1:`), structured counterexamples, automated $E \to A$ promotion, and external trust roots.
 
 ---
 
@@ -989,7 +991,7 @@ To address the security boundaries of executable documents, Project Black-Heart 
 * [GOEDEL.md](GOEDEL.md) — Gödelian Incompleteness, The Black Cone Event Horizon & Three-Valued Epistemic Logic.
 * [COLONY.md](COLONY.md) — The Living Colony Ecosystem, Neuro-Symbolic Petri Dish & Macro-Evolutionary Dynamics.
 * [MYCELIUM.md](MYCELIUM.md) — Collective Metamorphosis, Warrant Mesh & The Preservation of Phenotypic Diversity.
-* [WARRANT.md](WARRANT.md) — Unified Evidence Types, Witness Quantifier Grades & Epistemic Import from Warrant.
+* [WARRANT.md](WARRANT.md) — Epistemic Evidence Grades, Tri-State Verifier & Unified Edge-Claims (WARRANT-0.2 / Engine #24).
 * [CONTINUUM.md](CONTINUUM.md) — Suspended Thunks, Neutral Oracles & Merkle-Stream Continuity.
 * [MONAD.md](MONAD.md) — The Literate Polyglot Monad, Dual Trees & Proof-Bearing Legal Contracts.
 * [INTERACTION.md](INTERACTION.md) — Lafont's Symmetric Interaction Combinators on UTF-8 Glyphs.

@@ -16,6 +16,7 @@ import sys
 import argparse
 import json
 import time
+import hashlib
 
 from glyph import parse, evaluate, GLYPH_K, GLYPH_I, GLYPH_S, GLYPH_Y, GLYPH_ANCHOR
 from crypto import generate_keypair, public_key_from_secret
@@ -1739,6 +1740,96 @@ def cmd_morpho_autopoiesis(args):
         print("Usage: python3 cli.py morpho-autopoiesis {init,evolve,audit,table,info} ...")
 
 
+def cmd_warrant_kernel(args):
+    """Engine #24: Epistemic Kernel & Unified Edge-Claims (WARRANT-0.2)."""
+    import crypto
+    import glyph
+    import warrant_kernel
+    from warrant_kernel import (
+        EvidenceGrade, VerificationStatus, Polarity,
+        EmptyWitness, GroundedWitness, AxiomaticWitness, EmpiricalWitness, CounterexampleWitness,
+        EdgeClaim, TrustConfig, WarrantVerifier,
+        promote_empirical_to_axiomatic, generate_warrant_ledger_pdf
+    )
+
+    if args.action == "compile":
+        out_path = args.output or "warrant_ledger.pdf"
+        sk, pk = crypto.generate_keypair()
+        
+        t_str = "🤍 (🖤 🤍)"
+        h = glyph.evaluate(glyph.parse(t_str)).hash
+        c_ground = EdgeClaim.create_and_sign("p_root", "eval", "term", h, Polarity.AFFIRM,
+                                            GroundedWitness(t_str, h), sk, pk)
+        c_ax = EdgeClaim.create_and_sign("p_root", "I x -> x", "expr", "s_ax", Polarity.AFFIRM,
+                                        AxiomaticWitness(["Identity reduction"], "I x -> x", "Flow"), sk, pk)
+        fix = ["🤍", "🖤", "🌿"]
+        emp_w = EmpiricalWitness(fix, "", 3, 1)
+        emp_w.fixtures_fingerprint = emp_w.compute_fixtures_fingerprint()
+        c_emp = EdgeClaim.create_and_sign("p_root", "🤍", "🤍 🤍", "s_emp", Polarity.AFFIRM,
+                                         emp_w, sk, pk)
+        c_div = EdgeClaim.create_and_sign("p_root", "🖤 🤍", "🖤", "s_div", Polarity.REFUTE,
+                                         CounterexampleWitness("🤍 (🖤 🤍)", "🤍", "🖤 🤍", 2), sk, pk)
+        claims = [c_ground, c_ax, c_emp, c_div]
+        tc = TrustConfig()
+        generate_warrant_ledger_pdf(claims, out_path, tc)
+        print("\033[1;36m=================================================================\033[0m")
+        print("  %🖤 WARRANT EPISTEMIC LEDGER COMPILED: ISO 32000 POLYGLOT")
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  Target File:     {out_path}")
+        print(f"  Admitted Claims: {len(claims)} (Grades: G, A, E, C)")
+        print(f"  Author PK:       {pk}")
+        print("  Audit Command:   python3 <file>.pdf --audit\n")
+
+    elif args.action == "audit":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        with open(args.file, "rb") as f:
+            data = f.read()
+        marker = b" WARRANT_KERNEL_MANIFEST: "
+        idx = data.find(marker)
+        if idx == -1:
+            print(f"[!] No WARRANT_KERNEL_MANIFEST found in '{args.file}'.")
+            sys.exit(1)
+        line_end = data.find(b"\n", idx)
+        raw_json = data[idx + len(marker):line_end].decode("utf-8")
+        manifest = json.loads(raw_json)
+        tc = TrustConfig.from_dict(manifest.get("trust_config", {}))
+        verifier = WarrantVerifier(tc)
+        claims = [EdgeClaim.from_dict(c) for c in manifest.get("claims", [])]
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  %🖤 AUDITING WARRANT LEDGER: {args.file}")
+        print("\033[1;36m=================================================================\033[0m\n")
+        all_ok = True
+        for c in claims:
+            v = verifier.audit_claim(c)
+            col = "\033[1;32m" if v.status == VerificationStatus.PASS else ("\033[1;31m" if v.status == VerificationStatus.FAIL else "\033[1;33m")
+            print(f"  {col}{v.human_badge()}\033[0m")
+            if v.status == VerificationStatus.FAIL:
+                all_ok = False
+        print("\033[1;36m=================================================================\033[0m")
+        sys.exit(0 if all_ok else 1)
+
+    elif args.action == "promote":
+        rule = args.rule
+        sk, pk = crypto.generate_keypair()
+        emp_w = EmpiricalWitness(["🤍", "🖤"], "fp", 2, 1)
+        c = EdgeClaim.create_and_sign("p", rule, "ctx", "s", Polarity.AFFIRM, emp_w, sk, pk)
+        elevated = promote_empirical_to_axiomatic(c, sk, pk)
+        if elevated:
+            print("\033[1;32m[+] Empirical Hypothesis elevated to Axiomatic Identity!\033[0m")
+            print(f"  Rule:     {rule}")
+            print(f"  Grade:    {elevated.grade.value} ([A-AXIOMATIC])")
+            print(f"  Axiom:    {elevated.witness.soundness_axiom}")
+            print(f"  Claim ID: {elevated.claim_id}")
+        else:
+            print(f"\033[1;31m[-] Rule '{rule}' cannot be elevated to Axiomatic Identity: not confluent or sound.\033[0m")
+            sys.exit(1)
+    else:
+        print("Usage: python3 cli.py warrant-kernel {compile,audit,promote} ...")
+
+
+
 def cmd_shell(args):
     """Interactive Hypervisor REPL for Project Black-Heart."""
     from symbiosis import (
@@ -2289,6 +2380,22 @@ def main():
     p_ma_info = morpho_subs.add_parser("info", help="Display organism HUD and morphogenetic state")
     p_ma_info.add_argument("file", help="Target morpho-autopoietic organism PDF")
 
+    # warrant-kernel (Engine #24: WARRANT-0.2 Epistemic Kernel & Unified Edge-Claims)
+    p_wk = subparsers.add_parser(
+        "warrant-kernel",
+        help="Engine #24: Epistemic Kernel & Unified Edge-Claims (WARRANT-0.2)"
+    )
+    wk_subs = p_wk.add_subparsers(dest="action")
+
+    p_wk_compile = wk_subs.add_parser("compile", help="Compile sample Epistemic Warrant Ledger PDF polyglot")
+    p_wk_compile.add_argument("-o", "--output", default="warrant_ledger.pdf", help="Output PDF path")
+
+    p_wk_audit = wk_subs.add_parser("audit", help="Audit warrant ledger PDF or JSON against TrustConfig")
+    p_wk_audit.add_argument("file", help="Target warrant ledger file")
+
+    p_wk_promote = wk_subs.add_parser("promote", help="Promote empirical hypothesis to axiomatic identity")
+    p_wk_promote.add_argument("rule", help="Target algebraic rewrite rule (e.g. 'I x -> x')")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -2341,6 +2448,8 @@ def main():
         cmd_autopoiesis(args)
     elif args.command == "morpho-autopoiesis":
         cmd_morpho_autopoiesis(args)
+    elif args.command == "warrant-kernel":
+        cmd_warrant_kernel(args)
     elif args.command == "cross-proof":
         cmd_cross_proof(args)
     else:

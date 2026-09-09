@@ -42,6 +42,7 @@ SUITES = [
     ("Mycelial Consensus Agora", "test_agora"),
     ("Autopoietic Quine Organisms", "test_autopoiesis"),
     ("Morphogenetic Autopoiesis Master Synthesis", "test_morpho_autopoiesis"),
+    ("Epistemic Kernel & Unified Edge-Claims", "test_warrant_kernel"),
 ]
 
 def run_all_tests() -> bool:
