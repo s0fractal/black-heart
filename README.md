@@ -476,9 +476,48 @@ python3 successor.pdf --experiments
 
 ---
 
-## 21. Comprehensive Test Suite
+## 21. Epistemic Mycelium & Warrant Mesh (`mycelium.py`)
 
-Run all **118 unit tests** across all **14 engines** with a single command:
+Connecting autonomous organism program self-contemplation ([`metamorphosis.py`](file:///Users/s0fractal/Projects/black-heart/metamorphosis.py)) with the P2P swarm synchronization layer ([`mesh.py`](file:///Users/s0fractal/Projects/black-heart/mesh.py)), the **Epistemic Mycelium** implements a collective intelligence protocol without collapsing individual phenotypic identity or violating Manifesto Thesis 2 (*"experience is not copied"*):
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│                     LAYER 3: DARK MATTER / DIVERGENCES                 │
+│   Counterexamples of semantic divergence • Infinite reduction loops    │
+│   "Collective immune system: where mutations break closed semantics"   │
+├────────────────────────────────────────────────────────────────────────┤
+│                     LAYER 2: RE-EXECUTABLE WARRANTS                    │
+│   Algebraic rewrite rules • Proven ΔATP savings • Fixture fingerprints │
+│   "Warrant-principle: reason you can re-run and audit in O(1)"         │
+├────────────────────────────────────────────────────────────────────────┤
+│                     LAYER 1: CHURCH-ROSSER NORMAL FORMS                │
+│   Content-addressed NF: SHA-256(Initial) -> SHA-256(NormalForm)        │
+│   "Confluence theorem: settled normal forms are facts of the universe" │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+* **Local Immune Evaluator (`LocalImmuneEvaluator`):** Organisms audition external gossip warrants against their own chromosomes and private test fixtures. If beneficial and semantics are preserved, the mutation is adopted (Gen $N+1$) and endorsed with a cryptographic signature. If divergence is detected, an immutable `DivergenceRecord` is minted and broadcast to vaccinate the rest of the swarm.
+* **Preservation of Phenotypic Diversity:** Collective knowledge does not cause monoculture. Organisms preserve diversity through task heterogeneity, Pareto tradeoffs (AST size vs reduction depth), fixture locality, and unalterable Ed25519 cryptographic identities driving Turing reaction-diffusion coat morphogenesis.
+
+```bash
+# Query epistemic registry summary:
+python3 cli.py mycelium summary
+
+# Launch background epistemic gossip daemon:
+python3 cli.py mycelium serve -p 8766
+
+# Synchronize warrants, normal forms, and divergences from peer:
+python3 cli.py mycelium sync --peer http://127.0.0.1:8766
+
+# Audition an external warrant against a local organism:
+python3 cli.py mycelium audition organism.pdf warrant.json
+```
+
+---
+
+## 22. Comprehensive Test Suite
+
+Run all **125 unit tests** across all **15 engines** with a single command:
 ```bash
 # Unified test runner:
 python3 test_all.py
@@ -501,12 +540,14 @@ python3 test_symbiosis.py      # 5 tests: Dialectical symbiosis & Artin braid gr
 python3 test_quantum.py        # 5 tests: Topological quantum computing, Fibonacci anyons, unitary audit
 python3 test_morphogenesis.py  # 7 tests: Gray-Scott PDEs, Turing bifurcation, marching squares
 python3 test_metamorphosis.py  # 7 tests: Program self-contemplation, frozen evaluator, transition replay
+python3 test_mycelium.py       # 7 tests: Epistemic mycelium, warrants, divergence records, immune evaluation
 ```
 
 ---
 
-## 22. Specifications & Theory
+## 23. Specifications & Theory
 
+* [MYCELIUM.md](file:///Users/s0fractal/Projects/black-heart/MYCELIUM.md) — Collective Metamorphosis, Warrant Mesh & The Preservation of Phenotypic Diversity.
 * [CONTINUUM.md](file:///Users/s0fractal/Projects/black-heart/CONTINUUM.md) — Suspended Thunks, Neutral Oracles & Merkle-Stream Continuity.
 * [MONAD.md](file:///Users/s0fractal/Projects/black-heart/MONAD.md) — The Literate Polyglot Monad, Dual Trees & Proof-Bearing Legal Contracts.
 * [INTERACTION.md](file:///Users/s0fractal/Projects/black-heart/INTERACTION.md) — Lafont's Symmetric Interaction Combinators on UTF-8 Glyphs.
@@ -515,8 +556,8 @@ python3 test_metamorphosis.py  # 7 tests: Program self-contemplation, frozen eva
 
 ---
 
-## 23. License
+## 24. License
 
-* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, `interaction.py`, `organism.py`, `cross_proof.py`, `vault.py`, `continuum.py`, `zk_glyph.py`, `mesh.py`, `symbiosis.py`, `quantum.py`, `morphogenesis.py`, `metamorphosis.py`, `cli.py`, tests):** AGPL-3.0-only
+* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, `interaction.py`, `organism.py`, `cross_proof.py`, `vault.py`, `continuum.py`, `zk_glyph.py`, `mesh.py`, `symbiosis.py`, `quantum.py`, `morphogenesis.py`, `metamorphosis.py`, `mycelium.py`, `cli.py`, tests):** AGPL-3.0-only
 * **Texts & Polyglot artifacts:** CC BY-SA 4.0
 

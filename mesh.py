@@ -101,6 +101,7 @@ def sync_local_ledgers(source_pdf: str, destination_pdf: str) -> int:
 
 class LedgerNodeHandler(BaseHTTPRequestHandler):
     pdf_path: str = ""
+    epistemic_registry: Optional[Any] = None
 
     def log_message(self, format, *args):
         # Suppress noisy standard HTTP access logs
@@ -131,6 +132,37 @@ class LedgerNodeHandler(BaseHTTPRequestHandler):
                 self._send_json(200, {"blocks": missing, "count": len(missing)})
             except Exception as e:
                 self._send_json(500, {"error": str(e)})
+
+        # ====================================================================
+        # EPISTEMIC MYCELIUM ENDPOINTS
+        # ====================================================================
+        elif self.path == "/epistemic/summary":
+            if self.epistemic_registry is None:
+                self._send_json(404, {"error": "Epistemic registry not enabled on this node"})
+                return
+            self._send_json(200, self.epistemic_registry.summary())
+
+        elif self.path.startswith("/epistemic/warrants"):
+            if self.epistemic_registry is None:
+                self._send_json(404, {"error": "Epistemic registry not enabled on this node"})
+                return
+            w_list = [w.to_dict() for w in self.epistemic_registry.warrants.values()]
+            self._send_json(200, {"warrants": w_list, "count": len(w_list)})
+
+        elif self.path.startswith("/epistemic/divergences"):
+            if self.epistemic_registry is None:
+                self._send_json(404, {"error": "Epistemic registry not enabled on this node"})
+                return
+            d_list = [d.to_dict() for d in self.epistemic_registry.divergences.values()]
+            self._send_json(200, {"divergences": d_list, "count": len(d_list)})
+
+        elif self.path.startswith("/epistemic/normal_forms"):
+            if self.epistemic_registry is None:
+                self._send_json(404, {"error": "Epistemic registry not enabled on this node"})
+                return
+            nf_list = [n.to_dict() for n in self.epistemic_registry.normal_forms.values()]
+            self._send_json(200, {"normal_forms": nf_list, "count": len(nf_list)})
+
         else:
             self._send_json(404, {"error": "Endpoint not found"})
 
@@ -155,6 +187,64 @@ class LedgerNodeHandler(BaseHTTPRequestHandler):
                 self._send_json(200, {"status": "block_appended", "new_height": len(ledger.blocks), "tip": new_block.block_hash})
             except Exception as e:
                 self._send_json(500, {"error": str(e)})
+
+        # ====================================================================
+        # EPISTEMIC MYCELIUM SUBMISSIONS
+        # ====================================================================
+        elif self.path == "/epistemic/submit_warrant":
+            if self.epistemic_registry is None:
+                self._send_json(404, {"error": "Epistemic registry not enabled on this node"})
+                return
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(length)
+                data = json.loads(body.decode("utf-8"))
+                from mycelium import Warrant
+                warrant = Warrant.from_dict(data)
+                if not warrant.verify():
+                    self._send_json(400, {"error": "Invalid warrant signature or ID derivation"})
+                    return
+                self.epistemic_registry.add_warrant(warrant, verify_first=False)
+                self._send_json(200, {"status": "warrant_admitted", "warrant_id": warrant.warrant_id})
+            except Exception as e:
+                self._send_json(500, {"error": str(e)})
+
+        elif self.path == "/epistemic/submit_divergence":
+            if self.epistemic_registry is None:
+                self._send_json(404, {"error": "Epistemic registry not enabled on this node"})
+                return
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(length)
+                data = json.loads(body.decode("utf-8"))
+                from mycelium import DivergenceRecord
+                div = DivergenceRecord.from_dict(data)
+                if not div.verify():
+                    self._send_json(400, {"error": "Invalid divergence record signature or derivation"})
+                    return
+                self.epistemic_registry.add_divergence(div, verify_first=False)
+                self._send_json(200, {"status": "divergence_admitted", "record_id": div.record_id})
+            except Exception as e:
+                self._send_json(500, {"error": str(e)})
+
+        elif self.path == "/epistemic/submit_normal_form":
+            if self.epistemic_registry is None:
+                self._send_json(404, {"error": "Epistemic registry not enabled on this node"})
+                return
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(length)
+                data = json.loads(body.decode("utf-8"))
+                from mycelium import NormalFormEntry
+                nf = NormalFormEntry.from_dict(data)
+                if not nf.verify():
+                    self._send_json(400, {"error": "Invalid normal form entry signature or hash"})
+                    return
+                self.epistemic_registry.add_normal_form(nf, verify_first=False)
+                self._send_json(200, {"status": "normal_form_admitted", "term_hash": nf.term_hash})
+            except Exception as e:
+                self._send_json(500, {"error": str(e)})
+
         else:
             self._send_json(404, {"error": "Endpoint not found"})
 
@@ -171,6 +261,18 @@ def start_ledger_daemon(pdf_path: str, port: int = 8765) -> HTTPServer:
     class BoundHandler(LedgerNodeHandler):
         pass
     BoundHandler.pdf_path = os.path.abspath(pdf_path)
+    server = HTTPServer(("127.0.0.1", port), BoundHandler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server
+
+def start_epistemic_daemon(registry: Any, pdf_path: str = "", port: int = 8766) -> HTTPServer:
+    """Launches a background HTTP node serving an Epistemic Registry and optionally a living ledger."""
+    class BoundHandler(LedgerNodeHandler):
+        pass
+    if pdf_path:
+        BoundHandler.pdf_path = os.path.abspath(pdf_path)
+    BoundHandler.epistemic_registry = registry
     server = HTTPServer(("127.0.0.1", port), BoundHandler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -215,6 +317,62 @@ def sync_from_remote_peer(local_pdf: str, peer_url: str) -> int:
         dst_ledger.compile(local_pdf)
 
     return new_count
+
+def sync_epistemic_from_remote_peer(local_registry: Any, peer_url: str) -> Dict[str, int]:
+    """
+    Connects to a remote peer running a Black-Heart epistemic node,
+    fetches new warrants, normal forms, and divergence records,
+    validates them fail-closed, and updates the local registry.
+    """
+    peer_url = peer_url.rstrip("/")
+    counts = {"warrants": 0, "divergences": 0, "normal_forms": 0}
+
+    # 1. Sync Warrants
+    try:
+        req = urllib.request.Request(f"{peer_url}/epistemic/warrants")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            from mycelium import Warrant
+            for wd in data.get("warrants", []):
+                w = Warrant.from_dict(wd)
+                if w.warrant_id not in local_registry.warrants:
+                    if w.verify():
+                        local_registry.add_warrant(w, verify_first=False)
+                        counts["warrants"] += 1
+    except Exception:
+        pass
+
+    # 2. Sync Divergences
+    try:
+        req = urllib.request.Request(f"{peer_url}/epistemic/divergences")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            from mycelium import DivergenceRecord
+            for dd in data.get("divergences", []):
+                d = DivergenceRecord.from_dict(dd)
+                if d.record_id not in local_registry.divergences:
+                    if d.verify():
+                        local_registry.add_divergence(d, verify_first=False)
+                        counts["divergences"] += 1
+    except Exception:
+        pass
+
+    # 3. Sync Normal Forms
+    try:
+        req = urllib.request.Request(f"{peer_url}/epistemic/normal_forms")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            from mycelium import NormalFormEntry
+            for nd in data.get("normal_forms", []):
+                nf = NormalFormEntry.from_dict(nd)
+                if nf.term_hash not in local_registry.normal_forms:
+                    if nf.verify():
+                        local_registry.add_normal_form(nf, verify_first=False)
+                        counts["normal_forms"] += 1
+    except Exception:
+        pass
+
+    return counts
 
 if __name__ == "__main__":
     print("Testing P2P Living Polyglot Mesh Synchronization...")

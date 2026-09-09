@@ -455,6 +455,90 @@ def cmd_metamorph(args):
     print(f"  Scientific Log: {len(log.accepted_records())} accepted, {len(log.rejected_records())} rejected mutations recorded.\n")
 
 
+def cmd_mycelium(args):
+    """Manages Mycelium Warrant Registry and P2P Epistemic Swarm."""
+    from mycelium import (
+        EpistemicRegistry,
+        LocalImmuneEvaluator,
+        Warrant,
+        NormalFormEntry,
+        DivergenceRecord
+    )
+    from mesh import start_epistemic_daemon, sync_epistemic_from_remote_peer
+    from organism import extract_organism_from_pdf
+
+    reg_path = getattr(args, "registry", "epistemic_registry.json") or "epistemic_registry.json"
+    if os.path.exists(reg_path):
+        registry = EpistemicRegistry.load_from_file(reg_path)
+    else:
+        registry = EpistemicRegistry()
+
+    if args.action == "summary":
+        s = registry.summary()
+        print("\033[1;36m===================================================\033[0m")
+        print("  %🖤 BLACK-HEART EPISTEMIC MYCELIUM REGISTRY")
+        print("\033[1;36m===================================================\033[0m")
+        print(f"  Normal Forms Cached:  {s['normal_forms_count']}")
+        print(f"  Warrants Registered:  {s['warrants_count']}")
+        print(f"  Divergences (Immune): {s['divergences_count']}")
+        print(f"  Warrant Merkle Root:  ⚓ {s['warrant_merkle_root'][:32]}...\n")
+
+    elif args.action == "serve":
+        port = args.port
+        print(f"[*] Starting Black-Heart Mycelium Epistemic Daemon on port {port}...")
+        srv = start_epistemic_daemon(registry, port=port)
+        print(f"[✓] Mycelium Swarm Node online at http://127.0.0.1:{port}")
+        print("Press Ctrl+C to halt daemon.")
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("\n[*] Shutting down daemon...")
+            srv.shutdown()
+            registry.save_to_file(reg_path)
+            print(f"[✓] Registry saved to {reg_path}")
+
+    elif args.action == "sync":
+        peer_url = args.peer
+        print(f"[*] Syncing epistemic gossip with peer: {peer_url}...")
+        counts = sync_epistemic_from_remote_peer(registry, peer_url)
+        registry.save_to_file(reg_path)
+        print(f"[✓] Sync complete: +{counts['warrants']} warrants, +{counts['divergences']} divergences, +{counts['normal_forms']} normal forms.")
+        print(f"    Registry updated at {reg_path}")
+
+    elif args.action == "audition":
+        org_pdf = args.organism
+        warrant_file = args.warrant
+        if not os.path.exists(org_pdf) or not os.path.exists(warrant_file):
+            print("[!] Organism PDF or Warrant JSON not found.")
+            return
+
+        org = extract_organism_from_pdf(org_pdf)
+        with open(warrant_file, "r") as f:
+            warrant = Warrant.from_dict(json.load(f))
+
+        sk_hex = getattr(args, "secret_key", None)
+        if sk_hex:
+            sk = bytes.fromhex(sk_hex)
+        else:
+            from crypto import generate_keypair
+            sk, _ = generate_keypair()
+
+        evaluator = LocalImmuneEvaluator()
+        verdict = evaluator.audition_warrant(org, warrant, sk)
+        if verdict.adopted:
+            print(f"\033[1;32m[✓] WARRANT ADOPTED by Organism Gen #{org.generation}!\033[0m")
+            print(f"    Target Gene: {verdict.target_gene_id}")
+            print(f"    Local ΔATP:  {verdict.local_delta_atp} fuel units")
+            print(f"    Successor:   Gen #{verdict.successor_organism.generation} (Hash: {verdict.successor_organism.organism_hash[:16]}...)")
+        else:
+            print(f"\033[1;31m[!] WARRANT REJECTED by Local Immune Evaluator: {verdict.reason}\033[0m")
+            if verdict.divergence_record:
+                print(f"    New Divergence Counterexample minted: {verdict.divergence_record.record_id}")
+                registry.add_divergence(verdict.divergence_record, verify_first=False)
+                registry.save_to_file(reg_path)
+
+
 def cmd_shell(args):
     """Interactive Hypervisor REPL for Project Black-Heart."""
     from symbiosis import (
@@ -739,6 +823,24 @@ def main():
     p_meta.add_argument("organism", nargs="?", default=None, help="Path to input polyglot organism PDF (optional)")
     p_meta.add_argument("-o", "--output", default="metamorphic_organism.pdf", help="Output polyglot PDF path")
 
+    # mycelium
+    p_myc = subparsers.add_parser("mycelium", help="Collective Metamorphosis & Epistemic Warrant Mesh")
+    p_myc.add_argument("--registry", default="epistemic_registry.json", help="Path to epistemic registry JSON file")
+    myc_subs = p_myc.add_subparsers(dest="action")
+
+    p_myc_sum = myc_subs.add_parser("summary", help="Display summary of epistemic registry")
+
+    p_myc_srv = myc_subs.add_parser("serve", help="Start epistemic daemon on local port")
+    p_myc_srv.add_argument("-p", "--port", type=int, default=8766, help="Port to bind daemon")
+
+    p_myc_sync = myc_subs.add_parser("sync", help="Synchronize warrants & divergences from peer")
+    p_myc_sync.add_argument("--peer", required=True, help="Remote peer URL (http://...)")
+
+    p_myc_aud = myc_subs.add_parser("audition", help="Audition a warrant against a local organism")
+    p_myc_aud.add_argument("organism", help="Target organism PDF path")
+    p_myc_aud.add_argument("warrant", help="Warrant JSON path")
+    p_myc_aud.add_argument("--secret-key", default=None, help="Organism secret key hex (optional)")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -771,6 +873,8 @@ def main():
         cmd_morph(args)
     elif args.command == "metamorph":
         cmd_metamorph(args)
+    elif args.command == "mycelium":
+        cmd_mycelium(args)
     else:
         parser.print_help()
 

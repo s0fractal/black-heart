@@ -33,6 +33,7 @@ SUITES = [
     ("Topological Quantum Topos & Anyons", "test_quantum"),
     ("Turing Morphogenesis & Phenotypes", "test_morphogenesis"),
     ("Autonomous Form Metamorphosis", "test_metamorphosis"),
+    ("Epistemic Mycelium & Warrant Mesh", "test_mycelium"),
 ]
 
 def run_all_tests() -> bool:
