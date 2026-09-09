@@ -2190,6 +2190,199 @@ def cmd_epistemic_immune(args):
         print("Usage: python3 cli.py epistemic-immune {init,status,inoculate,autophagy,elevate} ...")
 
 
+def cmd_swarm(args):
+    """Engine #27: Epistemic Swarm Membrane & Symbiotic Quine Evolution (SWARM-0.1)."""
+    import epistemic_swarm
+    from epistemic_swarm import (
+        SwarmMembrane, SwarmMorphogenGrid, SwarmOrganismState,
+        BilateralQuineSymbiosis, SwarmInoculationCascade, SwarmAgoraCommons,
+        generate_swarm_membrane_pdf, append_swarm_membrane_hud
+    )
+    import epistemic_immune
+    from epistemic_immune import EpistemicOrganism, CounterexampleMetabolism
+    from organism import Chromosome
+    import crypto
+
+    def load_swarm(path: str) -> SwarmMembrane:
+        if not os.path.exists(path):
+            print(f"[!] File not found: {path}")
+            sys.exit(1)
+        with open(path, "rb") as f:
+            data = f.read()
+        prefix = bytes([0x23, 0x20, 0x25, 0xf0, 0x9f, 0x96, 0xa4]) + b" SWARM_MEMBRANE_MANIFEST: "
+        idx = data.rfind(prefix)
+        if idx != -1:
+            end = data.find(b"\n", idx)
+            d = json.loads(data[idx + len(prefix):end].decode("utf-8"))
+            return SwarmMembrane.from_dict(d)
+        try:
+            d = json.loads(data.decode("utf-8"))
+            return SwarmMembrane.from_dict(d)
+        except Exception:
+            print(f"[!] Could not parse SWARM_MEMBRANE_MANIFEST from {path}")
+            sys.exit(1)
+
+    def save_swarm(swarm: SwarmMembrane, path: str):
+        if path.endswith(".pdf"):
+            if os.path.exists(path):
+                with open(path, "rb") as f:
+                    src_bytes = f.read()
+                append_swarm_membrane_hud(src_bytes, path, swarm)
+            else:
+                generate_swarm_membrane_pdf(swarm, path)
+        else:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(swarm.to_dict(), f, indent=2)
+
+    if args.action == "init":
+        pop = getattr(args, "population", 4) or 4
+        out_path = args.output or "swarm_state.json"
+        swarm = SwarmMembrane(grid_width=16, grid_height=16)
+
+        for i in range(pop):
+            sk, pk = crypto.generate_keypair()
+            oid = f"quine-node-{i:02d}-{pk[:6]}"
+            c1 = Chromosome(f"GENE-CORE-{i}", "Identity Core", "I x", "x", vital=True)
+            c2 = Chromosome(f"GENE-K-{i}", "Constant Core", "K x y", "x", vital=True)
+            org = EpistemicOrganism(
+                organism_id=oid,
+                generation=0,
+                chromosomes=[c1, c2],
+                public_key_hex=pk,
+                atp_reserve=400 + i * 50,
+                active_axioms=["I x"]
+            )
+            st = SwarmOrganismState(
+                organism_id=oid,
+                x=(i * 3 + 2) % 16,
+                y=(i * 4 + 2) % 16,
+                heading=(1, 0),
+                is_alive=True
+            )
+            swarm.add_organism(org, st, pk, sk)
+
+        save_swarm(swarm, out_path)
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  %🖤 EPISTEMIC SWARM MEMBRANE INITIALIZED (SWARM-0.1)")
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  Population:     {pop} autonomous quine organisms")
+        print(f"  Lattice:        16x16 Gray-Scott Torus")
+        print(f"  Target File:    {out_path}\n")
+
+    elif args.action == "status":
+        swarm = load_swarm(args.state)
+        living = [oid for oid, st in swarm.organism_states.items() if st.is_alive]
+        total_atp = sum(swarm.organisms[oid].atp_reserve for oid in living)
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  %🖤 SWARM MEMBRANE TELEMETRY: {args.state} (Tick #{swarm.tick_count})")
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  Living Population:  {len(living)} / {len(swarm.organisms)} organisms")
+        print(f"  Metabolic Reserves: {total_atp} ATP (Avg: {total_atp // max(1, len(living))} ATP/org)")
+        print(f"  Ratified Canon:     {len(swarm.canon)} shared algebraic axioms")
+        print(f"  Recorded Cascades:  {len(swarm.cascade_history)} epidemic defense signals\n")
+
+        print("ID                           GEN  POS      ATP   AXIOMS  TOMBSTONES  STATUS")
+        print("-" * 75)
+        for oid, org in swarm.organisms.items():
+            st = swarm.organism_states[oid]
+            status_str = "\033[1;32mALIVE\033[0m" if st.is_alive else "\033[1;31mEXTINCT\033[0m"
+            print(f"{oid:<28} #{org.generation:<3} ({st.x:>2},{st.y:>2})  {org.atp_reserve:>5}  {len(org.active_axioms):>6}  {len(org.tombstone_registry.tombstones):>10}  {status_str}")
+        print()
+
+    elif args.action == "step":
+        swarm = load_swarm(args.state)
+        steps = getattr(args, "steps", 1) or 1
+        res = swarm.step(num_ticks=steps)
+        out_path = args.output or args.state
+        save_swarm(swarm, out_path)
+        print("\033[1;32m=================================================================\033[0m")
+        print(f"  %🖤 SIMULATION ADVANCED {steps} TICKS -> Current Tick #{res['tick']}")
+        print("\033[1;32m=================================================================\033[0m")
+        print(f"  Living Population:   {res['living_organisms']} organisms")
+        print(f"  ATP Harvested:       +{res['total_atp_harvested']} ATP from morphogen grid")
+        print(f"  Autophagy Rescues:   {res['autophagies']}")
+        print(f"  Extinctions:         {res['extinctions']}")
+        print(f"  Herd Immunity Rate:  {res['herd_immunity_rate']}\n")
+
+    elif args.action == "mate":
+        swarm = load_swarm(args.state)
+        p_a = args.parent_a
+        p_b = args.parent_b
+        child_org, child_st = BilateralQuineSymbiosis.recombine_and_mate(swarm, p_a, p_b)
+        out_path = args.output or args.state
+        save_swarm(swarm, out_path)
+        print("\033[1;32m=================================================================\033[0m")
+        print(f"  %🖤 BILATERAL QUINE SYMBIOSIS & CROSSOVER SUCCESSFUL")
+        print("\033[1;32m=================================================================\033[0m")
+        print(f"  Parent A:     {p_a}")
+        print(f"  Parent B:     {p_b}")
+        print(f"  Child ID:     {child_org.organism_id} (Gen #{child_org.generation})")
+        print(f"  Child Fuel:   {child_org.atp_reserve} ATP")
+        print(f"  Active Genes: {len(child_org.chromosomes)}")
+        print(f"  Merged Def:   {len(child_org.tombstone_registry.tombstones)} tombstones\n")
+
+    elif args.action == "inoculate":
+        swarm = load_swarm(args.state)
+        orig = args.origin
+        target_term = args.target_term or "K I (S K)"
+        org = swarm.organisms[orig]
+        sk = swarm.organism_keys[orig][1]
+        pk = swarm.organism_keys[orig][0]
+        claim, tomb, bounty = CounterexampleMetabolism.metabolize_counterexample(
+            organism=org,
+            gene_id="MUTATION_TEST",
+            rule_name=target_term,
+            input_fixture="x",
+            expected_norm="x",
+            actual_norm="divergence",
+            atp_cost=15,
+            secret_key_hex=sk,
+            public_key_hex=pk
+        )
+        cascade = SwarmInoculationCascade.broadcast_tombstone(swarm, orig, tomb, max_hops=args.hops or 3)
+        out_path = args.output or args.state
+        save_swarm(swarm, out_path)
+        print("\033[1;32m=================================================================\033[0m")
+        print(f"  %🖤 EPIDEMIC INOCULATION CASCADE PROPAGATED")
+        print("\033[1;32m=================================================================\033[0m")
+        print(f"  Origin:           {orig}")
+        print(f"  Target Refuted:   {target_term}")
+        print(f"  Inoculated Peers: {len(cascade.organisms_inoculated)} organisms")
+        print(f"  Hops Depth:       {cascade.hops_reached} / {args.hops or 3}")
+        print(f"  Reproduction R0:  {cascade.reproduction_number_r0}")
+        print(f"  Negative Space:   +{cascade.total_negative_space_pruned} AST volume pruned\n")
+
+    elif args.action == "propose":
+        swarm = load_swarm(args.state)
+        author = args.author
+        expr = args.expr
+        expected = args.expected or "x"
+        prop = SwarmAgoraCommons.table_proposal(swarm, author, expr, expected)
+        ratified, reason = SwarmAgoraCommons.vote_and_settle(swarm, prop)
+        out_path = args.output or args.state
+        save_swarm(swarm, out_path)
+        col = "\033[1;32m" if ratified else "\033[1;31m"
+        print(f"{col}=================================================================\033[0m")
+        print(f"  %🖤 SWARM AGORA BALLOT SETTLED: [{prop.status}]")
+        print(f"{col}=================================================================\033[0m")
+        print(f"  Author:       {author}")
+        print(f"  Expression:   {expr} == {expected}")
+        print(f"  Aye Weight:   {prop.aye_weight} | Nay Weight: {prop.nay_weight}")
+        print(f"  Result:       {reason}\n")
+
+    elif args.action == "pdf":
+        swarm = load_swarm(args.state)
+        out_path = args.output or "swarm_membrane.pdf"
+        generate_swarm_membrane_pdf(swarm, out_path)
+        print("\033[1;32m=================================================================\033[0m")
+        print(f"  %🖤 ISO 32000 POLYGLOT SWARM MEMBRANE GENERATED")
+        print("\033[1;32m=================================================================\033[0m")
+        print(f"  Output PDF:   {out_path}")
+        print(f"  Verification: Run 'python3 {out_path}' for self-executing audit\n")
+    else:
+        print("Usage: python3 cli.py swarm {init,status,step,mate,inoculate,propose,pdf} ...")
+
+
 def cmd_shell(args):
 
     """Interactive Hypervisor REPL for Project Black-Heart."""
@@ -2814,6 +3007,49 @@ def main():
     p_ei_elev.add_argument("file", help="Target organism file")
     p_ei_elev.add_argument("-o", "--output", help="Output PDF path")
 
+    # swarm (Engine #27: SWARM-0.1 Epistemic Swarm Membrane & Symbiotic Quine Evolution)
+    p_sw = subparsers.add_parser(
+        "swarm",
+        help="Engine #27: Epistemic Swarm Membrane & Symbiotic Quine Evolution (SWARM-0.1)"
+    )
+    sw_subs = p_sw.add_subparsers(dest="action")
+
+    p_sw_init = sw_subs.add_parser("init", help="Initialize a new epistemic swarm membrane")
+    p_sw_init.add_argument("--population", type=int, default=4, help="Number of initial quine organisms")
+    p_sw_init.add_argument("-o", "--output", default="swarm_state.json", help="Output JSON or PDF path")
+
+    p_sw_status = sw_subs.add_parser("status", help="Display swarm population telemetry and canon")
+    p_sw_status.add_argument("state", help="Swarm state JSON or polyglot PDF file")
+
+    p_sw_step = sw_subs.add_parser("step", help="Advance swarm simulation ticks")
+    p_sw_step.add_argument("state", help="Swarm state file")
+    p_sw_step.add_argument("--steps", type=int, default=1, help="Number of ticks to step")
+    p_sw_step.add_argument("-o", "--output", help="Output state path (default: overwrite)")
+
+    p_sw_mate = sw_subs.add_parser("mate", help="Trigger bilateral quine mating between two organisms")
+    p_sw_mate.add_argument("state", help="Swarm state file")
+    p_sw_mate.add_argument("--parent-a", required=True, help="First parent organism ID")
+    p_sw_mate.add_argument("--parent-b", required=True, help="Second parent organism ID")
+    p_sw_mate.add_argument("-o", "--output", help="Output state path")
+
+    p_sw_inoc = sw_subs.add_parser("inoculate", help="Inject refutation and broadcast epidemic cascade")
+    p_sw_inoc.add_argument("state", help="Swarm state file")
+    p_sw_inoc.add_argument("--origin", required=True, help="Originating organism ID")
+    p_sw_inoc.add_argument("--target-term", default="K I (S K)", help="Refuted candidate expression")
+    p_sw_inoc.add_argument("--hops", type=int, default=3, help="Max hop depth for gossip propagation")
+    p_sw_inoc.add_argument("-o", "--output", help="Output state path")
+
+    p_sw_prop = sw_subs.add_parser("propose", help="Table an axiom motion to the Swarm Agora")
+    p_sw_prop.add_argument("state", help="Swarm state file")
+    p_sw_prop.add_argument("--author", required=True, help="Author organism ID")
+    p_sw_prop.add_argument("--expr", required=True, help="Candidate rewrite expression (e.g. 'S K K x')")
+    p_sw_prop.add_argument("--expected", default="x", help="Expected normal form")
+    p_sw_prop.add_argument("-o", "--output", help="Output state path")
+
+    p_sw_pdf = sw_subs.add_parser("pdf", help="Compile ISO 32000 Swarm Membrane polyglot PDF")
+    p_sw_pdf.add_argument("state", help="Swarm state file")
+    p_sw_pdf.add_argument("-o", "--output", default="swarm_membrane.pdf", help="Output PDF path")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -2872,6 +3108,8 @@ def main():
         cmd_controlled_forgetting(args)
     elif args.command == "epistemic-immune":
         cmd_epistemic_immune(args)
+    elif args.command == "swarm":
+        cmd_swarm(args)
     elif args.command == "cross-proof":
         cmd_cross_proof(args)
     else:

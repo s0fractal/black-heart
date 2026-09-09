@@ -22,6 +22,7 @@
 17. **Epistemic Kernel & Unified Edge-Claims (`warrant_kernel.py`):** Normative implementation of WARRANT-0.2 importing tri-state verifier semantics (`pass`, `fail`, `unverified`), 5 evidence grades (∅, G, A, E, C), domain-separated RFC 8032 Ed25519 signatures (`warrant-sig-v1:`), structured counterexamples, automated $E \to A$ promotion, and external trust roots.
 18. **Controlled Forgetting & Epistemic Retirement (`controlled_forgetting.py`):** Normative implementation of CONTROLLED-FORGETTING-0.1, resolving Open Questions 3 & 4 of WARRANT.md. Pruning active evaluation surfaces to reclaim ATP metabolic gas while preserving 100% historical provenance in immutable ISO 32000 append-only bytes. Enforces Invariants I1–I8, Negative Space Coverage metric ($\mu(C) \in [0.0, 1.0]$), ResurrectionGuard immune gate, signed re-adoption protocol, and standalone visual Tombstone Stelae.
 19. **Autonomic Epistemic Immune System (`epistemic_immune.py`):** Normative implementation of EPISTEMIC-IMMUNE-0.1, closing the feedback loop between Warrant Epistemic Kernel (Engine #24), Controlled Forgetting (Engine #25), and Morphogenetic Autopoiesis (Engine #23). Enforces ResurrectionDefense pre-flight gates, converts failed mutations into Grade C counterexamples, reclaims metabolic gas bounties ($\mu(C)$ negative space), automates generational $E \to A$ hypothesis elevation, performs horizontal swarm cross-inoculation, and triggers starvation autophagy under ATP deficiency.
+20. **Epistemic Swarm Membrane & Symbiotic Quine Evolution (`epistemic_swarm.py`):** Normative implementation of SWARM-0.1. Synthesizes a decentralized multi-agent arena where autonomous quine organisms inhabit a 2D toroidal Gray-Scott morphogenetic lattice, dynamically harvest metabolic ATP from local reaction-diffusion fields, broadcast signed refutations across spatial neighborhoods via epidemic gossip cascades ($R_0$ herd immunity reproduction rate), execute fail-closed bilateral quine crossover under Invariant S1 (mating compatibility), table and audit algebraic theorems in the Swarm Agora Commons under quadratic stake-weighted consensus, and compile collective states into ISO 32000 append-only polyglot membranes with 2D spatial vector heatmaps.
 
 ---
 
@@ -996,6 +997,7 @@ To address the security boundaries of executable documents, Project Black-Heart 
 * [WARRANT.md](WARRANT.md) — Epistemic Evidence Grades, Tri-State Verifier & Unified Edge-Claims (WARRANT-0.2 / Engine #24).
 * [FORGETTING.md](FORGETTING.md) — Controlled Forgetting, Epistemic Retirement & Negative Space Calculus (CONTROLLED-FORGETTING-0.1 / Engine #25).
 * [IMMUNE.md](IMMUNE.md) — Autonomic Epistemic Immune System, Swarm Inoculation & Metabolic Homeostasis (EPISTEMIC-IMMUNE-0.1 / Engine #26).
+* [SWARM.md](SWARM.md) — Epistemic Swarm Membrane, Symbiotic Quine Evolution & Collective Canon (SWARM-0.1 / Engine #27).
 
 
 * [CONTINUUM.md](CONTINUUM.md) — Suspended Thunks, Neutral Oracles & Merkle-Stream Continuity.
