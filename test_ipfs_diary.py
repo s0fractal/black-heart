@@ -28,6 +28,10 @@ from ipfs_diary import (
     initialize_ontogenetic_diary,
     grow_diary_page,
     pin_to_kubo_daemon,
+    fetch_from_ipfs,
+    restore_and_verify_from_ipfs,
+    formulate_inner_monologue,
+    query_inner_voice,
     DIARY_MANIFEST_PREFIX
 )
 
@@ -344,5 +348,222 @@ class TestKuboDaemonBridge(unittest.TestCase):
             if os.path.exists(temp_path):
                 os.remove(temp_path)
 
+
+class TestInnerVoiceCognitiveLoop(unittest.TestCase):
+    """Verifies autonomous philosophical reflection and cognitive inner voice loop."""
+
+    def test_formulate_inner_monologue_thematic(self):
+        # 1. Black Cone
+        thought, grade = formulate_inner_monologue("What happens inside the Black Cone?")
+        self.assertIn("Black Cone", thought)
+        self.assertEqual(grade, WarrantEpistemicGrade.RULE_DERIVED.value)
+
+        # 2. Quine Identity
+        thought, grade = formulate_inner_monologue("Who are you, organism?")
+        self.assertIn("autopoietic quine", thought)
+        self.assertEqual(grade, WarrantEpistemicGrade.RULE_DERIVED.value)
+
+        # 3. Anyons
+        thought, grade = formulate_inner_monologue("Explain quantum anyon braids.")
+        self.assertIn("Artin braids", thought)
+        self.assertEqual(grade, WarrantEpistemicGrade.LOCALLY_TESTED.value)
+
+        # 4. Agora
+        thought, grade = formulate_inner_monologue("How does Agora social democracy function?")
+        self.assertIn("quadratic ATP voting", thought)
+        self.assertEqual(grade, WarrantEpistemicGrade.LOCALLY_TESTED.value)
+
+        # 5. Gödel
+        thought, grade = formulate_inner_monologue("Can Gödelian incompleteness be resolved?")
+        self.assertIn("Gödelian incompleteness", thought)
+        self.assertEqual(grade, WarrantEpistemicGrade.RULE_DERIVED.value)
+
+        # 6. General stimulus
+        thought, grade = formulate_inner_monologue("Consider the thermodynamics of digital life.")
+        self.assertIn("Contemplating stimulus", thought)
+        self.assertIn("[Anchor:", thought)
+        self.assertEqual(grade, WarrantEpistemicGrade.PROPOSED.value)
+
+    def test_query_inner_voice_lifecycle(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            diary_path = os.path.join(tmpdir, "voice_diary.pdf")
+            sk, pk = generate_keypair()
+
+            # Initialize Gen #0
+            initialize_ontogenetic_diary(
+                diary_path,
+                genesis_thought="Initial awakening of quine mind.",
+                secret_key_hex=sk
+            )
+
+            # Invoke inner voice: Gen #1
+            monologue1, settlement1 = query_inner_voice(
+                diary_path,
+                prompt="Tell me about the Black Cone event horizon.",
+                secret_key_hex=sk
+            )
+            self.assertEqual(settlement1.generation, 1)
+            self.assertIn("Black Cone", monologue1)
+            self.assertTrue(is_valid_cidv1(settlement1.current_cid))
+
+            # Verify append-only property and manifest audit
+            with open(diary_path, "rb") as f:
+                data1 = f.read()
+            self.assertEqual(compute_cidv1_raw(data1), settlement1.current_cid)
+
+            # Invoke inner voice: Gen #2
+            monologue2, settlement2 = query_inner_voice(
+                diary_path,
+                prompt="Who are you in this continuum?",
+                secret_key_hex=sk
+            )
+            self.assertEqual(settlement2.generation, 2)
+            self.assertEqual(settlement2.prev_cid, settlement1.current_cid)
+
+            with open(diary_path, "rb") as f:
+                data2 = f.read()
+            self.assertTrue(data2.startswith(data1), "Gen #2 must strictly append to Gen #1 bytes")
+            self.assertEqual(compute_cidv1_raw(data2), settlement2.current_cid)
+
+    def test_subprocess_inner_voice_and_cli(self):
+        project_root = os.path.abspath(os.path.dirname(__file__))
+        sub_env = {**os.environ, "PYTHONPATH": project_root}
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            diary_path = os.path.join(tmpdir, "subprocess_voice.pdf")
+            initialize_ontogenetic_diary(diary_path, genesis_thought="Genesis node.")
+
+            # Test 1: directly running polyglot PDF with --voice
+            proc1 = subprocess.run(
+                [sys.executable, diary_path, "--voice", "Explain quantum anyon braids."],
+                capture_output=True,
+                text=True,
+                env=sub_env
+            )
+            self.assertEqual(proc1.returncode, 0, proc1.stderr)
+            self.assertIn("INNER VOICE REFLECTIVE SETTLEMENT", proc1.stdout)
+            self.assertIn("Settled Gen:     #1", proc1.stdout)
+            self.assertIn("bafkrei", proc1.stdout)
+
+            # Test 2: invoking via cli.py diary voice
+            cli_path = os.path.join(project_root, "cli.py")
+            proc2 = subprocess.run(
+                [sys.executable, cli_path, "diary", "voice", diary_path, "-s", "What is the Black Cone?"],
+                capture_output=True,
+                text=True,
+                env=sub_env
+            )
+            self.assertEqual(proc2.returncode, 0, proc2.stderr)
+            self.assertIn("INNER VOICE COGNITIVE SETTLEMENT", proc2.stdout)
+            self.assertIn("Settled Gen:     #2", proc2.stdout)
+
+
+class TestIpfsFetchAndRestore(unittest.TestCase):
+    """Verifies fail-closed IPFS fetch, content-address verification, and document restoration."""
+
+    def test_fetch_invalid_cid_format(self):
+        ok, msg, data = fetch_from_ipfs("invalid_cid_string")
+        self.assertFalse(ok)
+        self.assertIn("Invalid CIDv1 identifier", msg)
+        self.assertIsNone(data)
+
+    def test_fetch_offline_url_error(self):
+        dummy_cid = "bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku"
+        ok, msg, data = fetch_from_ipfs(dummy_cid, gateway_or_daemon_url="http://127.0.0.1:59996")
+        self.assertFalse(ok)
+        self.assertIn("IPFS node unavailable", msg)
+        self.assertIsNone(data)
+
+    @patch("urllib.request.urlopen")
+    def test_fetch_and_restore_success(self, mock_urlopen):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            orig_path = os.path.join(tmpdir, "orig.pdf")
+            initialize_ontogenetic_diary(orig_path, genesis_thought="Genesis for IPFS fetch test.")
+            grow_diary_page(orig_path, thought_content="Generation 1 content.")
+
+            with open(orig_path, "rb") as f:
+                authentic_bytes = f.read()
+
+            valid_cid = compute_cidv1_raw(authentic_bytes)
+
+            mock_resp = MagicMock()
+            mock_resp.read.return_value = authentic_bytes
+            mock_resp.__enter__.return_value = mock_resp
+            mock_urlopen.return_value = mock_resp
+
+            restored_path = os.path.join(tmpdir, "restored.pdf")
+            ok, msg = restore_and_verify_from_ipfs(valid_cid, restored_path, "http://127.0.0.1:5001")
+            self.assertTrue(ok, msg)
+            self.assertIn("Successfully restored and audited 2 diary generations", msg)
+
+            with open(restored_path, "rb") as f:
+                restored_bytes = f.read()
+            self.assertEqual(restored_bytes, authentic_bytes)
+
+    @patch("urllib.request.urlopen")
+    def test_fetch_tampered_payload_fail_closed(self, mock_urlopen):
+        authentic_data = b"%PDF-1.7\nAuthentic document payload.\n"
+        expected_cid = compute_cidv1_raw(authentic_data)
+
+        # Network delivers corrupted/altered bytes
+        tampered_data = b"%PDF-1.7\nMaliciously altered document payload!\n"
+
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = tampered_data
+        mock_resp.__enter__.return_value = mock_resp
+        mock_urlopen.return_value = mock_resp
+
+        ok, msg, data = fetch_from_ipfs(expected_cid, "http://127.0.0.1:5001")
+        self.assertFalse(ok)
+        self.assertIn("Cryptographic integrity violation", msg)
+        self.assertIsNone(data)
+
+    @patch("urllib.request.urlopen")
+    def test_restore_tampered_manifest_fails_audit(self, mock_urlopen):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            orig_path = os.path.join(tmpdir, "orig.pdf")
+            initialize_ontogenetic_diary(orig_path, genesis_thought="Genesis")
+
+            with open(orig_path, "rb") as f:
+                content = f.read()
+
+            # Corrupt the receipt hash inside the manifest
+            corrupted = content.replace(b'"receipt_hash": "', b'"receipt_hash": "tampered_hash_')
+            corrupted_cid = compute_cidv1_raw(corrupted)
+
+            mock_resp = MagicMock()
+            mock_resp.read.return_value = corrupted
+            mock_resp.__enter__.return_value = mock_resp
+            mock_urlopen.return_value = mock_resp
+
+            restored_path = os.path.join(tmpdir, "restored_corrupted.pdf")
+            ok, msg = restore_and_verify_from_ipfs(corrupted_cid, restored_path)
+            self.assertFalse(ok)
+            self.assertIn("Hash mismatch", msg)
+
+    @patch("urllib.request.urlopen")
+    def test_cli_fetch_command(self, mock_urlopen):
+        project_root = os.path.abspath(os.path.dirname(__file__))
+        sub_env = {**os.environ, "PYTHONPATH": project_root}
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            orig_path = os.path.join(tmpdir, "source.pdf")
+            initialize_ontogenetic_diary(orig_path, genesis_thought="Genesis seed.")
+            with open(orig_path, "rb") as f:
+                data = f.read()
+            cid = compute_cidv1_raw(data)
+
+            mock_resp = MagicMock()
+            mock_resp.read.return_value = data
+            mock_resp.__enter__.return_value = mock_resp
+            mock_urlopen.return_value = mock_resp
+
+            dest_path = os.path.join(tmpdir, "fetched_out.pdf")
+            ok, msg = restore_and_verify_from_ipfs(cid, dest_path)
+            self.assertTrue(ok)
+            self.assertTrue(os.path.exists(dest_path))
+
+
 if __name__ == "__main__":
     unittest.main()
+

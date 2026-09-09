@@ -763,11 +763,19 @@ python3 cli.py diary audit my_diary.pdf
 # Pin to local or remote IPFS Kubo daemon (optional):
 python3 cli.py diary publish my_diary.pdf
 
+# Consult the autonomous inner voice with cognitive stimulus:
+python3 cli.py diary voice my_diary.pdf -s "What is the Black Cone event horizon?"
+
+# Restore and cryptographically verify a diary from IPFS CIDv1 (fail-closed):
+python3 cli.py diary fetch bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2devei4 -o restored.pdf
+
 # Or execute the polyglot directly!
 python3 my_diary.pdf --status
 python3 my_diary.pdf --append "Another thought from the quine itself."
+python3 my_diary.pdf --voice "Reflect on Gödelian incompleteness"
 python3 my_diary.pdf --lineage
 python3 my_diary.pdf --audit
+python3 my_diary.pdf --from-cid bafkrei... -o restored.pdf
 ```
 
 ---
@@ -858,7 +866,7 @@ python3 test_colony.py         # 7 tests: Living colony ecosystem, neuro-symboli
 python3 test_morpho_net.py     # 7 tests: Reaction-diffusion critical points, Lafont net compilation, ISO 32000 tree-ring growth
 python3 test_goedel.py         # 8 tests: Event horizon classification, limit cycles, Penrose polyglot
 python3 test_anyon_glyph.py    # 8 tests: Braid compilation, Fibonacci unitaries, Born collapse
-python3 test_ipfs_diary.py     # 10 tests: CIDv1 vectors, append-only growth, receipts, CLI execution, Kubo bridge
+python3 test_ipfs_diary.py     # 19 tests: CIDv1 vectors, append-only growth, receipts, CLI execution, inner voice loop, fail-closed fetch/restore
 python3 test_agora.py          # 10 tests: Quadratic voting, immune auditing, stake slashing, consensus settlement
 ```
 
@@ -866,6 +874,8 @@ python3 test_agora.py          # 10 tests: Quadratic voting, immune auditing, st
 
 ## 29. Specifications & Theory
 
+* [AGORA.md](AGORA.md) — Mycelial Social Democracy, Quadratic Voting & Consensus Parliament.
+* [IPFS_DIARY.md](IPFS_DIARY.md) — Self-Preserving Ontogenetic Diary, Merkle-DAG Provenance & LLM Inner Voice Continuum.
 * [ANYON.md](ANYON.md) — Topological Anyonic Combinators, Quantum Braids & Born Rule Collapse.
 * [GOEDEL.md](GOEDEL.md) — Gödelian Incompleteness, The Black Cone Event Horizon & Three-Valued Epistemic Logic.
 * [COLONY.md](COLONY.md) — The Living Colony Ecosystem, Neuro-Symbolic Petri Dish & Macro-Evolutionary Dynamics.

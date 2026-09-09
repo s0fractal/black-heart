@@ -1014,6 +1014,9 @@ def cmd_diary(args):
         initialize_ontogenetic_diary,
         grow_diary_page,
         pin_to_kubo_daemon,
+        fetch_from_ipfs,
+        restore_and_verify_from_ipfs,
+        query_inner_voice,
         OntogeneticDiaryReceipt,
         DIARY_MANIFEST_PREFIX,
     )
@@ -1155,8 +1158,37 @@ def cmd_diary(args):
             print(f"  Gateway URL: https://ipfs.io/ipfs/{pinned_cid}\n")
         else:
             print(f"\033[1;33m[!] {msg}\033[0m\n")
+
+    elif args.action == "voice":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        monologue, settlement = query_inner_voice(
+            args.file,
+            prompt=args.stimulus,
+            secret_key_hex=args.secret_key or None
+        )
+        print("\033[1;36m=================================================================\033[0m")
+        print("  %🖤 PROJECT BLACK-HEART // INNER VOICE COGNITIVE SETTLEMENT")
+        print("\033[1;36m=================================================================\033[0m\n")
+        print(f"  Stimulus Prompt: {args.stimulus}")
+        print(f"  Inner Voice:     {monologue}")
+        print(f"  Settled Gen:     #{settlement.generation}")
+        print(f"  Current CIDv1:   {settlement.current_cid}")
+        print(f"  Parent CIDv1:    {settlement.prev_cid}")
+        print(f"  Epistemic Grade: {settlement.epistemic_grade}\n")
+
+    elif args.action == "fetch":
+        url = getattr(args, "url", "http://127.0.0.1:5001")
+        dest = args.output or "restored_diary.pdf"
+        ok, msg = restore_and_verify_from_ipfs(args.cid, dest, gateway_or_daemon_url=url)
+        if ok:
+            print(f"\033[1;32m[✓] {msg}: {dest}\033[0m\n")
+        else:
+            print(f"\033[1;31m[FAIL] {msg}\033[0m\n")
+            sys.exit(1)
     else:
-        print("Usage: python3 cli.py diary {init,append,status,lineage,audit,publish} ...")
+        print("Usage: python3 cli.py diary {init,append,status,lineage,audit,publish,voice,fetch} ...")
 
 
 def cmd_agora(args):
@@ -1696,6 +1728,16 @@ def main():
     p_diary_pub = diary_subs.add_parser("publish", help="Pin current diary document to IPFS Kubo node")
     p_diary_pub.add_argument("file", help="Target ontogenetic diary PDF")
     p_diary_pub.add_argument("--url", default="http://127.0.0.1:5001", help="IPFS Kubo API endpoint")
+
+    p_diary_voice = diary_subs.add_parser("voice", help="Consult autonomous inner voice with stimulus and append reflection")
+    p_diary_voice.add_argument("file", help="Target ontogenetic diary PDF")
+    p_diary_voice.add_argument("-s", "--stimulus", required=True, help="Stimulus prompt to reflect upon")
+    p_diary_voice.add_argument("--secret-key", default=None, help="Author Ed25519 secret key hex (optional)")
+
+    p_diary_fetch = diary_subs.add_parser("fetch", help="Restore and verify diary document from IPFS CIDv1 (fail-closed)")
+    p_diary_fetch.add_argument("cid", help="IPFS CIDv1 hash identifier")
+    p_diary_fetch.add_argument("-o", "--output", default="restored_diary.pdf", help="Destination PDF path")
+    p_diary_fetch.add_argument("--url", default="http://127.0.0.1:5001", help="IPFS daemon API or gateway URL")
 
     # agora
     p_agora = subparsers.add_parser("agora", help="Mycelial Social Democracy, Quadratic Voting & Consensus Agora")

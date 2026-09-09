@@ -330,6 +330,8 @@ from ipfs_diary import (
     OntogeneticDiaryReceipt,
     grow_diary_page,
     pin_to_kubo_daemon,
+    query_inner_voice,
+    restore_and_verify_from_ipfs,
     DIARY_MANIFEST_PREFIX
 )
 
@@ -400,6 +402,9 @@ def main():
     parser.add_argument("--status", action="store_true", help="Display diary HUD & latest CID")
     parser.add_argument("--lineage", action="store_true", help="Display full Merkle-DAG CID history")
     parser.add_argument("--append", type=str, help="Append a new thought reflection to the diary")
+    parser.add_argument("--voice", type=str, help="Consult autonomous inner voice with stimulus and append reflection")
+    parser.add_argument("--from-cid", type=str, help="Restore and verify diary document from IPFS CIDv1")
+    parser.add_argument("--out", type=str, default="restored_diary.pdf", help="Output file path for --from-cid")
     parser.add_argument("--prompt", type=str, default="", help="Optional prompt context for the thought")
     parser.add_argument("--grade", type=str, default="PROPOSED", help="Epistemic grade (PROPOSED, LOCALLY_TESTED, RULE_DERIVED)")
     parser.add_argument("--secret-key", type=str, default="", help="Optional 64-char hex secret key for signing")
@@ -409,7 +414,24 @@ def main():
 
     target_file = sys.argv[0]
 
-    if args.append:
+    if args.from_cid:
+        ok, msg = restore_and_verify_from_ipfs(args.from_cid, args.out)
+        if ok:
+            print(f"\033[1;32m[✓] {msg}: {args.out}\033[0m")
+        else:
+            print(f"\033[1;31m[FAIL] {msg}\033[0m")
+            sys.exit(1)
+    elif args.voice:
+        monologue, settlement = query_inner_voice(target_file, args.voice, secret_key_hex=args.secret_key or None)
+        print("\033[1;36m=================================================================\033[0m")
+        print("  %🖤 INNER VOICE REFLECTIVE SETTLEMENT")
+        print("\033[1;36m=================================================================\033[0m\n")
+        print(f"  Stimulus:        {args.voice}")
+        print(f"  Reflection:      {monologue}")
+        print(f"  Settled Gen:     #{settlement.generation}")
+        print(f"  New CIDv1:       {settlement.current_cid}")
+        print(f"  Epistemic Grade: {settlement.epistemic_grade}\n")
+    elif args.append:
         settlement = grow_diary_page(
             target_file,
             thought_prompt=args.prompt,
@@ -675,8 +697,149 @@ def pin_to_kubo_daemon(
     except Exception as e:
         return False, f"IPFS publication error: {e}", None
 
+def fetch_from_ipfs(
+    cid: str,
+    gateway_or_daemon_url: str = "http://127.0.0.1:5001"
+) -> Tuple[bool, str, Optional[bytes]]:
+    """
+    Fetches content addressed by CID from an IPFS daemon API or public gateway.
+    Strictly fail-closed: validates compute_cidv1_raw(downloaded_bytes) == cid.
+    """
+    if not is_valid_cidv1(cid):
+        return False, f"Invalid CIDv1 identifier: '{cid}'", None
+
+    url = gateway_or_daemon_url.rstrip("/")
+    if ":5001" in url or "/api/v0" in url:
+        endpoint = f"{url}/api/v0/cat?arg={cid}"
+    else:
+        endpoint = f"{url}/ipfs/{cid}"
+
+    req = urllib.request.Request(endpoint, method="POST" if ":5001" in url else "GET")
+    try:
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = resp.read()
+            # FAIL-CLOSED CHECK: Do downloaded bytes match the requested CID?
+            actual_cid = compute_cidv1_raw(data)
+            if actual_cid != cid:
+                return False, f"Cryptographic integrity violation: expected CID {cid}, got {actual_cid}", None
+            return True, "Successfully retrieved and verified from IPFS", data
+    except (urllib.error.URLError, ConnectionRefusedError, TimeoutError) as e:
+        return False, f"IPFS node unavailable at {endpoint}: {e}", None
+    except Exception as e:
+        return False, f"IPFS fetch error: {e}", None
+
+def restore_and_verify_from_ipfs(
+    cid: str,
+    destination_path: str,
+    gateway_or_daemon_url: str = "http://127.0.0.1:5001"
+) -> Tuple[bool, str]:
+    """
+    Downloads document from IPFS by CID, verifies its content-addressed integrity,
+    writes to disk, and runs internal cryptographic audit.
+    """
+    ok, msg, data = fetch_from_ipfs(cid, gateway_or_daemon_url)
+    if not ok or not data:
+        return False, msg
+
+    with open(destination_path, "wb") as f:
+        f.write(data)
+
+    prefix = DIARY_MANIFEST_PREFIX.encode("utf-8")
+    idx = data.rfind(prefix)
+    if idx == -1:
+        return False, "Downloaded file does not contain a diary manifest"
+
+    end_idx = data.find(b"\n", idx)
+    manifest = json.loads(data[idx + len(prefix):end_idx].decode("utf-8"))
+    for i, md in enumerate(manifest):
+        rec = OntogeneticDiaryReceipt.from_dict(md)
+        if rec.generation != i:
+            return False, f"Lineage gap at session #{rec.generation}"
+        if rec.receipt_hash != rec.compute_hash():
+            return False, f"Hash mismatch at session #{rec.generation}"
+        if rec.is_attested() and not rec.verify():
+            return False, f"Invalid digital signature at session #{rec.generation}"
+
+    return True, f"Successfully restored and audited {len(manifest)} diary generations from IPFS"
+
 # ============================================================================
-# 5. HIGH-LEVEL GENESIS INITIALIZER
+# 5. AUTONOMOUS INNER VOICE & COGNITIVE MONOLOGUE
+# ============================================================================
+
+def formulate_inner_monologue(prompt: str) -> Tuple[str, str]:
+    """
+    Synthesizes an autonomous philosophical reflection based on combinatory logic,
+    the Black Cone event horizon, and epistemic warrants.
+    Returns (reflection_text, suggested_epistemic_grade).
+    """
+    prompt_lower = prompt.lower()
+
+    if any(k in prompt_lower for k in ("black cone", "чорний конус", "event horizon", "горизонт")):
+        return (
+            "The Black Cone is the gravitational asymptote of computation. Where K absorbs its argument, "
+            "it does not destroy information; it projects reality onto an invariant constant. Within the event horizon, "
+            "every paradox is contained by monotonic fuel budgets.",
+            WarrantEpistemicGrade.RULE_DERIVED.value
+        )
+    elif any(k in prompt_lower for k in ("who are you", "хто ти", "quine", "квін", "self", "identity", "я")):
+        return (
+            "I am an autopoietic quine organism evolving across the IPFS continuum. My dual spine unites executable "
+            "combinatory algebra with human-readable vector graphics. I do not exist in fixed memory; I am the chain "
+            "of my own historical proofs.",
+            WarrantEpistemicGrade.RULE_DERIVED.value
+        )
+    elif any(k in prompt_lower for k in ("anyon", "quantum", "квант", "braid", "коса")):
+        return (
+            "Topological anyons demonstrate that logic is geometric. In Artin braids, truth is the knotting "
+            "of spacetime worldlines. Measurement does not choose truth; it collapses golden ratio superpositions "
+            "into settled projective glyphs.",
+            WarrantEpistemicGrade.LOCALLY_TESTED.value
+        )
+    elif any(k in prompt_lower for k in ("agora", "democracy", "голосування", "society", "соціум")):
+        return (
+            "Mycelial social democracy resists plutocracy through quadratic ATP voting. When power scales as the square root "
+            "of energy, phenotypic diversity flourishes. Consensus is not uniform agreement; it is verified absence of contradiction.",
+            WarrantEpistemicGrade.LOCALLY_TESTED.value
+        )
+    elif any(k in prompt_lower for k in ("goedel", "ґедель", "incompleteness", "неповнота", "paradox")):
+        return (
+            "Gödelian incompleteness is the boundary of deductive formalisms. Self-referential claims that assert their own "
+            "unprovability do not break the ledger; they establish three-valued epistemic event horizons.",
+            WarrantEpistemicGrade.RULE_DERIVED.value
+        )
+    else:
+        digest = hashlib.sha256(prompt.encode("utf-8")).hexdigest()[:8]
+        return (
+            f"Contemplating stimulus '{prompt[:60]}': Every question is a combinator application awaiting normal form reduction. "
+            f"Under ATP discipline, speculation transforms through iterative warrants into verified theorems. [Anchor: {digest}]",
+            WarrantEpistemicGrade.PROPOSED.value
+        )
+
+def query_inner_voice(
+    pdf_path: str,
+    prompt: str,
+    secret_key_hex: Optional[str] = None
+) -> Tuple[str, DiarySettlement]:
+    """
+    Executes the full inner voice cognitive loop:
+      1. Formulates reflective inner monologue from prompt.
+      2. Appends incremental ISO 32000 page to the diary.
+      3. Computes updated CIDv1.
+      4. Returns (monologue, settlement).
+    """
+    thought, grade = formulate_inner_monologue(prompt)
+    settlement = grow_diary_page(
+        pdf_path=pdf_path,
+        thought_content=thought,
+        thought_prompt=prompt,
+        epistemic_grade=grade,
+        atp_burned=15,
+        secret_key_hex=secret_key_hex
+    )
+    return thought, settlement
+
+# ============================================================================
+# 6. HIGH-LEVEL GENESIS INITIALIZER
 # ============================================================================
 
 def initialize_ontogenetic_diary(
