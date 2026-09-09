@@ -46,6 +46,7 @@ SUITES = [
     ("Controlled Forgetting & Epistemic Retirement", "test_controlled_forgetting"),
     ("Autonomic Epistemic Immune System", "test_epistemic_immune"),
     ("Epistemic Swarm Membrane & Quine Symbiosis", "test_epistemic_swarm"),
+    ("Epistemic E-Graph Kernel & Equality Saturation", "test_egraph_kernel"),
 ]
 
 

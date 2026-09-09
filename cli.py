@@ -2383,6 +2383,103 @@ def cmd_swarm(args):
         print("Usage: python3 cli.py swarm {init,status,step,mate,inoculate,propose,pdf} ...")
 
 
+def cmd_egraph(args):
+    """Engine #28: Epistemic E-Graph Kernel & Proof-Carrying Equality Saturation (EGRAPH-0.1)."""
+    import egraph_kernel
+    from egraph_kernel import (
+        EGraph, RewriteRule, STANDARD_COMBINATOR_RULES,
+        generate_egraph_pdf, append_egraph_hud
+    )
+    from glyph import parse, tree_size
+
+    if args.action == "saturate":
+        expr_str = args.expr
+        t = parse(expr_str)
+        egraph = EGraph()
+        egraph.add_term(t)
+        res = egraph.saturate(STANDARD_COMBINATOR_RULES, max_iterations=getattr(args, "iterations", 10) or 10, fuel_atp=getattr(args, "fuel", 1000) or 1000)
+        opt_t, opt_cost = egraph.extract_optimal(egraph.uf.find(0))
+
+        if args.output:
+            with open(args.output, "w", encoding="utf-8") as f:
+                json.dump(egraph.to_dict(), f, indent=2)
+
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  %🖤 EQUALITY SATURATION ACCOMPLISHED (EGRAPH-0.1)")
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  Input Expression:     {expr_str}")
+        print(f"  Iterations Run:       {res['iterations']}")
+        print(f"  Total Equalities:     +{res['total_unions']} non-destructive unions")
+        print(f"  Active E-Classes:     {res['final_classes']} equivalence clusters")
+        print(f"  Canonical E-Nodes:    {res['final_nodes']} represented terms")
+        print(f"  Fuel Quanta Consumed: {res['fuel_spent']} ATP")
+        print(f"  Optimal Normal Form:  \033[1;32m{opt_t}\033[0m (Cost: {opt_cost})\n")
+
+    elif args.action == "explain":
+        t1_str = args.term_a
+        t2_str = args.term_b
+        t1 = parse(t1_str)
+        t2 = parse(t2_str)
+
+        egraph = EGraph()
+        egraph.add_term(t1)
+        egraph.add_term(t2)
+        egraph.saturate(STANDARD_COMBINATOR_RULES, max_iterations=getattr(args, "iterations", 10) or 10, fuel_atp=getattr(args, "fuel", 1000) or 1000)
+
+        proof = egraph.explain_equivalence(t1, t2)
+        col = "\033[1;32m" if proof.is_equivalent else "\033[1;31m"
+        print(f"{col}=================================================================\033[0m")
+        print(f"  %🖤 EQUIVALENCE PROOF FOREST CERTIFICATE")
+        print(f"{col}=================================================================\033[0m")
+        print(f"  Term A:        {t1_str}")
+        print(f"  Term B:        {t2_str}")
+        print(f"  Equivalent:    {col}{proof.is_equivalent}\033[0m")
+
+        if proof.is_equivalent:
+            print(f"  Proof Steps:   {len(proof.proof_steps)} equational derivations\n")
+            print("STEP  FROM                     TO                       JUSTIFICATION")
+            print("-" * 75)
+            for s in proof.proof_steps:
+                print(f"#{s.step_num:<4} {s.from_expr[:24]:<24} {s.to_expr[:24]:<24} {s.justification[:24]}")
+            print()
+        else:
+            print("  Reason:        Terms belong to disjoint E-Classes under active theories.\n")
+
+    elif args.action == "extract":
+        expr_str = args.expr
+        t = parse(expr_str)
+        egraph = EGraph()
+        cid = egraph.add_term(t)
+        egraph.saturate(STANDARD_COMBINATOR_RULES, max_iterations=getattr(args, "iterations", 10) or 10, fuel_atp=getattr(args, "fuel", 1000) or 1000)
+        opt_t, cost = egraph.extract_optimal(cid)
+        print("\033[1;32m=================================================================\033[0m")
+        print(f"  %🖤 OPTIMAL TERM EXTRACTION (EGRAPH-0.1)")
+        print("\033[1;32m=================================================================\033[0m")
+        print(f"  Original AST:   {expr_str} (Size: {tree_size(t)})")
+        print(f"  Optimal AST:    {opt_t} (Size: {tree_size(opt_t)}, Cost: {cost})")
+        print(f"  Compression:    {tree_size(t) - tree_size(opt_t):+d} AST nodes\n")
+
+    elif args.action == "pdf":
+        expr_str = args.expr
+        t = parse(expr_str)
+        egraph = EGraph()
+        egraph.add_term(t)
+        egraph.saturate(STANDARD_COMBINATOR_RULES, max_iterations=getattr(args, "iterations", 10) or 10, fuel_atp=getattr(args, "fuel", 1000) or 1000)
+        proof = None
+        if getattr(args, "target", None):
+            t_target = parse(args.target)
+            proof = egraph.explain_equivalence(t, t_target)
+        out_path = args.output or "egraph_proof.pdf"
+        generate_egraph_pdf(egraph, out_path, sample_proof=proof)
+        print("\033[1;32m=================================================================\033[0m")
+        print(f"  %🖤 ISO 32000 POLYGLOT E-GRAPH COMPILED")
+        print("\033[1;32m=================================================================\033[0m")
+        print(f"  Output PDF:    {out_path}")
+        print(f"  Verification:  Run 'python3 {out_path}' for self-executing audit\n")
+    else:
+        print("Usage: python3 cli.py egraph {saturate,explain,extract,pdf} ...")
+
+
 def cmd_shell(args):
 
     """Interactive Hypervisor REPL for Project Black-Heart."""
@@ -3050,6 +3147,37 @@ def main():
     p_sw_pdf.add_argument("state", help="Swarm state file")
     p_sw_pdf.add_argument("-o", "--output", default="swarm_membrane.pdf", help="Output PDF path")
 
+    # egraph (Engine #28: EGRAPH-0.1 Epistemic E-Graph Kernel & Proof-Carrying Equality Saturation)
+    p_eg = subparsers.add_parser(
+        "egraph",
+        help="Engine #28: Epistemic E-Graph Kernel & Proof-Carrying Equality Saturation (EGRAPH-0.1)"
+    )
+    eg_subs = p_eg.add_subparsers(dest="action")
+
+    p_eg_sat = eg_subs.add_parser("saturate", help="Run equality saturation on combinator expression")
+    p_eg_sat.add_argument("expr", help="Combinator expression to saturate")
+    p_eg_sat.add_argument("--iterations", type=int, default=10, help="Max saturation iterations")
+    p_eg_sat.add_argument("--fuel", type=int, default=1000, help="ATP fuel budget")
+    p_eg_sat.add_argument("-o", "--output", help="Output JSON path")
+
+    p_eg_exp = eg_subs.add_parser("explain", help="Prove equivalence between two terms with certified proof forest")
+    p_eg_exp.add_argument("term_a", help="First combinator term")
+    p_eg_exp.add_argument("term_b", help="Second combinator term")
+    p_eg_exp.add_argument("--iterations", type=int, default=10, help="Max saturation iterations")
+    p_eg_exp.add_argument("--fuel", type=int, default=1000, help="ATP fuel budget")
+
+    p_eg_ext = eg_subs.add_parser("extract", help="Extract globally minimal normal form from expression")
+    p_eg_ext.add_argument("expr", help="Combinator expression to optimize")
+    p_eg_ext.add_argument("--iterations", type=int, default=10, help="Max saturation iterations")
+    p_eg_ext.add_argument("--fuel", type=int, default=1000, help="ATP fuel budget")
+
+    p_eg_pdf = eg_subs.add_parser("pdf", help="Compile ISO 32000 E-Graph polyglot PDF")
+    p_eg_pdf.add_argument("expr", help="Root combinator expression")
+    p_eg_pdf.add_argument("--target", help="Optional target term to prove equivalence with")
+    p_eg_pdf.add_argument("--iterations", type=int, default=10, help="Max saturation iterations")
+    p_eg_pdf.add_argument("--fuel", type=int, default=1000, help="ATP fuel budget")
+    p_eg_pdf.add_argument("-o", "--output", default="egraph_proof.pdf", help="Output PDF path")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -3110,6 +3238,8 @@ def main():
         cmd_epistemic_immune(args)
     elif args.command == "swarm":
         cmd_swarm(args)
+    elif args.command == "egraph":
+        cmd_egraph(args)
     elif args.command == "cross-proof":
         cmd_cross_proof(args)
     else:
