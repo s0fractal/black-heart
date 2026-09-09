@@ -334,11 +334,12 @@ def sync_epistemic_from_remote_peer(local_registry: Any, peer_url: str) -> Dict[
             data = json.loads(resp.read().decode("utf-8"))
             from mycelium import Warrant
             for wd in data.get("warrants", []):
-                w = Warrant.from_dict(wd)
-                if w.warrant_id not in local_registry.warrants:
-                    if w.verify():
-                        local_registry.add_warrant(w, verify_first=False)
+                try:
+                    w = Warrant.from_dict(wd)
+                    if local_registry.add_warrant(w, verify_first=True):
                         counts["warrants"] += 1
+                except Exception:
+                    continue
     except Exception:
         pass
 
@@ -349,11 +350,12 @@ def sync_epistemic_from_remote_peer(local_registry: Any, peer_url: str) -> Dict[
             data = json.loads(resp.read().decode("utf-8"))
             from mycelium import DivergenceRecord
             for dd in data.get("divergences", []):
-                d = DivergenceRecord.from_dict(dd)
-                if d.record_id not in local_registry.divergences:
-                    if d.verify():
-                        local_registry.add_divergence(d, verify_first=False)
+                try:
+                    d = DivergenceRecord.from_dict(dd)
+                    if local_registry.add_divergence(d, verify_first=True):
                         counts["divergences"] += 1
+                except Exception:
+                    continue
     except Exception:
         pass
 
@@ -364,11 +366,12 @@ def sync_epistemic_from_remote_peer(local_registry: Any, peer_url: str) -> Dict[
             data = json.loads(resp.read().decode("utf-8"))
             from mycelium import NormalFormEntry
             for nd in data.get("normal_forms", []):
-                nf = NormalFormEntry.from_dict(nd)
-                if nf.term_hash not in local_registry.normal_forms:
-                    if nf.verify():
-                        local_registry.add_normal_form(nf, verify_first=False)
+                try:
+                    nf = NormalFormEntry.from_dict(nd)
+                    if local_registry.add_normal_form(nf, verify_first=True):
                         counts["normal_forms"] += 1
+                except Exception:
+                    continue
     except Exception:
         pass
 

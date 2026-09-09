@@ -198,6 +198,54 @@ class PolyglotDocument:
 
         return output_path
 
+def audit_polyglot_claims(target_path: str) -> bool:
+    """
+    Audits combinatory claims in a polyglot document without running external code.
+    Reads document strictly as bytes and verifies claims in memory.
+    """
+    with open(target_path, "rb") as f:
+        content = f.read()
+
+    claims = []
+    prefix = "%🖤 CLAIM: ".encode("utf-8")
+    for line in content.splitlines():
+        if line.startswith(prefix):
+            raw = line[len(prefix):].decode("utf-8", errors="replace").strip()
+            parts = [p.strip() for p in raw.split("|")]
+            if len(parts) >= 4:
+                claim_id = parts[0]
+                desc = parts[1]
+                expr = parts[2]
+                exp = parts[3]
+                atp = int(parts[4]) if len(parts) > 4 and parts[4].isdigit() else 10_000
+                claims.append((claim_id, desc, expr, exp, atp))
+
+    if not claims:
+        if "%🖤 CODE_VAULT_MANIFEST:".encode("utf-8") in content:
+            return True
+        return False
+
+    from glyph import parse, evaluate
+    total_atp = 0
+    passed = 0
+    for claim_id, desc, expr_str, exp_str, max_atp in claims:
+        try:
+            t = parse(expr_str)
+            norm, atp, digest = evaluate(t, max_atp=max_atp)
+            total_atp += atp
+            norm_str = str(norm)
+            exp_t = parse(exp_str)
+            exp_norm, _, _ = evaluate(exp_t)
+            exp_norm_str = str(exp_norm)
+            if norm_str == exp_norm_str:
+                passed += 1
+            else:
+                return False
+        except Exception:
+            return False
+
+    return passed == len(claims)
+
 def _escape_pdf(text: str) -> str:
     """Escape parentheses and backslashes for PDF string literals."""
     return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")

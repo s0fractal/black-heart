@@ -17,6 +17,9 @@ import sys
 from dataclasses import dataclass
 from typing import Union, List, Optional, Tuple
 
+# Support deep combinator reductions, Y-combinator chains, and deeply nested ASTs
+sys.setrecursionlimit(max(sys.getrecursionlimit(), 50000))
+
 # Core Glyphs
 GLYPH_K = "🖤"
 GLYPH_I = "🤍"

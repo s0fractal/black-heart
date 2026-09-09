@@ -473,6 +473,9 @@ class ExperimentRecord:
     size_delta: int
     test_inputs_count: int
     discrepancy_detail: Optional[str] = None
+    discrepancy_input: Optional[str] = None
+    discrepancy_expected: Optional[str] = None
+    discrepancy_actual: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -493,7 +496,10 @@ class ExperimentRecord:
             "size_candidate": self.size_candidate,
             "size_delta": self.size_delta,
             "test_inputs_count": self.test_inputs_count,
-            "discrepancy_detail": self.discrepancy_detail
+            "discrepancy_detail": self.discrepancy_detail,
+            "discrepancy_input": self.discrepancy_input,
+            "discrepancy_expected": self.discrepancy_expected,
+            "discrepancy_actual": self.discrepancy_actual
         }
 
     @classmethod
@@ -516,7 +522,10 @@ class ExperimentRecord:
             size_candidate=d["size_candidate"],
             size_delta=d["size_delta"],
             test_inputs_count=d["test_inputs_count"],
-            discrepancy_detail=d.get("discrepancy_detail")
+            discrepancy_detail=d.get("discrepancy_detail"),
+            discrepancy_input=d.get("discrepancy_input"),
+            discrepancy_expected=d.get("discrepancy_expected"),
+            discrepancy_actual=d.get("discrepancy_actual")
         )
 
 
@@ -572,7 +581,10 @@ class ExperimentLog:
             size_candidate=receipt.size_candidate,
             size_delta=receipt.size_delta,
             test_inputs_count=receipt.test_inputs_count,
-            discrepancy_detail=detail
+            discrepancy_detail=detail,
+            discrepancy_input=receipt.discrepancy_input,
+            discrepancy_expected=receipt.discrepancy_expected,
+            discrepancy_actual=receipt.discrepancy_actual
         )
         self.records.append(rec)
         return rec

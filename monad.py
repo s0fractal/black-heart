@@ -637,5 +637,83 @@ if __name__ == "__main__":
     main()
 '''
 
+def audit_contract_polyglot(target_path: str) -> bool:
+    """Verifies a SelfVerifyingContractPolyglot as pure static data and combinators without code execution."""
+    try:
+        with open(target_path, "rb") as f:
+            content = f.read()
+        prefix = "%🖤 CONTRACT_MANIFEST: ".encode("utf-8")
+        idx = content.find(prefix)
+        if idx == -1:
+            return False
+        end = content.find(b"\n", idx)
+        man = json.loads(content[idx + len(prefix):end].decode("utf-8"))
+
+        for field_name in [
+            "stream_hash", "parameters_hash", "evidence_hash",
+            "code_root_hash", "visual_root_hash", "joint_anchor",
+            "contract_anchor", "visual_spine", "code_spine"
+        ]:
+            val = man.get(field_name)
+            if val is None or (isinstance(val, str) and not val.strip()):
+                return False
+
+        s_marker = b"stream\n"
+        s_start = content.find(s_marker)
+        if s_start == -1:
+            return False
+        s_start += len(s_marker)
+        s_end = content.find(b"\nendstream", s_start)
+        if s_end == -1:
+            return False
+        stream_bytes = content[s_start:s_end]
+        if hashlib.sha256(stream_bytes).hexdigest() != man["stream_hash"]:
+            return False
+
+        vh = hashlib.sha256()
+        for v_node in man.get("visual_spine", []):
+            raw = json.dumps({
+                "node_type": v_node["node_type"],
+                "title": v_node["title"],
+                "text_content": v_node["text_content"],
+                "page_num": v_node["page_num"]
+            }, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+            vh.update(raw)
+        if vh.hexdigest() != man["visual_root_hash"]:
+            return False
+
+        from glyph import parse, evaluate
+        ch = hashlib.sha256()
+        for c_node in man.get("code_spine", []):
+            raw = json.dumps({
+                "clause_id": c_node["clause_id"],
+                "predicate_name": c_node["predicate_name"],
+                "expression": c_node["expression"],
+                "expected_normal_form": c_node["expected_normal_form"],
+                "atp_budget": c_node["atp_budget"],
+                "metadata": c_node["metadata"]
+            }, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+            ch.update(raw)
+
+            t = parse(c_node["expression"])
+            norm, _, _ = evaluate(t, max_atp=c_node["atp_budget"])
+            exp_t = parse(c_node["expected_normal_form"])
+            exp_norm, _, _ = evaluate(exp_t)
+            if str(norm) != str(exp_norm):
+                return False
+
+        if ch.hexdigest() != man["code_root_hash"]:
+            return False
+
+        jh = hashlib.sha256()
+        jh.update(man["code_root_hash"].encode("utf-8"))
+        jh.update(man["visual_root_hash"].encode("utf-8"))
+        if jh.hexdigest() != man["joint_anchor"]:
+            return False
+
+        return True
+    except Exception:
+        return False
+
 if __name__ == "__main__":
     print("monad.py — Literate Polyglot Monad module loaded.")

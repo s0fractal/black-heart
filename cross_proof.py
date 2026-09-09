@@ -667,5 +667,76 @@ def main():
 if __name__ == "__main__": main()
 '''
 
+def audit_agreement_polyglot(target_path: str) -> bool:
+    """Verifies a Bilateral Agreement Polyglot as static data without executing code."""
+    try:
+        with open(target_path, "rb") as f:
+            content = f.read()
+        prefix = AGREEMENT_MANIFEST_PREFIX.encode("utf-8")
+        idx = content.find(prefix)
+        if idx == -1:
+            return False
+        end = content.find(b"\n", idx)
+        man = json.loads(content[idx + len(prefix):end].decode("utf-8"))
+
+        author_pk = man.get("agreement_author_pk_hex")
+        author_sig = man.get("agreement_signature_hex")
+        if not author_pk or not author_sig:
+            return False
+
+        parties = man.get("parties", [])
+        terms_dict = {
+            "base_fee_usd": man["base_fee_usd"],
+            "parties": [
+                {
+                    "name": p["name"],
+                    "public_key_hex": p["public_key_hex"],
+                    "role": p["role"],
+                }
+                for p in parties
+            ],
+            "penalty_rate_usd": man["penalty_rate_usd"],
+            "target_uptime_percent": man["target_uptime_percent"],
+            "title": man["title"],
+            "trusted_oracle_pk_hex": man["trusted_oracle_pk_hex"],
+        }
+        terms_bytes = json.dumps(terms_dict, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        if not verify_bytes(bytes.fromhex(author_pk), terms_bytes, bytes.fromhex(author_sig)):
+            return False
+
+        for p in parties:
+            if "signature_hex" in p:
+                if not verify_bytes(bytes.fromhex(p["public_key_hex"]), terms_bytes, bytes.fromhex(p["signature_hex"])):
+                    return False
+        return True
+    except Exception:
+        return False
+
+def audit_oracle_polyglot(target_path: str) -> bool:
+    """Verifies a Telemetry Oracle Polyglot as static data without executing code."""
+    try:
+        with open(target_path, "rb") as f:
+            content = f.read()
+        prefix = ORACLE_MANIFEST_PREFIX.encode("utf-8")
+        idx = content.find(prefix)
+        if idx == -1:
+            return False
+        end = content.find(b"\n", idx)
+        man = json.loads(content[idx + len(prefix):end].decode("utf-8"))
+
+        payload_data = man.get("payload", {})
+        payload_bytes = json.dumps(payload_data, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        pk_bytes = bytes.fromhex(man["public_key_hex"])
+        sig_bytes = bytes.fromhex(man["signature_hex"])
+        if not verify_bytes(pk_bytes, payload_bytes, sig_bytes):
+            return False
+
+        computed_or_anchor = hashlib.sha256(payload_bytes + sig_bytes).hexdigest()
+        if man.get("oracle_anchor") != computed_or_anchor:
+            return False
+        return True
+    except Exception:
+        return False
+
 if __name__ == "__main__":
     print("cross_proof.py — Bilateral Interlocking Document Protocol loaded.")

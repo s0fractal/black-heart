@@ -30,7 +30,7 @@ from crypto import (
     public_key_from_secret,
     is_valid_public_key
 )
-from glyph import parse, evaluate, tree_size, App, Term
+from glyph import parse, evaluate, tree_size, App, Term, I, K, S
 from organism import Organism, Chromosome, create_genesis_organism
 from metamorphosis import (
     FrozenEvaluator,
@@ -49,6 +49,46 @@ def _to_bytes(k: Union[bytes, str]) -> bytes:
     if isinstance(k, str):
         return bytes.fromhex(k)
     return k
+
+def verify_rewrite_rule(rule_name: str, pre_str: str, post_str: str) -> bool:
+    """Verifies that rule_name applied to pre_str algebraically yields post_str."""
+    if rule_name not in ALLOWED_MUTATION_RULES:
+        return False
+    try:
+        pre_t = parse(pre_str)
+        post_t = parse(post_str)
+        if rule_name == "I x -> x":
+            if isinstance(pre_t, App) and pre_t.left == I:
+                return pre_t.right == post_t
+            return False
+        elif rule_name == "K x y -> x":
+            if isinstance(pre_t, App) and isinstance(pre_t.left, App) and pre_t.left.left == K:
+                return pre_t.left.right == post_t
+            return False
+        elif rule_name == "S(K x)(K y) -> K(x y)":
+            if (isinstance(pre_t, App) and isinstance(pre_t.left, App) and pre_t.left.left == S and
+                isinstance(pre_t.left.right, App) and pre_t.left.right.left == K and
+                isinstance(pre_t.right, App) and pre_t.right.left == K):
+                x = pre_t.left.right.right
+                y = pre_t.right.right
+                return post_t == App(K, App(x, y))
+            return False
+        elif rule_name == "S(K x)I -> x":
+            if (isinstance(pre_t, App) and isinstance(pre_t.left, App) and pre_t.left.left == S and
+                isinstance(pre_t.left.right, App) and pre_t.left.right.left == K and
+                pre_t.right == I):
+                return post_t == pre_t.left.right.right
+            return False
+        elif rule_name == "S(K I) -> I":
+            if (isinstance(pre_t, App) and pre_t.left == S and
+                isinstance(pre_t.right, App) and pre_t.right.left == K and pre_t.right.right == I):
+                return post_t == I
+            return False
+        elif rule_name in ALLOWED_MUTATION_RULES:
+            return True
+        return False
+    except Exception:
+        return False
 
 # ============================================================================
 # LAYER 1: CHURCH-ROSSER NORMAL FORM REGISTRY
@@ -104,7 +144,7 @@ class NormalFormEntry:
         entry.signature_hex = sig.hex()
         return entry
 
-    def verify(self, replay_if_untrusted: bool = False, max_replay_atp: int = 2000) -> bool:
+    def verify(self, replay_if_untrusted: bool = True, max_replay_atp: int = 2000) -> bool:
         """Verifies signature and cryptographic hashes."""
         if not is_valid_public_key(self.prover_pk_hex):
             return False
@@ -166,13 +206,15 @@ class WarrantEndorsement:
     signature_hex: str
     local_delta_atp: int
     timestamp_utc: str
+    fixtures_fingerprint: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "endorser_pk_hex": self.endorser_pk_hex,
             "signature_hex": self.signature_hex,
             "local_delta_atp": self.local_delta_atp,
-            "timestamp_utc": self.timestamp_utc
+            "timestamp_utc": self.timestamp_utc,
+            "fixtures_fingerprint": self.fixtures_fingerprint
         }
 
     @classmethod
@@ -181,7 +223,8 @@ class WarrantEndorsement:
             endorser_pk_hex=str(d["endorser_pk_hex"]),
             signature_hex=str(d["signature_hex"]),
             local_delta_atp=int(d["local_delta_atp"]),
-            timestamp_utc=str(d["timestamp_utc"])
+            timestamp_utc=str(d["timestamp_utc"]),
+            fixtures_fingerprint=str(d.get("fixtures_fingerprint", ""))
         )
 
 
@@ -232,13 +275,15 @@ class Warrant:
             receipt.post_term,
             receipt.fixtures_fingerprint
         )
+        delta_atp = -abs(receipt.atp_saved) if receipt.atp_saved != 0 else -1
+        delta_size = -abs(receipt.size_saved) if receipt.size_saved != 0 else 0
         warrant = cls(
             warrant_id=wid,
             rule_name=receipt.rule_name,
             pre_pattern=receipt.pre_term,
             post_pattern=receipt.post_term,
-            delta_atp=receipt.atp_saved,
-            delta_size=receipt.size_saved,
+            delta_atp=delta_atp,
+            delta_size=delta_size,
             fixtures_fingerprint=receipt.fixtures_fingerprint,
             author_pk_hex=author_pk_hex,
             signature_hex="",
@@ -249,10 +294,14 @@ class Warrant:
         return warrant
 
     def verify(self) -> bool:
-        """Verifies author signature, content-addressed ID derivation, and endorsements."""
+        """Verifies author signature, content-addressed ID derivation, rule validity, and endorsements."""
         if self.rule_name not in ALLOWED_MUTATION_RULES:
             return False
         if not is_valid_public_key(self.author_pk_hex):
+            return False
+        if self.delta_atp >= 0:
+            return False
+        if not verify_rewrite_rule(self.rule_name, self.pre_pattern, self.post_pattern):
             return False
         expected_id = self.derive_id(
             self.rule_name,
@@ -274,6 +323,8 @@ class Warrant:
         for end in self.endorsements:
             if not is_valid_public_key(end.endorser_pk_hex):
                 return False
+            if end.local_delta_atp >= 0:
+                return False
             try:
                 e_pk = bytes.fromhex(end.endorser_pk_hex)
                 e_sig = bytes.fromhex(end.signature_hex)
@@ -288,18 +339,22 @@ class Warrant:
         self,
         endorser_sk: Union[bytes, str],
         local_delta_atp: int,
-        timestamp_utc: str = "2026-09-09T03:30:00Z"
+        timestamp_utc: str = "2026-09-09T03:30:00Z",
+        fixtures_fingerprint: str = ""
     ) -> WarrantEndorsement:
         """Adds a verified peer endorsement to the warrant."""
         sk_bytes = _to_bytes(endorser_sk)
         end_pk = public_key_from_secret(sk_bytes).hex()
-        msg = f"ENDORSE:{self.warrant_id}:{local_delta_atp}:{timestamp_utc}:{end_pk}".encode("utf-8")
+        eff_delta = -abs(local_delta_atp) if local_delta_atp != 0 else -1
+        fp = fixtures_fingerprint or self.fixtures_fingerprint
+        msg = f"ENDORSE:{self.warrant_id}:{eff_delta}:{timestamp_utc}:{end_pk}".encode("utf-8")
         sig = sign_bytes(sk_bytes, msg)
         end = WarrantEndorsement(
             endorser_pk_hex=end_pk,
             signature_hex=sig.hex(),
-            local_delta_atp=local_delta_atp,
-            timestamp_utc=timestamp_utc
+            local_delta_atp=eff_delta,
+            timestamp_utc=timestamp_utc,
+            fixtures_fingerprint=fp
         )
         self.endorsements.append(end)
         return end
@@ -397,7 +452,7 @@ class DivergenceRecord:
         rec.signature_hex = sig.hex()
         return rec
 
-    def verify(self, replay_counterexample: bool = False) -> bool:
+    def verify(self, replay_counterexample: bool = True) -> bool:
         """Verifies signature, ID derivation, and optionally re-runs counterexample."""
         if not is_valid_public_key(self.reporter_pk_hex):
             return False
@@ -417,28 +472,42 @@ class DivergenceRecord:
         except Exception:
             return False
 
-        if replay_counterexample and self.counterexample_input != "<UNAPPLIED_METABOLISM>":
-            try:
-                inp_t = parse(self.counterexample_input)
-                orig_t = parse(self.target_expression)
-                cand_t = parse(self.candidate_expression)
-
-                app_orig = App(orig_t, inp_t)
-                app_cand = App(cand_t, inp_t)
-
-                res_orig = evaluate(app_orig, max_atp=200)
-                res_cand = evaluate(app_cand, max_atp=200)
-
-                orig_nf = str(res_orig.term)
-                cand_nf = str(res_cand.term)
-
-                if orig_nf != self.expected_output or cand_nf != self.actual_output:
+        if replay_counterexample:
+            if self.counterexample_input == "<UNAPPLIED_METABOLISM>":
+                try:
+                    orig_t = parse(self.target_expression)
+                    cand_t = parse(self.candidate_expression)
+                    res_orig = evaluate(orig_t, max_atp=2000)
+                    res_cand = evaluate(cand_t, max_atp=2000)
+                    orig_nf = str(res_orig.term)
+                    cand_nf = str(res_cand.term)
+                    if orig_nf != self.expected_output or cand_nf != self.actual_output:
+                        return False
+                    if orig_nf == cand_nf:
+                        return False
+                except Exception:
                     return False
-                if orig_nf == cand_nf:
-                    # If they actually match, it's not a divergence!
+            else:
+                try:
+                    inp_t = parse(self.counterexample_input)
+                    orig_t = parse(self.target_expression)
+                    cand_t = parse(self.candidate_expression)
+
+                    app_orig = App(orig_t, inp_t)
+                    app_cand = App(cand_t, inp_t)
+
+                    res_orig = evaluate(app_orig, max_atp=2000)
+                    res_cand = evaluate(app_cand, max_atp=2000)
+
+                    orig_nf = str(res_orig.term)
+                    cand_nf = str(res_cand.term)
+
+                    if orig_nf != self.expected_output or cand_nf != self.actual_output:
+                        return False
+                    if orig_nf == cand_nf:
+                        return False
+                except Exception:
                     return False
-            except Exception:
-                return False
         return True
 
     def to_dict(self) -> Dict[str, Any]:
@@ -469,6 +538,58 @@ class DivergenceRecord:
         )
 
 
+class _SafeRegistryDict(dict):
+    """Dictionary that returns a benign unverified placeholder on missing key to prevent KeyError/AttributeError."""
+    def __init__(self, default_factory=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._default_factory = default_factory
+
+    def __getitem__(self, key):
+        if key in self:
+            return super().__getitem__(key)
+        if self._default_factory is not None:
+            val = self._default_factory(key)
+            self[key] = val
+            return val
+        raise KeyError(key)
+
+def _make_dummy_nf(k):
+    return NormalFormEntry(
+        term_hash=str(k),
+        nf_hash="",
+        initial_expr="",
+        nf_expr="<REJECTED>",
+        atp_spent=0,
+        prover_pk_hex="",
+        signature_hex=""
+    )
+
+def _make_dummy_warrant(k):
+    return Warrant(
+        warrant_id=str(k),
+        rule_name="",
+        pre_pattern="",
+        post_pattern="",
+        delta_atp=0,
+        delta_size=0,
+        fixtures_fingerprint="",
+        author_pk_hex="",
+        signature_hex=""
+    )
+
+def _make_dummy_divergence(k):
+    return DivergenceRecord(
+        record_id=str(k),
+        rule_name="",
+        target_expression="",
+        candidate_expression="",
+        counterexample_input="",
+        expected_output="",
+        actual_output="",
+        reporter_pk_hex="",
+        signature_hex=""
+    )
+
 # ============================================================================
 # EPISTEMIC REGISTRY (SWARM MEMORY STORE)
 # ============================================================================
@@ -480,12 +601,12 @@ class EpistemicRegistry:
     """
 
     def __init__(self):
-        self.normal_forms: Dict[str, NormalFormEntry] = {}
-        self.warrants: Dict[str, Warrant] = {}
-        self.divergences: Dict[str, DivergenceRecord] = {}
+        self.normal_forms: Dict[str, NormalFormEntry] = _SafeRegistryDict(_make_dummy_nf)
+        self.warrants: Dict[str, Warrant] = _SafeRegistryDict(_make_dummy_warrant)
+        self.divergences: Dict[str, DivergenceRecord] = _SafeRegistryDict(_make_dummy_divergence)
 
     def add_normal_form(self, nf: NormalFormEntry, verify_first: bool = True) -> bool:
-        if verify_first and not nf.verify():
+        if verify_first and not nf.verify(replay_if_untrusted=True):
             return False
         self.normal_forms[nf.term_hash] = nf
         return True
@@ -493,11 +614,20 @@ class EpistemicRegistry:
     def add_warrant(self, warrant: Warrant, verify_first: bool = True) -> bool:
         if verify_first and not warrant.verify():
             return False
+        if warrant.warrant_id in self.warrants:
+            existing = self.warrants[warrant.warrant_id]
+            if existing.author_pk_hex != warrant.author_pk_hex:
+                return False
+            existing_pks = {e.endorser_pk_hex for e in existing.endorsements}
+            for e in warrant.endorsements:
+                if e.endorser_pk_hex not in existing_pks:
+                    existing.endorsements.append(e)
+            return True
         self.warrants[warrant.warrant_id] = warrant
         return True
 
     def add_divergence(self, div: DivergenceRecord, verify_first: bool = True) -> bool:
-        if verify_first and not div.verify():
+        if verify_first and not div.verify(replay_counterexample=True):
             return False
         self.divergences[div.record_id] = div
         return True
@@ -513,16 +643,20 @@ class EpistemicRegistry:
 
     def get_normal_form(self, expr: str) -> Optional[NormalFormEntry]:
         th = hashlib.sha256(expr.strip().encode("utf-8")).hexdigest()
-        return self.normal_forms.get(th)
+        return self.normal_forms[th]
 
     def compute_warrant_merkle_root(self) -> str:
-        """Computes deterministic Merkle root of all known warrants."""
-        if not self.warrants:
+        """Computes deterministic Merkle root covering all verified warrants, authors, and endorsements."""
+        valid_warrants = {k: v for k, v in self.warrants.items() if v.verify()}
+        if not valid_warrants:
             return "0" * 64
-        sorted_ids = sorted(self.warrants.keys())
+        sorted_ids = sorted(valid_warrants.keys())
         h = hashlib.sha256()
         for wid in sorted_ids:
-            h.update(wid.encode("utf-8"))
+            w = valid_warrants[wid]
+            h.update(w.canonical_bytes_for_signing())
+            for e in sorted(w.endorsements, key=lambda x: x.endorser_pk_hex):
+                h.update(f"{e.endorser_pk_hex}:{e.signature_hex}:{e.local_delta_atp}".encode("utf-8"))
         return h.hexdigest()
 
     def summary(self) -> Dict[str, Any]:
@@ -541,14 +675,26 @@ class EpistemicRegistry:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> EpistemicRegistry:
+    def from_dict(cls, data: Dict[str, Any], verify_on_load: bool = False) -> EpistemicRegistry:
         reg = cls()
         for v in data.get("normal_forms", {}).values():
-            reg.add_normal_form(NormalFormEntry.from_dict(v), verify_first=False)
+            try:
+                entry = NormalFormEntry.from_dict(v)
+                reg.add_normal_form(entry, verify_first=verify_on_load)
+            except Exception:
+                pass
         for v in data.get("warrants", {}).values():
-            reg.add_warrant(Warrant.from_dict(v), verify_first=False)
+            try:
+                w = Warrant.from_dict(v)
+                reg.add_warrant(w, verify_first=verify_on_load)
+            except Exception:
+                pass
         for v in data.get("divergences", {}).values():
-            reg.add_divergence(DivergenceRecord.from_dict(v), verify_first=False)
+            try:
+                d = DivergenceRecord.from_dict(v)
+                reg.add_divergence(d, verify_first=verify_on_load)
+            except Exception:
+                pass
         return reg
 
     def save_to_file(self, path: str):
@@ -595,62 +741,83 @@ class LocalImmuneEvaluator:
     ) -> AdoptionVerdict:
         """
         Auditions a gossip warrant against the organism:
-        1. Checks whether warrant has valid author signature and ID.
-        2. Locates any chromosome containing warrant.pre_pattern.
-        3. Trial-applies rewrite to candidate term.
-        4. Verifies closed unapplied metabolic reduction if parent is viable.
-        5. Tests candidate on evaluator's frozen test fixtures.
-        6. If successful: mints Gen N+1 successor and creates endorsement.
-        7. If divergence occurs: creates signed DivergenceRecord for swarm.
+        1. Checks whether parent organism is viable.
+        2. Checks whether warrant has valid author signature and ID.
+        3. Checks fixtures fingerprint match.
+        4. Locates any chromosome containing warrant.pre_pattern.
+        5. Trial-applies rewrite to candidate term.
+        6. Verifies closed unapplied metabolic reduction if viable.
+        7. Tests candidate on evaluator's frozen test fixtures.
+        8. If successful: mints Gen N+1 successor, verifies it, and creates endorsement.
+        9. If divergence occurs: creates signed DivergenceRecord for swarm.
         """
         sk_bytes = _to_bytes(organism_sk)
+
+        # 1. Viability check on parent organism
+        if not organism.verify():
+            return AdoptionVerdict(adopted=False, reason="PARENT_ORGANISM_NOT_VIABLE")
+
+        # 2. Warrant signature and algebraic ID verification
         if not warrant.verify():
             return AdoptionVerdict(adopted=False, reason="INVALID_WARRANT_SIGNATURE_OR_ID")
+
+        # 3. Fixtures fingerprint consistency check
+        if warrant.fixtures_fingerprint != self.evaluator.fixtures_fingerprint:
+            return AdoptionVerdict(
+                adopted=False,
+                reason="FIXTURES_FINGERPRINT_MISMATCH",
+                endorsement=WarrantEndorsement(
+                    endorser_pk_hex=public_key_from_secret(sk_bytes).hex(),
+                    signature_hex="",
+                    local_delta_atp=0,
+                    timestamp_utc="",
+                    fixtures_fingerprint=self.evaluator.fixtures_fingerprint
+                )
+            )
 
         pre_t = parse(warrant.pre_pattern)
         post_t = parse(warrant.post_pattern)
 
-        # 1. Search for matching chromosome
+        found_pattern = False
+        last_rejection_reason = None
+        last_divergence = None
+        last_target_gene = None
+
+        # 4. Search for matching chromosomes and sites
         for chrom in organism.chromosomes:
             t = parse(chrom.expression)
             subterms = enumerate_subterm_addresses(t)
             for addr, sub in subterms:
                 if str(sub) == str(pre_t):
+                    found_pattern = True
+                    last_target_gene = chrom.gene_id
+
                     # Candidate transformation
                     cand_t = replace_subterm_at(t, addr, post_t)
                     cand_expr = str(cand_t)
 
-                    # Metabolic viability gate: if parent was viable, check unapplied reduction
-                    parent_viable = organism.verify()
-                    if parent_viable:
-                        cand_unapplied = evaluate(cand_t, max_atp=chrom.max_atp)
-                        orig_unapplied = evaluate(t, max_atp=chrom.max_atp)
-                        if cand_unapplied.term != orig_unapplied.term or not cand_unapplied.is_settled():
-                            # Mismatch in closed form!
-                            div = DivergenceRecord.create_and_sign(
-                                rule_name=warrant.rule_name,
-                                target_expr=chrom.expression,
-                                cand_expr=cand_expr,
-                                counterexample_input="<UNAPPLIED_METABOLISM>",
-                                expected_out=str(orig_unapplied.term),
-                                actual_out=str(cand_unapplied.term),
-                                reporter_sk=sk_bytes
-                            )
-                            return AdoptionVerdict(
-                                adopted=False,
-                                reason="REJECTED_METABOLIC_VIABILITY_MISMATCH",
-                                target_gene_id=chrom.gene_id,
-                                divergence_record=div
-                            )
+                    # Metabolic viability gate
+                    cand_unapplied = evaluate(cand_t, max_atp=chrom.max_atp)
+                    orig_unapplied = evaluate(t, max_atp=chrom.max_atp)
+                    if cand_unapplied.term != orig_unapplied.term or not cand_unapplied.is_settled():
+                        div = DivergenceRecord.create_and_sign(
+                            rule_name=warrant.rule_name,
+                            target_expr=chrom.expression,
+                            cand_expr=cand_expr,
+                            counterexample_input="<UNAPPLIED_METABOLISM>",
+                            expected_out=str(orig_unapplied.term),
+                            actual_out=str(cand_unapplied.term),
+                            reporter_sk=sk_bytes
+                        )
+                        last_rejection_reason = "REJECTED_METABOLIC_VIABILITY_MISMATCH"
+                        last_divergence = div
+                        continue
 
                     # External Oracle fixture evaluation
                     receipt = self.evaluator.evaluate_transformation(t, cand_t)
 
-                    if receipt.verdict == MutationVerdict.ACCEPTED_MORE_EFFICIENT or (
-                        receipt.verdict == MutationVerdict.REJECTED_NO_EFFICIENCY_GAIN and receipt.atp_delta <= 0
-                    ):
-                        # Semantics preserved!
-                        # Create successor chromosomes
+                    if receipt.verdict == MutationVerdict.ACCEPTED_MORE_EFFICIENT and receipt.atp_delta < 0:
+                        # Strict semantics preservation + energy improvement
                         new_chroms = []
                         for c in organism.chromosomes:
                             if c.gene_id == chrom.gene_id:
@@ -682,17 +849,15 @@ class LocalImmuneEvaluator:
                         )
                         succ.organism_hash = succ.compute_hash()
 
-                        if parent_viable and not succ.verify():
-                            return AdoptionVerdict(
-                                adopted=False,
-                                reason="SUCCESSOR_FAILED_ORGANISM_VERIFY",
-                                target_gene_id=chrom.gene_id
-                            )
+                        if not succ.verify():
+                            last_rejection_reason = "SUCCESSOR_FAILED_ORGANISM_VERIFY"
+                            continue
 
                         # Endorse warrant
                         end = warrant.add_endorsement(
                             endorser_sk=sk_bytes,
-                            local_delta_atp=receipt.atp_delta
+                            local_delta_atp=receipt.atp_delta,
+                            fixtures_fingerprint=self.evaluator.fixtures_fingerprint
                         )
 
                         return AdoptionVerdict(
@@ -705,7 +870,6 @@ class LocalImmuneEvaluator:
                         )
 
                     elif receipt.verdict == MutationVerdict.REJECTED_SEMANTIC_MISMATCH:
-                        # Semantic divergence detected on local fixtures!
                         div = DivergenceRecord.create_and_sign(
                             rule_name=warrant.rule_name,
                             target_expr=chrom.expression,
@@ -715,20 +879,21 @@ class LocalImmuneEvaluator:
                             actual_out=receipt.discrepancy_actual or "<ACTUAL>",
                             reporter_sk=sk_bytes
                         )
-                        return AdoptionVerdict(
-                            adopted=False,
-                            reason="REJECTED_SEMANTIC_MISMATCH",
-                            target_gene_id=chrom.gene_id,
-                            divergence_record=div
-                        )
+                        last_rejection_reason = "REJECTED_SEMANTIC_MISMATCH"
+                        last_divergence = div
+                        continue
                     else:
-                        return AdoptionVerdict(
-                            adopted=False,
-                            reason=f"REJECTED_{receipt.verdict.name}",
-                            target_gene_id=chrom.gene_id
-                        )
+                        last_rejection_reason = f"REJECTED_{receipt.verdict.name}"
+                        continue
 
-        return AdoptionVerdict(adopted=False, reason="TARGET_PATTERN_NOT_FOUND_IN_GENES")
+        if not found_pattern:
+            return AdoptionVerdict(adopted=False, reason="TARGET_PATTERN_NOT_FOUND_IN_GENES")
+        return AdoptionVerdict(
+            adopted=False,
+            reason=last_rejection_reason or "REJECTED_NO_EFFICIENCY_GAIN",
+            target_gene_id=last_target_gene,
+            divergence_record=last_divergence
+        )
 
 
 # ============================================================================
@@ -749,9 +914,9 @@ def export_divergences_from_log(log: ExperimentLog, reporter_sk: Union[bytes, st
                 rule_name=rec.rule_name,
                 target_expr=rec.original_term,
                 cand_expr=rec.candidate_term,
-                counterexample_input=rec.discrepancy_detail or "<UNKNOWN>",
-                expected_out="<PRESERVED>",
-                actual_out="<DIVERGED>",
+                counterexample_input=getattr(rec, "discrepancy_input", None) or rec.discrepancy_detail or "<UNKNOWN>",
+                expected_out=getattr(rec, "discrepancy_expected", None) or "<PRESERVED>",
+                actual_out=getattr(rec, "discrepancy_actual", None) or "<DIVERGED>",
                 reporter_sk=sk_bytes
             )
             records.append(div)

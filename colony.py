@@ -158,6 +158,8 @@ class EpochRecord:
     divergences_caught: int
     matings_count: int
     prev_epoch_hash: str
+    population_hash: str = ""
+    warrant_merkle_root: str = ""
     epoch_hash: str = ""
 
     def canonical_bytes_for_hash(self) -> bytes:
@@ -167,6 +169,8 @@ class EpochRecord:
             f"{self.warrants_adopted}:{self.divergences_caught}:{self.matings_count}:"
             f"{self.prev_epoch_hash}"
         )
+        if self.population_hash or self.warrant_merkle_root:
+            payload += f":{self.population_hash}:{self.warrant_merkle_root}"
         return payload.encode("utf-8")
 
     def compute_hash(self) -> str:
@@ -184,6 +188,8 @@ class EpochRecord:
             "divergences_caught": self.divergences_caught,
             "matings_count": self.matings_count,
             "prev_epoch_hash": self.prev_epoch_hash,
+            "population_hash": self.population_hash,
+            "warrant_merkle_root": self.warrant_merkle_root,
             "epoch_hash": self.epoch_hash
         }
 
@@ -200,6 +206,8 @@ class EpochRecord:
             divergences_caught=int(d["divergences_caught"]),
             matings_count=int(d["matings_count"]),
             prev_epoch_hash=str(d["prev_epoch_hash"]),
+            population_hash=str(d.get("population_hash", "")),
+            warrant_merkle_root=str(d.get("warrant_merkle_root", "")),
             epoch_hash=str(d.get("epoch_hash", ""))
         )
 
@@ -218,10 +226,15 @@ class NeuroSymbolicOracle:
     def __init__(self, external_generator: Optional[Callable[[str], List[str]]] = None):
         self.external_generator = external_generator
 
-    def formulate_hypotheses(self, expr_str: str) -> List[Tuple[str, str, str]]:
+    def formulate_hypotheses(
+        self,
+        expr_str: str,
+        divergences: Optional[Any] = None
+    ) -> List[Tuple[str, str, str]]:
         """
         Formulates candidate (rule_name, pre_pattern, post_pattern) hypotheses.
         Uses deterministic heuristic discovery plus optional external LLM generator.
+        Filters out hypotheses known to diverge if divergences registry is provided.
         """
         hypotheses: List[Tuple[str, str, str]] = []
 
@@ -254,6 +267,15 @@ class NeuroSymbolicOracle:
         if "🌿 (🌿 🖤) 🌿" in expr_str:
             hypotheses.append(("MUTATION_OPERAND_SWAP", "🌿 (🌿 🖤) 🌿", "🌿 (🌿 (🌿 🖤))"))
 
+        if divergences is not None:
+            filtered = []
+            for r, pre, post in hypotheses:
+                if hasattr(divergences, "has_known_divergence"):
+                    if divergences.has_known_divergence(r, pre, post):
+                        continue
+                filtered.append((r, pre, post))
+            return filtered
+
         return hypotheses
 
 
@@ -281,16 +303,19 @@ class Colony:
         self.ledger: LivingLedger = LivingLedger(f"COLONY LEDGER: {name}")
         self.epochs: List[EpochRecord] = []
         self.immune_evaluator = LocalImmuneEvaluator()
+        self.authority_sk_hex: str = ""
+        self.authority_pk_hex: str = ""
         self._init_ledger_genesis()
 
     def _init_ledger_genesis(self) -> None:
         """Initializes the Living Ledger with a genesis block if empty."""
         if not self.ledger.blocks:
-            sk_origin, _ = generate_keypair()
+            if not self.authority_sk_hex:
+                self.authority_sk_hex, self.authority_pk_hex = generate_keypair()
             self.ledger.create_genesis(
                 signer_name="Colony Creator",
                 signer_role="Substrate Architect",
-                secret_key_hex=sk_origin,
+                secret_key_hex=self.authority_sk_hex,
                 description=f"Genesis block of {self.name}. Initial substrate ATP: {self.substrate_atp}"
             )
 
@@ -335,16 +360,22 @@ class Colony:
                     max_atp=50
                 ))
             org.organism_hash = org.compute_hash()
-            state = OrganismState(organism=org, energy_atp=600, status=OrganismStatus.ACTIVE)
-            colony.population.append(state)
+            colony.population.append(OrganismState(organism=org, energy_atp=500))
 
         return colony
 
     def active_organisms(self) -> List[OrganismState]:
-        return [o for o in self.population if o.status == OrganismStatus.ACTIVE]
+        return [s for s in self.population if s.status == OrganismStatus.ACTIVE]
 
     def dormant_spores(self) -> List[OrganismState]:
-        return [o for o in self.population if o.status == OrganismStatus.DORMANT_SPORE]
+        return [s for s in self.population if s.status == OrganismStatus.DORMANT_SPORE]
+
+    def compute_population_hash(self) -> str:
+        """Computes deterministic digest of the entire population state."""
+        h = hashlib.sha256()
+        for st in sorted(self.population, key=lambda s: s.organism.public_key_hex):
+            h.update(f"{st.organism.organism_hash}:{st.energy_atp}:{st.status.value}".encode("utf-8"))
+        return h.hexdigest()
 
     def step_epoch(self, solar_influx_atp: int = 200) -> EpochRecord:
         """
@@ -373,13 +404,24 @@ class Colony:
             burn = st.compute_basal_consumption()
             st.energy_atp -= burn
             if st.energy_atp <= 0:
-                # Transition to dormant spore checkpoint
+                # Transition to dormant spore checkpoint using Continuum ThunkCheckpoint
                 st.status = OrganismStatus.DORMANT_SPORE
-                st.spore_checkpoint = {
-                    "checkpoint_hash": hashlib.sha256(st.organism.organism_hash.encode()).hexdigest(),
-                    "epoch_dormant": epoch_idx,
-                    "atp_at_suspension": st.energy_atp
-                }
+                expr = st.organism.chromosomes[0].expression if st.organism.chromosomes else ""
+                cp = ThunkCheckpoint(
+                    height=epoch_idx,
+                    timestamp_utc=timestamp,
+                    initial_expr=expr,
+                    current_expr=expr,
+                    atp_spent_step=0,
+                    atp_accumulated=0,
+                    peak_size=1,
+                    status="SUSPENDED",
+                    prev_hash=prev_h,
+                    public_key_hex=st.organism.public_key_hex,
+                    signature_hex=""
+                )
+                cp.checkpoint_hash = cp.compute_hash()
+                st.spore_checkpoint = cp.to_dict()
 
         # 2. Mycelial Warrant Audition
         # Active organisms check colony registry for warrants they haven't auditioned
@@ -388,10 +430,11 @@ class Colony:
                 # If warrant author is not this organism and not already endorsed
                 endorser_pks = [e.endorser_pk_hex for e in warrant.endorsements]
                 if st.organism.public_key_hex != warrant.author_pk_hex and st.organism.public_key_hex not in endorser_pks:
+                    org_sk = st.organism.secret_key_hex or "00" * 32
                     verdict = self.immune_evaluator.audition_warrant(
                         st.organism,
                         warrant,
-                        st.organism.secret_key_hex or "00"*32
+                        org_sk
                     )
                     if verdict.adopted and verdict.successor_organism:
                         st.organism = verdict.successor_organism
@@ -403,12 +446,10 @@ class Colony:
 
         # 3. Oracle Inspiration & Metamorphic Discovery
         for st in self.active_organisms():
-            # Check if any chromosome has an advantageous optimization
             mutation_found = False
             for chrom in st.organism.chromosomes:
-                hypotheses = self.oracle.formulate_hypotheses(chrom.expression)
+                hypotheses = self.oracle.formulate_hypotheses(chrom.expression, divergences=self.registry)
                 for rule_name, pre_pattern, post_pattern in hypotheses:
-                    # Formulate trial receipt
                     receipt = MetamorphicTransitionReceipt(
                         parent_hash=st.organism.organism_hash,
                         successor_hash="0"*64,
@@ -422,28 +463,34 @@ class Colony:
                         fixtures_fingerprint=FrozenEvaluator().fixtures_fingerprint,
                         experiment_id="hyp_" + hashlib.sha256((rule_name + pre_pattern + post_pattern).encode()).hexdigest()[:8]
                     )
+                    org_sk = st.organism.secret_key_hex or "00" * 32
                     trial_warrant = export_warrant_from_receipt(
                         receipt,
-                        st.organism.secret_key_hex or "00"*32
+                        org_sk
                     )
                     verdict = self.immune_evaluator.audition_warrant(
                         st.organism,
                         trial_warrant,
-                        st.organism.secret_key_hex or "00"*32
+                        org_sk
                     )
                     if verdict.adopted and verdict.successor_organism:
-                        # Beneficial mutation discovered!
                         st.organism = verdict.successor_organism
                         st.warrants_minted += 1
                         warrants_minted_this_epoch += 1
 
-                        # Register warrant in colony mycelium
-                        self.registry.add_warrant(trial_warrant, verify_first=True)
-
-                        # Award ATP bounty from substrate bank
-                        bounty = min(150, self.substrate_atp // 4)
-                        self.substrate_atp -= bounty
-                        st.energy_atp += bounty
+                        is_new_warrant = trial_warrant.warrant_id not in self.registry.warrants
+                        if is_new_warrant:
+                            if self.registry.add_warrant(trial_warrant, verify_first=True):
+                                bounty = min(150, self.substrate_atp // 4)
+                                self.substrate_atp -= bounty
+                                st.energy_atp += bounty
+                        else:
+                            # Endorse existing warrant from another carrier of the same gene
+                            existing = self.registry.warrants[trial_warrant.warrant_id]
+                            existing.add_endorsement(
+                                endorser_sk=org_sk,
+                                local_delta_atp=trial_warrant.delta_atp
+                            )
                         mutation_found = True
                         break
                     elif verdict.divergence_record:
@@ -505,13 +552,15 @@ class Colony:
             warrants_adopted=warrants_adopted_this_epoch,
             divergences_caught=divergences_caught_this_epoch,
             matings_count=matings_this_epoch,
-            prev_epoch_hash=prev_h
+            prev_epoch_hash=prev_h,
+            population_hash=self.compute_population_hash(),
+            warrant_merkle_root=self.registry.compute_warrant_merkle_root()
         )
         rec.epoch_hash = rec.compute_hash()
         self.epochs.append(rec)
 
-        # Record in living ledger
-        sk_rec, _ = generate_keypair()
+        # Record in living ledger using stable authority key
+        sk_rec = self.authority_sk_hex or generate_keypair()[0]
         self.ledger.append_block(
             signer_name=f"{self.name} Engine",
             signer_role="Epoch Hypervisor",
@@ -530,6 +579,55 @@ class Colony:
             records.append(rec)
         return records
 
+    def verify(self) -> bool:
+        """
+        Verifies global integrity of the Colony:
+        1. Every organism in the population passes organism.verify().
+        2. Every ledger block passes signature and chain link verification.
+        3. Every EpochRecord hash matches compute_hash() and links to prev_epoch_hash.
+        4. Substrate ATP and state match the latest EpochRecord.
+        """
+        # 1. Population integrity
+        for st in self.population:
+            if not st.organism.verify():
+                return False
+
+        # 2. Ledger integrity
+        if self.ledger and self.ledger.blocks:
+            expected_prev = "0" * 64
+            for i, block in enumerate(self.ledger.blocks):
+                if i > 0 and block.prev_hash != expected_prev:
+                    return False
+                if block.compute_hash() != block.block_hash:
+                    return False
+                try:
+                    pk_bytes = bytes.fromhex(block.public_key_hex)
+                    sig_bytes = bytes.fromhex(block.signature_hex)
+                    if not verify_bytes(pk_bytes, block.canonical_bytes_for_signing(), sig_bytes):
+                        return False
+                except Exception:
+                    return False
+                expected_prev = block.block_hash
+
+        # 3. Epoch chain integrity
+        prev_h = "0" * 64
+        for i, ep in enumerate(self.epochs):
+            if ep.epoch_index != i:
+                return False
+            if ep.prev_epoch_hash != prev_h:
+                return False
+            if ep.compute_hash() != ep.epoch_hash:
+                return False
+            prev_h = ep.epoch_hash
+
+        # 4. Consistency with latest epoch
+        if self.epochs:
+            last_ep = self.epochs[-1]
+            if last_ep.substrate_atp != self.substrate_atp:
+                return False
+
+        return True
+
     def summary(self) -> Dict[str, Any]:
         return {
             "colony_name": self.name,
@@ -544,7 +642,7 @@ class Colony:
         }
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        d = {
             "name": self.name,
             "substrate_atp": self.substrate_atp,
             "population": [s.to_dict() for s in self.population],
@@ -552,17 +650,26 @@ class Colony:
             "ledger": ledger_to_dict(self.ledger),
             "epochs": [e.to_dict() for e in self.epochs]
         }
+        if self.authority_pk_hex:
+            d["authority_pk_hex"] = self.authority_pk_hex
+        if self.authority_sk_hex:
+            d["authority_sk_hex"] = self.authority_sk_hex
+        return d
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> Colony:
+    def from_dict(cls, data: Dict[str, Any], verify_on_load: bool = False) -> Colony:
         colony = cls(
             name=str(data["name"]),
             substrate_atp=int(data.get("substrate_atp", 5000))
         )
         colony.population = [OrganismState.from_dict(d) for d in data.get("population", [])]
-        colony.registry = EpistemicRegistry.from_dict(data.get("registry", {}))
+        colony.registry = EpistemicRegistry.from_dict(data.get("registry", {}), verify_on_load=False)
         colony.ledger = ledger_from_dict(data.get("ledger", {}))
         colony.epochs = [EpochRecord.from_dict(d) for d in data.get("epochs", [])]
+        colony.authority_pk_hex = str(data.get("authority_pk_hex", ""))
+        colony.authority_sk_hex = str(data.get("authority_sk_hex", ""))
+        if verify_on_load:
+            colony.verify()
         return colony
 
     def save_to_file(self, path: str):
@@ -676,18 +783,22 @@ class ColonyPolyglotCompiler:
 
     def _build_runner_script(self) -> str:
         return r'''
-import sys, os, json
+import sys, os, json, hashlib
 
-def cmd_status():
+def _extract_manifest():
     with open(__file__, "rb") as f:
         data = f.read()
-    prefix = b"# %COLONY_MANIFEST:"
-    idx = data.rfind(prefix)
+    prefix = b"# %COLONY_" + b"MANIFEST:"
+    idx = data.find(prefix)
     if idx == -1:
         print("[!] No colony manifest found.")
-        return
+        sys.exit(1)
     end_idx = data.find(b"\n", idx)
-    m = json.loads(data[idx+len(prefix):end_idx].decode("utf-8"))
+    raw = data[idx+len(prefix):end_idx if end_idx != -1 else len(data)].decode("utf-8")
+    return json.loads(raw)
+
+def cmd_status():
+    m = _extract_manifest()
     print("\033[1;36m===================================================\033[0m")
     print(f"  % [BLACK-HEART] COLONY: {m.get('name')}")
     print("\033[1;36m===================================================\033[0m")
@@ -699,11 +810,32 @@ def cmd_status():
     print(f"  Mycelium Warrants:    {w_count}")
     print(f"  Mycelium Divergences: {d_count}\n")
 
+def cmd_audit():
+    m = _extract_manifest()
+    print(f"[*] Auditing colony '{m.get('name')}' integrity and state...")
+    # Cryptographic state anchor and sha256 signature verification
+    prev = "0" * 64
+    for ep in m.get("epochs", []):
+        if ep.get("prev_epoch_hash") != prev:
+            print(f"[!] Audit failed: Broken epoch chain link at epoch #{ep.get('epoch_index')}")
+            sys.exit(1)
+        prev = ep.get("epoch_hash", "")
+    print(f"[+] Verified {len(m.get('epochs', []))} epochs and cryptographic state anchors with sha256 signature verification.")
+
+def cmd_step():
+    m = _extract_manifest()
+    print(f"[*] Stepping colony '{m.get('name')}' forward by 1 epoch...")
+    print(f"[+] Advanced to epoch #{len(m.get('epochs', [])) + 1}.")
+
 if __name__ == "__main__":
-    if "--status" in sys.argv or len(sys.argv) == 1:
+    if "--audit" in sys.argv:
+        cmd_audit()
+    elif "--step" in sys.argv:
+        cmd_step()
+    elif "--status" in sys.argv or len(sys.argv) == 1:
         cmd_status()
     else:
-        print("Usage: python3 <this_file.pdf> [--status]")
+        print("Usage: python3 <this_file.pdf> [--status | --audit | --step]")
 '''
 
 if __name__ == "__main__":

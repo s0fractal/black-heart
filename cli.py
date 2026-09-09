@@ -97,7 +97,7 @@ def cmd_keygen(args):
         print("\033[0;37mKeep your secret key secure and unshared.\033[0m\n")
 
 def cmd_verify(args):
-    """Audits and verifies any Black-Heart polyglot PDF."""
+    """Audits and verifies any Black-Heart polyglot PDF purely as data without executing arbitrary code."""
     target = args.file
     if not os.path.exists(target):
         print(f"\033[1;31m[!] Error: File not found: {target}\033[0m")
@@ -110,33 +110,86 @@ def cmd_verify(args):
     print(f"  %🖤 BLACK-HEART AUDIT: {os.path.basename(target)}")
     print("=" * 65 + "\033[0m\n")
 
+    success = False
     # Detect polyglot type
-    if "%🖤 BILATERAL_AGREEMENT_MANIFEST:".encode("utf-8") in content:
+    if "%🖤 BILATERAL_MANIFEST:".encode("utf-8") in content or "%🖤 BILATERAL_AGREEMENT_MANIFEST:".encode("utf-8") in content:
         print("[*] Detected Bilateral Agreement Polyglot.")
-        os.system(f"{sys.executable} {target}")
-    elif "%🖤 TELEMETRY_ORACLE_MANIFEST:".encode("utf-8") in content:
+        from cross_proof import audit_agreement_polyglot
+        success = audit_agreement_polyglot(target)
+    elif "%🖤 ORACLE_MANIFEST:".encode("utf-8") in content or "%🖤 TELEMETRY_ORACLE_MANIFEST:".encode("utf-8") in content:
         print("[*] Detected Telemetry Oracle Polyglot.")
-        os.system(f"{sys.executable} {target}")
+        from cross_proof import audit_oracle_polyglot
+        success = audit_oracle_polyglot(target)
     elif "%🖤 CONTINUUM_THUNK:".encode("utf-8") in content:
         print("[*] Detected Continuum Resumable Thunk Polyglot.")
-        os.system(f"{sys.executable} {target}")
+        from continuum import audit_self
+        try:
+            audit_self(target)
+            success = True
+        except Exception as e:
+            print(f"[!] Continuum verification failed: {e}")
+            success = False
     elif "%🖤 ZK_PROOF_MANIFEST:".encode("utf-8") in content:
         print("[*] Detected Zero-Knowledge Proof-Carrying Contract.")
-        os.system(f"{sys.executable} {target}")
+        from zk_glyph import audit_zkp
+        try:
+            audit_zkp(target)
+            success = True
+        except Exception as e:
+            print(f"[!] ZK proof verification failed: {e}")
+            success = False
     elif "%🖤 CONTRACT_MANIFEST:".encode("utf-8") in content:
         print("[*] Detected Proof-Carrying Contract Polyglot.")
-        os.system(f"{sys.executable} {target}")
+        from monad import audit_contract_polyglot
+        success = audit_contract_polyglot(target)
     elif "%🖤 LEDGER_MANIFEST:".encode("utf-8") in content:
         print("[*] Detected Multi-Block Living Polyglot Ledger.")
-        os.system(f"{sys.executable} {target}")
+        from living_ledger import LivingLedger
+        try:
+            ledger = LivingLedger.load_from_polyglot(target)
+            success = ledger.verify()
+        except Exception as e:
+            print(f"[!] Ledger verification failed: {e}")
+            success = False
+    elif "%🖤 METAMORPHIC_TRANSITION:".encode("utf-8") in content:
+        print("[*] Detected Metamorphic Organism Polyglot.")
+        from metamorphosis import audit_metamorphic_transition
+        try:
+            audit_metamorphic_transition(target)
+            success = True
+        except Exception as e:
+            print(f"[!] Metamorphic verification failed: {e}")
+            success = False
+    elif "%🖤 COLONY_MANIFEST:".encode("utf-8") in content:
+        print("[*] Detected Living Colony Ecosystem Polyglot.")
+        from colony import Colony
+        try:
+            colony = Colony.load_from_polyglot(target)
+            success = colony.verify()
+        except Exception as e:
+            print(f"[!] Colony verification failed: {e}")
+            success = False
     elif "%🖤 ORGANISM_GENOME:".encode("utf-8") in content:
         print("[*] Detected Autonomous Self-Reproducing Polyglot Automaton.")
-        os.system(f"{sys.executable} {target}")
+        from organism import extract_organism_from_pdf
+        try:
+            org = extract_organism_from_pdf(target)
+            success = org.verify()
+        except Exception as e:
+            print(f"[!] Organism verification failed: {e}")
+            success = False
     elif "%🖤 CLAIM:".encode("utf-8") in content or "%🖤 CODE_VAULT_MANIFEST:".encode("utf-8") in content:
         print("[*] Detected Self-Verifying Black-Heart Polyglot / Vault.")
-        os.system(f"{sys.executable} {target}")
+        from polyglot import audit_polyglot_claims
+        success = audit_polyglot_claims(target)
     else:
         print("\033[1;31m[!] Not a recognized Black-Heart polyglot document.\033[0m")
+        sys.exit(1)
+
+    if success:
+        print("\033[1;32m[✓ GREEN] Document verification passed successfully.\033[0m")
+    else:
+        print("\033[1;31m[✗ RED] Document verification failed.\033[0m")
         sys.exit(1)
 
 def cmd_compile(args):
@@ -212,12 +265,38 @@ def cmd_adjudicate(args):
     print(f"[*] Agreement Document: {agreement_pdf}")
     print(f"[*] Telemetry Oracle:   {oracle_pdf}\n")
 
-    res = adjudicate_bilateral(agreement_pdf, oracle_pdf)
+    pinned_pk = getattr(args, "pinned_author_pk", None)
+    pinned_hash = getattr(args, "pinned_agreement_hash", None)
+    allow_untrusted = getattr(args, "allow_untrusted_issuer", False)
+
+    if not pinned_pk and not pinned_hash and not allow_untrusted:
+        print("\033[1;31m[✗] ADJUDICATION REJECTED: UNTRUSTED_ISSUER_EVALUATION.\033[0m")
+        print("    Trust root pinning is required to adjudicate bilateral contracts.")
+        print("    Provide --pinned-author-pk <HEX> or --pinned-agreement-hash <HEX>,")
+        print("    or explicitly pass --allow-untrusted-issuer to override.")
+        sys.exit(1)
+
+    try:
+        res = adjudicate_bilateral(
+            agreement_pdf,
+            oracle_pdf,
+            expected_agreement_hash=pinned_hash,
+            expected_author_pk_hex=pinned_pk
+        )
+    except Exception as e:
+        print(f"\033[1;31m[✗] ADJUDICATION FAILED: {e}\033[0m\n")
+        sys.exit(1)
+
+    if res.trust_status == "UNTRUSTED_ISSUER_EVALUATION" and not allow_untrusted:
+        print("\033[1;31m[✗] ADJUDICATION REJECTED: UNTRUSTED_ISSUER_EVALUATION.\033[0m\n")
+        sys.exit(1)
+
     if res.status in ("SETTLED_COMPLIANT", "SETTLED_BREACH"):
         status_color = "\033[1;32m" if res.status == "SETTLED_COMPLIANT" else "\033[1;33m"
         print(f"{status_color}[✓] ADJUDICATION VERIFIED & SETTLED: {res.status}\033[0m")
         print(f"    Joint Bilateral Anchor: ⚓ {res.joint_bilateral_digest}")
         print(f"    Agreement:              {res.agreement_title}")
+        print(f"    Trust Status:           {res.trust_status}")
         print(f"    Oracle:                 {res.oracle_name} ({res.oracle_pk_hex[:16]}...)")
         print(f"    Measured Uptime:        {res.measured_uptime_percent:.2f}% (Target: {res.target_uptime_percent:.2f}%)")
         print(f"    Net Service Due:        ${res.net_service_due_usd} USD (Penalty: ${res.penalty_due_usd} USD)")
@@ -545,6 +624,9 @@ def cmd_colony(args):
     file_path = args.file or "colony.json"
 
     if args.action == "init":
+        if getattr(args, "seed", None) is not None:
+            import random
+            random.seed(args.seed)
         colony = Colony.create_genesis_colony(
             name=args.name,
             initial_organisms=args.organisms,
@@ -561,8 +643,11 @@ def cmd_colony(args):
     elif args.action == "step":
         if not os.path.exists(file_path):
             print(f"[!] Colony state file '{file_path}' not found. Run 'init' first.")
-            return
+            sys.exit(1)
         colony = Colony.load_from_file(file_path)
+        if not colony.verify():
+            print(f"[!] Integrity check failed: Colony state is corrupted or tampered.")
+            sys.exit(1)
         epochs = args.epochs or 1
         for _ in range(epochs):
             rec = colony.step_epoch(solar_influx_atp=args.solar)
@@ -573,8 +658,11 @@ def cmd_colony(args):
     elif args.action == "status":
         if not os.path.exists(file_path):
             print(f"[!] Colony state file '{file_path}' not found.")
-            return
+            sys.exit(1)
         colony = Colony.load_from_file(file_path)
+        if not colony.verify():
+            print(f"[!] Integrity check failed: Colony '{colony.name}' has invalid state, broken epoch chain, or corrupted chromosomes.")
+            sys.exit(1)
         s = colony.summary()
         print("\033[1;36m===================================================\033[0m")
         print(f"  %🖤 COLONY STATUS: {s['colony_name']}")
@@ -819,6 +907,9 @@ def main():
     p_adj = subparsers.add_parser("adjudicate", help="Bilateral cross-proof adjudication between contract and oracle PDFs")
     p_adj.add_argument("agreement", help="Path to bilateral agreement PDF")
     p_adj.add_argument("oracle", help="Path to telemetry oracle PDF")
+    p_adj.add_argument("--pinned-author-pk", default=None, help="Pinned Ed25519 public key hex of the agreement author")
+    p_adj.add_argument("--pinned-agreement-hash", default=None, help="Pinned SHA-256 agreement document anchor")
+    p_adj.add_argument("--allow-untrusted-issuer", action="store_true", help="Explicitly allow evaluation without pinned trust root")
 
     # continuum
     p_cont = subparsers.add_parser("continuum", help="Suspended Continuum Thunk polyglot operations")
@@ -916,6 +1007,7 @@ def main():
     p_col_init.add_argument("-n", "--name", default="Primeval Mycelium Colony", help="Colony name")
     p_col_init.add_argument("-o", "--organisms", type=int, default=3, help="Initial population count")
     p_col_init.add_argument("-a", "--atp", type=int, default=5000, help="Initial substrate ATP pool")
+    p_col_init.add_argument("--seed", type=int, default=None, help="PRNG seed for deterministic colony simulation")
 
     p_col_step = col_subs.add_parser("step", parents=[col_parent], help="Simulate colony forward by one or more epochs")
     p_col_step.add_argument("-e", "--epochs", type=int, default=1, help="Number of epochs to step")

@@ -24,7 +24,7 @@ from typing import Tuple, Optional, Dict, Any
 from crypto import (
     BASE_POINT, L, Q, Point,
     _scalar_mult, _edwards_add, _encode_point, _decode_point,
-    generate_keypair, public_key_from_secret
+    generate_keypair, public_key_from_secret, is_valid_public_key
 )
 
 ZK_MANIFEST_PREFIX = "%🖤 ZK_PROOF_MANIFEST: "
@@ -115,8 +115,8 @@ def schnorr_prove(secret_key_hex: str, context: str = "BLACK_HEART_PROOF") -> Sc
     R = _scalar_mult(BASE_POINT, r)
     R_bytes = _encode_point(R)
 
-    # 2. Challenge via Fiat-Shamir: e = H(R || P || context) mod L
-    c_hash = hashlib.sha512(R_bytes + P_bytes + context.encode("utf-8")).digest()
+    # 2. Challenge via Fiat-Shamir with domain separation:
+    c_hash = hashlib.sha512(b"BLACK_HEART_SCHNORR_NIZK_V1:" + R_bytes + P_bytes + context.encode("utf-8")).digest()
     e = int.from_bytes(c_hash, "little") % L
 
     # 3. Response: z = (r + e * s) mod L
@@ -133,19 +133,41 @@ def schnorr_prove(secret_key_hex: str, context: str = "BLACK_HEART_PROOF") -> Sc
 def schnorr_verify(proof: SchnorrProof) -> bool:
     """
     Verifies a Schnorr Zero-Knowledge Proof.
-    Checks: z * B == R + e * P
+    Checks: z * B == R + e * P with domain separation, subgroup validation, and non-malleability.
     """
     try:
+        if not isinstance(proof.response_z_hex, str) or len(proof.response_z_hex) != 64:
+            return False
+        if not isinstance(proof.prover_pk_hex, str) or len(proof.prover_pk_hex) != 64:
+            return False
+        if not isinstance(proof.commitment_R_hex, str) or len(proof.commitment_R_hex) != 64:
+            return False
+
+        # Validate public key is in prime-order subgroup
+        if not is_valid_public_key(proof.prover_pk_hex):
+            return False
+
         P_bytes = bytes.fromhex(proof.prover_pk_hex)
         R_bytes = bytes.fromhex(proof.commitment_R_hex)
         z_bytes = bytes.fromhex(proof.response_z_hex)
 
+        z = int.from_bytes(z_bytes, "little")
+        if z < 0 or z >= L:
+            return False
+
         P = _decode_point(P_bytes)
         R = _decode_point(R_bytes)
-        z = int.from_bytes(z_bytes, "little") % L
 
-        # Recompute challenge e = H(R || P || context) mod L
-        c_hash = hashlib.sha512(R_bytes + P_bytes + proof.context.encode("utf-8")).digest()
+        # Reject identity or low-order points for P and R
+        if P == (0, 1) or R == (0, 1):
+            return False
+        if _scalar_mult(P, 8) == (0, 1) or _scalar_mult(R, 8) == (0, 1):
+            return False
+        if _scalar_mult(R, L) != (0, 1):
+            return False
+
+        # Recompute challenge e with domain separation tag
+        c_hash = hashlib.sha512(b"BLACK_HEART_SCHNORR_NIZK_V1:" + R_bytes + P_bytes + proof.context.encode("utf-8")).digest()
         e = int.from_bytes(c_hash, "little") % L
 
         # LHS = z * B
@@ -206,6 +228,8 @@ def chaum_pedersen_prove(
     Generates a proof that log_B(P1) == log_H(P2) == secret_scalar.
     """
     s = secret_scalar % L
+    if s == 0:
+        s = 1
     P1 = _scalar_mult(BASE_POINT, s)
     P2 = _scalar_mult(GENERATOR_H, s)
 
@@ -222,8 +246,8 @@ def chaum_pedersen_prove(
     R1_bytes = _encode_point(R1)
     R2_bytes = _encode_point(R2)
 
-    # Challenge e = H(R1 || R2 || P1 || P2 || context) mod L
-    c_hash = hashlib.sha512(R1_bytes + R2_bytes + P1_bytes + P2_bytes + context.encode("utf-8")).digest()
+    # Challenge with domain separation:
+    c_hash = hashlib.sha512(b"BLACK_HEART_CHAUM_PEDERSEN_V1:" + R1_bytes + R2_bytes + P1_bytes + P2_bytes + context.encode("utf-8")).digest()
     e = int.from_bytes(c_hash, "little") % L
 
     # Response z = (r + e * s) mod L
@@ -247,18 +271,44 @@ def chaum_pedersen_verify(proof: ChaumPedersenProof) -> bool:
       z * H == R2 + e * P2
     """
     try:
+        if not isinstance(proof.response_z_hex, str) or len(proof.response_z_hex) != 64:
+            return False
+        if not isinstance(proof.point_P1_hex, str) or len(proof.point_P1_hex) != 64:
+            return False
+        if not isinstance(proof.point_P2_hex, str) or len(proof.point_P2_hex) != 64:
+            return False
+        if not isinstance(proof.commitment_R1_hex, str) or len(proof.commitment_R1_hex) != 64:
+            return False
+        if not isinstance(proof.commitment_R2_hex, str) or len(proof.commitment_R2_hex) != 64:
+            return False
+
+        if not is_valid_public_key(proof.point_P1_hex) or not is_valid_public_key(proof.point_P2_hex):
+            return False
+
+        z = int.from_bytes(bytes.fromhex(proof.response_z_hex), "little")
+        if z < 0 or z >= L:
+            return False
+
         P1 = _decode_point(bytes.fromhex(proof.point_P1_hex))
         P2 = _decode_point(bytes.fromhex(proof.point_P2_hex))
         R1 = _decode_point(bytes.fromhex(proof.commitment_R1_hex))
         R2 = _decode_point(bytes.fromhex(proof.commitment_R2_hex))
-        z = int.from_bytes(bytes.fromhex(proof.response_z_hex), "little") % L
+
+        if P1 == (0, 1) or P2 == (0, 1) or R1 == (0, 1) or R2 == (0, 1):
+            return False
+        if _scalar_mult(P1, 8) == (0, 1) or _scalar_mult(P2, 8) == (0, 1):
+            return False
+        if _scalar_mult(R1, 8) == (0, 1) or _scalar_mult(R2, 8) == (0, 1):
+            return False
+        if _scalar_mult(R1, L) != (0, 1) or _scalar_mult(R2, L) != (0, 1):
+            return False
 
         R1_bytes = bytes.fromhex(proof.commitment_R1_hex)
         R2_bytes = bytes.fromhex(proof.commitment_R2_hex)
         P1_bytes = bytes.fromhex(proof.point_P1_hex)
         P2_bytes = bytes.fromhex(proof.point_P2_hex)
 
-        c_hash = hashlib.sha512(R1_bytes + R2_bytes + P1_bytes + P2_bytes + proof.context.encode("utf-8")).digest()
+        c_hash = hashlib.sha512(b"BLACK_HEART_CHAUM_PEDERSEN_V1:" + R1_bytes + R2_bytes + P1_bytes + P2_bytes + proof.context.encode("utf-8")).digest()
         e = int.from_bytes(c_hash, "little") % L
 
         # 1. z * B == R1 + e * P1
