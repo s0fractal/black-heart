@@ -30,6 +30,6 @@ jobs:
           pip list
           python3 -c "import sys; print(f'Python {sys.version}')"
 
-      - name: Run Unified Test Suite (24 Engines)
+      - name: Run Unified Test Suite (25 Engines)
         run: |
           python3 test_all.py

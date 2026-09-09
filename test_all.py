@@ -43,7 +43,9 @@ SUITES = [
     ("Autopoietic Quine Organisms", "test_autopoiesis"),
     ("Morphogenetic Autopoiesis Master Synthesis", "test_morpho_autopoiesis"),
     ("Epistemic Kernel & Unified Edge-Claims", "test_warrant_kernel"),
+    ("Controlled Forgetting & Epistemic Retirement", "test_controlled_forgetting"),
 ]
+
 
 def run_all_tests() -> bool:
     print("\033[1;36m" + "=" * 70)

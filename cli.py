@@ -1829,8 +1829,217 @@ def cmd_warrant_kernel(args):
         print("Usage: python3 cli.py warrant-kernel {compile,audit,promote} ...")
 
 
+def cmd_controlled_forgetting(args):
+    """Engine #25: Controlled Forgetting & Epistemic Retirement (CONTROLLED-FORGETTING-0.1)."""
+    import crypto
+    import controlled_forgetting
+    from controlled_forgetting import (
+        RetirementMode, AdmissionStatus, NegativeSpaceMeter,
+        RetirementRecord, ReAdoptionRecord, EpistemicTombstoneRegistry,
+        append_retirement_tombstone_to_pdf, generate_tombstone_stele_pdf
+    )
+
+    if args.action == "retire":
+        target_id = args.target_id
+        target_digest = args.digest
+        mode_str = (args.mode or "DEPRECATED").upper()
+        mode = RetirementMode(mode_str)
+        loss = args.loss or f"Retired {target_id} from active cognitive surface."
+        rep_id = args.replacement
+        if mode == RetirementMode.SUPERSEDED and not rep_id:
+            print("[!] Error: Mode SUPERSEDED requires --replacement <replacement_id>")
+            sys.exit(1)
+
+        sk, pk = crypto.generate_keypair()
+        rule = args.rule or ""
+        cov = NegativeSpaceMeter.calculate_coverage(rule)
+        gas = NegativeSpaceMeter.compute_gas_reclamation(cov)
+
+        rec = RetirementRecord(
+            record_id="",
+            target_id=target_id,
+            target_digest=target_digest,
+            mode=mode,
+            replacement_id=rep_id,
+            loss_declaration=loss,
+            negative_space_coverage=cov,
+            atp_gas_recovered=gas,
+            author_pk_hex=pk,
+            signature_hex=""
+        )
+        rec.sign(sk)
+
+        out_path = args.output or "tombstones.pdf"
+        reg = EpistemicTombstoneRegistry()
+        reg.tombstones[target_id] = rec
+
+        if os.path.exists(out_path):
+            with open(out_path, "rb") as f:
+                src_bytes = f.read()
+            if b"%PDF-" in src_bytes:
+                prefix = bytes([0x23, 0x20, 0x25, 0xf0, 0x9f, 0x96, 0xa4]) + b" RETIREMENT_MANIFEST: "
+                idx = src_bytes.rfind(prefix)
+                if idx != -1:
+                    end = src_bytes.find(b"\n", idx)
+                    old_reg = json.loads(src_bytes[idx + len(prefix):end].decode("utf-8"))
+                    reg = EpistemicTombstoneRegistry.from_dict(old_reg)
+                    reg.tombstones[target_id] = rec
+                append_retirement_tombstone_to_pdf(src_bytes, out_path, rec, reg)
+                action_str = "INCREMENTALLY APPENDED TOMBSTONE STELE"
+            else:
+                generate_tombstone_stele_pdf([rec], out_path, reg)
+                action_str = "COMPILED TOMBSTONE STELE POLYGLOT"
+        else:
+            generate_tombstone_stele_pdf([rec], out_path, reg)
+            action_str = "COMPILED TOMBSTONE STELE POLYGLOT"
+
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  %🖤 CONTROLLED FORGETTING: {action_str}")
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  Target Subject:   {target_id}")
+        print(f"  Subject Digest:   {target_digest[:32]}...")
+        print(f"  Retirement Mode:  {mode.value}")
+        print(f"  Loss Declared:    {loss}")
+        print(f"  Negative Space:   {cov * 100:.1f}% pruned (mu(C))")
+        print(f"  ATP Gas Bounty:   +{gas} ATP reclaimed")
+        print(f"  Output Artifact:  {out_path}")
+        print(f"  Record ID:        {rec.record_id}\n")
+
+    elif args.action == "audit":
+        target = args.file
+        if not os.path.exists(target):
+            print(f"[!] Target file '{target}' not found.")
+            sys.exit(1)
+        with open(target, "rb") as f:
+            data = f.read()
+
+        reg = None
+        prefix = bytes([0x23, 0x20, 0x25, 0xf0, 0x9f, 0x96, 0xa4]) + b" RETIREMENT_MANIFEST: "
+        idx = data.rfind(prefix)
+        if idx != -1:
+            end = data.find(b"\n", idx)
+            raw = data[idx + len(prefix):end].decode("utf-8")
+            reg = EpistemicTombstoneRegistry.from_dict(json.loads(raw))
+        else:
+            try:
+                reg = EpistemicTombstoneRegistry.from_dict(json.loads(data.decode("utf-8")))
+            except Exception:
+                pass
+
+        if not reg:
+            print(f"[!] No valid RETIREMENT_MANIFEST or registry found in '{target}'.")
+            sys.exit(1)
+
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  %🖤 AUDITING EPISTEMIC TOMBSTONES: {target}")
+        print("\033[1;36m=================================================================\033[0m\n")
+        all_ok = True
+        for tid, t in reg.tombstones.items():
+            valid_sig = t.verify_signature()
+            status = reg.get_admission_status(tid).value
+            status_col = "\033[1;32m" if status == "ACTIVE" else ("\033[1;34m" if status == "READOPTED" else "\033[1;33m")
+            sig_badge = "\033[1;32m[✓ VALID SIG]\033[0m" if valid_sig else "\033[1;31m[✗ INVALID SIG]\033[0m"
+            print(f"  {sig_badge} {status_col}[{status}]\033[0m {tid} -> {t.mode.value}")
+            print(f"      Digest:    {t.target_digest[:24]}...")
+            print(f"      Loss (I4): '{t.loss_declaration}'")
+            print(f"      Metrics:   mu(C)={t.negative_space_coverage * 100:.1f}% | +{t.atp_gas_recovered} ATP reclaimed\n")
+            if not valid_sig:
+                all_ok = False
+
+        for rid, ro in reg.readoptions.items():
+            valid_sig = ro.verify_signature()
+            sig_badge = "\033[1;32m[✓ VALID SIG]\033[0m" if valid_sig else "\033[1;31m[✗ INVALID SIG]\033[0m"
+            print(f"  {sig_badge} \033[1;36m[RE-ADOPTION]\033[0m {ro.target_id}")
+            print(f"      Justification: '{ro.justification}'")
+            print(f"      Evidence Ref:  {ro.new_evidence_claim_id}\n")
+            if not valid_sig:
+                all_ok = False
+
+        print("\033[1;36m=================================================================\033[0m")
+        sys.exit(0 if all_ok else 1)
+
+    elif args.action == "readopt":
+        target = args.file
+        target_id = args.target_id
+        justification = args.reason or "Authorized restoration to active surface via empirical re-validation."
+        evidence_claim = args.evidence or "CLAIM_RESTORED_E01"
+        out_path = args.output or target
+
+        if not os.path.exists(target):
+            print(f"[!] Target file '{target}' not found.")
+            sys.exit(1)
+        with open(target, "rb") as f:
+            data = f.read()
+
+        reg = None
+        prefix = bytes([0x23, 0x20, 0x25, 0xf0, 0x9f, 0x96, 0xa4]) + b" RETIREMENT_MANIFEST: "
+        idx = data.rfind(prefix)
+        if idx != -1:
+            end = data.find(b"\n", idx)
+            raw = data[idx + len(prefix):end].decode("utf-8")
+            reg = EpistemicTombstoneRegistry.from_dict(json.loads(raw))
+        else:
+            reg = EpistemicTombstoneRegistry.from_dict(json.loads(data.decode("utf-8")))
+
+        if target_id not in reg.tombstones:
+            print(f"[!] Target subject '{target_id}' is not currently tombstoned in {target}.")
+            sys.exit(1)
+
+        sk, pk = crypto.generate_keypair()
+        ro = reg.readopt(target_id, justification, evidence_claim, sk, pk)
+
+        if b"%PDF-" in data:
+            generate_tombstone_stele_pdf(list(reg.tombstones.values()), out_path, reg)
+        else:
+            with open(out_path, "w", encoding="utf-8") as f:
+                json.dump(reg.to_dict(), f, indent=2)
+
+        print("\033[1;32m=================================================================\033[0m")
+        print(f"  %🖤 RE-ADOPTION AUTHORIZED (Invariant I3 Gate Cleared)")
+        print("\033[1;32m=================================================================\033[0m")
+        print(f"  Target Subject:       {target_id}")
+        print(f"  Justification:        {justification}")
+        print(f"  New Evidence Claim:   {evidence_claim}")
+        print(f"  Re-Adoption ID:       {ro.record_id}")
+        print(f"  Active Surface State: {reg.get_admission_status(target_id).value}\n")
+
+    elif args.action == "surface":
+        target = args.file
+        if not os.path.exists(target):
+            print(f"[!] Target file '{target}' not found.")
+            sys.exit(1)
+        with open(target, "rb") as f:
+            data = f.read()
+
+        prefix = bytes([0x23, 0x20, 0x25, 0xf0, 0x9f, 0x96, 0xa4]) + b" RETIREMENT_MANIFEST: "
+        idx = data.rfind(prefix)
+        if idx != -1:
+            end = data.find(b"\n", idx)
+            reg = EpistemicTombstoneRegistry.from_dict(json.loads(data[idx + len(prefix):end].decode("utf-8")))
+        else:
+            reg = EpistemicTombstoneRegistry.from_dict(json.loads(data.decode("utf-8")))
+
+        total_pruned_space = sum(t.negative_space_coverage for t in reg.tombstones.values())
+        total_gas_reclaimed = sum(t.atp_gas_recovered for t in reg.tombstones.values())
+        retired_count = sum(1 for tid in reg.tombstones if reg.get_admission_status(tid) == AdmissionStatus.RETIRED)
+        readopted_count = len(reg.readoptions)
+
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  %🖤 COGNITIVE ACTIVE SURFACE & PRUNED SUBSTRATE")
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  Historical Substrate (Tombstones): {len(reg.tombstones)}")
+        print(f"    - Excluded from Active Metabolism: {retired_count}")
+        print(f"    - Restored via Re-Adoption:        {readopted_count}")
+        print(f"  Cumulative Negative Space Metric:    {total_pruned_space:.2f} AST search volume")
+        print(f"  Cumulative Metabolic Fuel Reclaimed: +{total_gas_reclaimed} ATP")
+        print("\033[1;36m=================================================================\033[0m\n")
+
+    else:
+        print("Usage: python3 cli.py warrant-forget {retire,audit,readopt,surface} ...")
+
 
 def cmd_shell(args):
+
     """Interactive Hypervisor REPL for Project Black-Heart."""
     from symbiosis import (
         BraidWord, BraidCrossing, trefoil_knot, figure_eight_knot, hopf_link,
@@ -2396,6 +2605,35 @@ def main():
     p_wk_promote = wk_subs.add_parser("promote", help="Promote empirical hypothesis to axiomatic identity")
     p_wk_promote.add_argument("rule", help="Target algebraic rewrite rule (e.g. 'I x -> x')")
 
+    # warrant-forget (Engine #25: CONTROLLED-FORGETTING-0.1 Epistemic Retirement & Negative Space Coverage)
+    p_wf = subparsers.add_parser(
+        "warrant-forget",
+        help="Engine #25: Controlled Forgetting & Epistemic Retirement (CONTROLLED-FORGETTING-0.1)"
+    )
+    wf_subs = p_wf.add_subparsers(dest="action")
+
+    p_wf_retire = wf_subs.add_parser("retire", help="Retire an artifact from active admission with mandatory loss declaration")
+    p_wf_retire.add_argument("target_id", help="Subject identifier of the artifact to retire")
+    p_wf_retire.add_argument("digest", help="Content hash (SHA-256 hex) of the retired subject")
+    p_wf_retire.add_argument("-m", "--mode", default="DEPRECATED", choices=["SUPERSEDED", "REFUTED", "WITHDRAWN", "ARCHIVED", "QUARANTINED", "DEPRECATED"], help="Retirement category mode")
+    p_wf_retire.add_argument("-l", "--loss", help="Mandatory description of lost exploratory capacity (Invariant I4)")
+    p_wf_retire.add_argument("-r", "--replacement", help="Replacement subject identifier (mandatory if SUPERSEDED)")
+    p_wf_retire.add_argument("--rule", default="", help="Algebraic rule or pattern pruned for negative space coverage calculation")
+    p_wf_retire.add_argument("-o", "--output", default="tombstones.pdf", help="Target PDF polyglot or JSON registry to update")
+
+    p_wf_audit = wf_subs.add_parser("audit", help="Audit tombstone ledger signatures, Invariants I1-I8, and admission state")
+    p_wf_audit.add_argument("file", help="Target polyglot PDF or JSON registry")
+
+    p_wf_readopt = wf_subs.add_parser("readopt", help="Authorize re-adoption of a retired artifact into active surface (Invariant I3)")
+    p_wf_readopt.add_argument("file", help="Target polyglot PDF or JSON registry")
+    p_wf_readopt.add_argument("target_id", help="Subject identifier of the retired artifact to re-adopt")
+    p_wf_readopt.add_argument("--reason", help="Epistemic justification for restoring active status")
+    p_wf_readopt.add_argument("--evidence", default="CLAIM_RESTORED_E01", help="New evidence claim ID justifying resurrection")
+    p_wf_readopt.add_argument("-o", "--output", help="Output file path (default: overwrite target file)")
+
+    p_wf_surface = wf_subs.add_parser("surface", help="Display active evaluation surface vs pruned negative space substrate")
+    p_wf_surface.add_argument("file", help="Target polyglot PDF or JSON registry")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -2450,10 +2688,13 @@ def main():
         cmd_morpho_autopoiesis(args)
     elif args.command == "warrant-kernel":
         cmd_warrant_kernel(args)
+    elif args.command == "warrant-forget":
+        cmd_controlled_forgetting(args)
     elif args.command == "cross-proof":
         cmd_cross_proof(args)
     else:
         parser.print_help()
+
 
 if __name__ == "__main__":
     main()
