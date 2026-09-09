@@ -1113,6 +1113,9 @@ def cmd_diary(args):
         fetch_from_ipfs,
         restore_and_verify_from_ipfs,
         query_inner_voice,
+        dialectical_synthesis,
+        audit_diary_dag,
+        render_ascii_dag,
         OntogeneticDiaryReceipt,
         DIARY_MANIFEST_PREFIX,
     )
@@ -1125,18 +1128,21 @@ def cmd_diary(args):
         sk = args.secret_key
         if not sk:
             sk, _ = generate_keypair()
+        alias = getattr(args, "alias", "") or "Genesis"
         rec, cid = initialize_ontogenetic_diary(
             output_pdf_path=out_path,
             genesis_thought=args.thought or "I am an autonomous polyglot quine, remembering my origins across the distributed continuum.",
             genesis_prompt=args.prompt or "Who are you?",
             epistemic_grade=args.grade or "PROPOSED",
-            secret_key_hex=sk
+            secret_key_hex=sk,
+            author_alias=alias
         )
         print("\033[1;36m===================================================\033[0m")
         print("  %🖤 ONTOGENTIC IPFS DIARY INITIALIZED: Gen #0")
         print("\033[1;36m===================================================\033[0m")
         print(f"  Target Polyglot:     {out_path}")
         print(f"  Genesis CIDv1:       {cid}")
+        print(f"  Author Voice:        {rec.author_alias}")
         print(f"  Epistemic Grade:     {rec.epistemic_grade}")
         print(f"  Signer Public Key:   {rec.public_key_hex[:32]}...\n")
 
@@ -1150,15 +1156,81 @@ def cmd_diary(args):
             thought_prompt=args.prompt or "",
             epistemic_grade=args.grade or "PROPOSED",
             atp_burned=args.atp,
-            secret_key_hex=args.secret_key or None
+            secret_key_hex=args.secret_key or None,
+            author_alias=getattr(args, "alias", "") or ""
         )
         print("\033[1;32m===================================================\033[0m")
         print(f"  [✓] DIARY SETTLEMENT ACCOMPLISHED: Generation #{settlement.generation}")
         print("\033[1;32m===================================================\033[0m")
         print(f"  Current CIDv1:       {settlement.current_cid}")
         print(f"  Parent CIDv1:        {settlement.prev_cid}")
+        if settlement.author_alias:
+            print(f"  Author Voice:        {settlement.author_alias}")
         print(f"  Epistemic Grade:     {settlement.epistemic_grade}")
         print(f"  ATP Fuel Burned:     {settlement.atp_burned} ATP\n")
+
+    elif args.action == "cite":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        c_list = [c.strip() for c in args.cid.split(",") if c.strip()]
+        settlement = grow_diary_page(
+            args.file,
+            thought_content=args.thought,
+            thought_prompt=args.prompt or "",
+            epistemic_grade=args.grade or "PROPOSED",
+            atp_burned=args.atp,
+            secret_key_hex=args.secret_key or None,
+            cited_cids=c_list,
+            author_alias=getattr(args, "alias", "") or ""
+        )
+        print("\033[1;32m===================================================\033[0m")
+        print(f"  [✓] CITATION SETTLEMENT ACCOMPLISHED: Generation #{settlement.generation}")
+        print("\033[1;32m===================================================\033[0m")
+        print(f"  Current CIDv1:       {settlement.current_cid}")
+        print(f"  Parent CIDv1:        {settlement.prev_cid}")
+        print(f"  Cited CIDs:          {', '.join(settlement.cited_cids)}")
+        print(f"  Author Voice:        {settlement.author_alias or '<Anonymous>'}")
+        print(f"  Epistemic Grade:     {settlement.epistemic_grade}\n")
+
+    elif args.action == "dag":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        print(render_ascii_dag(args.file))
+
+    elif args.action == "synthesize":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        synthesis, grade = dialectical_synthesis(
+            args.thesis,
+            args.antithesis,
+            thesis_cid=getattr(args, "thesis_cid", "") or "",
+            antithesis_cid=getattr(args, "antithesis_cid", "") or ""
+        )
+        c_list = []
+        if getattr(args, "thesis_cid", ""):
+            c_list.append(args.thesis_cid)
+        if getattr(args, "antithesis_cid", ""):
+            c_list.append(args.antithesis_cid)
+        settlement = grow_diary_page(
+            args.file,
+            thought_content=synthesis,
+            thought_prompt="Dialectical synthesis of thesis and antithesis",
+            epistemic_grade=grade,
+            atp_burned=args.atp,
+            secret_key_hex=args.secret_key or None,
+            cited_cids=c_list,
+            author_alias=getattr(args, "alias", "") or "Synthesis"
+        )
+        print("\033[1;32m===================================================\033[0m")
+        print(f"  [✓] DIALECTICAL SYNTHESIS SETTLED: Generation #{settlement.generation}")
+        print("\033[1;32m===================================================\033[0m")
+        print(f"  Current CIDv1:       {settlement.current_cid}")
+        print(f"  Parent CIDv1:        {settlement.prev_cid}")
+        print(f"  Synthesis Content:   {synthesis}")
+        print(f"  Epistemic Grade:     {settlement.epistemic_grade}\n")
 
     elif args.action == "status":
         if not os.path.exists(args.file):
@@ -1184,6 +1256,10 @@ def cmd_diary(args):
         print(f"  Timestamp UTC:      {latest.get('timestamp_utc')}")
         print(f"  Epistemic Grade:    {latest.get('epistemic_grade')}")
         print(f"  Parent CIDv1:       {latest.get('prev_cid') or '<Genesis Ancestor>'}")
+        if latest.get("author_alias"):
+            print(f"  Author Voice:       {latest.get('author_alias')}")
+        if latest.get("cited_cids"):
+            print(f"  Cited CIDs:         {', '.join(latest.get('cited_cids'))}")
         print(f"  Thought Hash:       ⚓ {latest.get('thought_hash')}")
         print(f"  Prompt Trigger:     {latest.get('thought_prompt')}")
         print(f"  Thought Content:    {latest.get('thought_content')}\n")
@@ -1209,39 +1285,24 @@ def cmd_diary(args):
             t_utc = m.get("timestamp_utc")
             grade = m.get("epistemic_grade")
             p_cid = m.get("prev_cid") or "<Genesis>"
-            thought = m.get("thought_content", "")[:60]
-            print(f"  #{gen:02d} [{t_utc}] {grade:14s} | Parent: {p_cid[:22]}... | {thought}...")
+            alias = f" ({m.get('author_alias')})" if m.get("author_alias") else ""
+            cites = f" [cites: {len(m.get('cited_cids', []))}]" if m.get("cited_cids") else ""
+            thought = m.get("thought_content", "")[:50]
+            print(f"  #{gen:02d} [{t_utc}] {grade:14s}{alias}{cites} | Parent: {p_cid[:22]}... | {thought}...")
         print(f"\n  Current File CIDv1: {compute_cidv1_raw(data)}\n")
 
     elif args.action == "audit":
         if not os.path.exists(args.file):
             print(f"[!] Target file '{args.file}' not found.")
             sys.exit(1)
-        with open(args.file, "rb") as f:
-            data = f.read()
-        prefix = DIARY_MANIFEST_PREFIX.encode("utf-8")
-        idx = data.rfind(prefix)
-        if idx == -1:
-            print(f"[!] No diary receipt manifest found in '{args.file}'.")
+        try:
+            res = audit_diary_dag(args.file)
+            print(f"\033[1;32m[✓] ALL {res['total_generations']} DIARY PAGES CRYPTOGRAPHICALLY VERIFIED & AUDITED\033[0m")
+            print(f"  Total Citations: {res['total_citations']}")
+            print(f"  Unique Authors:  {', '.join(res['unique_authors']) if res['unique_authors'] else '<None>'}\n")
+        except Exception as e:
+            print(f"\033[1;31m[FAIL] Audit failed: {e}\033[0m")
             sys.exit(1)
-        end_idx = data.find(b"\n", idx)
-        manifest = json.loads(data[idx + len(prefix):end_idx].decode("utf-8"))
-        print(f"[*] Auditing ontogenetic diary chain across {len(manifest)} generations...")
-        for i, md in enumerate(manifest):
-            rec = OntogeneticDiaryReceipt.from_dict(md)
-            if rec.generation != i:
-                print(f"[FAIL] Generation sequence gap at index {i}: got #{rec.generation}")
-                sys.exit(1)
-            if rec.receipt_hash != rec.compute_hash():
-                print(f"[FAIL] Hash mismatch at generation #{rec.generation}")
-                sys.exit(1)
-            if rec.is_attested():
-                if not rec.verify():
-                    print(f"[FAIL] Cryptographic signature invalid at generation #{rec.generation}")
-                    sys.exit(1)
-            else:
-                print(f"[!] Generation #{rec.generation}: UNATTESTED (unsigned)")
-        print(f"\033[1;32m[✓] ALL {len(manifest)} DIARY PAGES CRYPTOGRAPHICALLY VERIFIED & AUDITED\033[0m\n")
 
     elif args.action == "publish":
         if not os.path.exists(args.file):
@@ -1270,7 +1331,7 @@ def cmd_diary(args):
         print(f"  Stimulus Prompt: {args.stimulus}")
         print(f"  Inner Voice:     {monologue}")
         print(f"  Settled Gen:     #{settlement.generation}")
-        print(f"  Current CIDv1:   {settlement.current_cid}")
+        print(f"  New CIDv1:       {settlement.current_cid}")
         print(f"  Parent CIDv1:    {settlement.prev_cid}")
         print(f"  Epistemic Grade: {settlement.epistemic_grade}\n")
 
@@ -1284,7 +1345,7 @@ def cmd_diary(args):
             print(f"\033[1;31m[FAIL] {msg}\033[0m\n")
             sys.exit(1)
     else:
-        print("Usage: python3 cli.py diary {init,append,status,lineage,audit,publish,voice,fetch} ...")
+        print("Usage: python3 cli.py diary {init,append,cite,dag,synthesize,status,lineage,audit,publish,voice,fetch} ...")
 
 
 def cmd_agora(args):
@@ -1827,6 +1888,7 @@ def main():
     p_diary_init.add_argument("-t", "--thought", default="I am an autonomous polyglot quine, remembering my origins across the distributed continuum.", help="Initial thought reflection")
     p_diary_init.add_argument("-p", "--prompt", default="Who are you?", help="Prompt trigger context")
     p_diary_init.add_argument("-g", "--grade", default="PROPOSED", help="Epistemic grade (PROPOSED, LOCALLY_TESTED, RULE_DERIVED)")
+    p_diary_init.add_argument("--alias", default="Genesis", help="Author voice alias")
     p_diary_init.add_argument("--secret-key", default=None, help="Author Ed25519 secret key hex (optional)")
 
     p_diary_app = diary_subs.add_parser("append", help="Append an incremental reflection page to the diary")
@@ -1834,8 +1896,32 @@ def main():
     p_diary_app.add_argument("-t", "--thought", required=True, help="New thought reflection to append")
     p_diary_app.add_argument("-p", "--prompt", default="", help="Prompt trigger context")
     p_diary_app.add_argument("-g", "--grade", default="PROPOSED", help="Epistemic grade")
+    p_diary_app.add_argument("--alias", default="", help="Author voice alias")
     p_diary_app.add_argument("--atp", type=int, default=10, help="ATP fuel burned")
     p_diary_app.add_argument("--secret-key", default=None, help="Author Ed25519 secret key hex (optional)")
+
+    p_diary_cite = diary_subs.add_parser("cite", help="Append a thought that cites one or more prior/external CIDv1 hashes")
+    p_diary_cite.add_argument("file", help="Target ontogenetic diary PDF")
+    p_diary_cite.add_argument("cid", help="Target CIDv1 hash (or comma-separated list) to cite")
+    p_diary_cite.add_argument("-t", "--thought", required=True, help="New thought reflection referencing the citation")
+    p_diary_cite.add_argument("-p", "--prompt", default="", help="Prompt trigger context")
+    p_diary_cite.add_argument("-g", "--grade", default="PROPOSED", help="Epistemic grade")
+    p_diary_cite.add_argument("--alias", default="", help="Author voice alias (e.g. Claude, Gemini, Organism-0)")
+    p_diary_cite.add_argument("--atp", type=int, default=15, help="ATP fuel burned")
+    p_diary_cite.add_argument("--secret-key", default=None, help="Author Ed25519 secret key hex (optional)")
+
+    p_diary_dag = diary_subs.add_parser("dag", help="Render ASCII Merkle-DAG citation topology")
+    p_diary_dag.add_argument("file", help="Target ontogenetic diary PDF")
+
+    p_diary_syn = diary_subs.add_parser("synthesize", help="Perform dialectical synthesis of thesis and antithesis thoughts")
+    p_diary_syn.add_argument("file", help="Target ontogenetic diary PDF")
+    p_diary_syn.add_argument("--thesis", required=True, help="Thesis thought text")
+    p_diary_syn.add_argument("--antithesis", required=True, help="Antithesis thought text")
+    p_diary_syn.add_argument("--thesis-cid", default="", help="Optional thesis CIDv1")
+    p_diary_syn.add_argument("--antithesis-cid", default="", help="Optional antithesis CIDv1")
+    p_diary_syn.add_argument("--alias", default="Synthesis", help="Author voice alias")
+    p_diary_syn.add_argument("--atp", type=int, default=20, help="ATP fuel burned")
+    p_diary_syn.add_argument("--secret-key", default=None, help="Author Ed25519 secret key hex (optional)")
 
     p_diary_stat = diary_subs.add_parser("status", help="Display latest diary HUD telemetry and CIDv1")
     p_diary_stat.add_argument("file", help="Target ontogenetic diary PDF")

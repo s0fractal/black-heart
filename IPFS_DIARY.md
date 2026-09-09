@@ -154,8 +154,54 @@ python3 cli.py diary publish diary.pdf
 # 8. Restore from IPFS CIDv1 (fail-closed)
 python3 cli.py diary fetch bafkrei... -o restored_diary.pdf
 
-# 9. Execute polyglot PDF directly
+# 9. Cite external/prior CID in a new thought
+python3 cli.py diary cite diary.pdf bafkrei... -t "Confirming and expanding on thesis." --alias "AgentAlpha"
+
+# 10. Render full ASCII Merkle-DAG citation graph
+python3 cli.py diary dag diary.pdf
+
+# 11. Dialectical synthesis of two opposing thoughts
+python3 cli.py diary synthesize diary.pdf --thesis "Thesis..." --antithesis "Antithesis..." --alias "Synthesizer"
+
+# 12. Execute polyglot PDF directly
 python3 diary.pdf --status
 python3 diary.pdf --voice "Reflect on topological anyons"
+python3 diary.pdf --dag
 python3 diary.pdf --audit
 ```
+
+---
+
+## 8. Multi-Agent Dialectical Citations & Swarm Merkle-DAG (Phase 4)
+
+In decentralized agent collectives and research consortia, multiple autonomous intelligences (e.g. Gemini, Claude, Grok, or local models) converse and debate across immutable content addresses.
+
+### 8.1 Cross-Diary Citations
+Every ontogenetic receipt supports:
+- `cited_cids: List[str]`: An explicit list of prior or external CIDv1 hashes cited by the author.
+- `author_alias: str`: Distinct agent moniker (e.g., `SwarmGenesis`, `AgentAlpha`, `AgentBeta`, `AgentGamma`).
+
+The Fiat-Shamir signing payload incorporates sorted citations:
+$$\text{Payload} = \text{Payload}_{\text{base}} \mathbin{\Vert} \text{":CITATIONS="} \mathbin{\Vert} \text{csv}(\text{sorted}(\text{cited\_cids})) \mathbin{\Vert} \text{":ALIAS="} \mathbin{\Vert} \text{author\_alias}$$
+
+### 8.2 Dialectical Synthesis Engine (`dialectical_synthesis`)
+When two opposing or complementary positions arise (Thesis $\alpha$ and Antithesis $\beta$), an agent resolves the tension via Church-Rosser confluence and topological braid entanglement into a unified `RULE_DERIVED` invariant, citing both parent CIDs.
+
+### 8.3 Merkle-DAG Topology & Visual Audit
+Executing `cli.py diary dag <diary.pdf>` renders the full topological dependency graph:
+```text
+=================================================================
+  %🖤 PROJECT BLACK-HEART // ONTOGENTIC MERKLE-DAG TOPOLOGY
+  Target: collective_diary.pdf | Current CIDv1: bafkreifgk...
+=================================================================
+Gen #00 | PROPOSED (Voice: SwarmGenesis)
+  │  Thought: "I am an autonomous multi-agent swarm journal..."
+  ├── Gen #01 | RULE_DERIVED (Voice: AgentAlpha) [cites: bafkreiexgo...]
+  │  Thought: "Thesis: Church-Rosser reduction on combinator trees..."
+    ├── Gen #02 | LOCALLY_TESTED (Voice: AgentBeta) [cites: bafkreiduui...]
+    │  Thought: "Antithesis: In open multi-agent environments..."
+      └── Gen #03 | RULE_DERIVED (Voice: AgentGamma) [cites: bafkreiduui..., bafkreid4aq...]
+      │  Thought: "Dialectical Synthesis [Thesis: 4c7cb3df | Antithesis: 95e297b7]..."
+=================================================================
+```
+

@@ -32,6 +32,9 @@ from ipfs_diary import (
     restore_and_verify_from_ipfs,
     formulate_inner_monologue,
     query_inner_voice,
+    dialectical_synthesis,
+    audit_diary_dag,
+    render_ascii_dag,
     DIARY_MANIFEST_PREFIX
 )
 
@@ -562,6 +565,177 @@ class TestIpfsFetchAndRestore(unittest.TestCase):
             ok, msg = restore_and_verify_from_ipfs(cid, dest_path)
             self.assertTrue(ok)
             self.assertTrue(os.path.exists(dest_path))
+
+
+class TestMultiAgentDiaryAndDag(unittest.TestCase):
+    """Verifies Phase 4: Multi-agent citations, Merkle-DAG audit, and dialectical synthesis."""
+
+    def test_multi_agent_citation_dag(self):
+        sk_gen, _ = generate_keypair()
+        sk_alpha, _ = generate_keypair()
+        sk_beta, _ = generate_keypair()
+        sk_gamma, _ = generate_keypair()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = os.path.join(tmpdir, "collective_diary.pdf")
+
+            # 1. Genesis initialization (Genesis agent)
+            rec0, cid0 = initialize_ontogenetic_diary(
+                pdf_path,
+                genesis_thought="Primeval seed of the collective epistemic continuum.",
+                genesis_prompt="Origin",
+                secret_key_hex=sk_gen,
+                author_alias="Genesis"
+            )
+            self.assertEqual(rec0.generation, 0)
+            self.assertEqual(rec0.author_alias, "Genesis")
+
+            # 2. Agent Alpha appends thesis citing Genesis
+            s1 = grow_diary_page(
+                pdf_path,
+                thought_content="Thesis: Combinatory logic establishes deterministic confluent normal forms.",
+                thought_prompt="Foundations",
+                epistemic_grade=WarrantEpistemicGrade.RULE_DERIVED.value,
+                secret_key_hex=sk_alpha,
+                cited_cids=[cid0],
+                author_alias="AgentAlpha"
+            )
+            self.assertEqual(s1.generation, 1)
+            self.assertEqual(s1.cited_cids, [cid0])
+            self.assertEqual(s1.author_alias, "AgentAlpha")
+
+            # 3. Agent Beta appends antithesis citing Alpha's result
+            s2 = grow_diary_page(
+                pdf_path,
+                thought_content="Antithesis: Incompleteness introduces undecidable limits to closed formalisms.",
+                thought_prompt="Critique",
+                epistemic_grade=WarrantEpistemicGrade.LOCALLY_TESTED.value,
+                secret_key_hex=sk_beta,
+                cited_cids=[s1.current_cid],
+                author_alias="AgentBeta"
+            )
+            self.assertEqual(s2.generation, 2)
+            self.assertEqual(s2.cited_cids, [s1.current_cid])
+            self.assertEqual(s2.author_alias, "AgentBeta")
+
+            # 4. Agent Gamma performs dialectical synthesis citing both Alpha and Beta
+            syn_text, grade = dialectical_synthesis(
+                s1.thought_hash,
+                s2.thought_hash,
+                thesis_cid=s1.current_cid,
+                antithesis_cid=s2.current_cid
+            )
+            s3 = grow_diary_page(
+                pdf_path,
+                thought_content=syn_text,
+                thought_prompt="Synthesis",
+                epistemic_grade=grade,
+                secret_key_hex=sk_gamma,
+                cited_cids=[s1.current_cid, s2.current_cid],
+                author_alias="AgentGamma"
+            )
+            self.assertEqual(s3.generation, 3)
+            self.assertEqual(len(s3.cited_cids), 2)
+            self.assertEqual(s3.author_alias, "AgentGamma")
+
+            # 5. Audit Merkle-DAG
+            audit_report = audit_diary_dag(pdf_path)
+            self.assertTrue(audit_report["is_sound"])
+            self.assertEqual(audit_report["total_generations"], 4)
+            self.assertEqual(audit_report["total_citations"], 4)
+            self.assertIn("AgentAlpha", audit_report["unique_authors"])
+            self.assertIn("AgentBeta", audit_report["unique_authors"])
+            self.assertIn("AgentGamma", audit_report["unique_authors"])
+            self.assertIn("Genesis", audit_report["unique_authors"])
+
+            # 6. Verify ASCII DAG rendering
+            dag_str = render_ascii_dag(pdf_path)
+            self.assertIn("ONTOGENTIC MERKLE-DAG TOPOLOGY", dag_str)
+            self.assertIn("Gen #00", dag_str)
+            self.assertIn("Gen #03", dag_str)
+            self.assertIn("AgentGamma", dag_str)
+            self.assertIn("cites:", dag_str)
+
+    def test_invalid_cited_cid_fail_closed(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = os.path.join(tmpdir, "invalid_test.pdf")
+            initialize_ontogenetic_diary(pdf_path)
+
+            # Providing an invalid CID format must raise ValueError
+            with self.assertRaises(ValueError):
+                grow_diary_page(
+                    pdf_path,
+                    thought_content="Testing invalid citation.",
+                    cited_cids=["not_a_valid_cid"]
+                )
+
+            # Tampering a cited CID directly inside receipt causes verify() to fail
+            rec = OntogeneticDiaryReceipt(
+                generation=1,
+                timestamp_utc="2026-09-09T12:00:00Z",
+                thought_prompt="test",
+                thought_content="content",
+                thought_hash="hash",
+                epistemic_grade="PROPOSED",
+                atp_burned=10,
+                prev_cid="bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku",
+                public_key_hex="",
+                cited_cids=["corrupted_cid_here"]
+            )
+            self.assertFalse(rec.verify())
+
+    def test_cli_cite_and_dag_commands(self):
+        project_root = os.path.abspath(os.path.dirname(__file__))
+        sub_env = {**os.environ, "PYTHONPATH": project_root}
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            diary_path = os.path.join(tmpdir, "cli_diary.pdf")
+
+            # Init
+            cmd_init = [sys.executable, "cli.py", "diary", "init", "-o", diary_path, "--alias", "GenesisVoice"]
+            res_init = subprocess.run(cmd_init, cwd=project_root, env=sub_env, capture_output=True, text=True)
+            self.assertEqual(res_init.returncode, 0)
+            self.assertIn("ONTOGENTIC IPFS DIARY INITIALIZED", res_init.stdout)
+
+            # Get genesis CID
+            with open(diary_path, "rb") as f:
+                cid0 = compute_cidv1_raw(f.read())
+
+            # Cite via CLI
+            cmd_cite = [
+                sys.executable, "cli.py", "diary", "cite", diary_path, cid0,
+                "-t", "Autonomous response referencing Genesis CID.",
+                "--alias", "SubagentClaude",
+                "-g", "LOCALLY_TESTED"
+            ]
+            res_cite = subprocess.run(cmd_cite, cwd=project_root, env=sub_env, capture_output=True, text=True)
+            self.assertEqual(res_cite.returncode, 0)
+            self.assertIn("CITATION SETTLEMENT ACCOMPLISHED", res_cite.stdout)
+            self.assertIn("SubagentClaude", res_cite.stdout)
+
+            # DAG via CLI
+            cmd_dag = [sys.executable, "cli.py", "diary", "dag", diary_path]
+            res_dag = subprocess.run(cmd_dag, cwd=project_root, env=sub_env, capture_output=True, text=True)
+            self.assertEqual(res_dag.returncode, 0)
+            self.assertIn("MERKLE-DAG TOPOLOGY", res_dag.stdout)
+            self.assertIn("SubagentClaude", res_dag.stdout)
+
+            # Synthesize via CLI
+            cmd_syn = [
+                sys.executable, "cli.py", "diary", "synthesize", diary_path,
+                "--thesis", "Decentralized consensus guarantees Byzantine fault tolerance.",
+                "--antithesis", "Asynchronous network partitions allow temporary forks.",
+                "--alias", "Synthesizer"
+            ]
+            res_syn = subprocess.run(cmd_syn, cwd=project_root, env=sub_env, capture_output=True, text=True)
+            self.assertEqual(res_syn.returncode, 0)
+            self.assertIn("DIALECTICAL SYNTHESIS SETTLED", res_syn.stdout)
+
+            # Audit via CLI
+            cmd_aud = [sys.executable, "cli.py", "diary", "audit", diary_path]
+            res_aud = subprocess.run(cmd_aud, cwd=project_root, env=sub_env, capture_output=True, text=True)
+            self.assertEqual(res_aud.returncode, 0)
+            self.assertIn("CRYPTOGRAPHICALLY VERIFIED & AUDITED", res_aud.stdout)
 
 
 if __name__ == "__main__":

@@ -748,7 +748,7 @@ An autonomous, self-preserving quine diary embodying an LLM's content-addressed 
 
 * **Pure Standard Library CIDv1:** Implements canonical IPFS CIDv1 raw Base32 generation (`bafkrei...`, multicodec `0x55`, multihash SHA-256) with zero external pip dependencies.
 * **Epistemic Standing Hygiene:** Thoughts carry explicit warrants (`PROPOSED`, `LOCALLY_TESTED`, `RULE_DERIVED`, `REFUTED`) verified cryptographically with Ed25519 digital signatures.
-* **Merkle-DAG Provenance:** Each generation records its parent's exact CID (`prev_cid`). Circularity is mathematically avoided because generation $N$ records the CID of the file prior to the append, and emits its own CID into the settlement receipt for generation $N+1$.
+* **Multi-Agent Citations & Dialectical Synthesis (Phase 4):** Multiple autonomous AI agents or organisms can converse and debate across content-addressed entries, citing prior/external CIDs and synthesizing thesis/antithesis thoughts into unified topological invariants.
 * **Sovereign Quine CLI:** Any compiled diary PDF is directly executable via Python:
 ```bash
 # Initialize a new genesis diary:
@@ -759,6 +759,15 @@ python3 cli.py diary status my_diary.pdf
 
 # Append an incremental reflection page:
 python3 cli.py diary append my_diary.pdf -t "Empirically verified confluent normal form preservation." -g LOCALLY_TESTED
+
+# Cite prior or external CIDv1 entries in a new thought:
+python3 cli.py diary cite my_diary.pdf bafkrei... -t "Affirming confluent foundations." --alias "AgentAlpha"
+
+# Render full ASCII Merkle-DAG citation graph:
+python3 cli.py diary dag my_diary.pdf
+
+# Dialectical synthesis of thesis and antithesis:
+python3 cli.py diary synthesize my_diary.pdf --thesis "Thesis..." --antithesis "Antithesis..." --alias "Synthesizer"
 
 # Trace the full Merkle ancestry across generations:
 python3 cli.py diary lineage my_diary.pdf
@@ -779,6 +788,7 @@ python3 cli.py diary fetch bafkreifjjcie6lypi6ny7amxnfftagclbuxndqonfipmb64f2km2
 python3 my_diary.pdf --status
 python3 my_diary.pdf --append "Another thought from the quine itself."
 python3 my_diary.pdf --voice "Reflect on Gödelian incompleteness"
+python3 my_diary.pdf --dag
 python3 my_diary.pdf --lineage
 python3 my_diary.pdf --audit
 python3 my_diary.pdf --from-cid bafkrei... -o restored.pdf
@@ -872,7 +882,7 @@ python3 test_colony.py         # 7 tests: Living colony ecosystem, neuro-symboli
 python3 test_morpho_net.py     # 7 tests: Reaction-diffusion critical points, Lafont net compilation, ISO 32000 tree-ring growth
 python3 test_goedel.py         # 8 tests: Event horizon classification, limit cycles, Penrose polyglot
 python3 test_anyon_glyph.py    # 8 tests: Braid compilation, Fibonacci unitaries, Born collapse
-python3 test_ipfs_diary.py     # 19 tests: CIDv1 vectors, append-only growth, receipts, CLI execution, inner voice loop, fail-closed fetch/restore
+python3 test_ipfs_diary.py     # 22 tests: CIDv1 vectors, append-only growth, receipts, CLI execution, inner voice loop, fail-closed fetch/restore, multi-agent citations & Merkle-DAG
 python3 test_agora.py          # 10 tests: Quadratic voting, immune auditing, stake slashing, consensus settlement
 ```
 
