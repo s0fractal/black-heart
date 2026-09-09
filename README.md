@@ -563,9 +563,56 @@ python3 primeval_colony.pdf --status
 
 ---
 
-## 23. Comprehensive Test Suite
+## 23. Morphogenetic Proof-Nets & Ontogenetic Quines (`morpho_net.py`)
 
-Run all **132 unit tests** across all **16 engines** with a single command:
+Synthesizing Turing reaction-diffusion PDEs with Lafont symmetric interaction combinators, `morpho_net.py` implements an artificial life substrate where physical spatial morphology directly compiles into visual proof-nets, and single-file ISO 32000 PDF polyglots grow generation-by-generation like tree rings:
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│      ONTOGENETIC MORPHOGENESIS & INTERACTION PROOF-NETS (%🖤)         │
+│                                                                        │
+│   Gray-Scott PDE Field on T² ──> Critical Point Extraction             │
+│   - Activator Peaks           ──> Constructors (🌱)                     │
+│   - Saddle Bifurcations       ──> Duplicators  (👥)                     │
+│   - Inhibitor Voids           ──> Erasers      (🕳️)                     │
+│                               │                                        │
+│                               ▼                                        │
+│                 Lafont Interaction Proof-Net                           │
+│                 - O(1) Local Graph Rewiring                            │
+│                 - Commutation, Annihilation, Erasure                   │
+│                 - Weisfeiler-Lehman Canonical Digest ⚓                 │
+│                               │                                        │
+│                               ▼                                        │
+│              ISO 32000 §7.5.6 In-Place Incremental Quine               │
+│              - 'python3 quine.pdf --grow'                              │
+│              - Appends new generation page directly to self            │
+│              - Merkle-linked Ed25519 Ontogenetic Receipts              │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+* **Spatial Singularity Compilation:** Evaluates reaction-diffusion concentrations on a discrete 2D torus $\mathbb{T}^2$. Spatial peaks compile to `🌱`, saddle inflections compile to `👥`, and sinks compile to `🕳️`. Principal ports wire along steepest gradients forming active redexes, while auxiliary ports trace isocontour loops.
+* **Weisfeiler-Lehman Settlement:** The compiled interaction net reduces under an ATP gas ceiling. The settled normal form produces a graph isomorphism-invariant canonical hash $\text{WL}(G)$ proving computational termination.
+* **Single-File Tree-Ring Quine:** Unlike traditional quines that spawn child files or overwrite their source, the ontogenetic polyglot reads its own binary, computes its next developmental epoch, and appends an incremental PDF revision directly to its own tail. Every previous generation remains fully preserved and viewable as an immutable historical page in the document.
+
+```bash
+# Initialize a genesis ontogenetic quine:
+python3 cli.py ontogeny init -a labyrinth -o ontogeny_quine.pdf
+
+# Inspect current developmental telemetry & proof-net HUD:
+python3 ontogeny_quine.pdf --status
+
+# Grow the organism by one generation (appends page in-place):
+python3 ontogeny_quine.pdf --grow --steps 50
+
+# Cryptographically audit the entire developmental Merkle chain:
+python3 ontogeny_quine.pdf --audit
+```
+
+---
+
+## 24. Comprehensive Test Suite
+
+Run all **138 unit tests** across all **17 engines** with a single command:
 ```bash
 # Unified test runner:
 python3 test_all.py
@@ -590,11 +637,12 @@ python3 test_morphogenesis.py  # 7 tests: Gray-Scott PDEs, Turing bifurcation, m
 python3 test_metamorphosis.py  # 7 tests: Program self-contemplation, frozen evaluator, transition replay
 python3 test_mycelium.py       # 7 tests: Epistemic mycelium, warrants, divergence records, immune evaluation
 python3 test_colony.py         # 7 tests: Living colony ecosystem, neuro-symbolic oracle, spore dormancy, ledger settlements
+python3 test_morpho_net.py     # 6 tests: Reaction-diffusion critical points, Lafont net compilation, ISO 32000 tree-ring growth
 ```
 
 ---
 
-## 24. Specifications & Theory
+## 25. Specifications & Theory
 
 * [COLONY.md](COLONY.md) — The Living Colony Ecosystem, Neuro-Symbolic Petri Dish & Macro-Evolutionary Dynamics.
 * [MYCELIUM.md](MYCELIUM.md) — Collective Metamorphosis, Warrant Mesh & The Preservation of Phenotypic Diversity.
@@ -607,8 +655,8 @@ python3 test_colony.py         # 7 tests: Living colony ecosystem, neuro-symboli
 
 ---
 
-## 25. License
+## 26. License
 
-* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, `interaction.py`, `organism.py`, `cross_proof.py`, `vault.py`, `continuum.py`, `zk_glyph.py`, `mesh.py`, `symbiosis.py`, `quantum.py`, `morphogenesis.py`, `metamorphosis.py`, `mycelium.py`, `colony.py`, `cli.py`, tests):** AGPL-3.0-only
+* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, `interaction.py`, `organism.py`, `cross_proof.py`, `vault.py`, `continuum.py`, `zk_glyph.py`, `mesh.py`, `symbiosis.py`, `quantum.py`, `morphogenesis.py`, `metamorphosis.py`, `mycelium.py`, `colony.py`, `morpho_net.py`, `cli.py`, tests):** AGPL-3.0-only
 * **Texts & Polyglot artifacts:** CC BY-SA 4.0
 

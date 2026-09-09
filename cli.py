@@ -691,6 +691,114 @@ def cmd_colony(args):
         print("Usage: python3 cli.py colony {init,step,status,compile} ...")
 
 
+def cmd_ontogeny(args):
+    """Ontogenetic quine polyglots & morphogenetic proof-net operations."""
+    from morpho_net import (
+        OntogeneticPolyglotCompiler,
+        grow_ontogenetic_quine_in_pdf,
+        OntogeneticProofReceipt,
+        ONTOGENY_MANIFEST_PREFIX,
+    )
+    from morphogenesis import TuringArchetype
+    from crypto import generate_keypair
+    import hashlib
+
+    if args.action == "init":
+        arch = TuringArchetype.from_key(args.archetype)
+        sk_hex = args.secret_key
+        if not sk_hex:
+            sk_hex, _ = generate_keypair()
+        compiler = OntogeneticPolyglotCompiler(archetype=arch)
+        rec0, field = compiler.initialize_genesis(
+            seed_hash=args.seed or hashlib.sha256(str(time.time()).encode()).hexdigest(),
+            secret_key_hex=sk_hex,
+            initial_pde_steps=args.steps,
+            max_atp=args.atp
+        )
+        out_path = args.output or "ontogeny_quine.pdf"
+        compiler.compile(out_path, field)
+        print("\033[1;36m===================================================\033[0m")
+        print(f"  %🖤 ONTOGENETIC QUINE INITIALIZED: Generation #0")
+        print("\033[1;36m===================================================\033[0m")
+        print(f"  Archetype:           {arch.key} ({arch.display_name})")
+        print(f"  PDE Steps:           {rec0.pde_steps}")
+        print(f"  Initial Nodes:       {rec0.initial_nodes}")
+        print(f"  Proof-Net Digest:    ⚓ {rec0.weisfeiler_lehman_digest[:32]}...")
+        print(f"  Signer Public Key:   {rec0.public_key_hex[:32]}...")
+        print(f"  Saved Polyglot:      {out_path}\n")
+
+    elif args.action == "grow":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        grow_ontogenetic_quine_in_pdf(
+            args.file,
+            pde_steps=args.steps,
+            atp_budget=args.atp,
+            secret_key_hex=args.secret_key or None
+        )
+
+    elif args.action == "audit":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        with open(args.file, "rb") as f:
+            data = f.read()
+        prefix = ONTOGENY_MANIFEST_PREFIX.encode("utf-8")
+        idx = data.rfind(prefix)
+        if idx == -1:
+            print(f"[!] No ontogeny receipt chain found in '{args.file}'.")
+            sys.exit(1)
+        end_idx = data.find(b"\n", idx)
+        raw = data[idx + len(prefix):end_idx].decode("utf-8")
+        receipts_data = json.loads(raw)
+        print(f"[*] Auditing ontogenetic developmental chain across {len(receipts_data)} generations...")
+        prev_h = "0" * 64
+        for i, md in enumerate(receipts_data):
+            rec = OntogeneticProofReceipt.from_dict(md)
+            if rec.generation != i:
+                print(f"[FAIL] Generation index mismatch at #{rec.generation}: expected #{i}")
+                sys.exit(1)
+            if rec.prev_receipt_hash != prev_h:
+                print(f"[FAIL] Hash chain broken at #{rec.generation}")
+                sys.exit(1)
+            if not rec.verify():
+                print(f"[FAIL] Cryptographic signature or hash invalid at generation #{rec.generation}")
+                sys.exit(1)
+            prev_h = rec.receipt_hash
+            print(f"  [✓] Gen #{rec.generation}: {rec.archetype} | steps={rec.pde_steps} | burned={rec.atp_burned} ATP | WL=⚓ {rec.weisfeiler_lehman_digest[:16]}...")
+        print(f"\033[1;32m[✓] ALL {len(receipts_data)} ONTOGENETIC GENERATIONS & PROOF-NETS CRYPTOGRAPHICALLY VERIFIED\033[0m\n")
+
+    elif args.action == "status":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        with open(args.file, "rb") as f:
+            data = f.read()
+        prefix = ONTOGENY_MANIFEST_PREFIX.encode("utf-8")
+        idx = data.rfind(prefix)
+        if idx == -1:
+            print(f"[!] No ontogeny receipt chain found in '{args.file}'.")
+            sys.exit(1)
+        end_idx = data.find(b"\n", idx)
+        raw = data[idx + len(prefix):end_idx].decode("utf-8")
+        manifest = json.loads(raw)
+        latest = manifest[-1]
+        print("\033[1;36m=================================================================\033[0m")
+        print("  %🖤 PROJECT BLACK-HEART // ONTOGENETIC QUINE ATLAS")
+        print(f"  Target File: {os.path.basename(args.file)} ({len(data)} bytes, {len(manifest)} generations)")
+        print("\033[1;36m=================================================================\033[0m\n")
+        print(f"  Current Generation:    #{latest.get('generation')}")
+        print(f"  Turing Archetype:      {latest.get('archetype')}")
+        print(f"  Cumulative PDE Steps:  {latest.get('pde_steps')}")
+        print(f"  Proof-Net Status:      {'SETTLED NORMAL FORM (Q.E.D.)' if latest.get('settled') else 'SUSPENDED'}")
+        print(f"  Total ATP Burned:      {sum(m.get('atp_burned', 0) for m in manifest)} fuel")
+        print(f"  Weisfeiler-Lehman:     ⚓ {latest.get('weisfeiler_lehman_digest')}")
+        print(f"  Signer Public Key:     {latest.get('public_key_hex')}\n")
+    else:
+        print("Usage: python3 cli.py ontogeny {init,grow,audit,status} ...")
+
+
 def cmd_shell(args):
     """Interactive Hypervisor REPL for Project Black-Heart."""
     from symbiosis import (
@@ -1018,6 +1126,30 @@ def main():
     p_col_comp = col_subs.add_parser("compile", parents=[col_parent], help="Compile colony into an executable ISO 32000 PDF polyglot")
     p_col_comp.add_argument("-o", "--output", default="colony.pdf", help="Output PDF polyglot path")
 
+    # ontogeny
+    p_ont = subparsers.add_parser("ontogeny", help="Morphogenetic Proof-Nets & Single-File Ontogenetic Quines")
+    ont_subs = p_ont.add_subparsers(dest="action")
+
+    p_ont_init = ont_subs.add_parser("init", help="Initialize a new genesis ontogenetic quine polyglot")
+    p_ont_init.add_argument("-a", "--archetype", default="labyrinth", help="Turing morphogenetic archetype (spots, labyrinth, waves, holes, solitons, pulsars)")
+    p_ont_init.add_argument("-s", "--seed", default=None, help="Genesis seed hash")
+    p_ont_init.add_argument("--steps", type=int, default=50, help="Initial PDE steps")
+    p_ont_init.add_argument("--atp", type=int, default=500, help="Initial ATP budget for proof-net reduction")
+    p_ont_init.add_argument("-o", "--output", default="ontogeny_quine.pdf", help="Output PDF file path")
+    p_ont_init.add_argument("--secret-key", default=None, help="Author secret key hex (optional)")
+
+    p_ont_grow = ont_subs.add_parser("grow", help="Advance morphogenesis and append next generation to polyglot")
+    p_ont_grow.add_argument("file", help="Target ontogenetic PDF polyglot")
+    p_ont_grow.add_argument("--steps", type=int, default=50, help="PDE steps to compute for this epoch")
+    p_ont_grow.add_argument("--atp", type=int, default=500, help="ATP budget for interaction net reduction")
+    p_ont_grow.add_argument("--secret-key", default=None, help="Author secret key hex (optional)")
+
+    p_ont_aud = ont_subs.add_parser("audit", help="Audit the entire ontogenetic Merkle chain and proof-nets")
+    p_ont_aud.add_argument("file", help="Target ontogenetic PDF polyglot")
+
+    p_ont_stat = ont_subs.add_parser("status", help="Display ontogenetic HUD telemetry and digests")
+    p_ont_stat.add_argument("file", help="Target ontogenetic PDF polyglot")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -1054,6 +1186,8 @@ def main():
         cmd_mycelium(args)
     elif args.command == "colony":
         cmd_colony(args)
+    elif args.command == "ontogeny":
+        cmd_ontogeny(args)
     else:
         parser.print_help()
 
