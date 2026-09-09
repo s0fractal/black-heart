@@ -2547,6 +2547,83 @@ def cmd_smt(args):
         print("Usage: python3 cli.py smt {solve,prove,pdf,check} ...")
 
 
+def cmd_cegis(args):
+    """Command handler for Engine #30: CEGIS & SMT-Driven Superoptimizer."""
+    import cegis_kernel
+    from cegis_kernel import (
+        CEGISLoop, SynthesisStatus, superoptimize_combinator,
+        generate_cegis_pdf, Example
+    )
+    import glyph
+    from glyph import K, I, S, parse
+
+    if args.action == "synthesize":
+        domain = [d.strip() for d in args.domain.split(",") if d.strip()]
+        cegis = CEGISLoop(verifier_domain=domain, max_iterations=args.max_iterations)
+
+        if args.task == "identity":
+            spec_fn = lambda inp: inp[0]
+            arity = 1
+        elif args.task == "first":
+            spec_fn = lambda inp: inp[0]
+            arity = 2
+        elif args.task == "second":
+            spec_fn = lambda inp: inp[1]
+            arity = 2
+        elif args.task == "constant_a":
+            spec_fn = lambda inp: "a"
+            arity = 1
+        else:
+            print(f"Unknown task: {args.task}. Choices: identity, first, second, constant_a")
+            return
+
+        res = cegis.synthesize(spec_fn, input_arity=arity, max_ast_size=args.max_size)
+        print("\033[1;36m" + "=" * 65)
+        print("  %🖤 CEGIS INDUCTIVE SYNTHESIS & SMT VERIFICATION REPORT")
+        print("=" * 65 + "\033[0m")
+        print(f"  Task:               {args.task} (arity {arity})")
+        print(f"  Status:             {res.status.value}")
+        print(f"  Synthesized Term:   \033[1;32m{res.program_str}\033[0m")
+        print(f"  Iterations:         {res.iterations}")
+        print(f"  Counterexamples:    {len(res.counterexamples)}")
+        print(f"  Candidates Explored:{res.candidates_explored} (OE Pruned: {res.candidates_pruned_oe})")
+        print(f"  SMT Verifications:  {res.smt_verifications}")
+        print(f"  Runtime:            {res.elapsed_sec * 1000:.2f} ms\n")
+
+    elif args.action == "superopt":
+        expr = args.expression
+        res = superoptimize_combinator(expr, max_ast_size=args.max_size)
+        print("\033[1;36m" + "=" * 65)
+        print("  %🖤 CEGIS SMT-DRIVEN COMBINATOR SUPEROPTIMIZER")
+        print("=" * 65 + "\033[0m")
+        print(f"  Target Expression:  {expr}")
+        print(f"  Status:             {res.status.value}")
+        print(f"  Optimized AST:      \033[1;32m{res.program_str}\033[0m")
+        print(f"  Size Reduction:     \033[1;33m{res.ast_size_reduction * 100:.1f}%\033[0m")
+        print(f"  SMT Certificate:    {'VERIFIED' if res.proof_dag else 'N/A'}")
+        print(f"  Runtime:            {res.elapsed_sec * 1000:.2f} ms\n")
+
+    elif args.action == "pdf":
+        out_pdf = getattr(args, "output", "cegis_synthesis.pdf") or "cegis_synthesis.pdf"
+        if args.expression:
+            res = superoptimize_combinator(args.expression)
+            title = f"CEGIS Superoptimizer: {args.expression}"
+        else:
+            cegis = CEGISLoop(verifier_domain=["a", "b", "c"])
+            res = cegis.synthesize(lambda inp: inp[0], input_arity=1)
+            title = f"CEGIS Synthesis: {args.task or 'identity'}"
+        generate_cegis_pdf(res, out_pdf, title=title)
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  Engine #30:      CEGIS & SMT-Driven Superoptimizer")
+        print(f"  Status:          {res.status.value}")
+        print(f"  Program AST:     \033[1;32m{res.program_str}\033[0m")
+        print(f"  Output PDF:      \033[1;32m{out_pdf}\033[0m")
+        print(f"  Autonomous Execution: python3 {out_pdf}\n")
+
+    else:
+        print("Usage: python3 cli.py cegis {synthesize,superopt,pdf} ...")
+
+
 def cmd_shell(args):
 
     """Interactive Hypervisor REPL for Project Black-Heart."""
@@ -3265,6 +3342,28 @@ def main():
     p_smt_check = smt_subs.add_parser("check", help="Fast satisfiability check (prints sat/unsat)")
     p_smt_check.add_argument("file", help="Input SMT-LIB 2 script file (.smt2)")
 
+    # cegis (Engine #30: Counterexample-Guided Inductive Synthesis & Superoptimizer)
+    p_cegis = subparsers.add_parser(
+        "cegis",
+        help="Engine #30: Counterexample-Guided Inductive Synthesis (CEGIS-0.1)"
+    )
+    cegis_subs = p_cegis.add_subparsers(dest="action")
+
+    p_cegis_syn = cegis_subs.add_parser("synthesize", help="Synthesize combinator program from specification")
+    p_cegis_syn.add_argument("--task", default="identity", choices=["identity", "first", "second", "constant_a"], help="Synthesis benchmark task")
+    p_cegis_syn.add_argument("--domain", default="a,b,c", help="Comma-separated verifier domain")
+    p_cegis_syn.add_argument("--max-size", type=int, default=10, help="Maximum AST search size")
+    p_cegis_syn.add_argument("--max-iterations", type=int, default=15, help="Maximum CEGIS loop iterations")
+
+    p_cegis_opt = cegis_subs.add_parser("superopt", help="Superoptimize combinator expression with SMT proof")
+    p_cegis_opt.add_argument("expression", help="Input combinator expression (e.g. 'S K K')")
+    p_cegis_opt.add_argument("--max-size", type=int, default=10, help="Maximum AST search size")
+
+    p_cegis_pdf = cegis_subs.add_parser("pdf", help="Compile ISO 32000 CEGIS verification polyglot PDF")
+    p_cegis_pdf.add_argument("-e", "--expression", default=None, help="Optional combinator expression to superoptimize")
+    p_cegis_pdf.add_argument("--task", default="identity", help="Task name for title")
+    p_cegis_pdf.add_argument("-o", "--output", default="cegis_synthesis.pdf", help="Output PDF path")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -3331,6 +3430,8 @@ def main():
         cmd_smt(args)
     elif args.command == "cross-proof":
         cmd_cross_proof(args)
+    elif args.command == "cegis":
+        cmd_cegis(args)
     else:
         parser.print_help()
 

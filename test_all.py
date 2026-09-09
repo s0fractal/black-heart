@@ -48,6 +48,7 @@ SUITES = [
     ("Epistemic Swarm Membrane & Quine Symbiosis", "test_epistemic_swarm"),
     ("Epistemic E-Graph Kernel & Equality Saturation", "test_egraph_kernel"),
     ("Sovereign SMT Kernel & First-Order DPLL(T) Verifier", "test_smt_kernel"),
+    ("Counterexample-Guided Inductive Synthesis (CEGIS)", "test_cegis_kernel"),
 ]
 
 
