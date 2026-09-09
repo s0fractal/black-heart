@@ -40,6 +40,7 @@ SUITES = [
     ("Anyonic Combinators & Quantum Braids", "test_anyon_glyph"),
     ("IPFS Ontogenetic Quine Diary", "test_ipfs_diary"),
     ("Mycelial Consensus Agora", "test_agora"),
+    ("Autopoietic Quine Organisms", "test_autopoiesis"),
 ]
 
 def run_all_tests() -> bool:

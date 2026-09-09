@@ -1466,6 +1466,111 @@ def cmd_agora(args):
         print("Usage: python3 cli.py agora {init,status,lineage,audit} ...")
 
 
+def cmd_autopoiesis(args):
+    """Grok Exp 1: Self-Contemplating Autopoietic Quine Organisms."""
+    from autopoiesis import (
+        init_autopoietic_organism,
+        evolve_autopoietic_organism,
+        audit_autopoietic_organism,
+        AUTOPOIESIS_MANIFEST_PREFIX,
+    )
+    import json
+
+    if args.action == "init":
+        out_path = args.output or "autopoietic_organism.pdf"
+        sk = args.secret_key
+        org, rec = init_autopoietic_organism(out_path, secret_key_hex=sk)
+        print("\033[1;36m===================================================\033[0m")
+        print("  %🖤 AUTOPOIETIC QUINE ORGANISM INITIALIZED: Generation #0")
+        print("\033[1;36m===================================================\033[0m")
+        print(f"  Target Document:      {out_path}")
+        print(f"  Organism Hash:        ⚓ {org.organism_hash}")
+        print(f"  Ed25519 Public Key:   {org.public_key_hex}")
+        print(f"  Active Chromosomes:   {len(org.chromosomes)}")
+        print("  Next Step: Run 'python3 <file.pdf>' or 'python3 cli.py autopoiesis evolve <file.pdf>'\n")
+
+    elif args.action == "evolve":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        succ, rec = evolve_autopoietic_organism(args.file, secret_key_hex=args.secret_key)
+        print("\033[1;32m===================================================\033[0m")
+        print(f"  [✓] AUTOPOIETIC EVOLUTION: Generation #{succ.generation} Appended In-Place!")
+        print("\033[1;32m===================================================\033[0m")
+        print(f"  Document:             {args.file}")
+        print(f"  New Organism Hash:    ⚓ {succ.organism_hash}")
+        print(f"  Parent Hash:          ⚓ {succ.parent_hash}")
+        print(f"  Applied Rewrite Rule: {rec.rule_name} on gene '{rec.gene_id}'")
+        print(f"  Conserved Energy:     -{rec.atp_saved} ATP fuel quanta")
+        print(f"  Syntactic Delta:      {rec.size_saved:+d} AST nodes\n")
+
+    elif args.action == "audit":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        ok, msg = audit_autopoietic_organism(args.file)
+        print("\033[1;32m===================================================\033[0m")
+        print("  %🖤 AUTOPOIETIC INTEGRITY & ORACLE REPLAY AUDITOR")
+        print("\033[1;32m===================================================\033[0m")
+        print(f"  [✓] {msg}\n")
+
+    elif args.action == "experiments":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        with open(args.file, "rb") as f:
+            data = f.read()
+        prefix = AUTOPOIESIS_MANIFEST_PREFIX.encode("utf-8")
+        idx = data.rfind(prefix)
+        if idx == -1:
+            print(f"[!] No autopoiesis manifest in '{args.file}'.")
+            sys.exit(1)
+        end_idx = data.find(b"\n", idx)
+        manifest = json.loads(data[idx + len(prefix):end_idx].decode("utf-8"))
+        exps = manifest.get("experiments", [])
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  %🖤 EMPIRICAL SCIENTIFIC LEDGER: {os.path.basename(args.file)}")
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  Total Evaluated Mutations: {len(exps)}")
+        acc = sum(1 for e in exps if e.get("verdict") == "ACCEPTED_MORE_EFFICIENT")
+        print(f"  Accepted Optimizations:    {acc}")
+        print(f"  Rejected Counterexamples:  {len(exps) - acc}\n")
+        print("EID         VERDICT                     RULE                        DELTA ATP   DISCREPANCY")
+        print("-" * 88)
+        for e in exps[-20:]:
+            v = e.get("verdict", "")
+            r = e.get("rule_name", "")[:26]
+            d = e.get("atp_delta", 0)
+            disc = (e.get("discrepancy_detail") or "Sound Invariant")[:28]
+            print(f"{e.get('experiment_id', ''):10s}  {v:26s}  {r:26s}  {d:+6d} ATP  {disc}")
+        print()
+
+    elif args.action == "genome":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        with open(args.file, "rb") as f:
+            data = f.read()
+        prefix = AUTOPOIESIS_MANIFEST_PREFIX.encode("utf-8")
+        idx = data.rfind(prefix)
+        if idx == -1:
+            print(f"[!] No autopoiesis manifest in '{args.file}'.")
+            sys.exit(1)
+        end_idx = data.find(b"\n", idx)
+        manifest = json.loads(data[idx + len(prefix):end_idx].decode("utf-8"))
+        org_dict = manifest.get("current_organism", {})
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  %🖤 ACTIVE COMBINATOR GENOME: Gen #{org_dict.get('generation')}")
+        print("\033[1;36m=================================================================\033[0m")
+        for c in org_dict.get("chromosomes", []):
+            print(f"  [{c.get('gene_id')}] {c.get('gene_name')}")
+            print(f"    Expression: {c.get('expression')}")
+            print(f"    NormalForm: {c.get('expected_normal_form')}")
+            print(f"    Max ATP:    {c.get('max_atp')}\n")
+    else:
+        print("Usage: python3 cli.py autopoiesis {init,evolve,audit,experiments,genome} ...")
+
+
 def cmd_shell(args):
     """Interactive Hypervisor REPL for Project Black-Heart."""
     from symbiosis import (
@@ -1963,6 +2068,27 @@ def main():
     p_agora_aud = agora_subs.add_parser("audit", help="Cryptographically audit all Agora sessions and multi-signatures")
     p_agora_aud.add_argument("file", help="Target Agora PDF polyglot")
 
+    # autopoiesis (Grok Exp 1)
+    p_auto = subparsers.add_parser("autopoiesis", help="Grok Exp 1: Self-Contemplating Autopoietic Quine Organisms")
+    auto_subs = p_auto.add_subparsers(dest="action")
+
+    p_auto_init = auto_subs.add_parser("init", help="Initialize Genesis Autopoietic Quine Organism")
+    p_auto_init.add_argument("-o", "--output", default="autopoietic_organism.pdf", help="Output PDF polyglot path")
+    p_auto_init.add_argument("--secret-key", default=None, help="Author Ed25519 secret key hex (optional)")
+
+    p_auto_evolve = auto_subs.add_parser("evolve", help="Advance organism by 1 generation in-place (ISO 32000 append)")
+    p_auto_evolve.add_argument("file", help="Target autopoietic organism PDF")
+    p_auto_evolve.add_argument("--secret-key", default=None, help="Author Ed25519 secret key hex (optional)")
+
+    p_auto_audit = auto_subs.add_parser("audit", help="Audit all generational receipts and replay AST transitions")
+    p_auto_audit.add_argument("file", help="Target autopoietic organism PDF")
+
+    p_auto_exp = auto_subs.add_parser("experiments", help="Display empirical scientific ledger")
+    p_auto_exp.add_argument("file", help="Target autopoietic organism PDF")
+
+    p_auto_gen = auto_subs.add_parser("genome", help="Display active combinator chromosomes")
+    p_auto_gen.add_argument("file", help="Target autopoietic organism PDF")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -2009,6 +2135,8 @@ def main():
         cmd_diary(args)
     elif args.command == "agora":
         cmd_agora(args)
+    elif args.command == "autopoiesis":
+        cmd_autopoiesis(args)
     elif args.command == "cross-proof":
         cmd_cross_proof(args)
     else:

@@ -12,6 +12,12 @@
 7. **Topological Quantum Topos (`quantum.py`):** Universal $B_3$ braid profile, non-Abelian Fibonacci anyons, Born measurement collapse, and standalone unitary invariance auditing.
 8. **Turing Morphogenesis (`morphogenesis.py`):** Gray-Scott reaction-diffusion PDEs on $\mathbb{T}^2$, 256-bit coprime entropy folding, and native vector contour rendering.
 9. **Form Metamorphosis & Self-Contemplation (`metamorphosis.py`):** Binary AST zipper rewriting, frozen invariant oracle evaluation, empirical experiment ledgers, and tamper-evident transition replay receipts.
+10. **Morphogenetic Proof-Nets (`morpho_net.py`):** Reaction-diffusion spatial singularities compiled into Lafont interaction nets, Weisfeiler-Lehman isomorphism invariants, and tree-ring generational PDF growth.
+11. **Gödelian Incompleteness & Event Horizons (`goedel.py`):** Black Cone event horizon classification, three-valued Kleene logic, and self-referential Penrose polyglots.
+12. **Topological Anyonic Combinators (`anyon_glyph.py`):** Artin braid words, Yang-Baxter confluence, Fibonacci fusion tree projectors, and Born rule collapse.
+13. **IPFS Ontogenetic Quine Diary (`ipfs_diary.py`):** Self-preserving ontogenetic diary, multi-agent dialectical citations, Merkle-DAG audit, and fail-closed CIDv1 retrieval.
+14. **Mycelial Social Democracy (`agora.py`):** Quadratic ATP voting, epistemic theorem auditing, stake slashing, and constitutional parliament.
+15. **Autopoietic Quine Organisms (`autopoiesis.py`):** Grok Experiment 1 in-place self-evolution, AST zipper rewriting, frozen oracle invariance, and cumulative empirical scientific ledgers.
 
 ---
 
@@ -852,9 +858,55 @@ python3 parliament.pdf --audit
 
 ---
 
-## 28. Comprehensive Test Suite
+## 28. Autopoietic Quine Organisms (`autopoiesis.py`) — Grok Experiment 1
 
-Run all **176 unit tests** across all **21 engines** with a single command:
+Realizing **Grok's Experiment 1** (*"Самосвідомий поліглот-квін"*):
+A self-reproducing, self-contemplating ISO 32000 PDF polyglot organism that upon direct execution (`python3 self.pdf`):
+1. Verifies its own physical byte stream, parent Merkle chain, and Ed25519 signatures.
+2. Contemplates its internal combinatory genome (`SKIY` chromosomes) via binary zipper AST navigation.
+3. Proposes equational rewrites (`S(K x)(K y) -> K(x y)`, `S(K x)I -> x`, static reductions).
+4. Evaluates functional semantic invariance on 5 frozen input fixtures via `FrozenEvaluator`.
+5. Chronicles both accepted optimizations and rejected counterexamples in its permanent empirical scientific ledger (`ExperimentLog`).
+6. Signs a new `AutopoiesisReceipt` with its Ed25519 identity.
+7. Strictly appends an ISO 32000 §7.5.6 revision page to itself (`after.startswith(before) == True`).
+8. Emits `[#] <new_organism_hash>`, leaving an unbroken cryptographic lineage of its physical evolution.
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│               SELF-CONTEMPLATING AUTOPOIETIC QUINE                     │
+│                                                                        │
+│   $ python3 organism.pdf                                               │
+│   [EVOLUTION ACCOMPLISHED] Generation #1 appended in-place!            │
+│     New Organism Hash: [#] 930cdc2102e31ab006ac40b8cc632f206ae...      │
+│     Applied Rewrite:   S(K x)(K y) -> K(x y) on GENE-OPT-04            │
+│     Energy Conserved:  -10 ATP fuel quanta                             │
+│     Append Invariant:  after.startswith(before) == True                │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+```bash
+# Initialize Genesis autopoietic quine:
+python3 cli.py autopoiesis init -o organism.pdf
+
+# In-place self-evolution (run directly as standalone executable script):
+python3 organism.pdf
+python3 organism.pdf --evolve
+
+# Cryptographically audit all generations and replay AST transitions against frozen oracle:
+python3 organism.pdf --audit
+
+# Dump empirical scientific ledger of accepted & rejected mutations:
+python3 organism.pdf --experiments
+
+# Inspect active combinator chromosomes:
+python3 organism.pdf --genome
+```
+
+---
+
+## 29. Comprehensive Test Suite
+
+Run all **200 unit tests** across all **22 engines** with a single command:
 ```bash
 # Unified test runner:
 python3 test_all.py
@@ -884,12 +936,14 @@ python3 test_goedel.py         # 8 tests: Event horizon classification, limit cy
 python3 test_anyon_glyph.py    # 8 tests: Braid compilation, Fibonacci unitaries, Born collapse
 python3 test_ipfs_diary.py     # 22 tests: CIDv1 vectors, append-only growth, receipts, CLI execution, inner voice loop, fail-closed fetch/restore, multi-agent citations & Merkle-DAG
 python3 test_agora.py          # 10 tests: Quadratic voting, immune auditing, stake slashing, consensus settlement
+python3 test_autopoiesis.py    # 7 tests: Autopoietic quine evolution, append-only invariance, frozen oracle replay, empirical ledger
 ```
 
 ---
 
-## 29. Specifications & Theory
+## 30. Specifications & Theory
 
+* [AUTOPOIESIS.md](AUTOPOIESIS.md) — Self-Contemplating Autopoietic Quine Organisms, In-Place Evolution & Empirical Ledgers.
 * [AGORA.md](AGORA.md) — Mycelial Social Democracy, Quadratic Voting & Consensus Parliament.
 * [IPFS_DIARY.md](IPFS_DIARY.md) — Self-Preserving Ontogenetic Diary, Merkle-DAG Provenance & LLM Inner Voice Continuum.
 * [ANYON.md](ANYON.md) — Topological Anyonic Combinators, Quantum Braids & Born Rule Collapse.
@@ -905,8 +959,9 @@ python3 test_agora.py          # 10 tests: Quadratic voting, immune auditing, st
 
 ---
 
-## 30. License
+## 31. License
 
-* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, `interaction.py`, `organism.py`, `cross_proof.py`, `vault.py`, `continuum.py`, `zk_glyph.py`, `mesh.py`, `symbiosis.py`, `quantum.py`, `morphogenesis.py`, `metamorphosis.py`, `mycelium.py`, `colony.py`, `morpho_net.py`, `goedel.py`, `anyon_glyph.py`, `cid.py`, `ipfs_diary.py`, `agora.py`, `cli.py`, tests):** AGPL-3.0-only
+* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, `interaction.py`, `organism.py`, `cross_proof.py`, `vault.py`, `continuum.py`, `zk_glyph.py`, `mesh.py`, `symbiosis.py`, `quantum.py`, `morphogenesis.py`, `metamorphosis.py`, `mycelium.py`, `colony.py`, `morpho_net.py`, `goedel.py`, `anyon_glyph.py`, `cid.py`, `ipfs_diary.py`, `agora.py`, `autopoiesis.py`, `cli.py`, tests):** AGPL-3.0-only
 * **Texts & Polyglot artifacts:** CC BY-SA 4.0
+
 
