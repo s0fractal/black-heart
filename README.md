@@ -659,9 +659,62 @@ python3 goedel_paradox.pdf --verify
 
 ---
 
-## 25. Comprehensive Test Suite
+---
 
-Run all **144 unit tests** across all **18 engines** with a single command:
+## 25. Anyonic Combinators & Quantum Braids (`anyon_glyph.py`)
+
+Synthesizing combinatory logic with Chern-Simons $SU(2)_3$ topological quantum field theory, `anyon_glyph.py` elevates glyph AST evaluation to non-Abelian anyon braiding on the 2-sphere and Born rule projective measurements:
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│           TOPOLOGICAL ANYONIC COMBINATOR TOPOS (%🖤 ANYON)             │
+│                                                                        │
+│   Combinator Tree ──> Artin Braid Generator Mapping (B_3)              │
+│   - 🤍 (Vacuum 1)     ──> Trivial strand pass-through                  │
+│   - 🖤 (Anyon τ)      ──> Braiding generator σ_1                       │
+│   - 🌿 (Chiral Sprout)──> Braiding generator σ_2                       │
+│   - 🔁 (Dehn Monodromy)─> Center full twist (σ_1 σ_2)³                 │
+│   - App(L, R)         ──> Entanglement bridge σ_1⁻¹                    │
+│                               │                                        │
+│                               ▼                                        │
+│               SU(2) Unitary Evolution & Bloch Sphere                   │
+│               - Fibonacci Pentagon F-Matrix & Braiding R-Matrix        │
+│               - Golden ratio probability invariants (1/φ, 1/φ²)        │
+│                               │                                        │
+│                               ▼                                        │
+│                 Born Rule Projective Measurement                       │
+│                 - P(|0⟩ Vacuum) = |α|² = cos²(θ/2) = 1/φ² (38.2%)      │
+│                 - P(|1⟩ Anyon τ) = |β|² = sin²(θ/2) = 1/φ  (61.8%)      │
+│                 - Collapses superposed state into 🤍 or 🖤             │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+* **Golden Ratio Probabilities:** For the fundamental combinator `🌿 🖤 🤍`, the compiled unitary circuit evolves the vacuum into an exact golden-ratio superposition on the Bloch sphere: $P(\text{Vacuum}) = 1/\phi^2 \approx 38.20\%$, $P(\text{Anyon}) = 1/\phi \approx 61.80\%$.
+* **Vector Spacetime Worldlines:** The compiled ISO 32000 PDF polyglot renders 3-strand anyon worldlines and stereographic Bloch sphere projections in pure vector graphics (`m`, `c`, `S`, `re`).
+* **Standalone Execution:** Running `python3 anyon.pdf --simulate` replays the unitary evolution and performs projective Born collapse directly from the terminal.
+
+```bash
+# Simulate unitary evolution and Born collapse:
+python3 cli.py anyon simulate -e "🌿 🖤 🤍"
+
+# Compile an anyonic quantum polyglot:
+python3 cli.py anyon compile -e "🌿 🖤 🤍" -o anyon_circuit.pdf
+
+# Inspect telemetry HUD:
+python3 cli.py anyon status anyon_circuit.pdf
+
+# Statically audit unitary invariance (|det U| = 1.0):
+python3 cli.py anyon verify anyon_circuit.pdf
+
+# Run standalone as self-verifying Python runtime:
+python3 anyon_circuit.pdf --simulate
+```
+
+---
+
+## 26. Comprehensive Test Suite
+
+Run all **150 unit tests** across all **19 engines** with a single command:
 ```bash
 # Unified test runner:
 python3 test_all.py
@@ -688,12 +741,14 @@ python3 test_mycelium.py       # 7 tests: Epistemic mycelium, warrants, divergen
 python3 test_colony.py         # 7 tests: Living colony ecosystem, neuro-symbolic oracle, spore dormancy, ledger settlements
 python3 test_morpho_net.py     # 6 tests: Reaction-diffusion critical points, Lafont net compilation, ISO 32000 tree-ring growth
 python3 test_goedel.py         # 6 tests: Event horizon classification, limit cycles, Penrose polyglot
+python3 test_anyon_glyph.py    # 6 tests: Braid compilation, Fibonacci unitaries, Born collapse
 ```
 
 ---
 
-## 26. Specifications & Theory
+## 27. Specifications & Theory
 
+* [ANYON.md](ANYON.md) — Topological Anyonic Combinators, Quantum Braids & Born Rule Collapse.
 * [GOEDEL.md](GOEDEL.md) — Gödelian Incompleteness, The Black Cone Event Horizon & Three-Valued Epistemic Logic.
 * [COLONY.md](COLONY.md) — The Living Colony Ecosystem, Neuro-Symbolic Petri Dish & Macro-Evolutionary Dynamics.
 * [MYCELIUM.md](MYCELIUM.md) — Collective Metamorphosis, Warrant Mesh & The Preservation of Phenotypic Diversity.
@@ -706,8 +761,8 @@ python3 test_goedel.py         # 6 tests: Event horizon classification, limit cy
 
 ---
 
-## 27. License
+## 28. License
 
-* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, `interaction.py`, `organism.py`, `cross_proof.py`, `vault.py`, `continuum.py`, `zk_glyph.py`, `mesh.py`, `symbiosis.py`, `quantum.py`, `morphogenesis.py`, `metamorphosis.py`, `mycelium.py`, `colony.py`, `morpho_net.py`, `goedel.py`, `cli.py`, tests):** AGPL-3.0-only
+* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, `interaction.py`, `organism.py`, `cross_proof.py`, `vault.py`, `continuum.py`, `zk_glyph.py`, `mesh.py`, `symbiosis.py`, `quantum.py`, `morphogenesis.py`, `metamorphosis.py`, `mycelium.py`, `colony.py`, `morpho_net.py`, `goedel.py`, `anyon_glyph.py`, `cli.py`, tests):** AGPL-3.0-only
 * **Texts & Polyglot artifacts:** CC BY-SA 4.0
 

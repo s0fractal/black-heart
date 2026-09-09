@@ -899,6 +899,115 @@ def cmd_goedel(args):
         print("Usage: python3 cli.py goedel {probe,compile,verify,status} ...")
 
 
+def cmd_anyon(args):
+    """Topological Anyonic Combinators & Quantum Braided Rewriting."""
+    from anyon_glyph import (
+        compile_glyph_to_anyon_braid,
+        settle_anyon_glyph,
+        construct_anyon_polyglot,
+        audit_anyon_polyglot,
+        AnyonSettlementReceipt,
+        ANYON_MANIFEST_PREFIX,
+    )
+    from quantum import FibonacciQuantumSystem
+    from glyph import parse
+    from crypto import generate_keypair
+    import json
+
+    if args.action == "simulate":
+        expr = args.expr or "🌿 🖤 🤍"
+        t = parse(expr)
+        braid = compile_glyph_to_anyon_braid(t)
+        sys_q = FibonacciQuantumSystem()
+        u = sys_q.compile_braid_to_unitary(braid)
+        st = sys_q.evolve_state(u)
+        p0, p1 = sys_q.calculate_born_probabilities(st)
+        bl = sys_q.calculate_bloch_coordinates(st)
+
+        print("\033[1;36m=================================================================\033[0m")
+        print("  %🖤 TOPOLOGICAL FIBONACCI ANYON SIMULATION")
+        print("\033[1;36m=================================================================\033[0m\n")
+        print(f"  Circuit Term:        {expr}")
+        print(f"  Artin Braid:         {braid.to_artin_notation()}")
+        print(f"  Writhe:              {braid.writhe:+d} (Crossings: {braid.crossing_number})")
+        print(f"  Unitary Gate Matrix: [{u.m00.real:+.3f}{u.m00.imag:+.3f}j, {u.m01.real:+.3f}{u.m01.imag:+.3f}j]")
+        print(f"                       [{u.m10.real:+.3f}{u.m10.imag:+.3f}j, {u.m11.real:+.3f}{u.m11.imag:+.3f}j]")
+        print(f"  Determinant |det U|: {abs(u.det()):.6f} (Unitary)")
+        print(f"  Born P(|0> Vacuum):  {p0*100:.2f}% ({'1/φ²' if abs(p0 - 0.381966) < 0.01 else 'Exact'})")
+        print(f"  Born P(|1> Anyon τ): {p1*100:.2f}% ({'1/φ' if abs(p1 - 0.618034) < 0.01 else 'Exact'})")
+        print(f"  Bloch Sphere Vector: [{bl['x']:+.3f}, {bl['y']:+.3f}, {bl['z']:+.3f}] (θ={bl['theta_deg']}°, φ={bl['phi_deg']}°)\n")
+
+    elif args.action == "compile":
+        sk_hex = getattr(args, "secret_key", None)
+        if not sk_hex:
+            sk_hex, _ = generate_keypair()
+        out_path = args.output or "anyon_circuit.pdf"
+        expr = args.expr or "🌿 🖤 🤍"
+        rec = construct_anyon_polyglot(
+            output_pdf_path=out_path,
+            secret_key_hex=sk_hex,
+            term_expr=expr
+        )
+        print("\033[1;36m===================================================\033[0m")
+        print(f"  %🖤 ANYON QUANTUM POLYGLOT COMPILED")
+        print("\033[1;36m===================================================\033[0m")
+        print(f"  Term:                {rec.term_expr}")
+        print(f"  Artin Braid:         {rec.braid_artin}")
+        print(f"  Born Probabilities:  P(0)={rec.born_p0_vacuum*100:.1f}%, P(1)={rec.born_p1_anyon*100:.1f}%")
+        print(f"  Projective Outcome:  {rec.collapsed_glyph}")
+        print(f"  Bloch Coordinates:   [{rec.bloch_x:+.3f}, {rec.bloch_y:+.3f}, {rec.bloch_z:+.3f}]")
+        print(f"  Signer Key:          {rec.public_key_hex[:32]}...")
+        print(f"  Saved Polyglot:      {out_path}\n")
+
+    elif args.action == "verify":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        with open(args.file, "rb") as f:
+            data = f.read()
+        ok, msg, info = audit_anyon_polyglot(data)
+        if not ok:
+            print(f"\033[1;31m[FAIL] Anyon audit rejected: {msg}\033[0m")
+            sys.exit(1)
+        print("\033[1;32m=================================================================\033[0m")
+        print("  [✓ SUCCESS] ANYONIC QUANTUM POLYGLOT AUDITED & VERIFIED")
+        print("\033[1;32m=================================================================\033[0m\n")
+        print(f"  Term Expression:   {info.get('term_expr')}")
+        print(f"  Artin Braid:       {info.get('braid_artin')}")
+        print(f"  Born P(|0>):       {info.get('born_p0_vacuum')*100:.2f}%")
+        print(f"  Born P(|1>):       {info.get('born_p1_anyon')*100:.2f}%")
+        print(f"  Unitary Invariance:|det U| = {info.get('unitary_det_mag')} (100% Preserved)")
+        print(f"  Signer Key:        {info.get('public_key_hex')}\n")
+
+    elif args.action == "status":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        with open(args.file, "rb") as f:
+            data = f.read()
+        prefix = ANYON_MANIFEST_PREFIX.encode("utf-8")
+        idx = data.rfind(prefix)
+        if idx == -1:
+            print(f"[!] No Anyon quantum manifest found in '{args.file}'.")
+            sys.exit(1)
+        end_idx = data.find(b"\n", idx)
+        raw = data[idx + len(prefix):end_idx].decode("utf-8")
+        manifest = json.loads(raw)
+        print("\033[1;36m=================================================================\033[0m")
+        print("  %🖤 PROJECT BLACK-HEART // ANYONIC QUANTUM ATLAS")
+        print(f"  Target File: {os.path.basename(args.file)} ({len(data)} bytes)")
+        print("\033[1;36m=================================================================\033[0m\n")
+        print(f"  Circuit Term:      {manifest.get('term_expr')}")
+        print(f"  Braid Word:        {manifest.get('braid_artin')}")
+        print(f"  Born Probabilities:P(0)={manifest.get('born_p0_vacuum')*100:.2f}%, P(1)={manifest.get('born_p1_anyon')*100:.2f}%")
+        print(f"  Bloch Angles:      θ={manifest.get('bloch_theta_deg')}°, φ={manifest.get('bloch_phi_deg')}°")
+        print(f"  Projective Result: {manifest.get('collapsed_glyph')}")
+        print(f"  Entropy:           {manifest.get('von_neumann_entropy')} shannons")
+        print(f"  Signer Key:        {manifest.get('public_key_hex')}\n")
+    else:
+        print("Usage: python3 cli.py anyon {simulate,compile,verify,status} ...")
+
+
 def cmd_shell(args):
     """Interactive Hypervisor REPL for Project Black-Heart."""
     from symbiosis import (
@@ -1269,6 +1378,24 @@ def main():
     p_goedel_stat = goedel_subs.add_parser("status", help="Inspect a Gödelian polyglot's receipt and telemetry")
     p_goedel_stat.add_argument("file", help="Target Gödelian PDF polyglot")
 
+    # anyon
+    p_anyon = subparsers.add_parser("anyon", help="Topological Anyonic Combinators & Quantum Braided Rewriting")
+    anyon_subs = p_anyon.add_subparsers(dest="action")
+
+    p_anyon_sim = anyon_subs.add_parser("simulate", help="Simulate unitary braiding and Born measurement")
+    p_anyon_sim.add_argument("-e", "--expr", default="🌿 🖤 🤍", help="Combinator circuit expression")
+
+    p_anyon_comp = anyon_subs.add_parser("compile", help="Compile an anyonic quantum polyglot PDF")
+    p_anyon_comp.add_argument("-e", "--expr", default="🌿 🖤 🤍", help="Combinator circuit expression")
+    p_anyon_comp.add_argument("-o", "--output", default="anyon_circuit.pdf", help="Output PDF file path")
+    p_anyon_comp.add_argument("--secret-key", default=None, help="Author secret key hex (optional)")
+
+    p_anyon_ver = anyon_subs.add_parser("verify", help="Statically audit an anyonic quantum polyglot")
+    p_anyon_ver.add_argument("file", help="Target anyonic PDF polyglot")
+
+    p_anyon_stat = anyon_subs.add_parser("status", help="Inspect an anyonic polyglot's telemetry HUD")
+    p_anyon_stat.add_argument("file", help="Target anyonic PDF polyglot")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -1309,6 +1436,8 @@ def main():
         cmd_ontogeny(args)
     elif args.command == "goedel":
         cmd_goedel(args)
+    elif args.command == "anyon":
+        cmd_anyon(args)
     else:
         parser.print_help()
 

@@ -37,6 +37,7 @@ SUITES = [
     ("Living Colony Ecosystem", "test_colony"),
     ("Morphogenetic Proof-Nets & Ontogeny", "test_morpho_net"),
     ("Gödelian Incompleteness & Event Horizon", "test_goedel"),
+    ("Anyonic Combinators & Quantum Braids", "test_anyon_glyph"),
 ]
 
 def run_all_tests() -> bool:
