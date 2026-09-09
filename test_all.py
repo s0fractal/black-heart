@@ -49,6 +49,7 @@ SUITES = [
     ("Epistemic E-Graph Kernel & Equality Saturation", "test_egraph_kernel"),
     ("Sovereign SMT Kernel & First-Order DPLL(T) Verifier", "test_smt_kernel"),
     ("Counterexample-Guided Inductive Synthesis (CEGIS)", "test_cegis_kernel"),
+    ("Scoped Re-Admission & Conditional Reopening", "test_scoped_admission"),
 ]
 
 

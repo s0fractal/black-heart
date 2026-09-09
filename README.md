@@ -1004,6 +1004,7 @@ To address the security boundaries of executable documents, Project Black-Heart 
 * [EGRAPH.md](EGRAPH.md) — Epistemic E-Graph Kernel, Proof-Carrying Equality Saturation & Congruence Closure (EGRAPH-0.1 / Engine #28).
 * [SMT.md](SMT.md) — Sovereign SMT Kernel & First-Order DPLL(T) Verifier, Propositional CDCL & T_EUF Congruence Closure (SMT-0.1 / Engine #29).
 * [CEGIS.md](CEGIS.md) — Counterexample-Guided Inductive Synthesis & SMT-Driven Superoptimizer (CEGIS-0.1 / Engine #30).
+* [SCOPED_ADMISSION.md](SCOPED_ADMISSION.md) — Scoped Re-Admission & Conditional Reopening of Possibilities (SCOPED_ADMISSION-0.1 / Codex & s0fractal).
 
 
 * [CONTINUUM.md](CONTINUUM.md) — Suspended Thunks, Neutral Oracles & Merkle-Stream Continuity.
