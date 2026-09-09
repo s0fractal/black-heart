@@ -342,12 +342,16 @@ class DialecticalOrchestrator:
             settled_theorem=f"Settled under envelope budget_steps={delta.recommended_budget_steps}" if adm else "Retest inconclusive."
         )
 
+        proof_dag = getattr(retest, "proof_dag", None)
+        smt_verified = (proof_dag is not None and verify_unsat_certificate(proof_dag))
+
         return DialecticalDiscoveryReport(
             triad=triad,
             request=req,
             retest_result=retest,
             scoped_admission=adm,
-            smt_verified=adm is not None,
+            smt_verified=smt_verified,
+            proof_dag=proof_dag,
             elapsed_sec=time.time() - t_start
         )
 

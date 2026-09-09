@@ -609,14 +609,28 @@ class WarrantVerifier:
 
         elif claim.grade == EvidenceGrade.AXIOMATIC:
             w_ax: AxiomaticWitness = claim.witness
-            # Verify rule in closed sound rules
+            # 1. Require derivation steps to be non-empty (no unbacked empty proof traces)
+            if not w_ax.derivation_steps:
+                return Verdict(
+                    status=VerificationStatus.FAIL,
+                    grade=EvidenceGrade.AXIOMATIC,
+                    reason="Axiomatic witness has empty derivation steps"
+                )
+            # 2. Rule must be bound to the claim edge (claim.tau == w_ax.rule_name)
+            if claim.tau != w_ax.rule_name:
+                return Verdict(
+                    status=VerificationStatus.FAIL,
+                    grade=EvidenceGrade.AXIOMATIC,
+                    reason=f"Claim transition tau '{claim.tau}' does not match witness rule '{w_ax.rule_name}'"
+                )
+            # 3. Verify rule in closed sound rules
             if w_ax.rule_name not in ALGEBRAIC_SOUND_RULES:
                 return Verdict(
                     status=VerificationStatus.FAIL,
                     grade=EvidenceGrade.AXIOMATIC,
                     reason=f"Rule '{w_ax.rule_name}' is not in closed algebraic sound set"
                 )
-            # Verify symbolic rewrite reproducibility
+            # 4. Verify symbolic rewrite reproducibility
             rule_valid, err_msg = verify_symbolic_algebraic_rule(w_ax.rule_name)
             if not rule_valid:
                 return Verdict(

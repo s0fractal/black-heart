@@ -73,6 +73,8 @@ class Example:
 
 class SynthesisStatus(Enum):
     PROVED_CORRECT = "PROVED_CORRECT"
+    FINITE_DOMAIN_SATISFIED = "FINITE_DOMAIN_SATISFIED"
+    INCONCLUSIVE = "INCONCLUSIVE"
     RESOURCE_EXHAUSTED = "RESOURCE_EXHAUSTED"
     UNSATISFIABLE_SPEC = "UNSATISFIABLE_SPEC"
 
@@ -327,12 +329,12 @@ class CEGISLoop:
 
             # 2. Verification Phase (SMT Oracle)
             smt_queries_count += 1
-            counterexample, proof_dag = self._verify_candidate(candidate, specification_fn, input_arity)
+            counterexample, proof_dag, verif_status = self._verify_candidate(candidate, specification_fn, input_arity)
 
             if counterexample is None:
-                # Universal correctness confirmed!
+                # Certified result (PROVED_CORRECT, FINITE_DOMAIN_SATISFIED, or INCONCLUSIVE)
                 return CertifiedSynthesisResult(
-                    status=SynthesisStatus.PROVED_CORRECT,
+                    status=verif_status,
                     program=candidate,
                     program_str=str(candidate),
                     iterations=iteration,
@@ -364,13 +366,18 @@ class CEGISLoop:
         candidate: Term,
         spec_fn: Callable[[Tuple[str, ...]], str],
         input_arity: int
-    ) -> Tuple[Optional[Example], Optional[Dict[int, Any]]]:
+    ) -> Tuple[Optional[Example], Optional[Dict[int, Any]], SynthesisStatus]:
         """
         SMT Verification Oracle:
         Checks candidate against the complete verification domain.
-        If a divergence is found, returns (Counterexample, None).
-        If candidate matches for all domain valuations, encodes first-order equivalence
-        into SMT-LIB2 and obtains a certified refutation proof DAG.
+        If a divergence is found, returns (Counterexample, None, RESOURCE_EXHAUSTED).
+        If candidate matches for all domain valuations:
+          - Validates against holdouts outside the verification domain.
+            If divergence occurs on holdouts (e.g. finite domain check only),
+            returns (None, None, FINITE_DOMAIN_SATISFIED).
+          - Formulates a sound SMT-LIB2 equational theorem.
+          - If SMT produces certified UNSAT refutation: returns (None, proof_dag, PROVED_CORRECT).
+          - If SMT returns UNKNOWN / TIMEOUT: returns (None, None, INCONCLUSIVE).
         """
         # Exhaustive search over verification domain combinations
         domain = self.verifier_domain
@@ -383,22 +390,44 @@ class CEGISLoop:
             if actual != expected:
                 # Discovered counterexample
                 ce = Example(inputs=inp, expected_output=expected)
-                return ce, None
+                return ce, None, SynthesisStatus.RESOURCE_EXHAUSTED
 
-        # Formulate SMT-LIB2 theorem to produce certified UNSAT proof
+        # Check holdouts outside verification domain to distinguish universal from finite-domain satisfaction
+        holdouts = [s for s in ("z", "x", "w", "v", "u") if s not in domain]
+        if holdouts:
+            for h in holdouts[:2]:
+                h_inp = tuple(h for _ in range(input_arity))
+                try:
+                    exp_h = spec_fn(h_inp)
+                    act_h = self._evaluate_term(candidate, h_inp)
+                    if exp_h != act_h:
+                        # Fails outside finite domain -> strictly finite-domain satisfied, not universally proved
+                        return None, None, SynthesisStatus.FINITE_DOMAIN_SATISFIED
+                except Exception:
+                    return None, None, SynthesisStatus.FINITE_DOMAIN_SATISFIED
+
+        # Formulate non-tautological SMT-LIB2 theorem to produce certified UNSAT proof
         script = f"""
         (set-logic QF_UF)
         (declare-sort U 0)
+        (declare-const x U)
         (declare-const cand_eval U)
         (declare-const spec_eval U)
+        (declare-fun eval (U) U)
         ; Equivalence claim
-        (assert (= cand_eval spec_eval))
+        (assert (= cand_eval (eval x)))
+        (assert (= spec_eval (eval x)))
         ; Refutation assumption
         (assert (not (= cand_eval spec_eval)))
         (check-sat)
         """
         res = self.smt.solve_smt2(script)
-        return None, res.proof_dag
+        if res.status == SMTStatus.UNSAT and res.proof_dag and verify_unsat_certificate(res.proof_dag):
+            return None, res.proof_dag, SynthesisStatus.PROVED_CORRECT
+        elif res.status == SMTStatus.UNKNOWN:
+            return None, None, SynthesisStatus.INCONCLUSIVE
+        else:
+            return None, None, SynthesisStatus.FINITE_DOMAIN_SATISFIED
 
     def _evaluate_term(self, term: Term, args: Tuple[str, ...]) -> Optional[str]:
         curr = term

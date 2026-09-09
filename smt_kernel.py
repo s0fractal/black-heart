@@ -1277,25 +1277,82 @@ class SMTSolver:
 # ============================================================================
 
 def verify_unsat_certificate(proof_dag: Dict[int, ResolutionProofNode]) -> bool:
-    """Independent 50-line verifier for UNSAT resolution refutation DAGs."""
-    if not proof_dag:
+    """
+    Independent verifier for UNSAT resolution refutation DAGs.
+    Enforces:
+      1. Presence of at least one empty clause node (len(clause) == 0).
+      2. Strict referential integrity: all antecedents must exist in proof_dag.
+      3. Non-empty antecedents for all derived/learned nodes.
+      4. Strict acyclicity (DAG invariant verified via DFS / topological cycle check).
+      5. Sound root grounding: all derivation paths from the empty clause must
+         terminate at valid axiom nodes (rule in ("input", "theory_lemma")).
+    """
+    if not proof_dag or not isinstance(proof_dag, dict):
         return False
 
-    empty_clause_node = None
-    for node in proof_dag.values():
-        if len(node.clause) == 0:
-            empty_clause_node = node
-            break
-
-    if empty_clause_node is None:
+    empty_clause_nodes = [node for node in proof_dag.values() if isinstance(node, ResolutionProofNode) and len(node.clause) == 0]
+    if not empty_clause_nodes:
         return False
 
+    # 1. Referential integrity & non-empty antecedents for learned nodes
     for cid, node in proof_dag.items():
-        if node.rule in ("input", "theory_lemma"):
-            continue
-        if not node.antecedents:
+        if not isinstance(node, ResolutionProofNode):
             return False
-    return True
+        if node.rule not in ("input", "theory_lemma"):
+            if not node.antecedents:
+                return False
+        for ant in node.antecedents:
+            if ant not in proof_dag:
+                return False
+
+    # 2. Cycle detection across the proof graph
+    visited: Dict[int, int] = {}  # 0: unvisited, 1: visiting (active in recursion stack), 2: fully explored
+
+    def has_cycle(nid: int) -> bool:
+        visited[nid] = 1
+        for ant in proof_dag[nid].antecedents:
+            state = visited.get(ant, 0)
+            if state == 1:
+                return True
+            if state == 0:
+                if has_cycle(ant):
+                    return True
+        visited[nid] = 2
+        return False
+
+    for nid in proof_dag:
+        if visited.get(nid, 0) == 0:
+            if has_cycle(nid):
+                return False
+
+    # 3. Sound root grounding: empty clause must trace back to input / theory_lemma axioms
+    for ec_node in empty_clause_nodes:
+        if ec_node.rule in ("input", "theory_lemma"):
+            return True
+
+        frontier = list(ec_node.antecedents)
+        seen = set(frontier)
+        derivation_valid = True
+        has_axioms = False
+
+        while frontier:
+            curr_id = frontier.pop()
+            curr = proof_dag[curr_id]
+            if curr.rule in ("input", "theory_lemma"):
+                has_axioms = True
+            else:
+                if not curr.antecedents:
+                    derivation_valid = False
+                    break
+                for ant in curr.antecedents:
+                    if ant not in seen:
+                        seen.add(ant)
+                        frontier.append(ant)
+
+        if derivation_valid and has_axioms:
+            return True
+
+    return False
 
 
 # ============================================================================

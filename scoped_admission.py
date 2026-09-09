@@ -22,14 +22,22 @@ Specification & Implementation based on BLACK-HEART-CONDITIONAL-REOPENING-001 (C
      max 3 active retest attempts per refusal family).
   6. Replay & Mutation Defense:
      Replays reuse prior results without burning fuel; candidate tampering is caught before execution.
+  7. Durable Provenance & Anti-Aliasing:
+     Admission strictly requires an internally recorded and verified retest execution.
+     Context bindings are deeply snapshotted to prevent mutation leaks.
+  8. Host-Enforced Execution Deadline:
+     Re-evaluations enforce wall-clock timeouts, preventing unyielding callbacks from blocking the hypervisor.
 
 Zero external dependencies: 100% Python standard library.
 """
 
 from __future__ import annotations
+import copy
 import hashlib
 import json
 import time
+import threading
+import concurrent.futures
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Tuple, Set, Union, Callable
@@ -92,6 +100,25 @@ class RefusalRecord:
     dependencies: Tuple[str, ...]
     timestamp_utc: str = field(default_factory=lambda: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
 
+    def __post_init__(self):
+        object.__setattr__(self, "context", copy.deepcopy(self.context))
+        if not self.record_id:
+            object.__setattr__(self, "record_id", self.compute_record_id())
+
+    def compute_record_id(self) -> str:
+        body = {
+            "candidate_digest": self.candidate_digest,
+            "evaluator_digest": self.evaluator_digest,
+            "requirement_digest": self.requirement_digest,
+            "inputs_digest": self.inputs_digest,
+            "evidence_digest": sha256_hex(self.evidence_bytes),
+            "context": self.context,
+            "outcome_type": self.outcome_type.value if hasattr(self.outcome_type, "value") else str(self.outcome_type),
+            "steps_executed": self.steps_executed,
+            "dependencies": sorted(list(self.dependencies))
+        }
+        return sha256_hex(canonical_json(body))
+
     @classmethod
     def create(
         cls,
@@ -105,14 +132,15 @@ class RefusalRecord:
         steps_executed: int,
         dependencies: Tuple[str, ...] = ("budget_steps",)
     ) -> RefusalRecord:
+        ctx_copy = copy.deepcopy(context)
         body = {
             "candidate_digest": candidate_digest,
             "evaluator_digest": evaluator_digest,
             "requirement_digest": requirement_digest,
             "inputs_digest": inputs_digest,
             "evidence_digest": sha256_hex(evidence_bytes),
-            "context": context,
-            "outcome_type": outcome_type.value,
+            "context": ctx_copy,
+            "outcome_type": outcome_type.value if hasattr(outcome_type, "value") else str(outcome_type),
             "steps_executed": steps_executed,
             "dependencies": sorted(list(dependencies))
         }
@@ -124,10 +152,41 @@ class RefusalRecord:
             requirement_digest=requirement_digest,
             inputs_digest=inputs_digest,
             evidence_bytes=evidence_bytes,
-            context=context,
+            context=ctx_copy,
             outcome_type=outcome_type,
             steps_executed=steps_executed,
             dependencies=dependencies
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "record_id": self.record_id,
+            "candidate_digest": self.candidate_digest,
+            "evaluator_digest": self.evaluator_digest,
+            "requirement_digest": self.requirement_digest,
+            "inputs_digest": self.inputs_digest,
+            "evidence_bytes_hex": self.evidence_bytes.hex(),
+            "context": copy.deepcopy(self.context),
+            "outcome_type": self.outcome_type.value,
+            "steps_executed": self.steps_executed,
+            "dependencies": list(self.dependencies),
+            "timestamp_utc": self.timestamp_utc
+        }
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> RefusalRecord:
+        return cls(
+            record_id=d["record_id"],
+            candidate_digest=d["candidate_digest"],
+            evaluator_digest=d["evaluator_digest"],
+            requirement_digest=d["requirement_digest"],
+            inputs_digest=d["inputs_digest"],
+            evidence_bytes=bytes.fromhex(d["evidence_bytes_hex"]),
+            context=copy.deepcopy(d["context"]),
+            outcome_type=RefusalReason(d["outcome_type"]),
+            steps_executed=int(d["steps_executed"]),
+            dependencies=tuple(d["dependencies"]),
+            timestamp_utc=d.get("timestamp_utc", "")
         )
 
 
@@ -146,6 +205,20 @@ class ReevaluationRequest:
     researcher_hypothesis: Optional[str] = None
     timestamp_utc: str = field(default_factory=lambda: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
 
+    def __post_init__(self):
+        object.__setattr__(self, "new_context", copy.deepcopy(self.new_context))
+
+    def compute_request_id(self) -> str:
+        body = {
+            "refusal_id": self.refusal_id,
+            "candidate_digest": self.candidate_digest,
+            "evaluator_digest": self.evaluator_digest,
+            "requirement_digest": self.requirement_digest,
+            "new_context": self.new_context,
+            "claimed_basis": self.claimed_basis
+        }
+        return sha256_hex(canonical_json(body))
+
     @classmethod
     def create(
         cls,
@@ -157,12 +230,13 @@ class ReevaluationRequest:
         claimed_basis: str,
         researcher_hypothesis: Optional[str] = None
     ) -> ReevaluationRequest:
+        ctx_copy = copy.deepcopy(new_context)
         body = {
             "refusal_id": refusal_id,
             "candidate_digest": candidate_digest,
             "evaluator_digest": evaluator_digest,
             "requirement_digest": requirement_digest,
-            "new_context": new_context,
+            "new_context": ctx_copy,
             "claimed_basis": claimed_basis
         }
         req_id = sha256_hex(canonical_json(body))
@@ -172,9 +246,36 @@ class ReevaluationRequest:
             candidate_digest=candidate_digest,
             evaluator_digest=evaluator_digest,
             requirement_digest=requirement_digest,
-            new_context=new_context,
+            new_context=ctx_copy,
             claimed_basis=claimed_basis,
             researcher_hypothesis=researcher_hypothesis
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "request_id": self.request_id,
+            "refusal_id": self.refusal_id,
+            "candidate_digest": self.candidate_digest,
+            "evaluator_digest": self.evaluator_digest,
+            "requirement_digest": self.requirement_digest,
+            "new_context": copy.deepcopy(self.new_context),
+            "claimed_basis": self.claimed_basis,
+            "researcher_hypothesis": self.researcher_hypothesis,
+            "timestamp_utc": self.timestamp_utc
+        }
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> ReevaluationRequest:
+        return cls(
+            request_id=d["request_id"],
+            refusal_id=d["refusal_id"],
+            candidate_digest=d["candidate_digest"],
+            evaluator_digest=d["evaluator_digest"],
+            requirement_digest=d["requirement_digest"],
+            new_context=copy.deepcopy(d["new_context"]),
+            claimed_basis=d["claimed_basis"],
+            researcher_hypothesis=d.get("researcher_hypothesis"),
+            timestamp_utc=d.get("timestamp_utc", "")
         )
 
 
@@ -195,6 +296,23 @@ class RetestResult:
     evidence_bytes: bytes
     timestamp_utc: str = field(default_factory=lambda: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
 
+    def __post_init__(self):
+        object.__setattr__(self, "context", copy.deepcopy(self.context))
+
+    def compute_retest_id(self) -> str:
+        body = {
+            "request_id": self.request_id,
+            "refusal_id": self.refusal_id,
+            "candidate_digest": self.candidate_digest,
+            "evaluator_digest": self.evaluator_digest,
+            "requirement_digest": self.requirement_digest,
+            "context": self.context,
+            "outcome": self.outcome.value if hasattr(self.outcome, "value") else str(self.outcome),
+            "steps_spent": self.steps_spent,
+            "evidence_digest": sha256_hex(self.evidence_bytes)
+        }
+        return sha256_hex(canonical_json(body))
+
     @classmethod
     def create(
         cls,
@@ -208,14 +326,15 @@ class RetestResult:
         steps_spent: int,
         evidence_bytes: bytes
     ) -> RetestResult:
+        ctx_copy = copy.deepcopy(context)
         body = {
             "request_id": request_id,
             "refusal_id": refusal_id,
             "candidate_digest": candidate_digest,
             "evaluator_digest": evaluator_digest,
             "requirement_digest": requirement_digest,
-            "context": context,
-            "outcome": outcome.value,
+            "context": ctx_copy,
+            "outcome": outcome.value if hasattr(outcome, "value") else str(outcome),
             "steps_spent": steps_spent,
             "evidence_digest": sha256_hex(evidence_bytes)
         }
@@ -227,10 +346,41 @@ class RetestResult:
             candidate_digest=candidate_digest,
             evaluator_digest=evaluator_digest,
             requirement_digest=requirement_digest,
-            context=context,
+            context=ctx_copy,
             outcome=outcome,
             steps_spent=steps_spent,
             evidence_bytes=evidence_bytes
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "retest_id": self.retest_id,
+            "request_id": self.request_id,
+            "refusal_id": self.refusal_id,
+            "candidate_digest": self.candidate_digest,
+            "evaluator_digest": self.evaluator_digest,
+            "requirement_digest": self.requirement_digest,
+            "context": copy.deepcopy(self.context),
+            "outcome": self.outcome.value,
+            "steps_spent": self.steps_spent,
+            "evidence_bytes_hex": self.evidence_bytes.hex(),
+            "timestamp_utc": self.timestamp_utc
+        }
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> RetestResult:
+        return cls(
+            retest_id=d["retest_id"],
+            request_id=d["request_id"],
+            refusal_id=d["refusal_id"],
+            candidate_digest=d["candidate_digest"],
+            evaluator_digest=d["evaluator_digest"],
+            requirement_digest=d["requirement_digest"],
+            context=copy.deepcopy(d["context"]),
+            outcome=RetestOutcome(d["outcome"]),
+            steps_spent=int(d["steps_spent"]),
+            evidence_bytes=bytes.fromhex(d["evidence_bytes_hex"]),
+            timestamp_utc=d.get("timestamp_utc", "")
         )
 
 
@@ -250,6 +400,9 @@ class ScopedAdmission:
     policy_id: str
     timestamp_utc: str = field(default_factory=lambda: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
 
+    def __post_init__(self):
+        object.__setattr__(self, "context", copy.deepcopy(self.context))
+
     @classmethod
     def create(
         cls,
@@ -260,7 +413,8 @@ class ScopedAdmission:
         context: Dict[str, Any],
         policy_id: str = "DEFAULT_SCOPED_POLICY"
     ) -> ScopedAdmission:
-        ctx_digest = canonical_context_digest(context)
+        ctx_copy = copy.deepcopy(context)
+        ctx_digest = canonical_context_digest(ctx_copy)
         body = {
             "retest_id": retest_id,
             "candidate_digest": candidate_digest,
@@ -277,8 +431,35 @@ class ScopedAdmission:
             context_digest=ctx_digest,
             evaluator_digest=evaluator_digest,
             requirement_digest=requirement_digest,
-            context=context,
+            context=ctx_copy,
             policy_id=policy_id
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "admission_id": self.admission_id,
+            "retest_id": self.retest_id,
+            "candidate_digest": self.candidate_digest,
+            "context_digest": self.context_digest,
+            "evaluator_digest": self.evaluator_digest,
+            "requirement_digest": self.requirement_digest,
+            "context": copy.deepcopy(self.context),
+            "policy_id": self.policy_id,
+            "timestamp_utc": self.timestamp_utc
+        }
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> ScopedAdmission:
+        return cls(
+            admission_id=d["admission_id"],
+            retest_id=d["retest_id"],
+            candidate_digest=d["candidate_digest"],
+            context_digest=d["context_digest"],
+            evaluator_digest=d["evaluator_digest"],
+            requirement_digest=d["requirement_digest"],
+            context=copy.deepcopy(d["context"]),
+            policy_id=d["policy_id"],
+            timestamp_utc=d.get("timestamp_utc", "")
         )
 
 
@@ -293,18 +474,28 @@ class ScopedAdmissionRegistry:
     """
     MAX_ATTEMPTS_PER_REFUSAL_FAMILY = 3
 
-    def __init__(self):
+    def __init__(self, default_timeout_sec: float = 2.0):
         self.refusals: Dict[str, RefusalRecord] = {}
         self.requests: Dict[str, ReevaluationRequest] = {}
         self.retest_results: Dict[str, RetestResult] = {}
+        self.canonical_retest_results: Dict[str, RetestResult] = {}
         # Key: (candidate_digest, context_digest, evaluator_digest, requirement_digest)
         self.admissions: Dict[Tuple[str, str, str, str], ScopedAdmission] = {}
         self.attempts_spent: Dict[str, int] = {}
         self.executed_runs_count: int = 0
         self.admissions_granted_count: int = 0
+        self.default_timeout_sec: float = default_timeout_sec
 
     def register_refusal(self, refusal: RefusalRecord) -> str:
-        """Register an immutable refusal record with its evidence bytes."""
+        """
+        Register an immutable refusal record with its evidence bytes.
+        """
+        if refusal.record_id in self.refusals:
+            existing = self.refusals[refusal.record_id]
+            if existing != refusal:
+                raise ValueError(f"Conflicting refusal record under existing ID {refusal.record_id}")
+            return refusal.record_id
+
         self.refusals[refusal.record_id] = refusal
         if refusal.record_id not in self.attempts_spent:
             self.attempts_spent[refusal.record_id] = 0
@@ -318,6 +509,7 @@ class ScopedAdmissionRegistry:
           - Evaluator or requirement changes require separate policy decisions.
           - Missing or unproven evidence rejects retest.
           - Only targeted budget increases following RESOURCE_LIMIT are eligible.
+          - Durable attempt quota limits survive registry instance restarts.
         """
         refusal = self.refusals.get(request.refusal_id)
         if not refusal:
@@ -331,8 +523,9 @@ class ScopedAdmissionRegistry:
         if request.evaluator_digest != refusal.evaluator_digest or request.requirement_digest != refusal.requirement_digest:
             return ReevalEligibility.POLICY_CHANGE_REQUIRES_SEPARATE_DECISION, "Policy or evaluator change requires separate authorization."
 
-        # Verify evidence integrity
-        if not refusal.evidence_bytes or sha256_hex(refusal.evidence_bytes) != sha256_hex(refusal.evidence_bytes):
+        # Verify evidence and refusal integrity against canonical hash (R2 fix: self-comparison bug eliminated)
+        computed_refusal_id = refusal.compute_record_id()
+        if not refusal.evidence_bytes or refusal.record_id != computed_refusal_id:
             return ReevalEligibility.APPLICABILITY_UNKNOWN, "Evidence bytes missing or corrupted."
 
         # Semantic counterexample cannot be cured by budget expansion
@@ -342,7 +535,7 @@ class ScopedAdmissionRegistry:
                 "Semantic counterexample is permanent under unchanged requirement; increasing budget does not cure invalid logic."
             )
 
-        # Check quota limit
+        # Check quota limit using attempt ledger
         spent = self.attempts_spent.get(refusal.record_id, 0)
         if spent >= self.MAX_ATTEMPTS_PER_REFUSAL_FAMILY:
             return ReevalEligibility.BLOCKED_BY_EXISTING_EVIDENCE, f"Retest quota exhausted ({spent}/{self.MAX_ATTEMPTS_PER_REFUSAL_FAMILY})."
@@ -368,21 +561,14 @@ class ScopedAdmissionRegistry:
         self,
         request: ReevaluationRequest,
         candidate_bytes: bytes,
-        executor_fn: Callable[[bytes, Dict[str, Any]], Tuple[RetestOutcome, int, bytes]]
+        executor_fn: Callable[[bytes, Dict[str, Any]], Tuple[RetestOutcome, int, bytes]],
+        timeout_sec: Optional[float] = None
     ) -> RetestResult:
         """
-        Executes a controlled retest with pre-reserved fuel counter and candidate digest verification.
-        Replays reuse previous results without burning additional attempts.
+        Executes a controlled retest with pre-reserved fuel counter, candidate digest verification,
+        exact request cache reuse, and internal wall-clock deadline enforcement.
         """
-        # Replay protection: if already evaluated for this exact request, reuse result
-        if request.request_id in self.retest_results:
-            return self.retest_results[request.request_id]
-
-        refusal = self.refusals.get(request.refusal_id)
-        if not refusal:
-            raise ValueError(f"Refusal {request.refusal_id} not registered.")
-
-        # Defense against candidate tampering between decision and execution
+        # 1. Candidate binding check FIRST (R5 defense against candidate tampering)
         actual_candidate_digest = sha256_hex(candidate_bytes)
         if actual_candidate_digest != request.candidate_digest:
             raise ValueError(
@@ -390,20 +576,59 @@ class ScopedAdmissionRegistry:
                 f"but provided bytes hash to {actual_candidate_digest[:16]}."
             )
 
+        # 2. Replay protection by canonical request ID (prevents bypassing exact-request reuse)
+        canonical_req_id = request.compute_request_id()
+        if canonical_req_id in self.canonical_retest_results:
+            return self.canonical_retest_results[canonical_req_id]
+
+        refusal = self.refusals.get(request.refusal_id)
+        if not refusal:
+            raise ValueError(f"Refusal {request.refusal_id} not registered.")
+
+        # 3. Assess request eligibility
         eligibility, reason = self.assess_request(request)
         if eligibility != ReevalEligibility.ELIGIBLE_FOR_RETEST:
             raise PermissionError(f"Retest rejected: {eligibility.value} — {reason}")
 
-        # Reserve attempt counter before execution (fuel burned regardless of crash/timeout)
-        self.attempts_spent[refusal.record_id] = self.attempts_spent.get(refusal.record_id, 0) + 1
+        # 4. Reserve attempt counter before execution (fuel burned regardless of crash/timeout)
+        current_spent = self.attempts_spent.get(refusal.record_id, 0)
+        if current_spent >= self.MAX_ATTEMPTS_PER_REFUSAL_FAMILY:
+            raise PermissionError(f"Retest quota exhausted for refusal {refusal.record_id} ({current_spent}/{self.MAX_ATTEMPTS_PER_REFUSAL_FAMILY})")
+
+        self.attempts_spent[refusal.record_id] = current_spent + 1
         self.executed_runs_count += 1
 
-        try:
-            outcome, steps_spent, evidence = executor_fn(candidate_bytes, request.new_context)
-        except Exception:
+        # 5. Wall-clock deadline enforcement (R11 host-enforced deadline)
+        deadline = timeout_sec or float(request.new_context.get("timeout_sec", self.default_timeout_sec))
+        ctx_snapshot = copy.deepcopy(request.new_context)
+        res_container = []
+        exc_container = []
+
+        def worker():
+            try:
+                out = executor_fn(candidate_bytes, ctx_snapshot)
+                res_container.append(out)
+            except Exception as e:
+                exc_container.append(e)
+
+        th = threading.Thread(target=worker, daemon=True)
+        th.start()
+        th.join(timeout=deadline)
+
+        if th.is_alive():
             outcome = RetestOutcome.INCONCLUSIVE
             steps_spent = request.new_context.get("budget_steps", 0)
-            evidence = b"CRASH_OR_TIMEOUT"
+            evidence = b"TIMEOUT: executor_timeout_exceeded"
+        elif exc_container:
+            outcome = RetestOutcome.INCONCLUSIVE
+            steps_spent = request.new_context.get("budget_steps", 0)
+            evidence = f"CRASH: {exc_container[0]}".encode("utf-8")
+        elif res_container:
+            outcome, steps_spent, evidence = res_container[0]
+        else:
+            outcome = RetestOutcome.INCONCLUSIVE
+            steps_spent = request.new_context.get("budget_steps", 0)
+            evidence = b"EMPTY_RESULT"
 
         result = RetestResult.create(
             request_id=request.request_id,
@@ -411,14 +636,15 @@ class ScopedAdmissionRegistry:
             candidate_digest=request.candidate_digest,
             evaluator_digest=request.evaluator_digest,
             requirement_digest=request.requirement_digest,
-            context=request.new_context,
+            context=ctx_snapshot,
             outcome=outcome,
             steps_spent=steps_spent,
             evidence_bytes=evidence
         )
 
         self.requests[request.request_id] = request
-        self.retest_results[request.request_id] = result
+        self.retest_results[result.retest_id] = result
+        self.canonical_retest_results[canonical_req_id] = result
         return result
 
     def grant_scoped_admission(
@@ -428,17 +654,39 @@ class ScopedAdmissionRegistry:
     ) -> Optional[ScopedAdmission]:
         """
         Grants scoped admission strictly bound to the verified context if retest succeeded.
-        Fails closed if retest was not successful.
+        Enforces strict provenance, execution origin, and immutable envelope integrity.
         """
+        # 1. Retest must have succeeded
         if retest.outcome != RetestOutcome.SUCCESS:
             return None
+
+        # 2. Provenance check: must exist in self.retest_results (R1 fix)
+        if retest.retest_id not in self.retest_results:
+            raise ValueError("Unverified result: retest_id not found in registry execution history.")
+        recorded = self.retest_results[retest.retest_id]
+
+        # 3. Hash integrity: retest_id must match content
+        if retest.retest_id != retest.compute_retest_id():
+            raise ValueError("Retest result integrity failure: retest_id does not match content.")
+
+        # 4. Request binding: request must exist and match (R1 / R3 fix)
+        if retest.request_id not in self.requests:
+            raise ValueError(f"Unlinked retest: request {retest.request_id} not registered.")
+        req = self.requests[retest.request_id]
+
+        if req.candidate_digest != retest.candidate_digest or req.refusal_id != retest.refusal_id:
+            raise ValueError("Retest result operand mismatch against linked request.")
+
+        # 5. Context non-leakage & immutable envelope match (R3 fix)
+        if canonical_context_digest(req.new_context) != canonical_context_digest(retest.context):
+            raise ValueError("Retest context divergence: tested context does not match request context.")
 
         admission = ScopedAdmission.create(
             retest_id=retest.retest_id,
             candidate_digest=retest.candidate_digest,
             evaluator_digest=retest.evaluator_digest,
             requirement_digest=retest.requirement_digest,
-            context=retest.context,
+            context=copy.deepcopy(retest.context),
             policy_id=policy_id
         )
 
@@ -468,3 +716,36 @@ class ScopedAdmissionRegistry:
         ctx_digest = canonical_context_digest(context)
         scope_key = (candidate_digest, ctx_digest, evaluator_digest, requirement_digest)
         return self.admissions.get(scope_key)
+
+    def export_state(self) -> Dict[str, Any]:
+        """Export registry state for durability and restart survival."""
+        return {
+            "attempts_spent": dict(self.attempts_spent),
+            "executed_runs_count": self.executed_runs_count,
+            "admissions_granted_count": self.admissions_granted_count,
+            "refusals": {k: v.to_dict() for k, v in self.refusals.items()},
+            "requests": {k: v.to_dict() for k, v in self.requests.items()},
+            "retest_results": {k: v.to_dict() for k, v in self.retest_results.items()},
+            "admissions": [v.to_dict() for v in self.admissions.values()]
+        }
+
+    def import_state(self, state: Dict[str, Any]):
+        """Import previously exported registry state."""
+        self.executed_runs_count = int(state.get("executed_runs_count", 0))
+        self.admissions_granted_count = int(state.get("admissions_granted_count", 0))
+        self.attempts_spent.update(state.get("attempts_spent", {}))
+
+        for k, v in state.get("refusals", {}).items():
+            self.refusals[k] = RefusalRecord.from_dict(v)
+        for k, v in state.get("requests", {}).items():
+            self.requests[k] = ReevaluationRequest.from_dict(v)
+        for k, v in state.get("retest_results", {}).items():
+            res = RetestResult.from_dict(v)
+            self.retest_results[k] = res
+            req = self.requests.get(res.request_id)
+            if req:
+                self.canonical_retest_results[req.compute_request_id()] = res
+        for v in state.get("admissions", []):
+            adm = ScopedAdmission.from_dict(v)
+            scope_key = (adm.candidate_digest, adm.context_digest, adm.evaluator_digest, adm.requirement_digest)
+            self.admissions[scope_key] = adm
