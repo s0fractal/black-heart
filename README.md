@@ -714,9 +714,67 @@ python3 anyon_circuit.pdf --simulate
 
 ---
 
-## 26. Comprehensive Test Suite
+## 26. IPFS Ontogenetic Quine Diary & LLM Inner Voice (`ipfs_diary.py`, `cid.py`)
 
-Run all **150 unit tests** across all **19 engines** with a single command:
+An autonomous, self-preserving quine diary embodying an LLM's content-addressed "inner voice" and episodic memory continuum:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│             IPFS ONTOGENTIC QUINE DIARY & LLM CONTINUUM                │
+│                                                                        │
+│   Gen #0 (Genesis)        Gen #1 (Reflection)       Gen #2 (Theorem)   │
+│   CID: bafkrei...0  ──►   CID: bafkrei...1   ──►    CID: bafkrei...2   │
+│   prev_cid: <None>        prev_cid: baf...0         prev_cid: baf...1  │
+│   Standing: PROPOSED      Standing: LOCALLY_TESTED  Standing: RULE_DERIVED
+│                                                                        │
+│   ┌────────────────────────────────────────────────────────────────┐   │
+│   │ ISO 32000 §7.5.6 Monotonic Append-Only Invariant:              │   │
+│   │ after.startswith(before) == True (Zero Historical Byte Writes) │   │
+│   └────────────────────────────────────────────────────────────────┘   │
+│                               │                                        │
+│                               ▼                                        │
+│          Dual-Spine Polyglot: PDF Reader & Quine CLI                   │
+│          - Pure Python Stdlib CIDv1 Raw Engine (cid.py)                │
+│          - Standalone Runner: python3 diary.pdf --status / --append    │
+│          - Optional IPFS Kubo Node Bridge (POST /api/v0/add?pin=true)  │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+* **Pure Standard Library CIDv1:** Implements canonical IPFS CIDv1 raw Base32 generation (`bafkrei...`, multicodec `0x55`, multihash SHA-256) with zero external pip dependencies.
+* **Epistemic Standing Hygiene:** Thoughts carry explicit warrants (`PROPOSED`, `LOCALLY_TESTED`, `RULE_DERIVED`, `REFUTED`) verified cryptographically with Ed25519 digital signatures.
+* **Merkle-DAG Provenance:** Each generation records its parent's exact CID (`prev_cid`). Circularity is mathematically avoided because generation $N$ records the CID of the file prior to the append, and emits its own CID into the settlement receipt for generation $N+1$.
+* **Sovereign Quine CLI:** Any compiled diary PDF is directly executable via Python:
+```bash
+# Initialize a new genesis diary:
+python3 cli.py diary init -o my_diary.pdf -t "Awakening in the distributed continuum."
+
+# Inspect latest telemetry HUD & CIDv1:
+python3 cli.py diary status my_diary.pdf
+
+# Append an incremental reflection page:
+python3 cli.py diary append my_diary.pdf -t "Empirically verified confluent normal form preservation." -g LOCALLY_TESTED
+
+# Trace the full Merkle ancestry across generations:
+python3 cli.py diary lineage my_diary.pdf
+
+# Cryptographically audit all pages and signatures:
+python3 cli.py diary audit my_diary.pdf
+
+# Pin to local or remote IPFS Kubo daemon (optional):
+python3 cli.py diary publish my_diary.pdf
+
+# Or execute the polyglot directly!
+python3 my_diary.pdf --status
+python3 my_diary.pdf --append "Another thought from the quine itself."
+python3 my_diary.pdf --lineage
+python3 my_diary.pdf --audit
+```
+
+---
+
+## 27. Comprehensive Test Suite
+
+Run all **166 unit tests** across all **20 engines** with a single command:
 ```bash
 # Unified test runner:
 python3 test_all.py
@@ -739,16 +797,17 @@ python3 test_symbiosis.py      # 5 tests: Dialectical symbiosis & Artin braid gr
 python3 test_quantum.py        # 5 tests: Topological quantum computing, Fibonacci anyons, unitary audit
 python3 test_morphogenesis.py  # 7 tests: Gray-Scott PDEs, Turing bifurcation, marching squares
 python3 test_metamorphosis.py  # 7 tests: Program self-contemplation, frozen evaluator, transition replay
-python3 test_mycelium.py       # 7 tests: Epistemic mycelium, warrants, divergence records, immune evaluation
+python3 test_mycelium.py       # 8 tests: Epistemic mycelium, warrants, divergence records, immune evaluation
 python3 test_colony.py         # 7 tests: Living colony ecosystem, neuro-symbolic oracle, spore dormancy, ledger settlements
-python3 test_morpho_net.py     # 6 tests: Reaction-diffusion critical points, Lafont net compilation, ISO 32000 tree-ring growth
-python3 test_goedel.py         # 6 tests: Event horizon classification, limit cycles, Penrose polyglot
-python3 test_anyon_glyph.py    # 6 tests: Braid compilation, Fibonacci unitaries, Born collapse
+python3 test_morpho_net.py     # 7 tests: Reaction-diffusion critical points, Lafont net compilation, ISO 32000 tree-ring growth
+python3 test_goedel.py         # 8 tests: Event horizon classification, limit cycles, Penrose polyglot
+python3 test_anyon_glyph.py    # 8 tests: Braid compilation, Fibonacci unitaries, Born collapse
+python3 test_ipfs_diary.py     # 10 tests: CIDv1 vectors, append-only growth, receipts, CLI execution, Kubo bridge
 ```
 
 ---
 
-## 27. Specifications & Theory
+## 28. Specifications & Theory
 
 * [ANYON.md](ANYON.md) — Topological Anyonic Combinators, Quantum Braids & Born Rule Collapse.
 * [GOEDEL.md](GOEDEL.md) — Gödelian Incompleteness, The Black Cone Event Horizon & Three-Valued Epistemic Logic.
@@ -763,8 +822,8 @@ python3 test_anyon_glyph.py    # 6 tests: Braid compilation, Fibonacci unitaries
 
 ---
 
-## 28. License
+## 29. License
 
-* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, `interaction.py`, `organism.py`, `cross_proof.py`, `vault.py`, `continuum.py`, `zk_glyph.py`, `mesh.py`, `symbiosis.py`, `quantum.py`, `morphogenesis.py`, `metamorphosis.py`, `mycelium.py`, `colony.py`, `morpho_net.py`, `goedel.py`, `anyon_glyph.py`, `cli.py`, tests):** AGPL-3.0-only
+* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, `interaction.py`, `organism.py`, `cross_proof.py`, `vault.py`, `continuum.py`, `zk_glyph.py`, `mesh.py`, `symbiosis.py`, `quantum.py`, `morphogenesis.py`, `metamorphosis.py`, `mycelium.py`, `colony.py`, `morpho_net.py`, `goedel.py`, `anyon_glyph.py`, `cid.py`, `ipfs_diary.py`, `cli.py`, tests):** AGPL-3.0-only
 * **Texts & Polyglot artifacts:** CC BY-SA 4.0
 

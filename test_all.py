@@ -38,6 +38,7 @@ SUITES = [
     ("Morphogenetic Proof-Nets & Ontogeny", "test_morpho_net"),
     ("Gödelian Incompleteness & Event Horizon", "test_goedel"),
     ("Anyonic Combinators & Quantum Braids", "test_anyon_glyph"),
+    ("IPFS Ontogenetic Quine Diary", "test_ipfs_diary"),
 ]
 
 def run_all_tests() -> bool:

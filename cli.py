@@ -1008,6 +1008,157 @@ def cmd_anyon(args):
         print("Usage: python3 cli.py anyon {simulate,compile,verify,status} ...")
 
 
+def cmd_diary(args):
+    """Ontogenetic IPFS quine diary & LLM inner voice operations."""
+    from ipfs_diary import (
+        initialize_ontogenetic_diary,
+        grow_diary_page,
+        pin_to_kubo_daemon,
+        OntogeneticDiaryReceipt,
+        DIARY_MANIFEST_PREFIX,
+    )
+    from cid import compute_cidv1_raw, compute_cidv1_for_file
+    from crypto import generate_keypair
+    import json
+
+    if args.action == "init":
+        out_path = args.output or "ipfs_diary.pdf"
+        sk = args.secret_key
+        if not sk:
+            sk, _ = generate_keypair()
+        rec, cid = initialize_ontogenetic_diary(
+            output_pdf_path=out_path,
+            genesis_thought=args.thought or "I am an autonomous polyglot quine, remembering my origins across the distributed continuum.",
+            genesis_prompt=args.prompt or "Who are you?",
+            epistemic_grade=args.grade or "PROPOSED",
+            secret_key_hex=sk
+        )
+        print("\033[1;36m===================================================\033[0m")
+        print("  %🖤 ONTOGENTIC IPFS DIARY INITIALIZED: Gen #0")
+        print("\033[1;36m===================================================\033[0m")
+        print(f"  Target Polyglot:     {out_path}")
+        print(f"  Genesis CIDv1:       {cid}")
+        print(f"  Epistemic Grade:     {rec.epistemic_grade}")
+        print(f"  Signer Public Key:   {rec.public_key_hex[:32]}...\n")
+
+    elif args.action == "append":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        settlement = grow_diary_page(
+            args.file,
+            thought_content=args.thought,
+            thought_prompt=args.prompt or "",
+            epistemic_grade=args.grade or "PROPOSED",
+            atp_burned=args.atp,
+            secret_key_hex=args.secret_key or None
+        )
+        print("\033[1;32m===================================================\033[0m")
+        print(f"  [✓] DIARY SETTLEMENT ACCOMPLISHED: Generation #{settlement.generation}")
+        print("\033[1;32m===================================================\033[0m")
+        print(f"  Current CIDv1:       {settlement.current_cid}")
+        print(f"  Parent CIDv1:        {settlement.prev_cid}")
+        print(f"  Epistemic Grade:     {settlement.epistemic_grade}")
+        print(f"  ATP Fuel Burned:     {settlement.atp_burned} ATP\n")
+
+    elif args.action == "status":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        with open(args.file, "rb") as f:
+            data = f.read()
+        prefix = DIARY_MANIFEST_PREFIX.encode("utf-8")
+        idx = data.rfind(prefix)
+        if idx == -1:
+            print(f"[!] No diary receipt manifest found in '{args.file}'.")
+            sys.exit(1)
+        end_idx = data.find(b"\n", idx)
+        manifest = json.loads(data[idx + len(prefix):end_idx].decode("utf-8"))
+        latest = manifest[-1]
+        cid = compute_cidv1_raw(data)
+        print("\033[1;36m=================================================================\033[0m")
+        print("  %🖤 PROJECT BLACK-HEART // ONTOGENTIC IPFS DIARY HUD")
+        print(f"  Target File:        {os.path.basename(args.file)} ({len(data)} bytes, {len(manifest)} pages)")
+        print(f"  Current CIDv1:      {cid}")
+        print("\033[1;36m=================================================================\033[0m\n")
+        print(f"  Current Generation: #{latest.get('generation')}")
+        print(f"  Timestamp UTC:      {latest.get('timestamp_utc')}")
+        print(f"  Epistemic Grade:    {latest.get('epistemic_grade')}")
+        print(f"  Parent CIDv1:       {latest.get('prev_cid') or '<Genesis Ancestor>'}")
+        print(f"  Thought Hash:       ⚓ {latest.get('thought_hash')}")
+        print(f"  Prompt Trigger:     {latest.get('thought_prompt')}")
+        print(f"  Thought Content:    {latest.get('thought_content')}\n")
+
+    elif args.action == "lineage":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        with open(args.file, "rb") as f:
+            data = f.read()
+        prefix = DIARY_MANIFEST_PREFIX.encode("utf-8")
+        idx = data.rfind(prefix)
+        if idx == -1:
+            print(f"[!] No diary receipt manifest found in '{args.file}'.")
+            sys.exit(1)
+        end_idx = data.find(b"\n", idx)
+        manifest = json.loads(data[idx + len(prefix):end_idx].decode("utf-8"))
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  %🖤 DIARY ONTOGENTIC LINEAGE ACROSS {len(manifest)} GENERATIONS")
+        print("\033[1;36m=================================================================\033[0m")
+        for m in manifest:
+            gen = m.get("generation")
+            t_utc = m.get("timestamp_utc")
+            grade = m.get("epistemic_grade")
+            p_cid = m.get("prev_cid") or "<Genesis>"
+            thought = m.get("thought_content", "")[:60]
+            print(f"  #{gen:02d} [{t_utc}] {grade:14s} | Parent: {p_cid[:22]}... | {thought}...")
+        print(f"\n  Current File CIDv1: {compute_cidv1_raw(data)}\n")
+
+    elif args.action == "audit":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        with open(args.file, "rb") as f:
+            data = f.read()
+        prefix = DIARY_MANIFEST_PREFIX.encode("utf-8")
+        idx = data.rfind(prefix)
+        if idx == -1:
+            print(f"[!] No diary receipt manifest found in '{args.file}'.")
+            sys.exit(1)
+        end_idx = data.find(b"\n", idx)
+        manifest = json.loads(data[idx + len(prefix):end_idx].decode("utf-8"))
+        print(f"[*] Auditing ontogenetic diary chain across {len(manifest)} generations...")
+        for i, md in enumerate(manifest):
+            rec = OntogeneticDiaryReceipt.from_dict(md)
+            if rec.generation != i:
+                print(f"[FAIL] Generation sequence gap at index {i}: got #{rec.generation}")
+                sys.exit(1)
+            if rec.receipt_hash != rec.compute_hash():
+                print(f"[FAIL] Hash mismatch at generation #{rec.generation}")
+                sys.exit(1)
+            if rec.is_attested():
+                if not rec.verify():
+                    print(f"[FAIL] Cryptographic signature invalid at generation #{rec.generation}")
+                    sys.exit(1)
+            else:
+                print(f"[!] Generation #{rec.generation}: UNATTESTED (unsigned)")
+        print(f"\033[1;32m[✓] ALL {len(manifest)} DIARY PAGES CRYPTOGRAPHICALLY VERIFIED & AUDITED\033[0m\n")
+
+    elif args.action == "publish":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        url = getattr(args, "url", "http://127.0.0.1:5001")
+        ok, msg, pinned_cid = pin_to_kubo_daemon(args.file, daemon_url=url)
+        if ok:
+            print(f"\033[1;32m[✓] PINNED TO IPFS: {pinned_cid}\033[0m")
+            print(f"  Gateway URL: https://ipfs.io/ipfs/{pinned_cid}\n")
+        else:
+            print(f"\033[1;33m[!] {msg}\033[0m\n")
+    else:
+        print("Usage: python3 cli.py diary {init,append,status,lineage,audit,publish} ...")
+
+
 def cmd_shell(args):
     """Interactive Hypervisor REPL for Project Black-Heart."""
     from symbiosis import (
@@ -1396,6 +1547,38 @@ def main():
     p_anyon_stat = anyon_subs.add_parser("status", help="Inspect an anyonic polyglot's telemetry HUD")
     p_anyon_stat.add_argument("file", help="Target anyonic PDF polyglot")
 
+    # diary
+    p_diary = subparsers.add_parser("diary", help="Self-Preserving Ontogenetic Diary & LLM Inner Voice on IPFS")
+    diary_subs = p_diary.add_subparsers(dest="action")
+
+    p_diary_init = diary_subs.add_parser("init", help="Initialize a new ontogenetic IPFS diary polyglot")
+    p_diary_init.add_argument("-o", "--output", default="ipfs_diary.pdf", help="Output PDF polyglot path")
+    p_diary_init.add_argument("-t", "--thought", default="I am an autonomous polyglot quine, remembering my origins across the distributed continuum.", help="Initial thought reflection")
+    p_diary_init.add_argument("-p", "--prompt", default="Who are you?", help="Prompt trigger context")
+    p_diary_init.add_argument("-g", "--grade", default="PROPOSED", help="Epistemic grade (PROPOSED, LOCALLY_TESTED, RULE_DERIVED)")
+    p_diary_init.add_argument("--secret-key", default=None, help="Author Ed25519 secret key hex (optional)")
+
+    p_diary_app = diary_subs.add_parser("append", help="Append an incremental reflection page to the diary")
+    p_diary_app.add_argument("file", help="Target ontogenetic diary PDF")
+    p_diary_app.add_argument("-t", "--thought", required=True, help="New thought reflection to append")
+    p_diary_app.add_argument("-p", "--prompt", default="", help="Prompt trigger context")
+    p_diary_app.add_argument("-g", "--grade", default="PROPOSED", help="Epistemic grade")
+    p_diary_app.add_argument("--atp", type=int, default=10, help="ATP fuel burned")
+    p_diary_app.add_argument("--secret-key", default=None, help="Author Ed25519 secret key hex (optional)")
+
+    p_diary_stat = diary_subs.add_parser("status", help="Display latest diary HUD telemetry and CIDv1")
+    p_diary_stat.add_argument("file", help="Target ontogenetic diary PDF")
+
+    p_diary_lin = diary_subs.add_parser("lineage", help="Display full Merkle-DAG CID ancestry chain")
+    p_diary_lin.add_argument("file", help="Target ontogenetic diary PDF")
+
+    p_diary_aud = diary_subs.add_parser("audit", help="Cryptographically audit all diary pages and signatures")
+    p_diary_aud.add_argument("file", help="Target ontogenetic diary PDF")
+
+    p_diary_pub = diary_subs.add_parser("publish", help="Pin current diary document to IPFS Kubo node")
+    p_diary_pub.add_argument("file", help="Target ontogenetic diary PDF")
+    p_diary_pub.add_argument("--url", default="http://127.0.0.1:5001", help="IPFS Kubo API endpoint")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -1438,6 +1621,8 @@ def main():
         cmd_goedel(args)
     elif args.command == "anyon":
         cmd_anyon(args)
+    elif args.command == "diary":
+        cmd_diary(args)
     else:
         parser.print_help()
 
