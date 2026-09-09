@@ -14,12 +14,14 @@ Tests:
   7. test_swarm_membrane_pdf_polyglot: ISO 32000 append-only update, vector HUD rendering, and Latin-1 Python script execution.
 """
 
+from __future__ import annotations
 import os
 import sys
 import json
 import unittest
 import tempfile
 import subprocess
+from typing import Tuple, List, Dict, Optional, Any
 
 import crypto
 from crypto import generate_keypair, public_key_from_secret

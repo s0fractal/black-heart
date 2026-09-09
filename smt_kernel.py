@@ -1162,7 +1162,7 @@ class SMTSolver:
                 sat.backjump(backjump_lvl)
                 self.theory_qhead = len(sat.trail)
                 theory.backtrack_to_level(backjump_lvl)
-                sat.add_clause(learned, rule="learned")
+                sat.add_clause(learned, rule="learned", antecedents=[confl_c_idx + 1])
                 if learned:
                     uip_lit = learned[0]
                     c_idx = len(sat.clauses) - 1
@@ -1189,7 +1189,7 @@ class SMTSolver:
                 sat.backjump(backjump_lvl)
                 self.theory_qhead = len(sat.trail)
                 theory.backtrack_to_level(backjump_lvl)
-                sat.add_clause(learned, rule="learned")
+                sat.add_clause(learned, rule="learned", antecedents=[lemma_c_idx + 1])
                 if learned:
                     uip_lit = learned[0]
                     c_idx = len(sat.clauses) - 1
