@@ -237,6 +237,10 @@ def reduce_step(term: Term) -> Tuple[Optional[Term], bool]:
         return (App(App(x, z), App(y, z)), True)
 
     # Rule Y: Y f -> f (Y f)
+    # Leftmost-outermost unfolding semantics. In tree substitution, eager recursion
+    # can inflate AST size (tracked deterministically via peak_size and ATP budget).
+    # For asymptotically optimal recursion with graph sharing (Lévy optimality)
+    # that prevents exponential term blowup, see interaction.py (Lafont Interaction Combinators).
     if isinstance(term, App) and term.left == Y:
         f = term.right
         return (App(f, App(Y, f)), True)

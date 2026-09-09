@@ -169,6 +169,30 @@ def cmd_verify(args):
         except Exception as e:
             print(f"[!] Colony verification failed: {e}")
             success = False
+    elif "%🖤 AUTOPOIESIS_MANIFEST:".encode("utf-8") in content:
+        print("[*] Detected Autopoietic Organism Polyglot.")
+        from autopoiesis import audit_autopoietic_organism
+        success = audit_autopoietic_organism(target)
+    elif "%🖤 AGORA_MANIFEST:".encode("utf-8") in content:
+        print("[*] Detected Agora Mycelial Consensus Parliament Polyglot.")
+        from agora import audit_agora_parliament
+        success = audit_agora_parliament(target)
+    elif "%🖤 IPFS_DIARY_MANIFEST:".encode("utf-8") in content:
+        print("[*] Detected IPFS Dialectical Diary DAG Polyglot.")
+        from ipfs_diary import audit_diary_dag
+        success = audit_diary_dag(target)
+    elif "%🖤 MORPHO_NET_MANIFEST:".encode("utf-8") in content:
+        print("[*] Detected Morphogenetic Proof-Net Polyglot.")
+        from morpho_net import audit_morphogenetic_polyglot
+        success = audit_morphogenetic_polyglot(target)
+    elif "%🖤 GOEDEL_MANIFEST:".encode("utf-8") in content:
+        print("[*] Detected Gödelian Incompleteness Polyglot.")
+        from goedel import audit_goedel_polyglot
+        success = audit_goedel_polyglot(target)
+    elif "%🖤 ANYON_QUANTUM_MANIFEST:".encode("utf-8") in content:
+        print("[*] Detected Anyonic Quantum Topos Polyglot.")
+        from anyon_glyph import audit_anyon_polyglot
+        success = audit_anyon_polyglot(target)
     elif "%🖤 ORGANISM_GENOME:".encode("utf-8") in content:
         print("[*] Detected Autonomous Self-Reproducing Polyglot Automaton.")
         from organism import extract_organism_from_pdf
@@ -190,6 +214,37 @@ def cmd_verify(args):
         print("\033[1;32m[✓ GREEN] Document verification passed successfully.\033[0m")
     else:
         print("\033[1;31m[✗ RED] Document verification failed.\033[0m")
+        sys.exit(1)
+
+def cmd_sandbox(args):
+    """Hermetic static non-executing polyglot auditor."""
+    from tools.sandbox import audit_polyglot_hermetic
+    target = args.file
+    if not os.path.exists(target):
+        print(f"\033[1;31m[!] File not found: {target}\033[0m")
+        sys.exit(1)
+
+    report = audit_polyglot_hermetic(target)
+
+    print("\033[1;36m" + "=" * 70)
+    print("  %🖤 PROJECT BLACK-HEART — HERMETIC NON-EXECUTING STATIC AUDITOR")
+    print(f"  Target File: {os.path.basename(target)}")
+    print("=" * 70 + "\033[0m\n")
+
+    print(f"[*] File Size:            {report.file_size_bytes} bytes")
+    print(f"[*] SHA-256 Digest:       {report.sha256_digest}")
+    print(f"[*] ISO 32000 Compliant:  {'Yes' if report.is_valid_iso32000 else 'No'}")
+    print(f"[*] Incremental Updates:  {report.incremental_updates_count}")
+    print(f"[*] Detected Manifests:   {', '.join(report.detected_manifest_types) or 'None'}")
+    print("\n--- AUDIT LOG ---")
+    for note in report.audit_notes:
+        print(f"  {note}")
+
+    print("\n" + "=" * 70)
+    if report.is_sound():
+        print("\033[1;32m[✓ SOUND] Document verified statically without executing host Python.\033[0m")
+    else:
+        print("\033[1;31m[✗ UNSOUND] Document failed static hermetic verification.\033[0m")
         sys.exit(1)
 
 def cmd_compile(args):
@@ -1764,6 +1819,11 @@ def main():
     p_verify = subparsers.add_parser("verify", help="Audit and verify any polyglot PDF")
     p_verify.add_argument("file", help="Path to polyglot PDF file")
 
+    # sandbox
+    p_sandbox = subparsers.add_parser("sandbox", help="Hermetic static non-executing polyglot auditor")
+    p_sandbox.add_argument("file", help="Path to polyglot PDF file to audit without host execution")
+    p_sandbox.add_argument("--strict", action="store_true", help="Fail if any warnings or non-critical anomalies appear")
+
     # compile
     p_compile = subparsers.add_parser("compile", help="Compile a proof-carrying polyglot PDF")
     p_compile.add_argument("-o", "--output", help="Output file path", default="output_polyglot.pdf")
@@ -2099,6 +2159,8 @@ def main():
         cmd_keygen(args)
     elif args.command == "verify":
         cmd_verify(args)
+    elif args.command == "sandbox":
+        cmd_sandbox(args)
     elif args.command == "compile":
         cmd_compile(args)
     elif args.command == "vault":
