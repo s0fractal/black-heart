@@ -25,11 +25,28 @@ from crypto import (
     public_key_from_secret,
     sign_bytes,
     verify_bytes,
-    CryptographicSeal
+    CryptographicSeal,
+    L
+)
+from cid import compute_cidv1_raw, compute_cidv1_for_file
+from zk_glyph import (
+    SchnorrProof,
+    schnorr_prove,
+    schnorr_verify,
+    ChaumPedersenProof,
+    chaum_pedersen_prove,
+    chaum_pedersen_verify,
+    GENERATOR_H,
+    _scalar_mult,
+    _encode_point,
+    BASE_POINT
 )
 
 ORACLE_MANIFEST_PREFIX = "%🖤 ORACLE_MANIFEST: "
 AGREEMENT_MANIFEST_PREFIX = "%🖤 BILATERAL_MANIFEST: "
+ZK_CHALLENGER_MANIFEST_PREFIX = "%🖤 ZK_CHALLENGER_MANIFEST: "
+ZK_WITNESS_MANIFEST_PREFIX = "%🖤 ZK_WITNESS_MANIFEST: "
+
 
 @dataclass
 class TelemetryIncident:
@@ -738,5 +755,631 @@ def audit_oracle_polyglot(target_path: str) -> bool:
     except Exception:
         return False
 
+# ============================================================================
+# 5. BILATERAL ZERO-KNOWLEDGE CROSS-PROOF PROTOCOL (GROK EXP 4)
+# ============================================================================
+
+@dataclass
+class BilateralZKSettlementReceipt:
+    """
+    Joint cryptographic settlement receipt for two independent interlocking documents
+    authenticated via zero-knowledge proof without exposing private keys.
+    """
+    status: str                         # "ZK_SETTLED_SOUND" or "ZK_VERIFICATION_FAILED"
+    statement_id: str                   # Unique statement / clause identifier
+    challenger_title: str               # Title of Challenger Contract
+    target_prover_pk_hex: str           # Target public key bound in contract
+    challenger_cid: str                 # CIDv1 of Challenger PDF
+    witness_cid: str                    # CIDv1 of Witness PDF
+    proof_type: str                     # "SchnorrZKP" or "ChaumPedersenZKP"
+    joint_bilateral_anchor: str         # SHA-256(cid_c || cid_w || proof || status)
+    timestamp_utc: str
+    details: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "status": self.status,
+            "statement_id": self.statement_id,
+            "challenger_title": self.challenger_title,
+            "target_prover_pk_hex": self.target_prover_pk_hex,
+            "challenger_cid": self.challenger_cid,
+            "witness_cid": self.witness_cid,
+            "proof_type": self.proof_type,
+            "joint_bilateral_anchor": self.joint_bilateral_anchor,
+            "timestamp_utc": self.timestamp_utc,
+            "details": self.details,
+        }
+
+def _generate_zk_cross_runner() -> str:
+    return r'''
+# --- ZERO-KNOWLEDGE BILATERAL CROSS-PROOF STANDALONE RUNNER ---
+import os, sys, json
+
+def main():
+    target = sys.argv[0]
+    args = sys.argv[1:]
+    print("\033[1;36m" + "=" * 70)
+    print("  %🖤 BLACK-HEART — ZERO-KNOWLEDGE BILATERAL CROSS-PROOF RUNNER")
+    print("=" * 70 + "\033[0m\n")
+
+    if "--cross-prove" in args or "--cross-prove-zk" in args:
+        flag = "--cross-prove" if "--cross-prove" in args else "--cross-prove-zk"
+        idx = args.index(flag)
+        if idx + 1 >= len(args):
+            print("\033[1;31m[!] Missing counterpart PDF path!\033[0m")
+            sys.exit(1)
+        other_pdf = args[idx + 1]
+
+        target_dir = os.path.dirname(os.path.abspath(target))
+        parent_dir = os.path.dirname(target_dir)
+        for p in (target_dir, parent_dir, "/Users/s0fractal/Projects/black-heart"):
+            if os.path.isdir(p) and p not in sys.path:
+                sys.path.insert(0, p)
+
+        from cross_proof import adjudicate_zk_bilateral, ZK_CHALLENGER_MANIFEST_PREFIX
+        try:
+            with open(target, "rb") as f:
+                t_bytes = f.read()
+            if ZK_CHALLENGER_MANIFEST_PREFIX.encode("utf-8") in t_bytes:
+                challenger_pdf, witness_pdf = target, other_pdf
+            else:
+                challenger_pdf, witness_pdf = other_pdf, target
+
+            rcpt = adjudicate_zk_bilateral(challenger_pdf, witness_pdf)
+            print("\033[1;32m[✓ GREEN] ZERO-KNOWLEDGE BILATERAL SETTLEMENT SOUND & RATIFIED!\033[0m")
+            print(f"  Status:             \033[1;32m{rcpt.status}\033[0m")
+            print(f"  Statement ID:       {rcpt.statement_id}")
+            print(f"  Contract Title:     {rcpt.challenger_title}")
+            print(f"  Prover Public Key:  {rcpt.target_prover_pk_hex[:16]}... (ZK Verified)")
+            print(f"  Challenger CIDv1:   {rcpt.challenger_cid}")
+            print(f"  Witness CIDv1:      {rcpt.witness_cid}")
+            print(f"  Proof System:       {rcpt.proof_type}")
+            print(f"\n  Joint Merkle Bilateral Settlement Anchor:")
+            print(f"  \033[1;35m⚓ ⟨digest:{rcpt.joint_bilateral_anchor}⟩\033[0m\n")
+        except Exception as e:
+            print(f"\033[1;31m[✗ REFUTED] Bilateral ZK Cross-Proof Failed: {e}\033[0m")
+            sys.exit(1)
+    else:
+        print("[*] To cross-prove this document against its counterpart, execute:")
+        print(f"    python3 {os.path.basename(target)} --cross-prove <counterpart.pdf>\n")
+    print("\033[1;36m" + "=" * 70 + "\033[0m")
+
+if __name__ == "__main__":
+    main()
+'''
+
+class BilateralZKChallengerPolyglot:
+    """
+    Compiles Document A: A contractual challenge demanding a Non-Interactive
+    Zero-Knowledge Proof (NIZK) for a specific public key or discrete log relation.
+    """
+    def __init__(
+        self,
+        title: str,
+        statement_id: str,
+        target_prover_pk_hex: str,
+        clause_text: str = "Settlement authorized upon verifiable zero-knowledge proof of sovereign key possession.",
+        proof_type: str = "SchnorrZKP",
+        second_point_hex: Optional[str] = None,
+        author_secret_key_hex: Optional[str] = None
+    ):
+        self.title = title
+        self.statement_id = statement_id
+        self.target_prover_pk_hex = target_prover_pk_hex
+        self.clause_text = clause_text
+        self.proof_type = proof_type
+        self.second_point_hex = second_point_hex or ""
+        if author_secret_key_hex:
+            self._sk = author_secret_key_hex
+            self._pk = public_key_from_secret(bytes.fromhex(author_secret_key_hex)).hex()
+        else:
+            self._sk, self._pk = generate_keypair()
+
+    def canonical_claim_bytes(self) -> bytes:
+        claim = {
+            "clause_text": self.clause_text,
+            "proof_type": self.proof_type,
+            "second_point_hex": self.second_point_hex,
+            "statement_id": self.statement_id,
+            "target_prover_pk_hex": self.target_prover_pk_hex,
+            "title": self.title
+        }
+        return json.dumps(claim, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+    def compile(self, output_path: str) -> str:
+        claim_b = self.canonical_claim_bytes()
+        author_sig = sign_bytes(bytes.fromhex(self._sk), claim_b).hex()
+
+        manifest_dict = {
+            "title": self.title,
+            "statement_id": self.statement_id,
+            "target_prover_pk_hex": self.target_prover_pk_hex,
+            "proof_type": self.proof_type,
+            "second_point_hex": self.second_point_hex,
+            "clause_text": self.clause_text,
+            "author_pk_hex": self._pk,
+            "author_signature_hex": author_sig,
+            "created_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        }
+        manifest_str = json.dumps(manifest_dict, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        manifest_comment = f"{ZK_CHALLENGER_MANIFEST_PREFIX}{manifest_str}\n".encode("utf-8")
+
+        # Visual PDF Stream
+        page_width, page_height = 595, 842
+        margin = 50
+        y = page_height - margin
+
+        stream_lines = [
+            "q",
+            # Dark Indigo Space
+            "0.03 0.05 0.12 rg",
+            f"0 0 {page_width} {page_height} re f",
+            # Outer Cyan Border
+            "0.15 0.75 0.95 RG 1.5 w",
+            f"{margin - 15} {margin - 15} {page_width - 2*(margin - 15)} {page_height - 2*(margin - 15)} re S",
+            # Header Box
+            "0.06 0.10 0.20 rg",
+            f"{margin} {y - 65} {page_width - 2*margin} 65 re f",
+            "0.15 0.75 0.95 RG 1.0 w",
+            f"{margin} {y - 65} {page_width - 2*margin} 65 re S",
+            "1.0 1.0 1.0 rg",
+            f"BT /F1 14 Tf {margin + 15} {y - 25} Td (PROJECT BLACK-HEART // BILATERAL ZK CHALLENGE) Tj ET",
+            "0.2 0.85 1.0 rg",
+            f"BT /F2 9 Tf {margin + 15} {y - 45} Td (STATEMENT: {_escape_pdf(self.statement_id)}  |  TYPE: {_escape_pdf(self.proof_type)}) Tj ET",
+        ]
+        y -= 85
+
+        # Contract Terms Box
+        box_h = 240
+        stream_lines.extend([
+            "0.05 0.08 0.16 rg",
+            f"{margin} {y - box_h} {page_width - 2*margin} {box_h} re f",
+            "0.20 0.55 0.80 RG 1.0 w",
+            f"{margin} {y - box_h} {page_width - 2*margin} {box_h} re S",
+            "1.0 1.0 1.0 rg",
+            f"BT /F1 11 Tf {margin + 15} {y - 25} Td (CONTRACT TITLE: {_escape_pdf(self.title[:55])}) Tj ET",
+            "0.75 0.85 0.95 rg",
+            f"BT /F3 9 Tf {margin + 15} {y - 50} Td (Clause: {_escape_pdf(self.clause_text[:75])}) Tj ET",
+            "0.85 0.70 0.20 rg",
+            f"BT /F2 9 Tf {margin + 15} {y - 80} Td (Target Prover Public Key:) Tj ET",
+            "1.0 1.0 1.0 rg",
+            f"BT /F2 8 Tf {margin + 15} {y - 95} Td ({self.target_prover_pk_hex}) Tj ET",
+        ])
+
+        if self.second_point_hex:
+            stream_lines.extend([
+                "0.85 0.70 0.20 rg",
+                f"BT /F2 9 Tf {margin + 15} {y - 120} Td (Second Generator Point H:) Tj ET",
+                "1.0 1.0 1.0 rg",
+                f"BT /F2 8 Tf {margin + 15} {y - 135} Td ({self.second_point_hex}) Tj ET",
+            ])
+
+        stream_lines.extend([
+            "0.40 0.80 1.0 rg",
+            f"BT /F2 9 Tf {margin + 15} {y - 165} Td (Author Ed25519 Identity:) Tj ET",
+            "0.9 0.9 0.9 rg",
+            f"BT /F2 8 Tf {margin + 15} {y - 180} Td ({self._pk}) Tj ET",
+            "0.2 0.85 1.0 rg",
+            f"BT /F2 8 Tf {margin + 15} {y - 205} Td (Execution: python3 <this_file>.pdf --cross-prove <witness.pdf>) Tj ET",
+        ])
+        y -= (box_h + 30)
+
+        # Adjudication Instructions Box
+        inst_h = 160
+        stream_lines.extend([
+            "0.04 0.06 0.12 rg",
+            f"{margin} {y - inst_h} {page_width - 2*margin} {inst_h} re f",
+            "0.15 0.65 0.85 RG 1.0 w",
+            f"{margin} {y - inst_h} {page_width - 2*margin} {inst_h} re S",
+            "1.0 1.0 1.0 rg",
+            f"BT /F1 10 Tf {margin + 15} {y - 25} Td (ZERO-KNOWLEDGE ADJUDICATION PROTOCOL) Tj ET",
+            "0.80 0.88 0.95 rg",
+            f"BT /F3 8 Tf {margin + 15} {y - 50} Td (1. The witness document proves knowledge of the private scalar without revealing it.) Tj ET",
+            f"BT /F3 8 Tf {margin + 15} {y - 70} Td (2. The proof is mathematically bound to this document's exact IPFS CIDv1.) Tj ET",
+            f"BT /F3 8 Tf {margin + 15} {y - 90} Td (3. Any modification to either PDF breaks the content-addressed challenge context.) Tj ET",
+            f"BT /F3 8 Tf {margin + 15} {y - 110} Td (4. Mutual settlement emits a joint Merkle witness anchor valid only if both exist.) Tj ET",
+            "Q"
+        ])
+
+        stream_content = "\n".join(stream_lines).encode("utf-8")
+
+        objs = [
+            b"<</Type /Catalog /Pages 2 0 R>>",
+            b"<</Type /Pages /Kids [3 0 R] /Count 1>>",
+            (
+                b"<</Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
+                b"/Contents 4 0 R /Resources <</Font <</F1 5 0 R /F2 6 0 R /F3 7 0 R>>>>>>"
+            ),
+            f"<</Length {len(stream_content)}>>\nstream\n".encode("latin1") + stream_content + b"\nendstream",
+            b"<</Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold>>",
+            b"<</Type /Font /Subtype /Type1 /BaseFont /Courier-Bold>>",
+            b"<</Type /Font /Subtype /Type1 /BaseFont /Helvetica>>",
+        ]
+
+        pdf_header = b"# coding: utf-8\nr\"\"\"%PDF-1.7\n%\xe2\x9a\x93\n"
+        body = bytearray(pdf_header)
+        body.extend(manifest_comment)
+
+        offsets = [0]
+        for i, o in enumerate(objs, 1):
+            offsets.append(len(body))
+            body.extend(f"{i} 0 obj\n".encode("latin1"))
+            body.extend(o)
+            body.extend(b"\nendobj\n")
+
+        xstart = len(body)
+        body.extend(f"xref\n0 {len(objs)+1}\n0000000000 65535 f \n".encode("latin1"))
+        for off in offsets[1:]:
+            body.extend(f"{off:010d} 00000 n \n".encode("latin1"))
+
+        body.extend(
+            f"trailer\n<</Size {len(objs)+1} /Root 1 0 R>>\nstartxref\n{xstart}\n%%EOF\n\"\"\"\n".encode("latin1")
+        )
+        body.extend(_generate_zk_cross_runner().encode("utf-8"))
+
+        with open(output_path, "wb") as f:
+            f.write(body)
+        return output_path
+
+
+class BilateralZKWitnessPolyglot:
+    """
+    Compiles Document B: An independent witness containing a Zero-Knowledge Proof
+    (Schnorr or Chaum-Pedersen) mathematically bound to Document A's exact CIDv1.
+    """
+    def __init__(
+        self,
+        witness_name: str,
+        challenger_pdf_path: str,
+        prover_secret_key_hex: Optional[str] = None,
+        prover_secret_scalar: Optional[int] = None,
+        witness_author_secret_key_hex: Optional[str] = None
+    ):
+        self.witness_name = witness_name
+        self.challenger_pdf_path = challenger_pdf_path
+        self.prover_secret_key_hex = prover_secret_key_hex
+        self.prover_secret_scalar = prover_secret_scalar
+        if witness_author_secret_key_hex:
+            self._sk = witness_author_secret_key_hex
+            self._pk = public_key_from_secret(bytes.fromhex(witness_author_secret_key_hex)).hex()
+        else:
+            self._sk, self._pk = generate_keypair()
+
+    def compile(self, output_path: str) -> str:
+        with open(self.challenger_pdf_path, "rb") as f:
+            c_bytes = f.read()
+        challenger_cid = compute_cidv1_raw(c_bytes)
+
+        prefix = ZK_CHALLENGER_MANIFEST_PREFIX.encode("utf-8")
+        idx = c_bytes.rfind(prefix)
+        if idx == -1:
+            raise ValueError(f"No ZK_CHALLENGER_MANIFEST in '{self.challenger_pdf_path}'")
+        end = c_bytes.find(b"\n", idx)
+        c_manifest = json.loads(c_bytes[idx + len(prefix):end].decode("utf-8"))
+
+        statement_id = c_manifest["statement_id"]
+        proof_type = c_manifest["proof_type"]
+        context = f"ZK_CROSS_PROOF:{challenger_cid}:{statement_id}"
+
+        if proof_type == "SchnorrZKP":
+            if not self.prover_secret_key_hex:
+                raise ValueError("prover_secret_key_hex required for SchnorrZKP")
+            zk_proof = schnorr_prove(self.prover_secret_key_hex, context=context)
+            proof_dict = zk_proof.to_dict()
+        elif proof_type == "ChaumPedersenZKP":
+            scalar = self.prover_secret_scalar
+            if scalar is None and self.prover_secret_key_hex:
+                h = hashlib.sha512(bytes.fromhex(self.prover_secret_key_hex)).digest()
+                scalar = int.from_bytes(h[:32], "little")
+                scalar &= (1 << 254) - 8
+                scalar |= (1 << 254)
+                scalar %= L
+            if scalar is None:
+                raise ValueError("prover_secret_scalar required for ChaumPedersenZKP")
+            zk_proof = chaum_pedersen_prove(scalar, context=context)
+            proof_dict = zk_proof.to_dict()
+        else:
+            raise ValueError(f"Unknown proof type: {proof_type}")
+
+        # Sign witness payload
+        witness_payload = {
+            "challenger_cid": challenger_cid,
+            "proof": proof_dict,
+            "statement_id": statement_id,
+            "witness_name": self.witness_name
+        }
+        payload_b = json.dumps(witness_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        witness_sig = sign_bytes(bytes.fromhex(self._sk), payload_b).hex()
+
+        manifest_dict = {
+            "witness_name": self.witness_name,
+            "challenger_cid": challenger_cid,
+            "statement_id": statement_id,
+            "proof": proof_dict,
+            "witness_pk_hex": self._pk,
+            "witness_signature_hex": witness_sig,
+            "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        }
+        manifest_str = json.dumps(manifest_dict, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        manifest_comment = f"{ZK_WITNESS_MANIFEST_PREFIX}{manifest_str}\n".encode("utf-8")
+
+        # Visual PDF Stream
+        page_width, page_height = 595, 842
+        margin = 50
+        y = page_height - margin
+
+        stream_lines = [
+            "q",
+            # Dark Amber / Obsidian Background
+            "0.05 0.04 0.08 rg",
+            f"0 0 {page_width} {page_height} re f",
+            # Outer Gold Border
+            "0.95 0.75 0.15 RG 1.5 w",
+            f"{margin - 15} {margin - 15} {page_width - 2*(margin - 15)} {page_height - 2*(margin - 15)} re S",
+            # Header Box
+            "0.12 0.08 0.16 rg",
+            f"{margin} {y - 65} {page_width - 2*margin} 65 re f",
+            "0.95 0.75 0.15 RG 1.0 w",
+            f"{margin} {y - 65} {page_width - 2*margin} 65 re S",
+            "1.0 1.0 1.0 rg",
+            f"BT /F1 14 Tf {margin + 15} {y - 25} Td (PROJECT BLACK-HEART // BILATERAL ZK WITNESS) Tj ET",
+            "0.95 0.80 0.25 rg",
+            f"BT /F2 9 Tf {margin + 15} {y - 45} Td (WITNESS: {_escape_pdf(self.witness_name)}  |  STATEMENT: {_escape_pdf(statement_id)}) Tj ET",
+        ]
+        y -= 85
+
+        # Proof Data Box
+        box_h = 240
+        stream_lines.extend([
+            "0.08 0.06 0.12 rg",
+            f"{margin} {y - box_h} {page_width - 2*margin} {box_h} re f",
+            "0.70 0.55 0.20 RG 1.0 w",
+            f"{margin} {y - box_h} {page_width - 2*margin} {box_h} re S",
+            "1.0 1.0 1.0 rg",
+            f"BT /F1 11 Tf {margin + 15} {y - 25} Td (BOUND CONTRACT CIDv1 MERKLE TARGET:) Tj ET",
+            "0.2 0.85 1.0 rg",
+            f"BT /F2 8 Tf {margin + 15} {y - 42} Td ({challenger_cid}) Tj ET",
+            "0.95 0.75 0.15 rg",
+            f"BT /F2 9 Tf {margin + 15} {y - 70} Td (Commitment Nonce R:) Tj ET",
+            "1.0 1.0 1.0 rg",
+            f"BT /F2 8 Tf {margin + 15} {y - 85} Td ({proof_dict.get('commitment_R_hex', proof_dict.get('commitment_R1_hex', ''))}) Tj ET",
+            "0.95 0.75 0.15 rg",
+            f"BT /F2 9 Tf {margin + 15} {y - 110} Td (Response Scalar z:) Tj ET",
+            "1.0 1.0 1.0 rg",
+            f"BT /F2 8 Tf {margin + 15} {y - 125} Td ({proof_dict.get('response_z_hex', '')}) Tj ET",
+            "0.85 0.85 0.85 rg",
+            f"BT /F2 9 Tf {margin + 15} {y - 150} Td (Prover Public Key P:) Tj ET",
+            "1.0 1.0 1.0 rg",
+            f"BT /F2 8 Tf {margin + 15} {y - 165} Td ({proof_dict.get('prover_pk_hex', proof_dict.get('point_P1_hex', ''))}) Tj ET",
+            "0.20 0.85 1.0 rg",
+            f"BT /F2 8 Tf {margin + 15} {y - 205} Td (Execution: python3 <this_file>.pdf --cross-prove <challenger.pdf>) Tj ET",
+        ])
+        y -= (box_h + 30)
+
+        # Verification Guarantee Box
+        inst_h = 160
+        stream_lines.extend([
+            "0.06 0.05 0.10 rg",
+            f"{margin} {y - inst_h} {page_width - 2*margin} {inst_h} re f",
+            "0.70 0.50 0.15 RG 1.0 w",
+            f"{margin} {y - inst_h} {page_width - 2*margin} {inst_h} re S",
+            "1.0 1.0 1.0 rg",
+            f"BT /F1 10 Tf {margin + 15} {y - 25} Td (ZERO-KNOWLEDGE NON-DISCLOSURE GUARANTEE) Tj ET",
+            "0.90 0.85 0.75 rg",
+            f"BT /F3 8 Tf {margin + 15} {y - 50} Td (1. The secret scalar s is never written or leaked into this document.) Tj ET",
+            f"BT /F3 8 Tf {margin + 15} {y - 70} Td (2. The proof z is valid strictly under the challenger's unique content address.) Tj ET",
+            f"BT /F3 8 Tf {margin + 15} {y - 90} Td (3. Any change in challenger bytes invalidates this proof completely.) Tj ET",
+            f"BT /F3 8 Tf {margin + 15} {y - 110} Td (4. Dual-document cross-proving completes in 100% pure standard library Python.) Tj ET",
+            "Q"
+        ])
+
+        stream_content = "\n".join(stream_lines).encode("utf-8")
+
+        objs = [
+            b"<</Type /Catalog /Pages 2 0 R>>",
+            b"<</Type /Pages /Kids [3 0 R] /Count 1>>",
+            (
+                b"<</Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
+                b"/Contents 4 0 R /Resources <</Font <</F1 5 0 R /F2 6 0 R /F3 7 0 R>>>>>>"
+            ),
+            f"<</Length {len(stream_content)}>>\nstream\n".encode("latin1") + stream_content + b"\nendstream",
+            b"<</Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold>>",
+            b"<</Type /Font /Subtype /Type1 /BaseFont /Courier-Bold>>",
+            b"<</Type /Font /Subtype /Type1 /BaseFont /Helvetica>>",
+        ]
+
+        pdf_header = b"# coding: utf-8\nr\"\"\"%PDF-1.7\n%\xe2\x9a\x93\n"
+        body = bytearray(pdf_header)
+        body.extend(manifest_comment)
+
+        offsets = [0]
+        for i, o in enumerate(objs, 1):
+            offsets.append(len(body))
+            body.extend(f"{i} 0 obj\n".encode("latin1"))
+            body.extend(o)
+            body.extend(b"\nendobj\n")
+
+        xstart = len(body)
+        body.extend(f"xref\n0 {len(objs)+1}\n0000000000 65535 f \n".encode("latin1"))
+        for off in offsets[1:]:
+            body.extend(f"{off:010d} 00000 n \n".encode("latin1"))
+
+        body.extend(
+            f"trailer\n<</Size {len(objs)+1} /Root 1 0 R>>\nstartxref\n{xstart}\n%%EOF\n\"\"\"\n".encode("latin1")
+        )
+        body.extend(_generate_zk_cross_runner().encode("utf-8"))
+
+        with open(output_path, "wb") as f:
+            f.write(body)
+        return output_path
+
+
+def adjudicate_zk_bilateral(
+    challenger_pdf_path: str,
+    witness_pdf_path: str
+) -> BilateralZKSettlementReceipt:
+    """
+    Executes bilateral zero-knowledge cross-proof adjudication between Document A
+    and Document B without exposing private keys. Strictly fail-closed.
+    """
+    if not os.path.exists(challenger_pdf_path):
+        raise FileNotFoundError(f"Challenger file not found: {challenger_pdf_path}")
+    if not os.path.exists(witness_pdf_path):
+        raise FileNotFoundError(f"Witness file not found: {witness_pdf_path}")
+
+    with open(challenger_pdf_path, "rb") as f:
+        c_bytes = f.read()
+    with open(witness_pdf_path, "rb") as f:
+        w_bytes = f.read()
+
+    cid_c = compute_cidv1_raw(c_bytes)
+    cid_w = compute_cidv1_raw(w_bytes)
+
+    # 1. Extract and verify Challenger Manifest
+    c_prefix = ZK_CHALLENGER_MANIFEST_PREFIX.encode("utf-8")
+    c_idx = c_bytes.rfind(c_prefix)
+    if c_idx == -1:
+        raise PermissionError(f"No ZK_CHALLENGER_MANIFEST found in '{challenger_pdf_path}'")
+    c_end = c_bytes.find(b"\n", c_idx)
+    c_manifest = json.loads(c_bytes[c_idx + len(c_prefix):c_end].decode("utf-8"))
+
+    c_claim_bytes = json.dumps({
+        "clause_text": c_manifest["clause_text"],
+        "proof_type": c_manifest["proof_type"],
+        "second_point_hex": c_manifest.get("second_point_hex", ""),
+        "statement_id": c_manifest["statement_id"],
+        "target_prover_pk_hex": c_manifest["target_prover_pk_hex"],
+        "title": c_manifest["title"]
+    }, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+    if not verify_bytes(bytes.fromhex(c_manifest["author_pk_hex"]), c_claim_bytes, bytes.fromhex(c_manifest["author_signature_hex"])):
+        raise PermissionError("Challenger contract author signature is invalid or tampered!")
+
+    # 2. Extract and verify Witness Manifest
+    w_prefix = ZK_WITNESS_MANIFEST_PREFIX.encode("utf-8")
+    w_idx = w_bytes.rfind(w_prefix)
+    if w_idx == -1:
+        raise PermissionError(f"No ZK_WITNESS_MANIFEST found in '{witness_pdf_path}'")
+    w_end = w_bytes.find(b"\n", w_idx)
+    w_manifest = json.loads(w_bytes[w_idx + len(w_prefix):w_end].decode("utf-8"))
+
+    w_payload_bytes = json.dumps({
+        "challenger_cid": w_manifest["challenger_cid"],
+        "proof": w_manifest["proof"],
+        "statement_id": w_manifest["statement_id"],
+        "witness_name": w_manifest["witness_name"]
+    }, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+    if not verify_bytes(bytes.fromhex(w_manifest["witness_pk_hex"]), w_payload_bytes, bytes.fromhex(w_manifest["witness_signature_hex"])):
+        raise PermissionError("Witness author signature is invalid or tampered!")
+
+    # 3. Content-Address Binding Assertion (FAIL-CLOSED)
+    if w_manifest["challenger_cid"] != cid_c:
+        raise PermissionError(
+            f"Bilateral CID mismatch: witness is bound to CID '{w_manifest['challenger_cid']}', "
+            f"but provided contract CID is '{cid_c}'. Replay attack rejected!"
+        )
+
+    if w_manifest["statement_id"] != c_manifest["statement_id"]:
+        raise PermissionError(
+            f"Statement ID mismatch: contract specifies '{c_manifest['statement_id']}', "
+            f"witness answers '{w_manifest['statement_id']}'"
+        )
+
+    # 4. Verify Zero-Knowledge Proof
+    expected_context = f"ZK_CROSS_PROOF:{cid_c}:{c_manifest['statement_id']}"
+    proof_dict = w_manifest["proof"]
+    proof_type = proof_dict.get("type")
+
+    if proof_type == "SchnorrZKP":
+        proof = SchnorrProof.from_dict(proof_dict)
+        if proof.context != expected_context:
+            raise PermissionError("Witness Schnorr proof context does not match expected bilateral context!")
+        if proof.prover_pk_hex.lower() != c_manifest["target_prover_pk_hex"].lower():
+            raise PermissionError(
+                f"Prover public key mismatch: expected '{c_manifest['target_prover_pk_hex']}', "
+                f"witness proved for '{proof.prover_pk_hex}'"
+            )
+        if not schnorr_verify(proof):
+            raise PermissionError("Schnorr zero-knowledge proof mathematical verification failed!")
+        proof_fingerprint = f"{proof.commitment_R_hex}:{proof.response_z_hex}"
+
+    elif proof_type == "ChaumPedersenZKP":
+        proof = ChaumPedersenProof.from_dict(proof_dict)
+        if proof.context != expected_context:
+            raise PermissionError("Witness Chaum-Pedersen proof context does not match expected bilateral context!")
+        if proof.point_P1_hex.lower() != c_manifest["target_prover_pk_hex"].lower():
+            raise PermissionError("Prover point P1 mismatch with target public key!")
+        if c_manifest.get("second_point_hex") and proof.point_P2_hex.lower() != c_manifest["second_point_hex"].lower():
+            raise PermissionError("Prover point P2 mismatch with expected second generator point!")
+        if not chaum_pedersen_verify(proof):
+            raise PermissionError("Chaum-Pedersen discrete log equality proof verification failed!")
+        proof_fingerprint = f"{proof.commitment_R1_hex}:{proof.commitment_R2_hex}:{proof.response_z_hex}"
+    else:
+        raise PermissionError(f"Unsupported proof type: '{proof_type}'")
+
+    # 5. Joint Bilateral Anchor
+    ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    joint_data = f"{cid_c}|{cid_w}|{proof_fingerprint}|ZK_SETTLED_SOUND|{ts}".encode("utf-8")
+    joint_anchor = hashlib.sha256(joint_data).hexdigest()
+
+    return BilateralZKSettlementReceipt(
+        status="ZK_SETTLED_SOUND",
+        statement_id=c_manifest["statement_id"],
+        challenger_title=c_manifest["title"],
+        target_prover_pk_hex=c_manifest["target_prover_pk_hex"],
+        challenger_cid=cid_c,
+        witness_cid=cid_w,
+        proof_type=proof_type,
+        joint_bilateral_anchor=joint_anchor,
+        timestamp_utc=ts,
+        details="Non-interactive zero-knowledge bilateral settlement mathematically verified & sound."
+    )
+
+def audit_zk_challenger_polyglot(target_path: str) -> bool:
+    """Verifies a ZK Challenger polyglot statically without execution."""
+    try:
+        with open(target_path, "rb") as f:
+            c_bytes = f.read()
+        prefix = ZK_CHALLENGER_MANIFEST_PREFIX.encode("utf-8")
+        idx = c_bytes.rfind(prefix)
+        if idx == -1:
+            return False
+        end = c_bytes.find(b"\n", idx)
+        c_manifest = json.loads(c_bytes[idx + len(prefix):end].decode("utf-8"))
+        c_claim_bytes = json.dumps({
+            "clause_text": c_manifest["clause_text"],
+            "proof_type": c_manifest["proof_type"],
+            "second_point_hex": c_manifest.get("second_point_hex", ""),
+            "statement_id": c_manifest["statement_id"],
+            "target_prover_pk_hex": c_manifest["target_prover_pk_hex"],
+            "title": c_manifest["title"]
+        }, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        return verify_bytes(bytes.fromhex(c_manifest["author_pk_hex"]), c_claim_bytes, bytes.fromhex(c_manifest["author_signature_hex"]))
+    except Exception:
+        return False
+
+def audit_zk_witness_polyglot(target_path: str) -> bool:
+    """Verifies a ZK Witness polyglot statically without execution."""
+    try:
+        with open(target_path, "rb") as f:
+            w_bytes = f.read()
+        prefix = ZK_WITNESS_MANIFEST_PREFIX.encode("utf-8")
+        idx = w_bytes.rfind(prefix)
+        if idx == -1:
+            return False
+        end = w_bytes.find(b"\n", idx)
+        w_manifest = json.loads(w_bytes[idx + len(prefix):end].decode("utf-8"))
+        w_payload_bytes = json.dumps({
+            "challenger_cid": w_manifest["challenger_cid"],
+            "proof": w_manifest["proof"],
+            "statement_id": w_manifest["statement_id"],
+            "witness_name": w_manifest["witness_name"]
+        }, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        return verify_bytes(bytes.fromhex(w_manifest["witness_pk_hex"]), w_payload_bytes, bytes.fromhex(w_manifest["witness_signature_hex"]))
+    except Exception:
+        return False
+
 if __name__ == "__main__":
     print("cross_proof.py — Bilateral Interlocking Document Protocol loaded.")
+

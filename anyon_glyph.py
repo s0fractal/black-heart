@@ -296,6 +296,25 @@ class AnyonPolyglotCompiler:
 
     def build_page_stream(self, receipt: AnyonSettlementReceipt) -> str:
         """Generates dark quantum vacuum page with vector braid lines and Bloch sphere."""
+        def escape(s: str) -> str:
+            return s.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+        def clean_term(s: str) -> str:
+            return s.replace("🌿", "S").replace("🖤", "K").replace("🤍", "I").replace("🔁", "Y").replace("⚓", "#")
+
+        def clean_braid(s: str) -> str:
+            return (
+                s.replace("σ_1⁻¹", "s1^-1")
+                 .replace("σ_2⁻¹", "s2^-1")
+                 .replace("σ_1", "s1")
+                 .replace("σ_2", "s2")
+                 .replace(" · ", " * ")
+            )
+
+        clean_expr = escape(clean_term(receipt.term_expr))
+        clean_b = escape(clean_braid(receipt.braid_artin))
+        collapsed_name = "I (VACUUM)" if receipt.collapsed_glyph == GLYPH_I else "K (ANYON TAU)"
+
         ops = [
             "q",
             # Dark Quantum Vacuum Background
@@ -311,12 +330,12 @@ class AnyonPolyglotCompiler:
             "1 1 1 rg",
             "BT /F1 15 Tf 60 775 Td (PROJECT BLACK-HEART // ANYONIC QUANTUM TOPOS) Tj ET",
             "0.10 0.85 0.95 rg",
-            f"BT /F1 9 Tf 60 755 Td (CIRCUIT: {receipt.term_expr}  |  WRITHE: {receipt.writhe:+d}  |  COLLAPSED: {receipt.collapsed_glyph}) Tj ET",
+            f"BT /F1 9 Tf 60 755 Td (CIRCUIT: {clean_expr}  |  WRITHE: {receipt.writhe:+d}  |  OUTCOME: {collapsed_name}) Tj ET",
             # Measurement Status Medallion
             "0.55 0.15 0.65 rg" if receipt.collapsed_glyph == GLYPH_K else "0.10 0.55 0.35 rg",
             "45 705 505 28 re f",
             "1 1 1 rg",
-            f"BT /F1 11 Tf 60 714 Td (BORN MEASUREMENT: {receipt.collapsed_glyph} ({'ANYON TAU' if receipt.collapsed_glyph == GLYPH_K else 'VACUUM 1'})  |  ENTROPY: {receipt.von_neumann_entropy:.4f} shannons) Tj ET",
+            f"BT /F1 11 Tf 60 714 Td (BORN MEASUREMENT: {collapsed_name}  |  ENTROPY: {receipt.von_neumann_entropy:.4f} shannons) Tj ET",
         ]
 
         # 1. Left Box: Spacetime Anyon Worldline Braid Diagram (x=45..285, y=390..680)
@@ -327,7 +346,7 @@ class AnyonPolyglotCompiler:
         ops.append("1 1 1 rg")
         ops.append(f"BT /F1 10 Tf {bx + 15} {by + bh - 20} Td (ANYON WORLDLINES & ARTIN BRAID) Tj ET")
         ops.append("0.7 0.8 0.95 rg")
-        ops.append(f"BT /F1 8 Tf {bx + 15} {by + bh - 35} Td (Braid: {receipt.braid_artin[:32]}) Tj ET")
+        ops.append(f"BT /F1 8 Tf {bx + 15} {by + bh - 35} Td (Braid: {clean_b[:32]}) Tj ET")
 
         # Draw 3 vertical worldlines with schematic crossings
         s1_x, s2_x, s3_x = bx + 50.0, bx + 120.0, bx + 190.0
@@ -385,8 +404,8 @@ class AnyonPolyglotCompiler:
         ops.append("0.35 0.55 0.85 RG 0.8 w")
         ops.append(f"{scx} {scy - sr - 15} m {scx} {scy + sr + 15} l S")
         ops.append("1 1 1 rg")
-        ops.append(f"BT /F1 8 Tf {scx - 8} {scy + sr + 18} Td (|0> 🤍) Tj ET")
-        ops.append(f"BT /F1 8 Tf {scx - 8} {scy - sr - 25} Td (|1> 🖤) Tj ET")
+        ops.append(f"BT /F1 8 Tf {scx - 24} {scy + sr + 18} Td (|0> VACUUM) Tj ET")
+        ops.append(f"BT /F1 8 Tf {scx - 20} {scy - sr - 25} Td (|1> ANYON) Tj ET")
 
         # Quantum State Vector: (x, y, z) mapped to 2D
         # Projection: px = scx + x * sr, py = scy + z * sr + y * (sr * 0.3)
@@ -411,7 +430,7 @@ class AnyonPolyglotCompiler:
         ops.append("BT /F1 11 Tf 60 345 Td (FIBONACCI ANYONIC QUANTUM SETTLEMENT HUD) Tj ET")
 
         ops.append("0.85 0.90 0.98 rg")
-        ops.append(f"BT /F1 9 Tf 60 320 Td (Braid Word:        {receipt.braid_artin[:50]}) Tj ET")
+        ops.append(f"BT /F1 9 Tf 60 320 Td (Braid Word:        {clean_b[:50]}) Tj ET")
         ops.append(f"BT /F1 9 Tf 60 300 Td (Born Probabilities: P(|0> Vacuum) = {receipt.born_p0_vacuum*100:.2f}%  |  P(|1> Anyon tau) = {receipt.born_p1_anyon*100:.2f}%) Tj ET")
         ops.append(f"BT /F1 9 Tf 60 280 Td (Bloch Sphere:       theta = {receipt.bloch_theta_deg:.2f} deg  |  phi = {receipt.bloch_phi_deg:.2f} deg) Tj ET")
         ops.append(f"BT /F1 9 Tf 60 260 Td (State Coordinates:  x = {receipt.bloch_x:+.4f},  y = {receipt.bloch_y:+.4f},  z = {receipt.bloch_z:+.4f}) Tj ET")

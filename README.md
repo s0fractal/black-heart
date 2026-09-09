@@ -316,6 +316,7 @@ Eliminating centralized webhooks and escrow servers:
 * **The Dual-Document Problem:** Traditional smart contracts rely on centralized cloud oracles. In Black-Heart, both the agreement (e.g. cloud SLA) and the telemetry oracle are independent self-verifying polyglot PDFs signed by their respective Ed25519 identities.
 * **Cross-Adjudication:** Running `cross_proof.py` (or executing `cli.py adjudicate`) allows the agreement PDF to ingest the telemetry oracle PDF, verify its Ed25519 signature against the agreed public key, evaluate combinator SLA equations, and compute deterministic financial adjustments.
 * **Joint Witness Anchor:** Produces a cryptographic dual-document digest $\mathcal{H}(D_{\text{agreement}} \mathbin{\Vert} D_{\text{oracle}} \mathbin{\Vert} \text{Resolution})$ ensuring neither party can retroactively substitute claims.
+* **Bilateral Zero-Knowledge Cross-Proof:** Privacy-preserving cross-adjudication using Schnorr knowledge proofs and Chaum-Pedersen discrete log equality on Curve25519. The Fiat-Shamir challenge is cryptographically bound to the contract's CIDv1, rendering replay attacks mathematically impossible.
 
 ```bash
 # 1. Run bilateral settlement demo:
@@ -323,6 +324,11 @@ python3 examples/bilateral_settlement_demo.py
 
 # 2. Adjudicate bilateral agreement against telemetry oracle:
 python3 cli.py adjudicate examples/bilateral_agreement.pdf examples/provider_telemetry_oracle.pdf
+
+# 3. Bilateral ZK cross-proving (Contract Challenger vs Witness):
+python3 cli.py adjudicate contract_zk.pdf witness_zk.pdf --zk
+# or direct counterpart evaluation:
+python3 witness_zk.pdf --cross-prove contract_zk.pdf
 ```
 
 See formal specification: [CROSS_PROOF.md](CROSS_PROOF.md).
@@ -852,7 +858,7 @@ python3 test_monad.py          # 7 tests: Dual trees, visual/semantic compilatio
 python3 test_living_ledger.py  # 5 tests: Incremental PDF updates, multi-block chains
 python3 test_interaction.py    # 6 tests: Symmetric interaction combinators, rewiring
 python3 test_organism.py       # 4 tests: Self-reproducing polyglot automata, quines
-python3 test_cross_proof.py    # 3 tests: Bilateral cross-proofs & embedded code vaults
+python3 test_cross_proof.py    # 8 tests: Bilateral cross-proofs, embedded code vaults & bilateral ZKP
 python3 test_continuum.py      # 4 tests: Suspended continuum thunks & incremental resumption
 python3 test_zk_glyph.py       # 5 tests: Pure-Python Ed25519 zero-knowledge proofs & NIZK
 python3 test_mesh.py           # 3 tests: Peer-to-peer living polyglot mesh sync & gossip

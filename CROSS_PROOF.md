@@ -104,3 +104,61 @@ python3 document.pdf --unpack-vault [output_dir]
 Файл читає власний PDF-потік, знаходить об'єкт вбудованого сховища, перевіряє його контрольний хеш SHA-256 і розгортає повний робочий простір.
 
 **Наукова стаття чи контракт стають непорушним ковчегом істини (Self-Preserving Archive).**
+
+---
+
+## 5. Двосторонні Zero-Knowledge Докази через CIDv1 Замикання (Bilateral ZK Cross-Proof)
+
+У консорціумах та міжкорпоративних угодах виникає вимога: **довести відповідність конфіденційного факту умовам контракту, не розкриваючи сам факт або закритий ключ свідок-документа**.
+
+Наприклад:
+- Контракт на закупівлю вимагає підтвердження платоспроможності або наявності секретного ключа доступу без передачі секрету.
+- Свідок-документ (Witness PDF) генерує інтерактивний або неінтерактивний ZK-доказ (NIZKP) на кривій Ed25519 / Curve25519.
+- Арбітражний процес перевіряє доказ у прив'язці до конкретного екземпляра контракту.
+
+### 5.1. Криптографічний протокол: Schnorr ZKP & Chaum-Pedersen DLog Equality
+
+В `cross_proof.py` (Секція 5) реалізовано два класи Zero-Knowledge крос-доказів:
+
+1. **Schnorr ZKP володіння секретним ключем (Knowledge of Secret Key):**
+   - Доводить, що свідок володіє $s \in \mathbb{F}_L$ таким, що $P = s \cdot B$, не розкриваючи $s$.
+   - **Commitment:** $R = r \cdot B$, де $r \xleftarrow{\$} \mathbb{F}_L$.
+   - **Fiat-Shamir Challenge:** $e = \text{SHA-512}(\text{Context} \mathbin{\Vert} R \mathbin{\Vert} P \mathbin{\Vert} M) \pmod L$.
+   - **Response:** $z = (r + e \cdot s) \pmod L$.
+   - **Верифікація:** $z \cdot B \stackrel{?}{=} R + e \cdot P$.
+
+2. **Chaum-Pedersen ZKP рівності дискретних логарифмів (DLog Equality):**
+   - Доводить, що $P_1 = s \cdot B$ і $P_2 = s \cdot H$ мають один і той самий секрет $s$.
+   - Забезпечує конфіденційне засліплення (pedersen commitment / blinded identity) без втрати аудитованості.
+
+### 5.2. Захист від Replay-атак через прив'язку до CIDv1 Контракту
+
+Ключова вразливість наївних ZK-доказів між документами — це повторне використання чужого доказу в іншому контракті (Replay Attack).
+Для запобігання цьому Fiat-Shamir виклик формується зі строгою прив'язкою до ідентифікатора контенту (CIDv1) контракту:
+
+$$\text{Context} = \text{"ZK\_CROSS\_PROOF:"} \mathbin{\Vert} \text{CIDv1}(D_{\text{contract}}) \mathbin{\Vert} \text{StatementID}$$
+
+де $\text{CIDv1}(D_{\text{contract}}) = \text{compute\_cidv1\_raw}(bytes(D_{\text{contract}}))$.
+
+Будь-яка модифікація контракту хоча б на 1 біт змінює його CIDv1, що миттєво робить ZK-доказ недійсним при верифікації (`fail-closed`).
+
+### 5.3. Архітектура поліглотів BilateralZKChallengerPolyglot та BilateralZKWitnessPolyglot
+
+- **`BilateralZKChallengerPolyglot`:** Контракт-челенджер, що визначає публічний стейтмент, необхідні типи ZK-доказів (`schnorr_knowledge` або `chaum_pedersen_equality`) та очікуваний публічний ключ свідка.
+- **`BilateralZKWitnessPolyglot`:** Документ-свідок, що містить математичний ZK-доказ, згенерований для конкретного CIDv1 контракту.
+- **`BilateralZKSettlementReceipt`:** Фінальна квитанція арбітражу, що карбує Merkle-хеш врегулювання:
+  $$H_{\text{receipt}} = \text{SHA-256}(\text{CIDv1}_C \mathbin{\Vert} \text{CIDv1}_W \mathbin{\Vert} \text{ProofType} \mathbin{\Vert} \text{Timestamp})$$
+
+### 5.4. Автономне виконання та CLI
+
+Обидва поліглоти мають автономний точковий вхід:
+```bash
+# Прямий крос-пруф через поліглот:
+python3 witness_zk.pdf --cross-prove contract_zk.pdf
+
+# Через єдиний CLI Black-Heart:
+python3 cli.py adjudicate contract_zk.pdf witness_zk.pdf --zk
+# або
+python3 cli.py cross-proof adjudicate contract_zk.pdf witness_zk.pdf
+```
+

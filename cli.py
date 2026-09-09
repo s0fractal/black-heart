@@ -265,6 +265,41 @@ def cmd_adjudicate(args):
     print(f"[*] Agreement Document: {agreement_pdf}")
     print(f"[*] Telemetry Oracle:   {oracle_pdf}\n")
 
+    with open(agreement_pdf, "rb") as f:
+        a_bytes = f.read()
+    from cross_proof import (
+        ZK_CHALLENGER_MANIFEST_PREFIX,
+        ZK_WITNESS_MANIFEST_PREFIX,
+        adjudicate_zk_bilateral,
+        adjudicate_bilateral
+    )
+    is_zk = getattr(args, "zk", False) or ZK_CHALLENGER_MANIFEST_PREFIX.encode("utf-8") in a_bytes or ZK_WITNESS_MANIFEST_PREFIX.encode("utf-8") in a_bytes
+    if is_zk:
+        print("\033[1;36m" + "=" * 65)
+        print("  %🖤 BILATERAL ZERO-KNOWLEDGE CROSS-PROOF ADJUDICATION")
+        print("=" * 65 + "\033[0m\n")
+        print(f"[*] Document 1: {agreement_pdf}")
+        print(f"[*] Document 2: {oracle_pdf}\n")
+        if ZK_CHALLENGER_MANIFEST_PREFIX.encode("utf-8") in a_bytes:
+            c_pdf, w_pdf = agreement_pdf, oracle_pdf
+        else:
+            c_pdf, w_pdf = oracle_pdf, agreement_pdf
+        try:
+            rcpt = adjudicate_zk_bilateral(c_pdf, w_pdf)
+            print("\033[1;32m[✓] ZERO-KNOWLEDGE BILATERAL SETTLEMENT SOUND & RATIFIED!\033[0m")
+            print(f"    Status:                 \033[1;32m{rcpt.status}\033[0m")
+            print(f"    Joint Bilateral Anchor: ⚓ {rcpt.joint_bilateral_anchor}")
+            print(f"    Statement ID:           {rcpt.statement_id}")
+            print(f"    Contract Title:         {rcpt.challenger_title}")
+            print(f"    Target Prover Key:      {rcpt.target_prover_pk_hex[:16]}... (ZK Verified)")
+            print(f"    Challenger CIDv1:       {rcpt.challenger_cid}")
+            print(f"    Witness CIDv1:          {rcpt.witness_cid}")
+            print(f"    Proof System:           {rcpt.proof_type}\n")
+            return
+        except Exception as e:
+            print(f"\033[1;31m[✗] ZK ADJUDICATION FAILED: {e}\033[0m\n")
+            sys.exit(1)
+
     pinned_pk = getattr(args, "pinned_author_pk", None)
     pinned_hash = getattr(args, "pinned_agreement_hash", None)
     allow_untrusted = getattr(args, "allow_untrusted_issuer", False)
@@ -293,16 +328,77 @@ def cmd_adjudicate(args):
 
     if res.status in ("SETTLED_COMPLIANT", "SETTLED_BREACH"):
         status_color = "\033[1;32m" if res.status == "SETTLED_COMPLIANT" else "\033[1;33m"
+        penalty_str = "COMPLIANT" if res.status == "SETTLED_COMPLIANT" else "BREACHED"
         print(f"{status_color}[✓] ADJUDICATION VERIFIED & SETTLED: {res.status}\033[0m")
         print(f"    Joint Bilateral Anchor: ⚓ {res.joint_bilateral_digest}")
         print(f"    Agreement:              {res.agreement_title}")
         print(f"    Trust Status:           {res.trust_status}")
         print(f"    Oracle:                 {res.oracle_name} ({res.oracle_pk_hex[:16]}...)")
-        print(f"    Measured Uptime:        {res.measured_uptime_percent:.2f}% (Target: {res.target_uptime_percent:.2f}%)")
-        print(f"    Net Service Due:        ${res.net_service_due_usd} USD (Penalty: ${res.penalty_due_usd} USD)")
+        print(f"    Payment Status:         {penalty_str} | Net Service Fee: ${res.net_service_due_usd:,} USD\n")
     else:
-        print(f"\033[1;31m[✗] ADJUDICATION FAILED: {res.status}\033[0m\n")
+        print(f"\033[1;31m[✗] ADJUDICATION REJECTED: {res.status}\033[0m\n")
         sys.exit(1)
+
+def cmd_cross_proof(args):
+    """Bilateral Zero-Knowledge Cross-Proof & Interlocking Contract operations."""
+    from cross_proof import (
+        BilateralZKChallengerPolyglot,
+        BilateralZKWitnessPolyglot,
+        adjudicate_zk_bilateral,
+        audit_zk_challenger_polyglot,
+        audit_zk_witness_polyglot
+    )
+    if args.action == "zk-contract":
+        challenger = BilateralZKChallengerPolyglot(
+            title=args.title or "BILATERAL ESCROW CONTRACT",
+            statement_id=args.statement or "CLAIM-ZK-001",
+            target_prover_pk_hex=args.target_pk,
+            clause_text=args.clause or "Settlement authorized upon verifiable zero-knowledge proof of sovereign key possession.",
+            proof_type=args.proof_type or "SchnorrZKP",
+            second_point_hex=args.second_point or None,
+            author_secret_key_hex=args.secret_key or None
+        )
+        out_path = args.output or "zk_contract.pdf"
+        challenger.compile(out_path)
+        print("\033[1;36m=================================================================\033[0m")
+        print("  %🖤 BILATERAL ZK CHALLENGER CONTRACT COMPILED")
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  Target File:     {out_path}")
+        print(f"  Statement ID:    {challenger.statement_id}")
+        print(f"  Proof Type:      {challenger.proof_type}")
+        print(f"  Target Prover PK:{challenger.target_prover_pk_hex[:16]}...\n")
+
+    elif args.action == "zk-witness":
+        witness = BilateralZKWitnessPolyglot(
+            witness_name=args.name or "Autonomous Prover",
+            challenger_pdf_path=args.contract,
+            prover_secret_key_hex=args.secret_key or None,
+            witness_author_secret_key_hex=args.author_key or None
+        )
+        out_path = args.output or "zk_witness.pdf"
+        witness.compile(out_path)
+        print("\033[1;32m=================================================================\033[0m")
+        print("  %🖤 BILATERAL ZK WITNESS POLYGLOT COMPILED")
+        print("\033[1;32m=================================================================\033[0m")
+        print(f"  Target File:     {out_path}")
+        print(f"  Bound Contract:  {args.contract}\n")
+
+    elif args.action == "adjudicate":
+        try:
+            rcpt = adjudicate_zk_bilateral(args.contract, args.witness)
+            print("\033[1;32m[✓ GREEN] ZERO-KNOWLEDGE BILATERAL SETTLEMENT SOUND & RATIFIED!\033[0m")
+            print(f"  Status:                 \033[1;32m{rcpt.status}\033[0m")
+            print(f"  Joint Bilateral Anchor: ⚓ {rcpt.joint_bilateral_anchor}")
+            print(f"  Statement ID:           {rcpt.statement_id}")
+            print(f"  Contract Title:         {rcpt.challenger_title}")
+            print(f"  Challenger CIDv1:       {rcpt.challenger_cid}")
+            print(f"  Witness CIDv1:          {rcpt.witness_cid}")
+            print(f"  Proof System:           {rcpt.proof_type}\n")
+        except Exception as e:
+            print(f"\033[1;31m[✗ REFUTED] Bilateral ZK Cross-Proof Failed: {e}\033[0m")
+            sys.exit(1)
+    else:
+        print("Usage: python3 cli.py cross-proof {zk-contract,zk-witness,adjudicate} ...")
 
 def cmd_test(args):
     """Executes the full test suite across all engines."""
@@ -1521,13 +1617,38 @@ def main():
     p_vault_unpack.add_argument("file", help="Target PDF polyglot")
     p_vault_unpack.add_argument("-d", "--dest", default=".", help="Destination directory")
 
-    # adjudicate
     p_adj = subparsers.add_parser("adjudicate", help="Bilateral cross-proof adjudication between contract and oracle PDFs")
     p_adj.add_argument("agreement", help="Path to bilateral agreement PDF")
     p_adj.add_argument("oracle", help="Path to telemetry oracle PDF")
+    p_adj.add_argument("--zk", action="store_true", help="Execute Zero-Knowledge cross-proof adjudication")
     p_adj.add_argument("--pinned-author-pk", default=None, help="Pinned Ed25519 public key hex of the agreement author")
     p_adj.add_argument("--pinned-agreement-hash", default=None, help="Pinned SHA-256 agreement document anchor")
     p_adj.add_argument("--allow-untrusted-issuer", action="store_true", help="Explicitly allow evaluation without pinned trust root")
+
+    # cross-proof
+    p_cross = subparsers.add_parser("cross-proof", help="Bilateral Zero-Knowledge Cross-Proof & Interlocking Contracts")
+    cross_subs = p_cross.add_subparsers(dest="action")
+
+    p_cross_c = cross_subs.add_parser("zk-contract", help="Compile a Bilateral ZK Challenger Contract PDF")
+    p_cross_c.add_argument("-o", "--output", default="zk_contract.pdf", help="Output PDF file path")
+    p_cross_c.add_argument("-t", "--title", default="BILATERAL ESCROW CONTRACT", help="Contract title")
+    p_cross_c.add_argument("-s", "--statement", default="CLAIM-ZK-001", help="Statement identifier")
+    p_cross_c.add_argument("--pk", "--target-pk", dest="target_pk", required=True, help="Target prover Ed25519 public key hex")
+    p_cross_c.add_argument("--clause", default="Settlement authorized upon verifiable zero-knowledge proof.", help="Clause statement text")
+    p_cross_c.add_argument("--proof-type", default="SchnorrZKP", choices=["SchnorrZKP", "ChaumPedersenZKP"], help="Proof system")
+    p_cross_c.add_argument("--second-point", default=None, help="Second point hex for Chaum-Pedersen")
+    p_cross_c.add_argument("--secret-key", default=None, help="Contract author secret key hex (optional)")
+
+    p_cross_w = cross_subs.add_parser("zk-witness", help="Compile a Bilateral ZK Witness PDF bound to contract CID")
+    p_cross_w.add_argument("-c", "--contract", required=True, help="Path to Challenger Contract PDF")
+    p_cross_w.add_argument("-o", "--output", default="zk_witness.pdf", help="Output PDF file path")
+    p_cross_w.add_argument("-n", "--name", default="Autonomous Prover", help="Witness prover entity name")
+    p_cross_w.add_argument("--sk", "--secret-key", dest="secret_key", required=True, help="Prover secret key hex")
+    p_cross_w.add_argument("--author-key", default=None, help="Witness author secret key hex (optional)")
+
+    p_cross_adj = cross_subs.add_parser("adjudicate", help="Adjudicate bilateral zero-knowledge contract and witness")
+    p_cross_adj.add_argument("contract", help="Path to Challenger Contract PDF")
+    p_cross_adj.add_argument("witness", help="Path to Witness PDF")
 
     # continuum
     p_cont = subparsers.add_parser("continuum", help="Suspended Continuum Thunk polyglot operations")
@@ -1802,6 +1923,8 @@ def main():
         cmd_diary(args)
     elif args.command == "agora":
         cmd_agora(args)
+    elif args.command == "cross-proof":
+        cmd_cross_proof(args)
     else:
         parser.print_help()
 
