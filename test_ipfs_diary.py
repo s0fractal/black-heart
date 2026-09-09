@@ -737,6 +737,57 @@ class TestMultiAgentDiaryAndDag(unittest.TestCase):
             self.assertEqual(res_aud.returncode, 0)
             self.assertIn("CRYPTOGRAPHICALLY VERIFIED & AUDITED", res_aud.stdout)
 
+    def test_fail_closed_unsigned_thought_content_tampered_fails_audit(self):
+        """Unsigned diary thought content must be unconditionally checked against its thought_hash (N6)."""
+        import json
+        from ipfs_diary import DIARY_MANIFEST_PREFIX
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            diary_path = os.path.join(tmpdir, "unsigned_diary.pdf")
+            initialize_ontogenetic_diary(diary_path, genesis_thought="Original thought content.")
+
+            with open(diary_path, "rb") as f:
+                data = f.read()
+
+            p = DIARY_MANIFEST_PREFIX.encode("utf-8")
+            i = data.rfind(p)
+            j = data.index(b"\n", i)
+            manifest = json.loads(data[i + len(p):j].decode("utf-8"))
+
+            # Tamper with thought_content while keeping thought_hash untouched
+            manifest[0]["thought_content"] = "Tampered thought without updating hash"
+            tampered_data = data[:i] + p + json.dumps(manifest, ensure_ascii=True).encode("utf-8") + data[j:]
+
+            with open(diary_path, "wb") as f:
+                f.write(tampered_data)
+
+            # audit_diary_dag must strictly fail
+            with self.assertRaises(ValueError) as ctx:
+                audit_diary_dag(diary_path)
+            self.assertIn("integrity verification failed", str(ctx.exception).lower())
+
+    def test_fail_closed_refused_restore_preserves_destination_file(self):
+        """A refused restore from IPFS must never overwrite an existing destination file (N7)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dest_path = os.path.join(tmpdir, "precious_existing_diary.pdf")
+            original_content = b"PRECIOUS EXISTING DOCUMENT"
+            with open(dest_path, "wb") as f:
+                f.write(original_content)
+
+            # Mock fetch returning invalid diary bytes under a valid CID
+            bad_bytes = b"not a diary"
+            bad_cid = compute_cidv1_raw(bad_bytes)
+
+            with patch("ipfs_diary.fetch_from_ipfs", return_value=(True, "CID verified", bad_bytes)):
+                ok, msg = restore_and_verify_from_ipfs(bad_cid, dest_path)
+                self.assertFalse(ok)
+                self.assertIn("does not contain a diary manifest", msg)
+
+            # Assert destination file was NOT overwritten
+            with open(dest_path, "rb") as f:
+                current_content = f.read()
+            self.assertEqual(current_content, original_content, "Existing file must be completely untouched on refused restore")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,7 +1,7 @@
 # AUTOPOIESIS-0.1: Self-Contemplating Autopoietic Quine Organisms
 
 > **Project:** `%🖤 Black-Heart` Autonomous Evolution Continuum  
-> **Status:** Ratified & Mathematically Audited (Grok Experiment 1)  
+> **Status:** Hardened & Cryptographically Audited (Grok Experiment 1, Review 11 Cleared)  
 > **Date:** 2026-09-09  
 > **Engines:** [autopoiesis.py](file:///Users/s0fractal/Projects/black-heart/autopoiesis.py), [test_autopoiesis.py](file:///Users/s0fractal/Projects/black-heart/test_autopoiesis.py), [cli.py](file:///Users/s0fractal/Projects/black-heart/cli.py)
 
@@ -231,3 +231,12 @@ python3 organism.pdf --experiments
 ```bash
 python3 organism.pdf --genome
 ```
+
+---
+
+## 8. Security & Integrity Hardening (Review 11 Cleared)
+
+1. **Strict Key Decoupling (N1):** The shareable PDF artifact contains solely the author's public key (`public_key_hex`). The signing secret key is never embedded in PDF manifests or organism dictionaries, residing in a local sidecar (`<file>.key`, mode `0600`) or provided via caller environment.
+2. **Active Genome & Replay Binding (N2):** Both `audit_autopoietic_organism` and `evolve_autopoietic_organism` verify that `current_organism` matches the latest receipt's organism hash and generation, and recompute its cryptographic hash from actual chromosome ASTs, fail-closing upon any decoupled modifications.
+3. **Exact ISO 32000 Xref Offsets (N3):** The Genesis and incremental revision tables calculate exact byte offsets from the bytearray buffer, ensuring `startxref` points directly to `xref\n` and all object offsets point precisely to their respective indirect object headers.
+

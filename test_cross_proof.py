@@ -309,6 +309,74 @@ class TestBilateralZKCrossProof(unittest.TestCase):
             self.assertEqual(proc2.returncode, 0, proc2.stderr)
             self.assertIn("ZERO-KNOWLEDGE BILATERAL SETTLEMENT SOUND & RATIFIED!", proc2.stdout)
 
+    def test_fail_closed_zk_proof_type_downgrade(self):
+        """Contract requiring ChaumPedersenZKP must reject SchnorrZKP even if validly signed (N8)."""
+        from zk_glyph import schnorr_prove
+        from cid import compute_cidv1_raw
+        from crypto import sign_bytes
+        import json
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            challenger_pdf = os.path.join(tmpdir, "chaum_contract.pdf")
+            witness_pdf = os.path.join(tmpdir, "downgraded_witness.pdf")
+
+            from zk_glyph import GENERATOR_H, _scalar_mult, _encode_point, L
+            import hashlib
+            h = hashlib.sha512(bytes.fromhex(self.prover_sk)).digest()
+            scalar = int.from_bytes(h[:32], "little")
+            scalar &= (1 << 254) - 8
+            scalar |= (1 << 254)
+            scalar %= L
+            P2 = _scalar_mult(GENERATOR_H, scalar)
+            P2_hex = _encode_point(P2).hex()
+
+            BilateralZKChallengerPolyglot(
+                title="STRICT CHAUM CONTRACT",
+                statement_id="CLAIM-CP-DOWNGRADE",
+                target_prover_pk_hex=self.prover_pk,
+                proof_type="ChaumPedersenZKP",
+                second_point_hex=P2_hex,
+                author_secret_key_hex=self.challenger_sk
+            ).compile(challenger_pdf)
+
+            # Build a valid Chaum-Pedersen witness first
+            BilateralZKWitnessPolyglot(
+                witness_name="Downgrade Attacker",
+                challenger_pdf_path=challenger_pdf,
+                prover_secret_key_hex=self.prover_sk,
+                witness_author_secret_key_hex=self.prover_sk
+            ).compile(witness_pdf)
+
+            # Manually replace proof in witness manifest with a Schnorr proof
+            with open(witness_pdf, "rb") as f:
+                wd = f.read()
+            with open(challenger_pdf, "rb") as f:
+                cd = f.read()
+            c_cid = compute_cidv1_raw(cd)
+
+            from cross_proof import ZK_WITNESS_MANIFEST_PREFIX
+            p_bytes = ZK_WITNESS_MANIFEST_PREFIX.encode("utf-8")
+            i = wd.rfind(p_bytes)
+            j = wd.index(b"\n", i)
+            wm = json.loads(wd[i + len(p_bytes):j].decode("utf-8"))
+
+            # Replace with Schnorr proof
+            wm["proof"] = schnorr_prove(self.prover_sk, context=f"ZK_CROSS_PROOF:{c_cid}:CLAIM-CP-DOWNGRADE").to_dict()
+            payload = {k: wm[k] for k in ("challenger_cid", "proof", "statement_id", "witness_name")}
+            wm["witness_signature_hex"] = sign_bytes(
+                bytes.fromhex(self.prover_sk),
+                json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+            ).hex()
+
+            new_wd = wd[:i] + p_bytes + json.dumps(wm, ensure_ascii=True).encode("utf-8") + wd[j:]
+            with open(witness_pdf, "wb") as f:
+                f.write(new_wd)
+
+            # Adjudication must fail closed with PermissionError
+            with self.assertRaises(PermissionError) as ctx:
+                adjudicate_zk_bilateral(challenger_pdf, witness_pdf)
+            self.assertIn("Proof type mismatch", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

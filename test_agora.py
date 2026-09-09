@@ -408,5 +408,78 @@ class TestSubprocessAgoraQuine(unittest.TestCase):
                 grow_agora_page(pdf_path, rec)
             self.assertIn("mismatch", str(ctx.exception).lower())
 
+    def test_fail_closed_negative_atp_costs_rejected(self):
+        """Negative stake_atp and atp_burned must fail verification and cannot mint resources (N4)."""
+        engine = AgoraConsensusEngine()
+        sk, pk = generate_keypair()
+        engine.register_citizen(pk, 100)
+
+        # 1. Negative stake_atp proposal must fail signature verification and table_proposal
+        bad_prop = AgoraProposal(
+            proposal_id="PROP_NEG",
+            proposal_type=ProposalType.CONSTITUTIONAL_AMENDMENT.value,
+            title="Negative Stake Attack",
+            statement="Attempt to mint 50 ATP",
+            stake_atp=-50
+        )
+        bad_prop.sign(sk)
+        self.assertFalse(bad_prop.verify_signature())
+        with self.assertRaises(ValueError):
+            engine.table_proposal(bad_prop)
+        self.assertEqual(engine.citizen_balances[pk], 100)
+
+        # 2. Negative atp_burned ballot must fail verification and cast_ballot
+        good_prop = AgoraProposal(
+            proposal_id="PROP_VALID",
+            proposal_type=ProposalType.CONSTITUTIONAL_AMENDMENT.value,
+            title="Valid Proposal",
+            statement="Valid proposal",
+            stake_atp=20
+        )
+        good_prop.sign(sk)
+        engine.table_proposal(good_prop)
+        self.assertEqual(engine.citizen_balances[pk], 80)
+
+        bad_ballot = AgoraBallot(
+            proposal_id="PROP_VALID",
+            voter_public_key=pk,
+            direction="AYE",
+            atp_burned=-50,
+            quadratic_weight=0
+        )
+        bad_ballot.sign(sk)
+        self.assertFalse(bad_ballot.verify_signature())
+        with self.assertRaises(ValueError):
+            engine.cast_ballot(bad_ballot)
+        self.assertEqual(engine.citizen_balances[pk], 80)
+
+    def test_fail_closed_repeated_settlement_idempotent(self):
+        """Repeated evaluate_and_settle calls must be idempotent and never double-refund (N5)."""
+        engine = AgoraConsensusEngine()
+        sk, pk = generate_keypair()
+        engine.register_citizen(pk, 100)
+
+        prop = AgoraProposal(
+            proposal_id="PROP_REPEAT",
+            proposal_type=ProposalType.CONSTITUTIONAL_AMENDMENT.value,
+            title="Repeat Settlement Test",
+            statement="Should be rejected cleanly and refunded exactly once",
+            stake_atp=10
+        )
+        prop.sign(sk)
+        engine.table_proposal(prop)
+        self.assertEqual(engine.citizen_balances[pk], 90)
+
+        # First settlement: rejected without quorum -> refunds stake 10 -> balance 100
+        first_receipt = engine.evaluate_and_settle("PROP_REPEAT")
+        self.assertEqual(first_receipt.status, ProposalStatus.REJECTED.value)
+        self.assertEqual(engine.citizen_balances[pk], 100)
+
+        # Second settlement: already settled -> must return existing receipt and NOT modify balance
+        second_receipt = engine.evaluate_and_settle("PROP_REPEAT")
+        self.assertEqual(second_receipt.status, ProposalStatus.REJECTED.value)
+        self.assertEqual(engine.citizen_balances[pk], 100)  # Must strictly remain 100, not 110!
+
+
 if __name__ == "__main__":
     unittest.main()

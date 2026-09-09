@@ -190,13 +190,12 @@ class AutopoiesisReceipt:
 
 
 def organism_to_dict(org: Organism) -> Dict[str, Any]:
-    """Serializes an Organism to a json-serializable dictionary."""
+    """Serializes an Organism to a json-serializable dictionary (public attributes only)."""
     return {
         "generation": org.generation,
         "parent_hash": org.parent_hash,
         "organism_hash": org.organism_hash or org.compute_hash(),
         "public_key_hex": org.public_key_hex,
-        "secret_key_hex": getattr(org, "secret_key_hex", ""),
         "birth_timestamp_utc": org.birth_timestamp_utc,
         "chromosomes": [c.to_dict() for c in org.chromosomes]
     }
@@ -606,32 +605,12 @@ def init_autopoietic_organism(
     source_dir = os.path.dirname(os.path.abspath(__file__))
     manifest_data = {
         "source_dir": source_dir,
-        "secret_key_hex": sk_hex,
         "current_organism": organism_to_dict(org),
         "receipts": [genesis_receipt.to_dict()],
         "experiments": []
     }
     manifest_line = AUTOPOIESIS_MANIFEST_PREFIX + json.dumps(manifest_data, separators=(",", ":"), ensure_ascii=True) + "\n"
     runner_script = _build_autopoiesis_runner_script()
-
-    # ISO 32000 PDF Body
-    lines = [
-        b"%PDF-1.4",
-        b"%\xe2\xe3\xcf\xd3",
-        b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj",
-        b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj",
-        b"3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >> endobj",
-        f"4 0 obj << /Length {length} >>\nstream\n".encode("latin1") + stream_bytes + b"\nendstream\nendobj",
-        b"5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >> endobj",
-        b"6 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj"
-    ]
-    body = b"\n".join(lines) + b"\n"
-    trailer = (
-        b"xref\n0 7\n0000000000 65535 f \n"
-        b"0000000015 00000 n \n0000000068 00000 n \n0000000125 00000 n \n"
-        b"0000000250 00000 n \n0000000750 00000 n \n0000000850 00000 n \n"
-        b"trailer << /Size 7 /Root 1 0 R >>\nstartxref\n950\n%%EOF\n"
-    )
 
     header_text = (
         f"#!{sys.executable}\n"
@@ -642,18 +621,57 @@ def init_autopoietic_organism(
         "r'''\n"
     ).encode("latin1")
 
-    polyglot_bytes = (
-        header_text
-        + body
-        + trailer
-        + b"\n'''\n"
-        + runner_script.encode("latin1")
-        + b"\n"
-        + manifest_line.encode("utf-8")
-    )
+    out = bytearray(header_text)
+    pdf_header = b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n"
+    out.extend(pdf_header)
+
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>",
+        f"<< /Length {length} >>\nstream\n".encode("latin1") + stream_bytes + b"\nendstream",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+
+    offsets = [0]
+    for i, obj in enumerate(objects, 1):
+        offsets.append(len(out))
+        out.extend(f"{i} 0 obj\n".encode("latin1"))
+        out.extend(obj)
+        out.extend(b"\nendobj\n")
+
+    xref_offset = len(out)
+    out.extend(f"xref\n0 {len(objects) + 1}\n".encode("latin1"))
+    out.extend(b"0000000000 65535 f \n")
+    for off in offsets[1:]:
+        out.extend(f"{off:010d} 00000 n \n".encode("latin1"))
+
+    trailer = (
+        f"trailer << /Size {len(objects) + 1} /Root 1 0 R >>\n"
+        f"startxref\n{xref_offset}\n%%EOF\n"
+    ).encode("latin1")
+    out.extend(trailer)
+    out.extend(b"\n'''\n")
+    out.extend(runner_script.encode("latin1"))
+    out.extend(b"\n")
+    out.extend(manifest_line.encode("utf-8"))
+
+    polyglot_bytes = bytes(out)
 
     with open(pdf_path, "wb") as f:
         f.write(polyglot_bytes)
+
+    # N1 Fix: Save private key strictly in local sidecar file with restricted permissions (never in PDF)
+    key_path = pdf_path + ".key"
+    try:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+        mode = 0o600
+        fd = os.open(key_path, flags, mode)
+        with os.fdopen(fd, "w") as kf:
+            kf.write(sk_hex.strip() + "\n")
+    except Exception:
+        pass
 
     return org, genesis_receipt
 
@@ -672,8 +690,13 @@ def evolve_autopoietic_organism(
     its empirical ledger, signs a new receipt, and performs an in-place ISO 32000
     incremental update appending a new generation revision page to itself.
     """
-    if not os.path.exists(pdf_path):
-        raise FileNotFoundError(f"Polyglot organism not found: {pdf_path}")
+    # N2 Fix: Audit current document before evolving to verify genome and receipt chain integrity
+    try:
+        is_valid, audit_msg = audit_autopoietic_organism(pdf_path)
+        if not is_valid:
+            raise ValueError(f"Cannot evolve tampered organism: {audit_msg}")
+    except Exception as e:
+        raise ValueError(f"Cannot evolve tampered organism: {e}")
 
     with open(pdf_path, "rb") as f:
         content = f.read()
@@ -687,9 +710,20 @@ def evolve_autopoietic_organism(
     raw_manifest = content[idx + len(prefix):end_idx if end_idx != -1 else len(content)]
     manifest = json.loads(raw_manifest.decode("utf-8"))
 
-    sk_hex = secret_key_hex or manifest.get("secret_key_hex")
+    # N1 Fix: Read secret key from explicit param, local sidecar keyfile, or environment (never from manifest)
+    sk_hex = secret_key_hex
     if not sk_hex:
-        raise ValueError("No Ed25519 secret key available to sign generational transition")
+        key_path = pdf_path + ".key"
+        if os.path.exists(key_path):
+            try:
+                with open(key_path, "r") as kf:
+                    sk_hex = kf.read().strip()
+            except Exception:
+                pass
+    if not sk_hex:
+        sk_hex = os.environ.get("BLACK_HEART_SECRET_KEY")
+    if not sk_hex:
+        raise ValueError("No Ed25519 secret key available to sign generational transition (provide secret_key_hex, <file>.key, or BLACK_HEART_SECRET_KEY)")
 
     current_org = organism_from_dict(manifest["current_organism"], sk_hex or "")
     receipts: List[AutopoiesisReceipt] = [AutopoiesisReceipt.from_dict(r) for r in manifest["receipts"]]
@@ -782,10 +816,9 @@ def evolve_autopoietic_organism(
     # Render Visual Page Stream
     stream_bytes = render_autopoiesis_page_stream(succ, next_receipt, exp_log.records[-12:])
 
-    # Prepare updated manifest data
+    # Prepare updated manifest data (N1 Fix: never store secret_key_hex in manifest)
     new_manifest_data = {
         "source_dir": manifest.get("source_dir", os.path.dirname(os.path.abspath(__file__))),
-        "secret_key_hex": sk_hex,
         "current_organism": organism_to_dict(succ),
         "receipts": [r.to_dict() for r in receipts],
         "experiments": exp_log.to_list()
@@ -913,6 +946,34 @@ def audit_autopoietic_organism(pdf_path: str) -> Tuple[bool, str]:
     receipts = [AutopoiesisReceipt.from_dict(r) for r in receipts_data]
     exp_log = ExperimentLog.from_list(manifest.get("experiments", []))
     evaluator = FrozenEvaluator()
+
+    # N2 Fix: Verify that manifest['current_organism'] is strictly bound to history and recomputed
+    curr_org_dict = manifest.get("current_organism")
+    if not curr_org_dict:
+        raise ValueError("Missing current_organism in manifest")
+    curr_org = organism_from_dict(curr_org_dict)
+
+    recomputed_org_hash = curr_org.compute_hash()
+    if curr_org.organism_hash != recomputed_org_hash:
+        raise ValueError(
+            f"Active genome tampering detected: current_organism declared hash '{curr_org.organism_hash}' "
+            f"does not match recomputed hash '{recomputed_org_hash}'"
+        )
+
+    last_receipt = receipts[-1]
+    if curr_org.organism_hash != last_receipt.organism_hash:
+        raise ValueError(
+            f"Active genome uncoupled from receipt chain: current_organism hash '{curr_org.organism_hash}' "
+            f"!= latest receipt organism_hash '{last_receipt.organism_hash}'"
+        )
+    if curr_org.generation != last_receipt.generation:
+        raise ValueError(
+            f"Active genome generation #{curr_org.generation} != latest receipt #{last_receipt.generation}"
+        )
+    if curr_org.parent_hash != last_receipt.parent_hash:
+        raise ValueError("Active genome parent_hash mismatch with latest receipt")
+    if curr_org.public_key_hex != last_receipt.public_key_hex:
+        raise ValueError("Active genome public_key_hex mismatch with latest receipt")
 
     # Verify Genesis
     gen0 = receipts[0]

@@ -80,6 +80,7 @@ class AgoraProposal:
     stake_atp: int = 100
     timestamp_utc: str = ""
     signature_hex: str = ""
+    status: str = ProposalStatus.PENDING.value
 
     def canonical_bytes_for_signing(self) -> bytes:
         payload = (
@@ -99,6 +100,9 @@ class AgoraProposal:
         if not self.author_public_key or not self.signature_hex:
             return False
         if not is_valid_public_key(self.author_public_key):
+            return False
+        # Domain validation: stake_atp must be a strictly positive integer
+        if not isinstance(self.stake_atp, int) or isinstance(self.stake_atp, bool) or self.stake_atp <= 0:
             return False
         try:
             pk_bytes = bytes.fromhex(self.author_public_key)
@@ -136,6 +140,7 @@ class AgoraProposal:
             stake_atp=int(d.get("stake_atp", 100)),
             timestamp_utc=str(d.get("timestamp_utc", "")),
             signature_hex=str(d.get("signature_hex", "")),
+            status=str(d.get("status", ProposalStatus.PENDING.value)),
         )
 
 @dataclass
@@ -167,8 +172,11 @@ class AgoraBallot:
             return False
         if not is_valid_public_key(self.voter_public_key):
             return False
+        # Domain validation: atp_burned must be a strictly positive integer
+        if not isinstance(self.atp_burned, int) or isinstance(self.atp_burned, bool) or self.atp_burned <= 0:
+            return False
         # Invariant: quadratic_weight must strictly equal floor(sqrt(atp_burned))
-        expected_weight = int(math.isqrt(max(0, self.atp_burned)))
+        expected_weight = int(math.isqrt(self.atp_burned))
         if self.quadratic_weight != expected_weight:
             return False
         try:
@@ -385,15 +393,22 @@ class AgoraConsensusEngine:
         self.ballots: Dict[str, List[AgoraBallot]] = {}  # proposal_id -> list of ballots
         self.settlement_history: List[ConsensusSettlementReceipt] = []
 
-    def register_citizen(self, public_key_hex: str, initial_atp: int) -> None:
+    def register_citizen(self, public_key_hex: str, initial_atp: int = 100) -> None:
+        """Registers a quine citizen into the Agora with an initial ATP endowment."""
         if not is_valid_public_key(public_key_hex):
             raise ValueError(f"Invalid Ed25519 citizen public key: {public_key_hex}")
-        self.citizen_balances[public_key_hex] = max(0, initial_atp)
+        if not isinstance(initial_atp, int) or isinstance(initial_atp, bool) or initial_atp < 0:
+            raise ValueError("initial_atp must be a non-negative integer")
+        self.citizen_balances[public_key_hex] = initial_atp
 
     def table_proposal(self, proposal: AgoraProposal) -> str:
         """Tables a new proposal before the assembly, locking author's ATP stake."""
+        if not isinstance(proposal.stake_atp, int) or isinstance(proposal.stake_atp, bool) or proposal.stake_atp <= 0:
+            raise ValueError("Proposal stake_atp must be a strictly positive integer")
         if not proposal.verify_signature():
             raise ValueError("Proposal signature is invalid or author key is malformed")
+        if proposal.proposal_id in self.proposals:
+            raise ValueError(f"Proposal {proposal.proposal_id} already exists")
         author = proposal.author_public_key
         balance = self.citizen_balances.get(author, 0)
         if balance < proposal.stake_atp:
@@ -401,6 +416,7 @@ class AgoraConsensusEngine:
 
         # Deduct stake
         self.citizen_balances[author] -= proposal.stake_atp
+        proposal.status = ProposalStatus.PENDING.value
         self.proposals[proposal.proposal_id] = proposal
         self.ballots[proposal.proposal_id] = []
         return proposal.proposal_id
@@ -410,10 +426,14 @@ class AgoraConsensusEngine:
         Casts a quadratic ballot. Deducts atp_burned from voter's balance.
         Returns the effective quadratic weight.
         """
+        if not isinstance(ballot.atp_burned, int) or isinstance(ballot.atp_burned, bool) or ballot.atp_burned <= 0:
+            raise ValueError("Ballot atp_burned must be a strictly positive integer")
         if not ballot.verify_signature():
             raise ValueError("Ballot signature is invalid or weight violates sqrt(atp)")
         if ballot.proposal_id not in self.proposals:
             raise ValueError(f"Proposal {ballot.proposal_id} does not exist")
+        if self.proposals[ballot.proposal_id].status != ProposalStatus.PENDING.value:
+            raise ValueError(f"Proposal {ballot.proposal_id} is already settled; cannot cast ballots")
 
         voter = ballot.voter_public_key
         balance = self.citizen_balances.get(voter, 0)
@@ -438,6 +458,13 @@ class AgoraConsensusEngine:
             raise ValueError(f"Proposal {proposal_id} not found")
 
         proposal = self.proposals[proposal_id]
+        if proposal.status != ProposalStatus.PENDING.value:
+            # Idempotency guard: return previously minted settlement receipt without re-applying balance mutations
+            for past in self.settlement_history:
+                if past.proposal.proposal_id == proposal_id:
+                    return past
+            raise ValueError(f"Proposal {proposal_id} is already settled with status {proposal.status}")
+
         votes = self.ballots.get(proposal_id, [])
 
         now_utc = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -466,6 +493,8 @@ class AgoraConsensusEngine:
                     proof_of_refutation=msg,
                     timestamp_utc=now_utc
                 )
+
+                proposal.status = ProposalStatus.SLASHED.value
 
                 receipt = ConsensusSettlementReceipt(
                     generation=gen,
@@ -507,12 +536,14 @@ class AgoraConsensusEngine:
 
         if quorum_reached and supermajority_reached:
             status = ProposalStatus.RATIFIED.value
+            proposal.status = status
             # Author receives stake back + reward from community pool
             self.citizen_balances[proposal.author_public_key] = (
                 self.citizen_balances.get(proposal.author_public_key, 0) + proposal.stake_atp + 50
             )
         else:
             status = ProposalStatus.REJECTED.value
+            proposal.status = status
             # Return stake on clean rejection
             self.citizen_balances[proposal.author_public_key] = (
                 self.citizen_balances.get(proposal.author_public_key, 0) + proposal.stake_atp

@@ -583,16 +583,38 @@ def cmd_verify(filepath):
         print(f"[FAIL] Replay settled term mismatch: expected {rec.settled_term}, got {res.term}")
         sys.exit(1)
 
-    if witness and witness.period != rec.cycle_period:
-        print(f"[FAIL] Cycle period mismatch: expected {rec.cycle_period}, got {witness.period}")
+    if res.atp_spent != rec.atp_spent:
+        print(f"[FAIL] Replay ATP spent mismatch: expected {rec.atp_spent}, got {res.atp_spent}")
         sys.exit(1)
 
-    print("\033[1;32m[✓ SUCCESS] GÖDELIAN PARADOX CRYPTOGRAPHICALLY RESOLVED\033[0m")
+    if witness:
+        if rec.cycle_period != witness.period:
+            print(f"[FAIL] Cycle period mismatch: expected {rec.cycle_period}, got {witness.period}")
+            sys.exit(1)
+        if rec.witness_hash != witness.witness_hash:
+            print(f"[FAIL] Replay witness hash mismatch: expected {rec.witness_hash}, got {witness.witness_hash}")
+            sys.exit(1)
+    else:
+        expected_w_hash = hashlib.sha256(str(res.term).encode("utf-8")).hexdigest()
+        if rec.cycle_period != 0:
+            print(f"[FAIL] Expected zero cycle period for settled term, got {rec.cycle_period}")
+            sys.exit(1)
+        if rec.witness_hash != expected_w_hash:
+            print(f"[FAIL] Replay witness hash mismatch: expected {expected_w_hash}, got {rec.witness_hash}")
+            sys.exit(1)
+
+    expected_doc_root = hashlib.sha256(f"GOEDEL_DOC:{rec.sentence_id}:{rec.initial_term}".encode("utf-8")).hexdigest()
+    if rec.document_merkle_root != expected_doc_root:
+        print(f"[FAIL] Document merkle root mismatch: expected {expected_doc_root}, got {rec.document_merkle_root}")
+        sys.exit(1)
+
+    print("\033[1;32m[✓ SUCCESS] GÖDELIAN PARADOX CRYPTOGRAPHICALLY RESOLVED: REPLAY VERIFIED & SOUND\033[0m")
     print(f"  Sentence:          {rec.initial_term}")
     print(f"  Settled State:     {grade.value} (Limit-Cycle Period: {rec.cycle_period})")
     print(f"  Attractor Witness: {rec.witness_hash[:32]}...")
     print(f"  Receipt Anchor:    {rec.receipt_hash[:32]}...")
-    print("  Epistemic Status:  PROVEN UNPROVABLE WITHIN CLASSICAL LIMITS (Q.E.D.)\n")
+    print(f"  Truth Grade:       {rec.truth_grade}")
+    print("  Epistemic Status:  ATTRACTOR CYCLE DETECTED / PROVEN UNPROVABLE WITHIN CLASSICAL LIMITS (Q.E.D.)\n")
 
 def main():
     parser = argparse.ArgumentParser(description="Gödelian Diagonal Polyglot Runner")

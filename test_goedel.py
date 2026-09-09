@@ -241,5 +241,37 @@ class TestGoedelIncompleteness(unittest.TestCase):
             ok, msg, _ = audit_goedel_polyglot(forged)
             self.assertFalse(ok, "Audit must reject fabricated settlement fields even if signed")
 
+    def test_n9_embedded_verify_rejects_tampered_witness_hash(self):
+        """N9 remediation: Embedded --verify must reject signed fabricated witness_hash."""
+        import subprocess
+        project_root = os.path.abspath(os.path.dirname(__file__))
+        sub_env = {**os.environ, "PYTHONPATH": project_root}
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = os.path.join(tmpdir, "goedel_n9.pdf")
+            gr = construct_goedel_polyglot(pdf_path, self.sk_hex, sentence_expr="🔁 🤍")
+            with open(pdf_path, "rb") as f:
+                gb = f.read()
+
+            # Fabricate witness_hash and sign with valid key
+            gr.witness_hash = "0" * 64
+            gr.sign(self.sk_hex)
+
+            from goedel import GOEDEL_MANIFEST_PREFIX
+            prefix = GOEDEL_MANIFEST_PREFIX.encode("utf-8")
+            start = gb.rfind(prefix)
+            end = gb.index(b"\n", start)
+            forged = gb[:start] + prefix + json.dumps(gr.to_dict()).encode("utf-8") + gb[end:]
+
+            with open(pdf_path, "wb") as f:
+                f.write(forged)
+
+            # Embedded --verify execution MUST fail with non-zero exit code
+            res = subprocess.run([sys.executable, pdf_path, "--verify"], capture_output=True, text=True, env=sub_env)
+            self.assertNotEqual(res.returncode, 0, "Embedded --verify must fail on tampered witness hash")
+            self.assertIn("[FAIL]", res.stdout)
+            self.assertIn("witness hash mismatch", res.stdout.lower())
+
+
 if __name__ == "__main__":
     unittest.main()

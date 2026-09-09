@@ -96,15 +96,23 @@ class OntogeneticProofReceipt:
     def is_attested(self) -> bool:
         return bool(self.public_key_hex and self.signature_hex)
 
-    def verify(self) -> bool:
+    def verify_integrity(self) -> bool:
+        """Verifies structural fields, generation index, and canonical hash integrity."""
         if self.generation < 0:
+            return False
+        if len(self.weisfeiler_lehman_digest) != 64:
+            return False
+        expected_hash = self.compute_hash()
+        if self.receipt_hash and self.receipt_hash != expected_hash:
+            return False
+        return True
+
+    def verify(self) -> bool:
+        if not self.verify_integrity():
             return False
         if not self.is_attested():
             return False
         if not is_valid_public_key(self.public_key_hex):
-            return False
-        expected_hash = self.compute_hash()
-        if self.receipt_hash and self.receipt_hash != expected_hash:
             return False
         try:
             pk_bytes = bytes.fromhex(self.public_key_hex)
@@ -621,7 +629,9 @@ def grow_ontogenetic_quine_in_pdf(
             raise ValueError(f"Ontogenetic chain gap at index {i}: generation #{r.generation}")
         if r.prev_receipt_hash != prev_h:
             raise ValueError(f"Ontogenetic hash broken at generation #{r.generation}")
-        if not r.verify():
+        if not r.verify_integrity():
+            raise ValueError(f"Ontogenetic receipt #{r.generation} failed integrity verification")
+        if r.is_attested() and not r.verify():
             raise ValueError(f"Ontogenetic receipt #{r.generation} failed cryptographic verification")
         prev_h = r.receipt_hash
 

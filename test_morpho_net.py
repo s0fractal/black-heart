@@ -315,6 +315,43 @@ class TestMorphogeneticProofNet(unittest.TestCase):
             self.assertFalse(child.is_attested(), "R6: Child must be unattested")
             self.assertFalse(child.verify(), "R6: verify() must return False for unattested child")
 
+    def test_n10_unsigned_step_does_not_dead_end_subsequent_growth(self):
+        """N10 remediation: An unsigned growth step must not dead-end subsequent growth."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = os.path.join(tmpdir, "n10_organism.pdf")
+            arch = TuringArchetype.SPOTS
+            field = MorphogeneticField(width=24, height=24, F=arch.F, k=arch.k, Du=arch.Du, Dv=arch.Dv)
+            field.seed_from_hash("33" * 32)
+
+            genesis = OntogeneticProofReceipt(
+                generation=0,
+                timestamp_utc="2026-09-09T00:00:00Z",
+                archetype=arch.key,
+                pde_steps=0,
+                initial_nodes=0,
+                active_pairs=0,
+                reduced_steps=0,
+                atp_burned=0,
+                settled=True,
+                weisfeiler_lehman_digest="c" * 64,
+                prev_receipt_hash="0" * 64,
+                public_key_hex=self.pk_hex
+            )
+            genesis.sign(self.sk_hex)
+            compiler = OntogeneticPolyglotCompiler(archetype=arch)
+            compiler.receipts = [genesis]
+            compiler.compile(root, field)
+
+            # Gen 1: Unsigned growth step
+            gen1 = grow_ontogenetic_quine_in_pdf(root, pde_steps=1, atp_budget=10)
+            self.assertFalse(gen1.is_attested())
+
+            # Gen 2: Subsequent growth step with key must succeed cleanly without ValueError
+            gen2 = grow_ontogenetic_quine_in_pdf(root, pde_steps=1, atp_budget=10, secret_key_hex=self.sk_hex)
+            self.assertEqual(gen2.generation, 2)
+            self.assertTrue(gen2.is_attested())
+            self.assertTrue(gen2.verify())
+
+
 if __name__ == "__main__":
     unittest.main()
-

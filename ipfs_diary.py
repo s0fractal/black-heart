@@ -97,12 +97,9 @@ class OntogeneticDiaryReceipt:
         self.signature_hex = sig.hex()
         self.receipt_hash = self.compute_hash()
 
-    def verify(self) -> bool:
+    def verify_integrity(self) -> bool:
+        """Verifies content-addressing, thought content hash, and structural hash integrity."""
         if self.generation < 0:
-            return False
-        if not self.is_attested():
-            return False
-        if not is_valid_public_key(self.public_key_hex):
             return False
         if self.thought_hash != self.compute_thought_hash():
             return False
@@ -111,6 +108,15 @@ class OntogeneticDiaryReceipt:
                 return False
         expected_hash = self.compute_hash()
         if self.receipt_hash and self.receipt_hash != expected_hash:
+            return False
+        return True
+
+    def verify(self) -> bool:
+        if not self.verify_integrity():
+            return False
+        if not self.is_attested():
+            return False
+        if not is_valid_public_key(self.public_key_hex):
             return False
         try:
             pk_bytes = bytes.fromhex(self.public_key_hex)
@@ -814,9 +820,6 @@ def restore_and_verify_from_ipfs(
     if not ok or not data:
         return False, msg
 
-    with open(destination_path, "wb") as f:
-        f.write(data)
-
     prefix = DIARY_MANIFEST_PREFIX.encode("utf-8")
     idx = data.rfind(prefix)
     if idx == -1:
@@ -830,8 +833,14 @@ def restore_and_verify_from_ipfs(
             return False, f"Lineage gap at session #{rec.generation}"
         if rec.receipt_hash != rec.compute_hash():
             return False, f"Hash mismatch at session #{rec.generation}"
+        if not rec.verify_integrity():
+            return False, f"Integrity check failed at session #{rec.generation}"
         if rec.is_attested() and not rec.verify():
             return False, f"Invalid digital signature at session #{rec.generation}"
+
+    # Only write to destination AFTER full verification passes (N7 fix: prevent clobbering existing files)
+    with open(destination_path, "wb") as f:
+        f.write(data)
 
     return True, f"Successfully restored and audited {len(manifest)} diary generations from IPFS"
 
@@ -1017,6 +1026,8 @@ def audit_diary_dag(filepath: str) -> Dict[str, Any]:
         rec = OntogeneticDiaryReceipt.from_dict(md)
         if rec.generation != i:
             raise ValueError(f"Generation sequence gap at index {i}: got #{rec.generation}")
+        if not rec.verify_integrity():
+            raise ValueError(f"Thought content integrity verification failed at generation #{rec.generation}")
         if rec.receipt_hash != rec.compute_hash():
             raise ValueError(f"Hash mismatch at generation #{rec.generation}")
         if rec.is_attested() and not rec.verify():

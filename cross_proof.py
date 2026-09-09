@@ -1288,8 +1288,16 @@ def adjudicate_zk_bilateral(
 
     # 4. Verify Zero-Knowledge Proof
     expected_context = f"ZK_CROSS_PROOF:{cid_c}:{c_manifest['statement_id']}"
-    proof_dict = w_manifest["proof"]
+    req_proof_type = c_manifest.get("proof_type", "SchnorrZKP")
+    proof_dict = w_manifest.get("proof", {})
     proof_type = proof_dict.get("type")
+
+    # Fail-closed: witness must strictly provide the exact proof type requested by contract
+    if proof_type != req_proof_type:
+        raise PermissionError(
+            f"Proof type mismatch: contract requires '{req_proof_type}', "
+            f"but witness provided '{proof_type}'"
+        )
 
     if proof_type == "SchnorrZKP":
         proof = SchnorrProof.from_dict(proof_dict)
@@ -1310,8 +1318,13 @@ def adjudicate_zk_bilateral(
             raise PermissionError("Witness Chaum-Pedersen proof context does not match expected bilateral context!")
         if proof.point_P1_hex.lower() != c_manifest["target_prover_pk_hex"].lower():
             raise PermissionError("Prover point P1 mismatch with target public key!")
-        if c_manifest.get("second_point_hex") and proof.point_P2_hex.lower() != c_manifest["second_point_hex"].lower():
-            raise PermissionError("Prover point P2 mismatch with expected second generator point!")
+        expected_p2 = c_manifest.get("second_point_hex")
+        if expected_p2:
+            if not proof.point_P2_hex or proof.point_P2_hex.lower() != expected_p2.lower():
+                raise PermissionError(
+                    f"Prover point P2 mismatch: contract requires '{expected_p2}', "
+                    f"witness provided '{proof.point_P2_hex}'"
+                )
         if not chaum_pedersen_verify(proof):
             raise PermissionError("Chaum-Pedersen discrete log equality proof verification failed!")
         proof_fingerprint = f"{proof.commitment_R1_hex}:{proof.commitment_R2_hex}:{proof.response_z_hex}"

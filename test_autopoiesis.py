@@ -251,6 +251,90 @@ class TestAutopoiesisEngine(unittest.TestCase):
         self.assertEqual(res_gen.returncode, 0, f"Error: {res_gen.stderr}")
         self.assertIn("ACTIVE COMBINATOR GENOME", res_gen.stdout)
 
+    def test_08_n1_no_private_key_in_pdf(self):
+        """N1 remediation: Secret key must never be stored inside the shareable PDF artifact."""
+        sk, pk = generate_keypair()
+        init_autopoietic_organism(self.pdf_path, sk)
+
+        with open(self.pdf_path, "rb") as f:
+            data = f.read()
+
+        p = AUTOPOIESIS_MANIFEST_PREFIX.encode("utf-8")
+        i = data.rfind(p)
+        j = data.index(b"\n", i)
+        m = json.loads(data[i + len(p):j].decode("utf-8"))
+
+        # Secret key must NOT exist anywhere in manifest
+        self.assertNotIn("secret_key_hex", m, "N1: secret_key_hex must not be in manifest root")
+        self.assertNotIn("secret_key_hex", m["current_organism"], "N1: secret_key_hex must not be in current_organism")
+        self.assertNotIn(sk.encode("latin1"), data, "N1: Raw secret key bytes must not appear in PDF artifact")
+
+        # Sidecar file must exist with restricted permissions
+        key_path = self.pdf_path + ".key"
+        self.assertTrue(os.path.exists(key_path))
+        with open(key_path, "r") as kf:
+            saved_key = kf.read().strip()
+        self.assertEqual(saved_key, sk)
+
+    def test_09_n2_tampered_genome_fails_audit(self):
+        """N2 remediation: Tampering with active genome in current_organism must strictly fail audit."""
+        init_autopoietic_organism(self.pdf_path)
+
+        with open(self.pdf_path, "rb") as f:
+            data = f.read()
+
+        p = AUTOPOIESIS_MANIFEST_PREFIX.encode("utf-8")
+        i = data.rfind(p)
+        j = data.index(b"\n", i)
+        m = json.loads(data[i + len(p):j].decode("utf-8"))
+
+        # Tamper with active chromosome in current_organism without updating receipts
+        m["current_organism"]["chromosomes"][0]["expression"] = "🤍 CompromisedCore"
+        m["current_organism"]["chromosomes"][0]["expected_normal_form"] = "CompromisedCore"
+
+        tampered_data = data[:i] + p + json.dumps(m, ensure_ascii=True).encode("utf-8") + data[j:]
+        with open(self.pdf_path, "wb") as f:
+            f.write(tampered_data)
+
+        # audit_autopoietic_organism must fail closed
+        with self.assertRaises(ValueError) as ctx:
+            audit_autopoietic_organism(self.pdf_path)
+        self.assertIn("Active genome tampering detected", str(ctx.exception))
+
+        # evolve_autopoietic_organism must also fail closed
+        with self.assertRaises(ValueError) as ctx2:
+            evolve_autopoietic_organism(self.pdf_path)
+        self.assertIn("Cannot evolve tampered organism", str(ctx2.exception))
+
+    def test_10_n3_exact_xref_offsets(self):
+        """N3 remediation: startxref must point to actual xref and object offsets must be exact."""
+        import re
+        init_autopoietic_organism(self.pdf_path)
+
+        with open(self.pdf_path, "rb") as f:
+            data = f.read()
+
+        # Extract declared startxref offset
+        match = re.findall(rb"startxref\s+(\d+)", data)
+        self.assertTrue(bool(match))
+        pos = int(match[0])
+
+        # Declared offset MUST point to b"xref\n"
+        self.assertEqual(data[pos:pos+5], b"xref\n", f"N3: startxref at {pos} does not point to xref")
+
+        # Check object offsets declared in xref table
+        xref_end = data.find(b"trailer", pos)
+        xref_block = data[pos:xref_end].decode("latin1")
+        lines = [l.strip() for l in xref_block.split("\n") if l.strip()]
+
+        for line in lines[2:]:  # skip 'xref', '0 7'
+            parts = line.split()
+            if len(parts) >= 3 and parts[2] == "n":
+                off = int(parts[0])
+                # Offset must point to "X 0 obj"
+                target = data[off:off+10]
+                self.assertIn(b"0 obj", target, f"N3: Offset {off} points to {target}, expected object header")
+
 
 if __name__ == "__main__":
     unittest.main()
