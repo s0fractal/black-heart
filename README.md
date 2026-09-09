@@ -515,9 +515,57 @@ python3 cli.py mycelium audition organism.pdf warrant.json
 
 ---
 
-## 22. Comprehensive Test Suite
+## 22. Living Colony Ecosystem & Petri Dish (`colony.py`)
 
-Run all **125 unit tests** across all **15 engines** with a single command:
+Synthesizing all 15 previous engines into a unified artificial life runtime, the **Living Colony Ecosystem** simulates closed-loop macro-evolution in a Petri dish:
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│               PETRI DISH: LIVING COLONY ECOSYSTEM (%🖤)               │
+│                                                                        │
+│   [Solar Influx] ──> Substrate ATP Pool (Thermodynamic Boundary)       │
+│                               │                                        │
+│          ┌────────────────────┴────────────────────┐                   │
+│          ▼                                         ▼                   │
+│   Active Organisms                          Dormant Spores             │
+│   - Basal metabolic burn                    - Zero-ATP checkpoints     │
+│   - Warrant audition & adoption             - Cryptographic suspended  │
+│   - Oracle hypothesis exploration             thunk state              │
+│   - Dialectical sexual recombination        - Revival upon solar bloom │
+│          │                                         │                   │
+│          └────────────────────┬────────────────────┘                   │
+│                               ▼                                        │
+│             Living Polyglot Ledger Chronicles                          │
+│             - Merkle-linked Epoch Settlements                          │
+│             - Standalone Executable Colony PDF Polyglot                │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+* **Neuro-Symbolic Oracle (`🎭`):** Formal implementation of the Neutral Term Oracle from [`CONTINUUM.md`](file:///Users/s0fractal/Projects/black-heart/CONTINUUM.md). Generates candidate rewrite hypotheses tested against private frozen test fixtures. Beneficial mutations earn substrate ATP bounties and are published as warrants to the epistemic mycelium.
+* **Metabolic Boundary & Spores:** Organisms consume basal ATP proportional to chromosome size. Energy-exhausted organisms transition to `DORMANT_SPORE` status as cryptographically sealed suspended thunks, preserving identity until substrate ATP abundance enables revival.
+* **Dialectical Recombination:** Wealthy organisms ($ATP \ge 300$) engage in sexual reproduction via [`symbiosis.py`](file:///Users/s0fractal/Projects/black-heart/symbiosis.py), yielding offspring bearing $B_n$ Artin braid group knot lineages.
+* **Colony Polyglot Compiler:** Compiles the entire colony into an executable ISO 32000 PDF with active roster HUD, substrate gauges, and standalone offline execution CLI.
+
+```bash
+# Initialize a new colony:
+python3 cli.py colony init -n "Primeval Biome" -o 3 -a 5000
+
+# Inspect telemetry and mycelium health:
+python3 cli.py colony status
+
+# Step simulation forward by N epochs:
+python3 cli.py colony step -e 5 --solar 200
+
+# Compile into standalone executable PDF polyglot:
+python3 cli.py colony compile -o primeval_colony.pdf
+python3 primeval_colony.pdf --status
+```
+
+---
+
+## 23. Comprehensive Test Suite
+
+Run all **132 unit tests** across all **16 engines** with a single command:
 ```bash
 # Unified test runner:
 python3 test_all.py
@@ -541,12 +589,14 @@ python3 test_quantum.py        # 5 tests: Topological quantum computing, Fibonac
 python3 test_morphogenesis.py  # 7 tests: Gray-Scott PDEs, Turing bifurcation, marching squares
 python3 test_metamorphosis.py  # 7 tests: Program self-contemplation, frozen evaluator, transition replay
 python3 test_mycelium.py       # 7 tests: Epistemic mycelium, warrants, divergence records, immune evaluation
+python3 test_colony.py         # 7 tests: Living colony ecosystem, neuro-symbolic oracle, spore dormancy, ledger settlements
 ```
 
 ---
 
-## 23. Specifications & Theory
+## 24. Specifications & Theory
 
+* [COLONY.md](file:///Users/s0fractal/Projects/black-heart/COLONY.md) — The Living Colony Ecosystem, Neuro-Symbolic Petri Dish & Macro-Evolutionary Dynamics.
 * [MYCELIUM.md](file:///Users/s0fractal/Projects/black-heart/MYCELIUM.md) — Collective Metamorphosis, Warrant Mesh & The Preservation of Phenotypic Diversity.
 * [CONTINUUM.md](file:///Users/s0fractal/Projects/black-heart/CONTINUUM.md) — Suspended Thunks, Neutral Oracles & Merkle-Stream Continuity.
 * [MONAD.md](file:///Users/s0fractal/Projects/black-heart/MONAD.md) — The Literate Polyglot Monad, Dual Trees & Proof-Bearing Legal Contracts.
@@ -556,8 +606,8 @@ python3 test_mycelium.py       # 7 tests: Epistemic mycelium, warrants, divergen
 
 ---
 
-## 24. License
+## 25. License
 
-* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, `interaction.py`, `organism.py`, `cross_proof.py`, `vault.py`, `continuum.py`, `zk_glyph.py`, `mesh.py`, `symbiosis.py`, `quantum.py`, `morphogenesis.py`, `metamorphosis.py`, `mycelium.py`, `cli.py`, tests):** AGPL-3.0-only
+* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, `interaction.py`, `organism.py`, `cross_proof.py`, `vault.py`, `continuum.py`, `zk_glyph.py`, `mesh.py`, `symbiosis.py`, `quantum.py`, `morphogenesis.py`, `metamorphosis.py`, `mycelium.py`, `colony.py`, `cli.py`, tests):** AGPL-3.0-only
 * **Texts & Polyglot artifacts:** CC BY-SA 4.0
 

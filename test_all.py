@@ -34,6 +34,7 @@ SUITES = [
     ("Turing Morphogenesis & Phenotypes", "test_morphogenesis"),
     ("Autonomous Form Metamorphosis", "test_metamorphosis"),
     ("Epistemic Mycelium & Warrant Mesh", "test_mycelium"),
+    ("Living Colony Ecosystem", "test_colony"),
 ]
 
 def run_all_tests() -> bool:

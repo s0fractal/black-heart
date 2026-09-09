@@ -539,6 +539,70 @@ def cmd_mycelium(args):
                 registry.save_to_file(reg_path)
 
 
+def cmd_colony(args):
+    """Colony operations: init, step, status, compile."""
+    from colony import Colony, ColonyPolyglotCompiler
+    file_path = args.file or "colony.json"
+
+    if args.action == "init":
+        colony = Colony.create_genesis_colony(
+            name=args.name,
+            initial_organisms=args.organisms,
+            initial_substrate_atp=args.atp
+        )
+        colony.save_to_file(file_path)
+        print("\033[1;36m===================================================\033[0m")
+        print(f"  %🖤 COLONY INITIALIZED: {colony.name}")
+        print("\033[1;36m===================================================\033[0m")
+        print(f"  Active Organisms:   {len(colony.active_organisms())}")
+        print(f"  Substrate ATP Pool: {colony.substrate_atp}")
+        print(f"  Saved to:           {file_path}\n")
+
+    elif args.action == "step":
+        if not os.path.exists(file_path):
+            print(f"[!] Colony state file '{file_path}' not found. Run 'init' first.")
+            return
+        colony = Colony.load_from_file(file_path)
+        epochs = args.epochs or 1
+        for _ in range(epochs):
+            rec = colony.step_epoch(solar_influx_atp=args.solar)
+            print(f"[*] Epoch #{rec.epoch_index} complete | Active: {rec.active_count} | Spores: {rec.spore_count} | Minted: {rec.warrants_minted} | Adopted: {rec.warrants_adopted} | Matings: {rec.matings_count} | Anchor: {rec.epoch_hash[:16]}...")
+        colony.save_to_file(file_path)
+        print(f"\n[+] Colony state saved to '{file_path}'.")
+
+    elif args.action == "status":
+        if not os.path.exists(file_path):
+            print(f"[!] Colony state file '{file_path}' not found.")
+            return
+        colony = Colony.load_from_file(file_path)
+        s = colony.summary()
+        print("\033[1;36m===================================================\033[0m")
+        print(f"  %🖤 COLONY STATUS: {s['colony_name']}")
+        print("\033[1;36m===================================================\033[0m")
+        print(f"  Epochs Elapsed:         {s['epochs_total']}")
+        print(f"  Active Organisms:       {s['active_organisms']}")
+        print(f"  Dormant Spores:         {s['dormant_spores']}")
+        print(f"  Substrate ATP Pool:     {s['substrate_atp_pool']}")
+        print(f"  Mycelium Warrants:      {s['warrants_in_mycelium']}")
+        print(f"  Mycelium Divergences:   {s['divergences_in_mycelium']}")
+        print(f"  Ledger Block Height:    {s['ledger_blocks_height']}")
+        print(f"  Latest Epoch Anchor:    {s['latest_epoch_hash'][:32]}...\n")
+
+    elif args.action == "compile":
+        if not os.path.exists(file_path):
+            print(f"[!] Colony state file '{file_path}' not found.")
+            return
+        colony = Colony.load_from_file(file_path)
+        compiler = ColonyPolyglotCompiler(colony)
+        pdf_bytes = compiler.compile_pdf()
+        out_path = args.output or "colony.pdf"
+        with open(out_path, "wb") as f:
+            f.write(pdf_bytes)
+        print(f"[+] Compiled executable colony polyglot to '{out_path}' ({len(pdf_bytes)} bytes).")
+    else:
+        print("Usage: python3 cli.py colony {init,step,status,compile} ...")
+
+
 def cmd_shell(args):
     """Interactive Hypervisor REPL for Project Black-Heart."""
     from symbiosis import (
@@ -841,6 +905,27 @@ def main():
     p_myc_aud.add_argument("warrant", help="Warrant JSON path")
     p_myc_aud.add_argument("--secret-key", default=None, help="Organism secret key hex (optional)")
 
+    # colony
+    col_parent = argparse.ArgumentParser(add_help=False)
+    col_parent.add_argument("-f", "--file", default="colony.json", help="Colony state JSON file")
+
+    p_col = subparsers.add_parser("colony", help="Living Colony Ecosystem & Neuro-Symbolic Petri Dish")
+    col_subs = p_col.add_subparsers(dest="action")
+
+    p_col_init = col_subs.add_parser("init", parents=[col_parent], help="Initialize a new Genesis colony")
+    p_col_init.add_argument("-n", "--name", default="Primeval Mycelium Colony", help="Colony name")
+    p_col_init.add_argument("-o", "--organisms", type=int, default=3, help="Initial population count")
+    p_col_init.add_argument("-a", "--atp", type=int, default=5000, help="Initial substrate ATP pool")
+
+    p_col_step = col_subs.add_parser("step", parents=[col_parent], help="Simulate colony forward by one or more epochs")
+    p_col_step.add_argument("-e", "--epochs", type=int, default=1, help="Number of epochs to step")
+    p_col_step.add_argument("-s", "--solar", type=int, default=200, help="Solar ATP influx per epoch")
+
+    p_col_stat = col_subs.add_parser("status", parents=[col_parent], help="Display summary telemetry of the colony")
+
+    p_col_comp = col_subs.add_parser("compile", parents=[col_parent], help="Compile colony into an executable ISO 32000 PDF polyglot")
+    p_col_comp.add_argument("-o", "--output", default="colony.pdf", help="Output PDF polyglot path")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -875,6 +960,8 @@ def main():
         cmd_metamorph(args)
     elif args.command == "mycelium":
         cmd_mycelium(args)
+    elif args.command == "colony":
+        cmd_colony(args)
     else:
         parser.print_help()
 
