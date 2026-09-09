@@ -1159,6 +1159,124 @@ def cmd_diary(args):
         print("Usage: python3 cli.py diary {init,append,status,lineage,audit,publish} ...")
 
 
+def cmd_agora(args):
+    """Mycelial social democracy, quadratic voting & consensus parliament."""
+    from agora import (
+        initialize_agora_assembly,
+        grow_agora_page,
+        AgoraProposal,
+        AgoraBallot,
+        ConsensusSettlementReceipt,
+        AGORA_MANIFEST_PREFIX,
+        ProposalType,
+        VoteDirection,
+        ProposalStatus,
+        audit_combinator_theorem,
+        calculate_gini_coefficient,
+        calculate_herfindahl_index
+    )
+    from cid import compute_cidv1_raw
+    from crypto import generate_keypair
+    import json
+
+    if args.action == "init":
+        out_path = args.output or "agora_parliament.pdf"
+        sk = args.secret_key
+        if not sk:
+            sk, _ = generate_keypair()
+        rec, cid = initialize_agora_assembly(out_path, founder_sk_hex=sk)
+        print("\033[1;36m===================================================\033[0m")
+        print("  %🖤 MYCELIAL CONSENSUS AGORA INITIALIZED: Session #0")
+        print("\033[1;36m===================================================\033[0m")
+        print(f"  Target Polyglot:     {out_path}")
+        print(f"  Genesis CIDv1:       {cid}")
+        print(f"  Constitution Title:  {rec.proposal.title}")
+        print(f"  Signer Public Key:   {rec.proposal.author_public_key[:32]}...\n")
+
+    elif args.action == "status":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        with open(args.file, "rb") as f:
+            data = f.read()
+        prefix = AGORA_MANIFEST_PREFIX.encode("utf-8")
+        idx = data.rfind(prefix)
+        if idx == -1:
+            print(f"[!] No Agora receipt manifest found in '{args.file}'.")
+            sys.exit(1)
+        end_idx = data.find(b"\n", idx)
+        manifest = json.loads(data[idx + len(prefix):end_idx].decode("utf-8"))
+        latest = manifest[-1]
+        cid = compute_cidv1_raw(data)
+        print("\033[1;36m=================================================================\033[0m")
+        print("  %🖤 PROJECT BLACK-HEART // MYCELIAL CONSENSUS AGORA HUD")
+        print(f"  Target File:        {os.path.basename(args.file)} ({len(data)} bytes, {len(manifest)} ratified sessions)")
+        print(f"  Current CIDv1:      {cid}")
+        print("\033[1;36m=================================================================\033[0m\n")
+        print(f"  Latest Session:     #{latest.get('generation')}")
+        print(f"  Timestamp UTC:      {latest.get('timestamp_utc')}")
+        print(f"  Status:             {latest.get('status')}")
+        prop = latest.get("proposal", {})
+        print(f"  Motion Title:       {prop.get('title')}")
+        print(f"  Motion Type:        {prop.get('proposal_type')}")
+        print(f"  Aye Weight:         {latest.get('aye_weight')} W  |  Nay Weight: {latest.get('nay_weight')} W")
+        print(f"  Gini Inequality:    G = {latest.get('gini_coefficient')}")
+        print(f"  Power Concentration:HHI = {latest.get('hhi_index')}")
+        print(f"  Parent CIDv1:       {latest.get('prev_cid') or '<Genesis>'}\n")
+
+    elif args.action == "lineage":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        with open(args.file, "rb") as f:
+            data = f.read()
+        prefix = AGORA_MANIFEST_PREFIX.encode("utf-8")
+        idx = data.rfind(prefix)
+        if idx == -1:
+            print(f"[!] No Agora receipt manifest found in '{args.file}'.")
+            sys.exit(1)
+        end_idx = data.find(b"\n", idx)
+        manifest = json.loads(data[idx + len(prefix):end_idx].decode("utf-8"))
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  %🖤 CONSTITUTIONAL LINEAGE ACROSS {len(manifest)} RATIFIED SESSIONS")
+        print("\033[1;36m=================================================================\033[0m")
+        for m in manifest:
+            gen = m.get("generation")
+            t_utc = m.get("timestamp_utc")
+            st = m.get("status")
+            p_cid = m.get("prev_cid") or "<Genesis>"
+            prop = m.get("proposal", {})
+            title = prop.get("title", "")[:45]
+            print(f"  #{gen:02d} [{t_utc}] {st:10s} | Parent: {p_cid[:20]}... | {title}")
+        print(f"\n  Current Constitutional CIDv1: {compute_cidv1_raw(data)}\n")
+
+    elif args.action == "audit":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        with open(args.file, "rb") as f:
+            data = f.read()
+        prefix = AGORA_MANIFEST_PREFIX.encode("utf-8")
+        idx = data.rfind(prefix)
+        if idx == -1:
+            print(f"[!] No Agora receipt manifest found in '{args.file}'.")
+            sys.exit(1)
+        end_idx = data.find(b"\n", idx)
+        manifest = json.loads(data[idx + len(prefix):end_idx].decode("utf-8"))
+        print(f"[*] Auditing Agora constitutional chain across {len(manifest)} sessions...")
+        for i, md in enumerate(manifest):
+            rec = ConsensusSettlementReceipt.from_dict(md)
+            if rec.generation != i:
+                print(f"[FAIL] Session gap at index {i}: got #{rec.generation}")
+                sys.exit(1)
+            if rec.receipt_hash != rec.compute_hash():
+                print(f"[FAIL] Hash mismatch at session #{rec.generation}")
+                sys.exit(1)
+        print(f"\033[1;32m[✓] ALL {len(manifest)} AGORA SESSIONS CRYPTOGRAPHICALLY AUDITED & SOUND\033[0m\n")
+    else:
+        print("Usage: python3 cli.py agora {init,status,lineage,audit} ...")
+
+
 def cmd_shell(args):
     """Interactive Hypervisor REPL for Project Black-Heart."""
     from symbiosis import (
@@ -1579,6 +1697,23 @@ def main():
     p_diary_pub.add_argument("file", help="Target ontogenetic diary PDF")
     p_diary_pub.add_argument("--url", default="http://127.0.0.1:5001", help="IPFS Kubo API endpoint")
 
+    # agora
+    p_agora = subparsers.add_parser("agora", help="Mycelial Social Democracy, Quadratic Voting & Consensus Agora")
+    agora_subs = p_agora.add_subparsers(dest="action")
+
+    p_agora_init = agora_subs.add_parser("init", help="Initialize a new Agora Parliament polyglot")
+    p_agora_init.add_argument("-o", "--output", default="agora_parliament.pdf", help="Output PDF polyglot path")
+    p_agora_init.add_argument("--secret-key", default=None, help="Founder Ed25519 secret key hex (optional)")
+
+    p_agora_stat = agora_subs.add_parser("status", help="Display Agora assembly HUD and latest ratified status")
+    p_agora_stat.add_argument("file", help="Target Agora PDF polyglot")
+
+    p_agora_lin = agora_subs.add_parser("lineage", help="Display full constitutional Merkle chain")
+    p_agora_lin.add_argument("file", help="Target Agora PDF polyglot")
+
+    p_agora_aud = agora_subs.add_parser("audit", help="Cryptographically audit all Agora sessions and multi-signatures")
+    p_agora_aud.add_argument("file", help="Target Agora PDF polyglot")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -1623,6 +1758,8 @@ def main():
         cmd_anyon(args)
     elif args.command == "diary":
         cmd_diary(args)
+    elif args.command == "agora":
+        cmd_agora(args)
     else:
         parser.print_help()
 

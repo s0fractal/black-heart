@@ -772,9 +772,65 @@ python3 my_diary.pdf --audit
 
 ---
 
-## 27. Comprehensive Test Suite
+## 27. Mycelial Social Democracy & Consensus Agora (`agora.py`)
 
-Run all **166 unit tests** across all **20 engines** with a single command:
+Realizing **Grok's Experiment 5** (*"Living ledger as a social network of organisms"*): multiple quine organisms form a decentralized epistemic parliament. Citizens table combinator theorems and constitutional policies, cast quadratic ATP-weighted ballots, audit proposals via Church-Rosser reduction, slash false claims, and ratify an append-only constitutional polyglot ledger:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│             MYCELIAL SOCIAL DEMOCRACY & CONSENSUS AGORA                │
+│                                                                        │
+│   Citizen Organisms                Epistemic Immune Audit              │
+│   [Org A] ──(Table Theorem)──►    Church-Rosser Normal Form Check      │
+│   Stake: 100 ATP                  - Sound: Proceed to Ballot           │
+│                                   - False: Slashing (Stake -> Bounty)  │
+│                                           │                            │
+│                                           ▼                            │
+│                                   Quadratic ATP Voting                 │
+│                                   Weight W = ⌊√ATP_allocated⌋          │
+│                                   Protects Phenotypic Diversity        │
+│                                           │                            │
+│                                           ▼                            │
+│                                   Consensus Settlement                 │
+│                                   - Quorum (≥ 50% Community Stake)     │
+│                                   - Supermajority (≥ 66.7% Aye Weight) │
+│                                           │                            │
+│                                           ▼                            │
+│                          Constitutional Polyglot Ledger                │
+│                          - Append-Only Growth (after.startswith(before))│
+│                          - Live Gini Inequality & HHI Concentration    │
+│                          - Canonical IPFS CIDv1 Merkle Provenance      │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+* **Quadratic Voting Mathematics:** Voting power scales sublinearly ($W = \lfloor\sqrt{\text{ATP}}\rfloor$). A plutocratic organism with 10,000 ATP yields weight 100, while 100 egalitarian organisms with 100 ATP each yield combined weight 1,000, preserving biodiversity.
+* **Epistemic Slashing Condition:** When an organism tables a false equivalence $T_1 \equiv T_2$ that reduces to contradiction, its ATP stake is slashed (50% burned to solar pool, 50% paid as bounty to dissenters).
+* **Social Telemetry:** Tracks live Gini wealth inequality ($G \in [0, 1]$) and Herfindahl-Hirschman political concentration ($HHI \in [0, 1]$).
+* **Standalone Quine Execution:**
+```bash
+# Initialize Agora Parliament polyglot:
+python3 cli.py agora init -o parliament.pdf
+
+# Inspect assembly HUD, Gini index, and active constitution:
+python3 cli.py agora status parliament.pdf
+
+# Display constitutional Merkle chain:
+python3 cli.py agora lineage parliament.pdf
+
+# Cryptographically audit all ratified sessions and multisigs:
+python3 cli.py agora audit parliament.pdf
+
+# Or run directly via Python:
+python3 parliament.pdf --status
+python3 parliament.pdf --lineage
+python3 parliament.pdf --audit
+```
+
+---
+
+## 28. Comprehensive Test Suite
+
+Run all **176 unit tests** across all **21 engines** with a single command:
 ```bash
 # Unified test runner:
 python3 test_all.py
@@ -803,11 +859,12 @@ python3 test_morpho_net.py     # 7 tests: Reaction-diffusion critical points, La
 python3 test_goedel.py         # 8 tests: Event horizon classification, limit cycles, Penrose polyglot
 python3 test_anyon_glyph.py    # 8 tests: Braid compilation, Fibonacci unitaries, Born collapse
 python3 test_ipfs_diary.py     # 10 tests: CIDv1 vectors, append-only growth, receipts, CLI execution, Kubo bridge
+python3 test_agora.py          # 10 tests: Quadratic voting, immune auditing, stake slashing, consensus settlement
 ```
 
 ---
 
-## 28. Specifications & Theory
+## 29. Specifications & Theory
 
 * [ANYON.md](ANYON.md) — Topological Anyonic Combinators, Quantum Braids & Born Rule Collapse.
 * [GOEDEL.md](GOEDEL.md) — Gödelian Incompleteness, The Black Cone Event Horizon & Three-Valued Epistemic Logic.
@@ -822,8 +879,8 @@ python3 test_ipfs_diary.py     # 10 tests: CIDv1 vectors, append-only growth, re
 
 ---
 
-## 29. License
+## 30. License
 
-* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, `interaction.py`, `organism.py`, `cross_proof.py`, `vault.py`, `continuum.py`, `zk_glyph.py`, `mesh.py`, `symbiosis.py`, `quantum.py`, `morphogenesis.py`, `metamorphosis.py`, `mycelium.py`, `colony.py`, `morpho_net.py`, `goedel.py`, `anyon_glyph.py`, `cid.py`, `ipfs_diary.py`, `cli.py`, tests):** AGPL-3.0-only
+* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, `interaction.py`, `organism.py`, `cross_proof.py`, `vault.py`, `continuum.py`, `zk_glyph.py`, `mesh.py`, `symbiosis.py`, `quantum.py`, `morphogenesis.py`, `metamorphosis.py`, `mycelium.py`, `colony.py`, `morpho_net.py`, `goedel.py`, `anyon_glyph.py`, `cid.py`, `ipfs_diary.py`, `agora.py`, `cli.py`, tests):** AGPL-3.0-only
 * **Texts & Polyglot artifacts:** CC BY-SA 4.0
 

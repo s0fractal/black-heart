@@ -39,6 +39,7 @@ SUITES = [
     ("Gödelian Incompleteness & Event Horizon", "test_goedel"),
     ("Anyonic Combinators & Quantum Braids", "test_anyon_glyph"),
     ("IPFS Ontogenetic Quine Diary", "test_ipfs_diary"),
+    ("Mycelial Consensus Agora", "test_agora"),
 ]
 
 def run_all_tests() -> bool:
