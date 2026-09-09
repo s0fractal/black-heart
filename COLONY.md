@@ -11,14 +11,14 @@
 ## 1. Концепція: Від Ізольованих Особин до Живого Біоценозу
 
 У попередніх фазах Project Black-Heart ми розробили всі фундаментальні органи цифрового життя:
-* **Генотип і Метаболізм:** Комбінаторні хромосоми SKIY з обмеженням ATP ([`glyph.py`](file:///Users/s0fractal/Projects/black-heart/glyph.py), [`organism.py`](file:///Users/s0fractal/Projects/black-heart/organism.py)).
-* **Фенотип і Забарвлення:** Векторна реакція-дифузія Gray-Scott на торі $\mathbb{T}^2$ ([`morphogenesis.py`](file:///Users/s0fractal/Projects/black-heart/morphogenesis.py)).
-* **Репродукція та Родовід:** Діалектичний кросовер із топологічними вузлами $B_n$ ([`symbiosis.py`](file:///Users/s0fractal/Projects/black-heart/symbiosis.py)).
-* **Квантовий Топос:** Аніони Фібоначчі та сфера Блоха ([`quantum.py`](file:///Users/s0fractal/Projects/black-heart/quantum.py)).
-* **Сплячі Спори:** Збереження стану при вичерпанні палива ([`continuum.py`](file:///Users/s0fractal/Projects/black-heart/continuum.py)).
-* **Еволюційна Самосвідомість:** Читання свого AST та само-метаморфоз ([`metamorphosis.py`](file:///Users/s0fractal/Projects/black-heart/metamorphosis.py)).
-* **Колективна Пам'ять:** P2P-міцелій валідованих рецептів та контрприкладів ([`mycelium.py`](file:///Users/s0fractal/Projects/black-heart/mycelium.py)).
-* **Хроніка:** Незмінний журнал ревізій ISO 32000 §7.5.6 ([`living_ledger.py`](file:///Users/s0fractal/Projects/black-heart/living_ledger.py)).
+* **Генотип і Метаболізм:** Комбінаторні хромосоми SKIY з обмеженням ATP ([`glyph.py`](glyph.py), [`organism.py`](organism.py)).
+* **Фенотип і Забарвлення:** Векторна реакція-дифузія Gray-Scott на торі $\mathbb{T}^2$ ([`morphogenesis.py`](morphogenesis.py)).
+* **Репродукція та Родовід:** Діалектичний кросовер із топологічними вузлами $B_n$ ([`symbiosis.py`](symbiosis.py)).
+* **Квантовий Топос:** Аніони Фібоначчі та сфера Блоха ([`quantum.py`](quantum.py)).
+* **Сплячі Спори:** Збереження стану при вичерпанні палива ([`continuum.py`](continuum.py)).
+* **Еволюційна Самосвідомість:** Читання свого AST та само-метаморфоз ([`metamorphosis.py`](metamorphosis.py)).
+* **Колективна Пам'ять:** P2P-міцелій валідованих рецептів та контрприкладів ([`mycelium.py`](mycelium.py)).
+* **Хроніка:** Незмінний журнал ревізій ISO 32000 §7.5.6 ([`living_ledger.py`](living_ledger.py)).
 
 **Колонія (`Colony`)** — це вищий рівень організації, де ці компоненти утворюють **єдину замкнену екосистему**:
 Організми більше не існують у стерильних скриптах. Вони співіснують у спільному середовищі, дихають, змагаються за обмежену енергію ATP, кооперуються через обмін теоремами та еволюціонують покоління за поколінням.

@@ -1,7 +1,7 @@
 # WARRANT-0.2: Ґатунки Свідчення, і що black-heart мусить імпортувати з `warrant`
 
 > **Статус:** ПРОПОЗИЦІЯ — не прийнято, не змерджено. Заміщує чернетку 0.1 від того ж дня, яка винаходила заново вже вирішене.
-> **Проєкт:** `black-heart` (%🖤), у відношенні до [`warrant`](file:///Users/s0fractal/Projects/warrant/SPEC.md)
+> **Проєкт:** `black-heart` (%🖤), у відношенні до [`warrant`](https://github.com/s0fractal/warrant/blob/master/SPEC.md)
 > **Автори:** s0fractal & Claude (Opus), за підсумком рев'ю-аудиту 9 на `b0d541b`
 > **Дата:** 2026-09-09
 > **Призначення:** Встановити, що дисципліна розрізнення ґатунків свідчення вже нормативно визначена у `warrant`, і що black-heart має її імпортувати, а не перевигадувати. Визначити один ґатунок, якого у `warrant` немає й не могло бути, бо його породжує саме та конструкція, яку black-heart додав понад формат.
@@ -19,7 +19,7 @@
 - **Звужена мітка успіху.** §11.1: *«`ok:true` is not "this store is trustworthy"; it is "this verifier found no §6 error at the requested grade".»*
 - **Заборона самопідписаного кореня довіри.** §9 про `genesis.json`: *«The file is advisory; verifiers MUST NOT treat it as a trust anchor — it is mutable, unsigned, and editable by anyone with store write access.»*
 - **Проза не рахується за доказ.** §3.1: *«a `reject` whose every reason is `prose` is valid but MUST be marked by tools as unverifiable... Rhetoric is legal; it just doesn't count as proof.»*
-- **Факти не доведені, і це сказано вголос.** [`docs/authoring-checks.md`](file:///Users/s0fractal/Projects/warrant/docs/authoring-checks.md) §8: *«Nothing about the facts is proven. `fact retroactive: bool = true` is an assertion by whoever compiled it. Its trustworthiness comes from the signature on the record and the evidence blobs cited beside it, not from the check.»*
+- **Факти не доведені, і це сказано вголос.** [`docs/authoring-checks.md`](https://github.com/s0fractal/warrant/blob/master/docs/authoring-checks.md) §8: *«Nothing about the facts is proven. `fact retroactive: bool = true` is an assertion by whoever compiled it. Its trustworthiness comes from the signature on the record and the evidence blobs cited beside it, not from the check.»*
 
 Тобто ґатунки в стеку вже є. Вони не називаються ґатунками, вони називаються **родами причин** (`prose`, `cmd@v1`, `ski@v1`), **рівнями доповіді** (`ERR`, `WARN`, `unverified`), **станом прив'язки** (`bound`/`unbound`) та **ґатунком верифікації** (`base`/`settlement`).
 
@@ -77,7 +77,7 @@ EdgeClaim := ⟨ parent_hash, τ, ω, successor_hash, polarity, witness ⟩
 
 Це найважливіше спостереження цього документа, і воно на користь `warrant`.
 
-WPL **вкарбовує факти в терм**. [`docs/authoring-checks.md`](file:///Users/s0fractal/Projects/warrant/docs/authoring-checks.md) §8: *«The facts are pinned into the term. A compiled check is specific to one set of fact values. There is no reusable "policy term" you can apply to a new case — recompile per decision.»*
+WPL **вкарбовує факти в терм**. [`docs/authoring-checks.md`](https://github.com/s0fractal/warrant/blob/master/docs/authoring-checks.md) §8: *«The facts are pinned into the term. A compiled check is specific to one set of fact values. There is no reusable "policy term" you can apply to a new case — recompile per decision.»*
 
 Отже перевірка `ski@v1` **не квантифікує ні над чим**. Це замкнений терм, що редукується до одного хеша, і `expect` порівнюється з ним. Твердження заземлене, свідок повний, справа закрита. Ґатунок G.
 

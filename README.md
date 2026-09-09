@@ -130,7 +130,7 @@ $$\mathcal{M}(A) = \langle S_{\text{comp}}, \; P_{\text{doc}}, \; A \rangle$$
   - **Joint Merkle Anchor:** $H_{\text{dual}} = \text{SHA-256}(H_{\text{code}} \mathbin{\Vert} H_{\text{visual}})$. Any tampering with text or code breaks the anchor.
 * **Anti-Drift Invariant:** Every monadic step ($\gg=$) atomically advances both the computational predicate and the visual presentation page ($\Delta S \iff \Delta P$).
 
-See formal specification: [MONAD.md](file:///Users/s0fractal/Projects/black-heart/MONAD.md).
+See formal specification: [MONAD.md](MONAD.md).
 
 ---
 
@@ -243,7 +243,7 @@ In 1990, Yves Lafont discovered that universal Turing-complete computation requi
 * **No Variable Capture:** Completely eliminates $\alpha$-conversion, de Bruijn indices, and global environments.
 * **Annihilation ($\alpha \bowtie \alpha$), Commutation ($\gamma \bowtie \delta$), and Erasure ($\alpha \bowtie \epsilon$).**
 
-See formal specification: [INTERACTION.md](file:///Users/s0fractal/Projects/black-heart/INTERACTION.md).
+See formal specification: [INTERACTION.md](INTERACTION.md).
 
 ---
 
@@ -306,7 +306,7 @@ Implementing John von Neumann's Theory of Self-Reproducing Automata (1966) direc
   # Outputs: organism_gen0001_<child_hash>.pdf with newly derived Ed25519 keypair and mutations!
   ```
 
-See formal specification: [GENOME.md](file:///Users/s0fractal/Projects/black-heart/GENOME.md).
+See formal specification: [GENOME.md](GENOME.md).
 
 ---
 
@@ -325,7 +325,7 @@ python3 examples/bilateral_settlement_demo.py
 python3 cli.py adjudicate examples/bilateral_agreement.pdf examples/provider_telemetry_oracle.pdf
 ```
 
-See formal specification: [CROSS_PROOF.md](file:///Users/s0fractal/Projects/black-heart/CROSS_PROOF.md).
+See formal specification: [CROSS_PROOF.md](CROSS_PROOF.md).
 
 ---
 
@@ -342,7 +342,7 @@ Turning proof-carrying PDF documents into portable, deterministic software vault
 
 ## 14. Suspended Continuum Computations (`continuum.py`)
 
-Fulfilling [CONTINUUM.md](file:///Users/s0fractal/Projects/black-heart/CONTINUUM.md):
+Fulfilling [CONTINUUM.md](CONTINUUM.md):
 * **Non-Destructive Reduction:** Eliminates "Out of Gas" crashes. When the ATP budget runs out, the computation pauses gracefully into a **Suspended Thunk** with an immutable checkpoint digest.
 * **Resumable Polyglot PDFs:** A single ISO 32000 PDF document displays an active ATP fuel gauge and execution progress.
 * **Incremental Resumption:** Running `python3 computation.pdf --fuel <N>` evaluates $N$ additional steps, appends an incremental update block (ISO 32000 §7.5.6) with a new page, and updates the checkpoint on disk! When normal form is reached, a final Q.E.D. settlement seal is rendered.
@@ -478,7 +478,7 @@ python3 successor.pdf --experiments
 
 ## 21. Epistemic Mycelium & Warrant Mesh (`mycelium.py`)
 
-Connecting autonomous organism program self-contemplation ([`metamorphosis.py`](file:///Users/s0fractal/Projects/black-heart/metamorphosis.py)) with the P2P swarm synchronization layer ([`mesh.py`](file:///Users/s0fractal/Projects/black-heart/mesh.py)), the **Epistemic Mycelium** implements a collective intelligence protocol without collapsing individual phenotypic identity or violating Manifesto Thesis 2 (*"experience is not copied"*):
+Connecting autonomous organism program self-contemplation ([`metamorphosis.py`](metamorphosis.py)) with the P2P swarm synchronization layer ([`mesh.py`](mesh.py)), the **Epistemic Mycelium** implements a collective intelligence protocol without collapsing individual phenotypic identity or violating Manifesto Thesis 2 (*"experience is not copied"*):
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -541,9 +541,9 @@ Synthesizing all 15 previous engines into a unified artificial life runtime, the
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-* **Neuro-Symbolic Oracle (`🎭`):** Formal implementation of the Neutral Term Oracle from [`CONTINUUM.md`](file:///Users/s0fractal/Projects/black-heart/CONTINUUM.md). Generates candidate rewrite hypotheses tested against private frozen test fixtures. Beneficial mutations earn substrate ATP bounties and are published as warrants to the epistemic mycelium.
+* **Neuro-Symbolic Oracle (`🎭`):** Formal implementation of the Neutral Term Oracle from [`CONTINUUM.md`](CONTINUUM.md). Generates candidate rewrite hypotheses tested against private frozen test fixtures. Beneficial mutations earn substrate ATP bounties and are published as warrants to the epistemic mycelium.
 * **Metabolic Boundary & Spores:** Organisms consume basal ATP proportional to chromosome size. Energy-exhausted organisms transition to `DORMANT_SPORE` status as cryptographically sealed suspended thunks, preserving identity until substrate ATP abundance enables revival.
-* **Dialectical Recombination:** Wealthy organisms ($ATP \ge 300$) engage in sexual reproduction via [`symbiosis.py`](file:///Users/s0fractal/Projects/black-heart/symbiosis.py), yielding offspring bearing $B_n$ Artin braid group knot lineages.
+* **Dialectical Recombination:** Wealthy organisms ($ATP \ge 300$) engage in sexual reproduction via [`symbiosis.py`](symbiosis.py), yielding offspring bearing $B_n$ Artin braid group knot lineages.
 * **Colony Polyglot Compiler:** Compiles the entire colony into an executable ISO 32000 PDF with active roster HUD, substrate gauges, and standalone offline execution CLI.
 
 ```bash
@@ -596,13 +596,14 @@ python3 test_colony.py         # 7 tests: Living colony ecosystem, neuro-symboli
 
 ## 24. Specifications & Theory
 
-* [COLONY.md](file:///Users/s0fractal/Projects/black-heart/COLONY.md) — The Living Colony Ecosystem, Neuro-Symbolic Petri Dish & Macro-Evolutionary Dynamics.
-* [MYCELIUM.md](file:///Users/s0fractal/Projects/black-heart/MYCELIUM.md) — Collective Metamorphosis, Warrant Mesh & The Preservation of Phenotypic Diversity.
-* [CONTINUUM.md](file:///Users/s0fractal/Projects/black-heart/CONTINUUM.md) — Suspended Thunks, Neutral Oracles & Merkle-Stream Continuity.
-* [MONAD.md](file:///Users/s0fractal/Projects/black-heart/MONAD.md) — The Literate Polyglot Monad, Dual Trees & Proof-Bearing Legal Contracts.
-* [INTERACTION.md](file:///Users/s0fractal/Projects/black-heart/INTERACTION.md) — Lafont's Symmetric Interaction Combinators on UTF-8 Glyphs.
-* [GENOME.md](file:///Users/s0fractal/Projects/black-heart/GENOME.md) — Autonomous Self-Replicating Polyglot Automata.
-* [CROSS_PROOF.md](file:///Users/s0fractal/Projects/black-heart/CROSS_PROOF.md) — Bilateral Interlocking Documents & Embedded Code Vaults.
+* [COLONY.md](COLONY.md) — The Living Colony Ecosystem, Neuro-Symbolic Petri Dish & Macro-Evolutionary Dynamics.
+* [MYCELIUM.md](MYCELIUM.md) — Collective Metamorphosis, Warrant Mesh & The Preservation of Phenotypic Diversity.
+* [WARRANT.md](WARRANT.md) — Unified Evidence Types, Witness Quantifier Grades & Epistemic Import from Warrant.
+* [CONTINUUM.md](CONTINUUM.md) — Suspended Thunks, Neutral Oracles & Merkle-Stream Continuity.
+* [MONAD.md](MONAD.md) — The Literate Polyglot Monad, Dual Trees & Proof-Bearing Legal Contracts.
+* [INTERACTION.md](INTERACTION.md) — Lafont's Symmetric Interaction Combinators on UTF-8 Glyphs.
+* [GENOME.md](GENOME.md) — Autonomous Self-Replicating Polyglot Automata.
+* [CROSS_PROOF.md](CROSS_PROOF.md) — Bilateral Interlocking Documents & Embedded Code Vaults.
 
 ---
 
