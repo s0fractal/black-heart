@@ -2480,6 +2480,73 @@ def cmd_egraph(args):
         print("Usage: python3 cli.py egraph {saturate,explain,extract,pdf} ...")
 
 
+def cmd_smt(args):
+    """Engine #29: Sovereign SMT Kernel & First-Order DPLL(T) Verifier (SMT-0.1)."""
+    import smt_kernel
+    from smt_kernel import SMTSolver, SMTStatus, verify_unsat_certificate, generate_smt_pdf
+
+    solver = SMTSolver()
+
+    if args.action == "solve":
+        with open(args.file, "r", encoding="utf-8") as f:
+            script = f.read()
+        res = solver.solve_smt2(script)
+        col = "\033[1;32m" if res.status == SMTStatus.SAT else "\033[1;31m"
+        print(f"{col}=================================================================\033[0m")
+        print(f"  %🖤 SOVEREIGN SMT DPLL(T) SOLVER (SMT-0.1)")
+        print(f"{col}=================================================================\033[0m")
+        print(f"  File:          {args.file}")
+        print(f"  Verdict:       {col}{res.status.value}\033[0m")
+        print(f"  Decisions:     {res.decisions}")
+        print(f"  Propagations:  {res.propagations}")
+        print(f"  Conflicts:     {res.conflicts}")
+        print(f"  Runtime:       {res.elapsed_sec*1000:.2f} ms\n")
+        if res.status == SMTStatus.SAT and res.model:
+            print("  Model Interpretation:")
+            for k, v in list(res.model.get("booleans", {}).items())[:10]:
+                print(f"    {k:<24} := {v}")
+            print()
+        elif res.status == SMTStatus.UNSAT and res.proof_dag:
+            print(f"  Certified Resolution DAG: {len(res.proof_dag)} derived clauses")
+            print(f"  Valid UNSAT Certificate:  {verify_unsat_certificate(res.proof_dag)}\n")
+
+    elif args.action == "prove":
+        with open(args.file, "r", encoding="utf-8") as f:
+            script = f.read()
+        res = solver.solve_smt2(script)
+        if res.status == SMTStatus.UNSAT:
+            print("\033[1;32m[+] THEOREM PROVED (UNSAT REFUTATION CONFIRMED)\033[0m")
+            print(f"    Proof DAG size: {len(res.proof_dag or {})} resolution steps")
+            print(f"    Independent Verification: {verify_unsat_certificate(res.proof_dag)}")
+        elif res.status == SMTStatus.SAT:
+            print("\033[1;33m[!] THEOREM DISPROVED (SATISFIABLE COUNTERMODEL FOUND)\033[0m")
+            print(f"    Countermodel: {res.model}")
+        else:
+            print(f"\033[1;31m[?] UNDECIDED: {res.status.value}\033[0m")
+
+    elif args.action == "pdf":
+        with open(args.file, "r", encoding="utf-8") as f:
+            script = f.read()
+        res = solver.solve_smt2(script)
+        out_pdf = getattr(args, "output", "smt_proof.pdf") or "smt_proof.pdf"
+        generate_smt_pdf(res, out_pdf, title=os.path.basename(args.file))
+        print("\033[1;36m=================================================================\033[0m")
+        print("  %🖤 SMT ISO 32000 POLYGLOT PDF GENERATED")
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  Source SMT-LIB:  {args.file}")
+        print(f"  Verdict:         {res.status.value}")
+        print(f"  Output PDF:      \033[1;32m{out_pdf}\033[0m")
+        print(f"  Autonomous Execution: python3 {out_pdf}\n")
+
+    elif args.action == "check":
+        with open(args.file, "r", encoding="utf-8") as f:
+            script = f.read()
+        res = solver.solve_smt2(script)
+        print(res.status.value.lower())
+    else:
+        print("Usage: python3 cli.py smt {solve,prove,pdf,check} ...")
+
+
 def cmd_shell(args):
 
     """Interactive Hypervisor REPL for Project Black-Heart."""
@@ -3178,6 +3245,26 @@ def main():
     p_eg_pdf.add_argument("--fuel", type=int, default=1000, help="ATP fuel budget")
     p_eg_pdf.add_argument("-o", "--output", default="egraph_proof.pdf", help="Output PDF path")
 
+    # smt (Engine #29: Sovereign SMT Kernel & First-Order DPLL(T) Verifier)
+    p_smt = subparsers.add_parser(
+        "smt",
+        help="Engine #29: Sovereign SMT Kernel & First-Order DPLL(T) Verifier (SMT-0.1)"
+    )
+    smt_subs = p_smt.add_subparsers(dest="action")
+
+    p_smt_solve = smt_subs.add_parser("solve", help="Solve SMT-LIB 2 QF_UF script via DPLL(T)")
+    p_smt_solve.add_argument("file", help="Input SMT-LIB 2 script file (.smt2)")
+
+    p_smt_prove = smt_subs.add_parser("prove", help="Prove theorem via UNSAT refutation DAG")
+    p_smt_prove.add_argument("file", help="Input SMT-LIB 2 script file (.smt2)")
+
+    p_smt_pdf = smt_subs.add_parser("pdf", help="Compile ISO 32000 SMT verification polyglot PDF")
+    p_smt_pdf.add_argument("file", help="Input SMT-LIB 2 script file (.smt2)")
+    p_smt_pdf.add_argument("-o", "--output", default="smt_proof.pdf", help="Output PDF path")
+
+    p_smt_check = smt_subs.add_parser("check", help="Fast satisfiability check (prints sat/unsat)")
+    p_smt_check.add_argument("file", help="Input SMT-LIB 2 script file (.smt2)")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -3240,6 +3327,8 @@ def main():
         cmd_swarm(args)
     elif args.command == "egraph":
         cmd_egraph(args)
+    elif args.command == "smt":
+        cmd_smt(args)
     elif args.command == "cross-proof":
         cmd_cross_proof(args)
     else:

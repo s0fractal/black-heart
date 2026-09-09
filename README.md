@@ -1000,6 +1000,7 @@ To address the security boundaries of executable documents, Project Black-Heart 
 * [IMMUNE.md](IMMUNE.md) — Autonomic Epistemic Immune System, Swarm Inoculation & Metabolic Homeostasis (EPISTEMIC-IMMUNE-0.1 / Engine #26).
 * [SWARM.md](SWARM.md) — Epistemic Swarm Membrane, Symbiotic Quine Evolution & Collective Canon (SWARM-0.1 / Engine #27).
 * [EGRAPH.md](EGRAPH.md) — Epistemic E-Graph Kernel, Proof-Carrying Equality Saturation & Congruence Closure (EGRAPH-0.1 / Engine #28).
+* [SMT.md](SMT.md) — Sovereign SMT Kernel & First-Order DPLL(T) Verifier, Propositional CDCL & T_EUF Congruence Closure (SMT-0.1 / Engine #29).
 
 
 * [CONTINUUM.md](CONTINUUM.md) — Suspended Thunks, Neutral Oracles & Merkle-Stream Continuity.
