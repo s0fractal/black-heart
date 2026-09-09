@@ -204,5 +204,42 @@ class TestGoedelIncompleteness(unittest.TestCase):
             self.assertFalse(ok_t, "Tampered audit must fail-closed")
             self.assertIn("invalid", msg_t.lower())
 
+    def test_r3_budget_exhaustion_is_not_paradox(self):
+        """R3 remediation: Finite ATP budget exhaustion must be BUDGET_EXHAUSTED, not PARADOX."""
+        low_res, low_wit, low_grade, low_hor = evaluate_with_cycle_detection(parse("🤍 🖤"), max_atp=1)
+        self.assertEqual(low_grade, TruthGrade.BUDGET_EXHAUSTED)
+        self.assertEqual(low_hor, EventHorizonClass.UNDECIDED_BUDGET_LIMIT)
+        self.assertIsNone(low_wit)
+
+        high_res, high_wit, high_grade, high_hor = evaluate_with_cycle_detection(parse("🤍 🖤"), max_atp=2)
+        self.assertEqual(high_grade, TruthGrade.TRUE)
+        self.assertEqual(high_hor, EventHorizonClass.SINGULARITY_COLLAPSE)
+
+    def test_r4_partial_replay_tampered_witness_and_horizon_rejected(self):
+        """R4 remediation: Audit must verify all claimed settlement fields during replay."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = os.path.join(tmpdir, "goedel_r4.pdf")
+            gr = construct_goedel_polyglot(pdf_path, self.sk_hex, sentence_expr="🔁 🤍")
+            with open(pdf_path, "rb") as f:
+                gb = f.read()
+
+            self.assertTrue(audit_goedel_polyglot(gb)[0])
+
+            # Tampering with settled_term, witness_hash, horizon_class, and document_merkle_root
+            gr.settled_term = "invented"
+            gr.witness_hash = "0" * 64
+            gr.horizon_class = "invented"
+            gr.document_merkle_root = "f" * 64
+            gr.sign(self.sk_hex)  # Author signs fabricated fields
+
+            from goedel import GOEDEL_MANIFEST_PREFIX
+            prefix = GOEDEL_MANIFEST_PREFIX.encode("utf-8")
+            start = gb.rfind(prefix)
+            end = gb.index(b"\n", start)
+            forged = gb[:start] + prefix + json.dumps(gr.to_dict()).encode("utf-8") + gb[end:]
+
+            ok, msg, _ = audit_goedel_polyglot(forged)
+            self.assertFalse(ok, "Audit must reject fabricated settlement fields even if signed")
+
 if __name__ == "__main__":
     unittest.main()

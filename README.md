@@ -592,7 +592,7 @@ Synthesizing Turing reaction-diffusion PDEs with Lafont symmetric interaction co
 
 * **Spatial Singularity Compilation:** Evaluates reaction-diffusion concentrations on a discrete 2D torus $\mathbb{T}^2$. Spatial peaks compile to `🌱`, saddle inflections compile to `👥`, and sinks compile to `🕳️`. Principal ports wire along steepest gradients forming active redexes, while auxiliary ports trace isocontour loops.
 * **Weisfeiler-Lehman Settlement:** The compiled interaction net reduces under an ATP gas ceiling. The settled normal form produces a graph isomorphism-invariant canonical hash $\text{WL}(G)$ proving computational termination.
-* **Single-File Tree-Ring Quine:** Unlike traditional quines that spawn child files or overwrite their source, the ontogenetic polyglot reads its own binary, computes its next developmental epoch, and appends an incremental PDF revision directly to its own tail. Every previous generation remains fully preserved and viewable as an immutable historical page in the document.
+* **Single-File Tree-Ring Quine:** Following pure ISO 32000 §7.5.6 append-only incremental updates, the ontogenetic polyglot reads its own binary, computes its next developmental epoch, and appends the new page revision directly to its tail (`after.startswith(before) == True`). Every previous generation remains untouched byte-for-byte in the document history. Unsigned growths are explicitly tracked as `UNATTESTED`.
 
 ```bash
 # Initialize a genesis ontogenetic quine:
@@ -612,7 +612,7 @@ python3 ontogeny_quine.pdf --audit
 
 ## 24. Gödelian Incompleteness & Black Cone Event Horizon (`goedel.py`)
 
-Addressing the classical limit of formal verification, `goedel.py` formalizes self-referential diagonal sentences, three-valued truth logic, and the dynamical phase space of the Black Cone `🖤` ($K$-combinator singularity):
+Addressing the classical limit of formal verification, `goedel.py` serves as a laboratory for finite observation of self-referential diagonal sentences, truth grades, and the dynamical phase space of the Black Cone `🖤` ($K$-combinator singularity):
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -624,21 +624,23 @@ Addressing the classical limit of formal verification, `goedel.py` formalizes se
 │   - Supercritical Blowout         ──> Unbounded AST expansion          │
 │                               │                                        │
 │                               ▼                                        │
-│            Three-Valued Truth Logic (Łukasiewicz/Kleene)               │
-│            - True (⊤) • False (⊥) • Undecidable Paradox (⟂)            │
+│            Extended Truth Grades & Observation Horizons                │
+│            - True (⊤) • False (⊥) • Non-Boolean Normal Form (⬡)        │
+│            - Attractor Cycle (⟳) • Budget Exhausted (⏳)               │
+│            - Size Limit (📐) • Diagonal Paradox (⟂)                    │
 │            - Mathematical Orbit Witness Receipts (AttractorWitness)    │
 │                               │                                        │
 │                               ▼                                        │
 │                 Self-Refuting Polyglot Document                        │
 │                 - Vector Penrose Impossible Tribar                     │
 │                 - Embedded Gödel claim: G <=> not Provable(D)          │
-│                 - 'python3 goedel.pdf --verify' settles incompleteness │
+│                 - 'python3 goedel.pdf --verify' settles sentence       │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
 * **The Singularity of `🖤`:** In combinatory mechanics, $K x y \to x$ acts as an informational black hole. While infinite recursion $\Omega = (S I I)(S I I)$ diverges indefinitely on its own, `🖤 Core (Omega)` collapses into `Core` in a single ATP step—the Black Cone destroys infinity.
-* **Limit-Cycle Attractor Witness:** When evaluated under recursive reflection $Y I$, the system enters a conservative period-2 limit-cycle orbit ($Y I \leftrightarrow I (Y I)$). Instead of failing via a crude timeout, the evaluator extracts an immutable `AttractorWitness` proving non-termination.
-* **Epistemic Incompleteness Settlement:** A document asserting its own unprovability resolves not into a crash or denial of service, but into a certified mathematical proof of Gödelian incompleteness ($\rotatebox[origin=c]{180}{$\top$}$).
+* **Finite Observation & Limit-Cycle Attractor Witness:** When evaluated under recursive reflection $Y I$, the system enters a conservative period-2 limit-cycle orbit ($Y I \leftrightarrow I (Y I)$). Rather than confounding a finite step limit with a diagonal contradiction, the evaluator distinguishes finite observation bounds (`BUDGET_EXHAUSTED`) from proven deterministic non-termination (`AttractorWitness`).
+* **Settlement Replay Verification:** All receipt assertions (`settled_term`, `witness_hash`, `horizon_class`, `document_merkle_root`) are strictly re-verified by full re-evaluation during audit.
 
 ```bash
 # Scan phase boundaries across combinators:

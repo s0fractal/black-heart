@@ -93,8 +93,13 @@ class OntogeneticProofReceipt:
         self.signature_hex = sig.hex()
         self.receipt_hash = self.compute_hash()
 
+    def is_attested(self) -> bool:
+        return bool(self.public_key_hex and self.signature_hex)
+
     def verify(self) -> bool:
         if self.generation < 0:
+            return False
+        if not self.is_attested():
             return False
         if not is_valid_public_key(self.public_key_hex):
             return False
@@ -542,9 +547,15 @@ def cmd_audit(filepath):
         if rec.prev_receipt_hash != prev_h:
             print(f"[FAIL] Hash chain broken at #{rec.generation}")
             sys.exit(1)
-        if not rec.verify():
-            print(f"[FAIL] Cryptographic signature or hash invalid at generation #{rec.generation}")
+        if rec.receipt_hash != rec.compute_hash():
+            print(f"[FAIL] Receipt hash mismatch at generation #{rec.generation}")
             sys.exit(1)
+        if rec.is_attested():
+            if not rec.verify():
+                print(f"[FAIL] Cryptographic signature or hash invalid at generation #{rec.generation}")
+                sys.exit(1)
+        else:
+            print(f"[!] Generation #{rec.generation} is UNATTESTED (unsigned growth step)")
         prev_h = rec.receipt_hash
     print(f"\033[1;32m[✓] ALL {len(manifest)} ONTOGENETIC GENERATIONS & PROOF-NETS CRYPTOGRAPHICALLY VERIFIED\033[0m\n")
 
@@ -657,17 +668,17 @@ def grow_ontogenetic_quine_in_pdf(
         public_key_hex=current.public_key_hex
     )
 
-    # Signing: use provided key or fallback to genesis keypair if matching
+    # Signing: use provided key; if omitted, leave receipt unsigned (UNATTESTED)
     if secret_key_hex:
         next_rec.sign(secret_key_hex)
     else:
-        # If unsigned or no key supplied, synthesize self-consistent author key
-        sk_auto = hashlib.sha256(f"ONTOGENY_AUTOGENERATION:{genesis_seed}".encode()).digest()
-        next_rec.sign(sk_auto.hex())
+        next_rec.public_key_hex = ""
+        next_rec.signature_hex = ""
+        next_rec.receipt_hash = next_rec.compute_hash()
 
     receipts.append(next_rec)
 
-    # Re-encode manifest
+    # Re-encode manifest for this generation
     new_manifest_data = json.dumps([r.to_dict() for r in receipts], ensure_ascii=False)
     new_manifest_bytes = f"\n{ONTOGENY_MANIFEST_PREFIX}{new_manifest_data}\n".encode("utf-8")
 
@@ -692,6 +703,7 @@ def grow_ontogenetic_quine_in_pdf(
     new_page_id = base_obj_count + 1
     new_contents_id = base_obj_count + 2
     new_pages_id = base_obj_count + 3
+    root_obj_id = new_pages_id + 1
 
     page_obj = (
         f"{new_page_id} 0 obj\n"
@@ -710,34 +722,21 @@ def grow_ontogenetic_quine_in_pdf(
         f"{new_pages_id} 0 obj\n<< /Type /Pages /Kids [{kids_refs}] /Count {len(receipts)} >>\nendobj\n"
     ).encode("latin1")
 
-    root_obj_id = new_pages_id + 1
     catalog_obj = (
         f"{root_obj_id} 0 obj\n<< /Type /Catalog /Pages {new_pages_id} 0 R >>\nendobj\n"
     ).encode("latin1")
 
-    docstring_marker = b'\n"""\n'
-    split_pos = content.find(docstring_marker)
-    if split_pos != -1:
-        pdf_prefix = content[:split_pos]
-        runner_suffix = content[split_pos + len(docstring_marker):]
-        # Strip old manifest lines
-        m_idx = pdf_prefix.find(prefix)
-        if m_idx != -1:
-            m_end = pdf_prefix.find(b"\n", m_idx)
-            pdf_prefix = pdf_prefix[:m_idx] + pdf_prefix[m_end + 1:]
-    else:
-        pdf_prefix = content
-        runner_suffix = b""
-
+    # Pure ISO 32000 append-only update chunk: preserves 100% of previous bytes
+    py_prefix = b'\nr"""\n'
     update_body = bytearray()
     update_offsets = []
 
     for obj in (page_obj, contents_obj, pages_obj, catalog_obj):
         obj_num = int(obj[:obj.find(b" 0 obj")].decode("latin1"))
-        update_offsets.append((obj_num, len(pdf_prefix) + len(update_body)))
+        update_offsets.append((obj_num, len(content) + len(py_prefix) + len(update_body)))
         update_body.extend(obj)
 
-    new_xref_offset = len(pdf_prefix) + len(update_body)
+    new_xref_offset = len(content) + len(py_prefix) + len(update_body)
     xref_chunk = bytearray()
     xref_chunk.extend(f"xref\n".encode("latin1"))
     for obj_num, offset in update_offsets:
@@ -746,21 +745,22 @@ def grow_ontogenetic_quine_in_pdf(
 
     trailer_chunk = (
         f"trailer\n<< /Size {root_obj_id + 1} /Root {root_obj_id} 0 R /Prev {prev_xref} >>\n"
-        f"startxref\n{new_xref_offset}\n%%EOF".encode("latin1")
+        f"startxref\n{new_xref_offset}\n%%EOF\n".encode("latin1")
     )
 
-    new_full_content = (
-        pdf_prefix +
+    py_suffix = b'"""\n'
+
+    append_chunk = (
+        py_prefix +
         bytes(update_body) +
         bytes(xref_chunk) +
         trailer_chunk +
         new_manifest_bytes +
-        b'\n"""\n' +
-        runner_suffix
+        py_suffix
     )
 
-    with open(pdf_path, "wb") as f:
-        f.write(new_full_content)
+    with open(pdf_path, "ab") as f:
+        f.write(append_chunk)
 
     print(f"\033[1;32m[+] ONTOGENETIC STEP ACCOMPLISHED: Generation #{next_gen} appended to {os.path.basename(pdf_path)}\033[0m")
     print(f"    Total Developmental Pages: {len(receipts)}")

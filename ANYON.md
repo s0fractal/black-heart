@@ -90,6 +90,9 @@ $$S_{\text{vN}} = -P_0 \log_2 P_0 - P_1 \log_2 P_1 \approx 0.959419 \text{ бі�
    python3 anyon_circuit.pdf --simulate
    ```
 
+> [!NOTE]
+> **Профіль детермінованого аудиту:** `audit_anyon_polyglot()` здійснює точний повторний прорахунок (replay) за схемою $\text{term} \to \text{braid} \to U \to |\psi\rangle \to (P_0, P_1)$, перевіряє унітарність $U^\dagger U = I_2$ з точністю $\epsilon = 10^{-4}$ та діапазон $0 \le P_i \le 1$. Проєктивний наслідок колапсу (`collapsed_glyph`) зберігається як атестоване спостереження спостерігача.
+
 ---
 
 ## 5. Висновок

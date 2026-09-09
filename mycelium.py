@@ -21,6 +21,7 @@ without risking semantic corruption or collapsing into a monoculture.
 from __future__ import annotations
 import json
 import hashlib
+from enum import Enum
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any, Tuple, Union
 
@@ -228,6 +229,27 @@ class WarrantEndorsement:
         )
 
 
+ALGEBRAIC_PROVEN_RULES = {
+    "I x -> x",
+    "K x y -> x",
+    "S(K x)(K y) -> K(x y)",
+    "S(K x)I -> x",
+    "S(K I) -> I"
+}
+
+class WarrantEpistemicGrade(Enum):
+    """
+    Epistemic standing of an optimization or mutation warrant:
+      PROPOSED:       Trial mutation or exploratory hypothesis with nominal/unmeasured delta.
+      LOCALLY_TESTED: Empirically verified on local test fixtures with measured ATP reduction.
+      RULE_DERIVED:   Algebraically proven identity rewrite rule (e.g. Identity Elimination).
+      REFUTED:        Failed immune check, regressed fitness, or refuted hypothesis.
+    """
+    PROPOSED = "PROPOSED"
+    LOCALLY_TESTED = "LOCALLY_TESTED"
+    RULE_DERIVED = "RULE_DERIVED"
+    REFUTED = "REFUTED"
+
 @dataclass
 class Warrant:
     """
@@ -245,18 +267,26 @@ class Warrant:
     fixtures_fingerprint: str
     author_pk_hex: str
     signature_hex: str
+    epistemic_grade: str = WarrantEpistemicGrade.PROPOSED.value
     endorsements: List[WarrantEndorsement] = field(default_factory=list)
 
     @classmethod
-    def derive_id(cls, rule_name: str, pre_pattern: str, post_pattern: str, fixtures_fp: str) -> str:
-        s = f"WARRANT:{rule_name}:{pre_pattern}:{post_pattern}:{fixtures_fp}"
+    def derive_id(
+        cls,
+        rule_name: str,
+        pre_pattern: str,
+        post_pattern: str,
+        fixtures_fp: str,
+        epistemic_grade: str = WarrantEpistemicGrade.PROPOSED.value
+    ) -> str:
+        s = f"WARRANT:{rule_name}:{pre_pattern}:{post_pattern}:{fixtures_fp}:{epistemic_grade}"
         return hashlib.sha256(s.encode("utf-8")).hexdigest()[:16]
 
     def canonical_bytes_for_signing(self) -> bytes:
         payload = (
             f"WARRANT:{self.warrant_id}:{self.rule_name}:"
             f"{self.pre_pattern}:{self.post_pattern}:{self.delta_atp}:"
-            f"{self.delta_size}:{self.fixtures_fingerprint}:{self.author_pk_hex}"
+            f"{self.delta_size}:{self.fixtures_fingerprint}:{self.epistemic_grade}:{self.author_pk_hex}"
         )
         return payload.encode("utf-8")
 
@@ -264,16 +294,29 @@ class Warrant:
     def create_from_receipt(
         cls,
         receipt: MetamorphicTransitionReceipt,
-        author_sk: Union[bytes, str]
+        author_sk: Union[bytes, str],
+        epistemic_grade: Optional[str] = None
     ) -> Warrant:
         """Constructs and signs a Warrant from an accepted MetamorphicTransitionReceipt."""
         sk_bytes = _to_bytes(author_sk)
         author_pk_hex = public_key_from_secret(sk_bytes).hex()
+
+        if epistemic_grade is None:
+            if receipt.rule_name in ALGEBRAIC_PROVEN_RULES:
+                grade = WarrantEpistemicGrade.RULE_DERIVED.value
+            elif receipt.atp_saved > 0:
+                grade = WarrantEpistemicGrade.LOCALLY_TESTED.value
+            else:
+                grade = WarrantEpistemicGrade.PROPOSED.value
+        else:
+            grade = epistemic_grade
+
         wid = cls.derive_id(
             receipt.rule_name,
             receipt.pre_term,
             receipt.post_term,
-            receipt.fixtures_fingerprint
+            receipt.fixtures_fingerprint,
+            grade
         )
         delta_atp = -abs(receipt.atp_saved) if receipt.atp_saved != 0 else -1
         delta_size = -abs(receipt.size_saved) if receipt.size_saved != 0 else 0
@@ -287,6 +330,7 @@ class Warrant:
             fixtures_fingerprint=receipt.fixtures_fingerprint,
             author_pk_hex=author_pk_hex,
             signature_hex="",
+            epistemic_grade=grade,
             endorsements=[]
         )
         sig = sign_bytes(sk_bytes, warrant.canonical_bytes_for_signing())
@@ -307,7 +351,8 @@ class Warrant:
             self.rule_name,
             self.pre_pattern,
             self.post_pattern,
-            self.fixtures_fingerprint
+            self.fixtures_fingerprint,
+            self.epistemic_grade
         )
         if self.warrant_id != expected_id:
             return False
@@ -368,6 +413,7 @@ class Warrant:
             "delta_atp": self.delta_atp,
             "delta_size": self.delta_size,
             "fixtures_fingerprint": self.fixtures_fingerprint,
+            "epistemic_grade": self.epistemic_grade,
             "author_pk_hex": self.author_pk_hex,
             "signature_hex": self.signature_hex,
             "endorsements": [e.to_dict() for e in self.endorsements]
@@ -385,6 +431,7 @@ class Warrant:
             fixtures_fingerprint=str(d["fixtures_fingerprint"]),
             author_pk_hex=str(d["author_pk_hex"]),
             signature_hex=str(d["signature_hex"]),
+            epistemic_grade=str(d.get("epistemic_grade", WarrantEpistemicGrade.PROPOSED.value)),
             endorsements=[WarrantEndorsement.from_dict(e) for e in d.get("endorsements", [])]
         )
 

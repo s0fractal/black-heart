@@ -34,6 +34,7 @@ from mycelium import (
     NormalFormEntry,
     Warrant,
     WarrantEndorsement,
+    WarrantEpistemicGrade,
     DivergenceRecord,
     EpistemicRegistry,
     LocalImmuneEvaluator,
@@ -284,6 +285,47 @@ class TestMycelium(unittest.TestCase):
         finally:
             srv.shutdown()
             srv.server_close()
+
+    # ========================================================================
+    # 8. Epistemic Grade Taxonomy (Review 10 Fix)
+    # ========================================================================
+    def test_warrant_epistemic_grade_separation(self):
+        """Warrants must distinguish RULE_DERIVED, LOCALLY_TESTED, and PROPOSED."""
+        # Algebraic rule -> RULE_DERIVED
+        rec_alg = MetamorphicTransitionReceipt(
+            parent_hash="0"*64,
+            successor_hash="1"*64,
+            gene_id="G1",
+            site_address=(),
+            rule_name="I x -> x",
+            pre_term="🤍 y",
+            post_term="y",
+            atp_saved=-1,
+            size_saved=-1,
+            fixtures_fingerprint="fp1",
+            experiment_id="e1"
+        )
+        w_alg = export_warrant_from_receipt(rec_alg, self.sk_a)
+        self.assertEqual(w_alg.epistemic_grade, WarrantEpistemicGrade.RULE_DERIVED.value)
+        self.assertTrue(w_alg.verify())
+
+        # Speculative trial mutation without measured savings -> PROPOSED
+        rec_trial = MetamorphicTransitionReceipt(
+            parent_hash="0"*64,
+            successor_hash="1"*64,
+            gene_id="G2",
+            site_address=(),
+            rule_name="MUTATION_OPERAND_SWAP",
+            pre_term="🌿 a b",
+            post_term="a",
+            atp_saved=-2,  # nominal trial value <= 0
+            size_saved=-1,
+            fixtures_fingerprint="fp2",
+            experiment_id="e2"
+        )
+        w_trial = export_warrant_from_receipt(rec_trial, self.sk_a)
+        self.assertEqual(w_trial.epistemic_grade, WarrantEpistemicGrade.PROPOSED.value)
+        self.assertTrue(w_trial.verify())
 
 if __name__ == "__main__":
     unittest.main()

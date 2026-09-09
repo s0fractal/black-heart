@@ -131,9 +131,18 @@ class AnyonSettlementReceipt:
     receipt_hash: str = ""
 
     def canonical_bytes(self) -> bytes:
+        u = self.unitary_matrix
+        mat_str = (
+            f"U:{u[0][0][0]:.6f},{u[0][0][1]:.6f}|"
+            f"{u[0][1][0]:.6f},{u[0][1][1]:.6f}|"
+            f"{u[1][0][0]:.6f},{u[1][0][1]:.6f}|"
+            f"{u[1][1][0]:.6f},{u[1][1][1]:.6f}"
+        )
         payload = (
             f"ANYON_SETTLEMENT:{self.term_expr}:{self.braid_artin}:{self.writhe}:{self.crossing_number}:"
+            f"{mat_str}:{self.unitary_det_mag:.6f}:"
             f"{self.born_p0_vacuum:.6f}:{self.born_p1_anyon:.6f}:{self.bloch_x:.6f}:{self.bloch_y:.6f}:{self.bloch_z:.6f}:"
+            f"{self.bloch_theta_deg:.6f}:{self.bloch_phi_deg:.6f}:"
             f"{self.von_neumann_entropy:.6f}:{self.collapsed_glyph}:{self.document_anchor}:{self.public_key_hex}:{self.timestamp_utc}"
         )
         return payload.encode("utf-8")
@@ -610,14 +619,61 @@ def audit_anyon_polyglot(pdf_bytes: bytes) -> Tuple[bool, str, Dict[str, Any]]:
     if not rec.verify():
         return False, "Cryptographic signature or receipt hash invalid", {}
 
-    # Verify probability conservation
+    # 1. Verify probability range, finiteness, and conservation
+    if not (math.isfinite(rec.born_p0_vacuum) and math.isfinite(rec.born_p1_anyon)):
+        return False, "Born probabilities must be finite numbers", {}
+    if not (0.0 <= rec.born_p0_vacuum <= 1.0) or not (0.0 <= rec.born_p1_anyon <= 1.0):
+        return False, f"Born probabilities out of range [0, 1]: ({rec.born_p0_vacuum}, {rec.born_p1_anyon})", {}
     prob_sum = rec.born_p0_vacuum + rec.born_p1_anyon
     if abs(prob_sum - 1.0) > 1e-4:
         return False, f"Born probabilities violate conservation: sum = {prob_sum}", {}
 
-    # Verify unitary gate determinant magnitude |det(U)| = 1.0
-    if abs(rec.unitary_det_mag - 1.0) > 1e-4:
-        return False, f"Unitary determinant magnitude is non-unitary: |det U| = {rec.unitary_det_mag}", {}
+    # 2. Verify matrix unitarity U† U = I directly on claimed matrix
+    try:
+        claimed_u = ComplexMatrix2x2(
+            complex(rec.unitary_matrix[0][0][0], rec.unitary_matrix[0][0][1]),
+            complex(rec.unitary_matrix[0][1][0], rec.unitary_matrix[0][1][1]),
+            complex(rec.unitary_matrix[1][0][0], rec.unitary_matrix[1][0][1]),
+            complex(rec.unitary_matrix[1][1][0], rec.unitary_matrix[1][1][1]),
+        )
+    except Exception as e:
+        return False, f"Malformed unitary matrix elements: {e}", {}
+
+    if not claimed_u.is_unitary(tol=1e-4):
+        return False, "Claimed matrix violates unitarity U† U = I", {}
+
+    det_mag = abs(claimed_u.det())
+    if abs(det_mag - 1.0) > 1e-4 or abs(rec.unitary_det_mag - det_mag) > 1e-4:
+        return False, f"Unitary determinant magnitude is non-unitary: |det U| = {det_mag}", {}
+
+    # 3. Deterministic Replay: re-derive braid, unitary matrix, state, and probabilities from term
+    try:
+        t = parse(rec.term_expr)
+        braid = compile_glyph_to_anyon_braid(t)
+        if braid.to_artin_notation() != rec.braid_artin:
+            return False, f"Replay braid mismatch: expected {rec.braid_artin}, got {braid.to_artin_notation()}", {}
+        if braid.writhe != rec.writhe or braid.crossing_number != rec.crossing_number:
+            return False, "Braid topological invariants mismatch", {}
+
+        sys_q = FibonacciQuantumSystem()
+        recomputed_u = sys_q.compile_braid_to_unitary(braid)
+        u_list = recomputed_u.to_list()
+        for r in range(2):
+            for c in range(2):
+                if (abs(u_list[r][c][0] - rec.unitary_matrix[r][c][0]) > 1e-4 or
+                    abs(u_list[r][c][1] - rec.unitary_matrix[r][c][1]) > 1e-4):
+                    return False, f"Unitary matrix element mismatch at ({r},{c}) during replay", {}
+
+        st = sys_q.evolve_state(recomputed_u, initial_state=(1.0 + 0.0j, 0.0 + 0.0j))
+        p0, p1 = sys_q.calculate_born_probabilities(st)
+        if abs(p0 - rec.born_p0_vacuum) > 1e-4 or abs(p1 - rec.born_p1_anyon) > 1e-4:
+            return False, f"Recomputed Born probabilities ({p0:.4f}, {p1:.4f}) do not match receipt ({rec.born_p0_vacuum:.4f}, {rec.born_p1_anyon:.4f})", {}
+
+        expected_doc_anchor = hashlib.sha256(f"ANYON_CIRCUIT:{rec.term_expr}:{rec.braid_artin}".encode()).hexdigest()
+        if rec.document_anchor != expected_doc_anchor:
+            return False, "Document anchor mismatch with replayed circuit", {}
+    except Exception as e:
+        return False, f"Replay simulation failed: {e}", {}
 
     return True, "Anyonic quantum settlement statically verified and sound", rec.to_dict()
 

@@ -183,6 +183,8 @@ class TestMorphogeneticProofNet(unittest.TestCase):
             compiler.compile(pdf_path, field)
 
             size_gen0 = os.path.getsize(pdf_path)
+            with open(pdf_path, "rb") as f:
+                bytes_gen0 = f.read()
 
             # 2. Run 'python3 organism.pdf --status'
             res_status = subprocess.run(
@@ -201,9 +203,13 @@ class TestMorphogeneticProofNet(unittest.TestCase):
             size_gen1 = os.path.getsize(pdf_path)
             self.assertGreater(size_gen1, size_gen0, "PDF must grow incrementally in size")
 
-            # 4. Grow to Generation #2 via subprocess 'python3 organism.pdf --grow'
+            with open(pdf_path, "rb") as f:
+                bytes_gen1 = f.read()
+            self.assertTrue(bytes_gen1.startswith(bytes_gen0), "R5 remediation: gen1 must preserve gen0 prefix byte-for-byte")
+
+            # 4. Grow to Generation #2 via subprocess 'python3 organism.pdf --grow' with secret key
             res_grow = subprocess.run(
-                [sys.executable, pdf_path, "--grow"],
+                [sys.executable, pdf_path, "--grow", "--secret-key", self.sk_hex],
                 capture_output=True,
                 text=True,
                 timeout=25
@@ -212,6 +218,10 @@ class TestMorphogeneticProofNet(unittest.TestCase):
             self.assertIn("Generation #2", res_grow.stdout)
             size_gen2 = os.path.getsize(pdf_path)
             self.assertGreater(size_gen2, size_gen1)
+
+            with open(pdf_path, "rb") as f:
+                bytes_gen2 = f.read()
+            self.assertTrue(bytes_gen2.startswith(bytes_gen1), "R5 remediation: gen2 must preserve gen1 prefix byte-for-byte")
 
             # 5. Run 'python3 organism.pdf --audit' to cryptographically audit entire lineage
             res_audit = subprocess.run(
@@ -260,6 +270,50 @@ class TestMorphogeneticProofNet(unittest.TestCase):
             )
             self.assertNotEqual(res.returncode, 0)
             self.assertTrue("[FAIL]" in res.stdout or "[FAIL]" in res.stderr)
+
+    def test_r5_and_r6_security_remediation(self):
+        """Remediates R5 (strictly append-only bytes) and R6 (no derived secret keys without authorization)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = os.path.join(tmpdir, "r5_r6.pdf")
+            arch = TuringArchetype.SPOTS
+            field = MorphogeneticField(width=36, height=36, F=arch.F, k=arch.k, Du=arch.Du, Dv=arch.Dv)
+            field.seed_from_hash("42" * 32)
+
+            genesis = OntogeneticProofReceipt(
+                generation=0,
+                timestamp_utc="2026-09-09T00:00:00Z",
+                archetype=arch.key,
+                pde_steps=0,
+                initial_nodes=0,
+                active_pairs=0,
+                reduced_steps=0,
+                atp_burned=0,
+                settled=True,
+                weisfeiler_lehman_digest="b" * 64,
+                prev_receipt_hash="0" * 64,
+                public_key_hex=self.pk_hex
+            )
+            genesis.sign(self.sk_hex)
+            compiler = OntogeneticPolyglotCompiler(archetype=arch)
+            compiler.receipts = [genesis]
+            compiler.compile(root, field)
+
+            with open(root, "rb") as f:
+                before = f.read()
+
+            # Growth without secret key
+            child = grow_ontogenetic_quine_in_pdf(root, pde_steps=1, atp_budget=10)
+            with open(root, "rb") as f:
+                after = f.read()
+
+            # R5: Original prefix must be strictly preserved
+            self.assertTrue(after.startswith(before), "R5: after.startswith(before) must be strictly True")
+
+            # R6: No secret key synthesized from public receipt hash
+            self.assertEqual(child.public_key_hex, "", "R6: Public key must be empty when unsigned")
+            self.assertEqual(child.signature_hex, "", "R6: Signature must be empty when unsigned")
+            self.assertFalse(child.is_attested(), "R6: Child must be unattested")
+            self.assertFalse(child.verify(), "R6: verify() must return False for unattested child")
 
 if __name__ == "__main__":
     unittest.main()

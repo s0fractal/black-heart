@@ -172,5 +172,49 @@ class TestAnyonicGlyphQuantum(unittest.TestCase):
             self.assertFalse(ok_t, "Tampered audit must fail closed")
             self.assertIn("invalid", msg_t.lower())
 
+    def test_r1_tampered_unitary_matrix_or_angles_fails_signature(self):
+        """R1 remediation: Any modification to unitary_matrix or Bloch angles must invalidate signature and audit."""
+        t = parse("🌿 🖤 🤍")
+        rec = settle_anyon_glyph(t, secret_key_hex=self.sk_hex, seed_hex="55" * 32)
+        self.assertTrue(rec.verify())
+
+        # Tampering with unitary matrix must break signature
+        rec.unitary_matrix = [[(0.0, 0.0), (0.0, 0.0)], [(0.0, 0.0), (0.0, 0.0)]]
+        self.assertFalse(rec.verify(), "Zeroed unitary matrix must invalidate signature")
+
+        # Tampering with Bloch angles must break signature
+        rec2 = settle_anyon_glyph(t, secret_key_hex=self.sk_hex, seed_hex="55" * 32)
+        rec2.bloch_theta_deg = 9999.0
+        self.assertFalse(rec2.verify(), "Tampered Bloch angle must invalidate signature")
+
+    def test_r2_signed_false_computation_rejected_by_audit(self):
+        """R2 remediation: Properly signed receipts with out-of-range probabilities or non-unitary matrices must be rejected."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = os.path.join(tmpdir, "signed_false.pdf")
+            rec = construct_anyon_polyglot(
+                output_pdf_path=pdf_path,
+                secret_key_hex=self.sk_hex,
+                term_expr="🌿 🖤 🤍",
+                seed_hex="33" * 16
+            )
+            with open(pdf_path, "rb") as f:
+                pdf_bytes = f.read()
+
+            # Forging probabilities (-1.0, 2.0) even if re-signed must fail audit
+            prefix = ANYON_MANIFEST_PREFIX.encode("utf-8")
+            idx = pdf_bytes.rfind(prefix)
+            end_idx = pdf_bytes.find(b"\n", idx)
+
+            rec.born_p0_vacuum = -1.0
+            rec.born_p1_anyon = 2.0
+            rec.sign(self.sk_hex)  # Author signs invalid probabilities
+
+            forged_manifest = prefix + json.dumps(rec.to_dict()).encode("utf-8")
+            forged_pdf = pdf_bytes[:idx] + forged_manifest + pdf_bytes[end_idx:]
+
+            ok, msg, _ = audit_anyon_polyglot(forged_pdf)
+            self.assertFalse(ok, "Audit must reject out-of-range probabilities even if signed")
+            self.assertIn("out of range", msg)
+
 if __name__ == "__main__":
     unittest.main()

@@ -73,11 +73,14 @@ GOEDEL_MANIFEST_PREFIX = "%" + "🖤" + " GOEDEL_RECEIPT_MANIFEST: "
 # ============================================================================
 
 class TruthGrade(Enum):
-    """Three-valued logic grades for Gödelian self-referential statements."""
+    """Truth grades for Gödelian self-referential statements and finite evaluation."""
     TRUE = "TRUE"                           # Settled normal form evaluating to Church TRUE
     FALSE = "FALSE"                         # Settled normal form evaluating to Church FALSE
+    NORMAL_FORM_NON_BOOLEAN = "NORMAL_FORM_NON_BOOLEAN" # Settled normal form that is not a Church boolean
     ATTRACTOR_CYCLE = "ATTRACTOR_CYCLE"     # Non-terminating periodic limit cycle (e.g., period-2 oscillator)
     DIVERGENT = "DIVERGENT"                 # Supercritical tree size expansion exceeding energy horizon
+    SIZE_LIMIT = "SIZE_LIMIT"               # Exceeded AST node limit during observation
+    BUDGET_EXHAUSTED = "BUDGET_EXHAUSTED"   # Finite ATP observation budget exhausted before settlement
     PARADOX = "PARADOX"                     # Self-referential diagonal contradiction (G <=> not G)
 
     def symbol(self) -> str:
@@ -85,19 +88,27 @@ class TruthGrade(Enum):
             return "⊤"
         elif self == TruthGrade.FALSE:
             return "⊥"
+        elif self == TruthGrade.NORMAL_FORM_NON_BOOLEAN:
+            return "⬡"
         elif self == TruthGrade.ATTRACTOR_CYCLE:
             return "⟳"
         elif self == TruthGrade.DIVERGENT:
             return "💥"
+        elif self == TruthGrade.SIZE_LIMIT:
+            return "📐"
+        elif self == TruthGrade.BUDGET_EXHAUSTED:
+            return "⏳"
         elif self == TruthGrade.PARADOX:
             return "⟂"
         return "?"
 
 class EventHorizonClass(Enum):
     """Asymptotic dynamical fate of combinator terms under reduction."""
-    SINGULARITY_COLLAPSE = "SINGULARITY_COLLAPSE"  # Black Cone 🖤 swallows recursive branches
+    SINGULARITY_COLLAPSE = "SINGULARITY_COLLAPSE"  # Black Cone 🖤 swallows recursive branches / normal form
+    NORMAL_FORM_COLLAPSE = "NORMAL_FORM_COLLAPSE"  # Term settled into normal form
     STABLE_ATTRACTOR = "STABLE_ATTRACTOR"          # Trapped in periodic limit-cycle orbit
     SUPERCRITICAL_BLOWOUT = "SUPERCRITICAL_BLOWOUT"# Unbounded AST tree growth
+    UNDECIDED_BUDGET_LIMIT = "UNDECIDED_BUDGET_LIMIT"# Finite observation budget exhausted
     DIAGONAL_PARADOX = "DIAGONAL_PARADOX"          # Gödelian diagonal sentence
 
 @dataclass
@@ -258,7 +269,7 @@ def evaluate_with_cycle_detection(
                 hash=term_hash(curr),
                 status=EvalStatus.SUSPENDED
             )
-            return res, None, TruthGrade.DIVERGENT, EventHorizonClass.SUPERCRITICAL_BLOWOUT
+            return res, None, TruthGrade.SIZE_LIMIT, EventHorizonClass.SUPERCRITICAL_BLOWOUT
 
         h = term_hash(curr)
         if h in history:
@@ -303,12 +314,15 @@ def evaluate_with_cycle_detection(
             curr_str = str(curr)
             if curr == TRUE or curr_str == GLYPH_K:
                 grade = TruthGrade.TRUE
+                horizon = EventHorizonClass.SINGULARITY_COLLAPSE
             elif curr == FALSE or curr_str == f"{GLYPH_K} {GLYPH_I}":
                 grade = TruthGrade.FALSE
+                horizon = EventHorizonClass.SINGULARITY_COLLAPSE
             else:
-                grade = TruthGrade.TRUE
+                grade = TruthGrade.NORMAL_FORM_NON_BOOLEAN
+                horizon = EventHorizonClass.SINGULARITY_COLLAPSE
 
-            return res, None, grade, EventHorizonClass.SINGULARITY_COLLAPSE
+            return res, None, grade, horizon
 
         curr = next_term
         steps += 1
@@ -322,7 +336,7 @@ def evaluate_with_cycle_detection(
         hash=term_hash(curr),
         status=EvalStatus.SUSPENDED
     )
-    return res, None, TruthGrade.PARADOX, EventHorizonClass.DIAGONAL_PARADOX
+    return res, None, TruthGrade.BUDGET_EXHAUSTED, EventHorizonClass.UNDECIDED_BUDGET_LIMIT
 
 # ============================================================================
 # 4. BLACK CONE EVENT HORIZON SCANNER
@@ -561,6 +575,14 @@ def cmd_verify(filepath):
         print(f"[FAIL] Replay truth grade mismatch: expected {rec.truth_grade}, got {grade.value}")
         sys.exit(1)
 
+    if horizon.value != rec.horizon_class:
+        print(f"[FAIL] Replay horizon class mismatch: expected {rec.horizon_class}, got {horizon.value}")
+        sys.exit(1)
+
+    if str(res.term) != rec.settled_term:
+        print(f"[FAIL] Replay settled term mismatch: expected {rec.settled_term}, got {res.term}")
+        sys.exit(1)
+
     if witness and witness.period != rec.cycle_period:
         print(f"[FAIL] Cycle period mismatch: expected {rec.cycle_period}, got {witness.period}")
         sys.exit(1)
@@ -728,8 +750,27 @@ def audit_goedel_polyglot(pdf_bytes: bytes) -> Tuple[bool, str, Dict[str, Any]]:
         res, witness, grade, horizon = evaluate_with_cycle_detection(t, max_atp=rec.atp_spent + 100)
         if grade.value != rec.truth_grade:
             return False, f"Replay truth grade mismatch: expected {rec.truth_grade}, got {grade.value}", {}
-        if witness and witness.period != rec.cycle_period:
-            return False, f"Replay cycle period mismatch: expected {rec.cycle_period}, got {witness.period}", {}
+        if horizon.value != rec.horizon_class:
+            return False, f"Replay horizon class mismatch: expected {rec.horizon_class}, got {horizon.value}", {}
+        if str(res.term) != rec.settled_term:
+            return False, f"Replay settled term mismatch: expected {rec.settled_term}, got {res.term}", {}
+        if res.atp_spent != rec.atp_spent:
+            return False, f"Replay ATP spent mismatch: expected {rec.atp_spent}, got {res.atp_spent}", {}
+        if witness:
+            if rec.cycle_period != witness.period:
+                return False, f"Replay cycle period mismatch: expected {rec.cycle_period}, got {witness.period}", {}
+            if rec.witness_hash != witness.witness_hash:
+                return False, f"Replay witness hash mismatch: expected {rec.witness_hash}, got {witness.witness_hash}", {}
+        else:
+            expected_w_hash = hashlib.sha256(str(res.term).encode("utf-8")).hexdigest()
+            if rec.cycle_period != 0:
+                return False, f"Expected zero cycle period for settled term, got {rec.cycle_period}", {}
+            if rec.witness_hash != expected_w_hash:
+                return False, f"Replay witness hash mismatch for settled term: expected {expected_w_hash}, got {rec.witness_hash}", {}
+
+        expected_doc_root = hashlib.sha256(f"GOEDEL_DOC:{rec.sentence_id}:{rec.initial_term}".encode("utf-8")).hexdigest()
+        if rec.document_merkle_root != expected_doc_root:
+            return False, f"Document merkle root mismatch: expected {expected_doc_root}, got {rec.document_merkle_root}", {}
     except Exception as e:
         return False, f"Static evaluation failed: {e}", {}
 
