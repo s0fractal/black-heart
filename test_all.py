@@ -36,6 +36,7 @@ SUITES = [
     ("Epistemic Mycelium & Warrant Mesh", "test_mycelium"),
     ("Living Colony Ecosystem", "test_colony"),
     ("Morphogenetic Proof-Nets & Ontogeny", "test_morpho_net"),
+    ("Gödelian Incompleteness & Event Horizon", "test_goedel"),
 ]
 
 def run_all_tests() -> bool:

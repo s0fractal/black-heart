@@ -610,9 +610,58 @@ python3 ontogeny_quine.pdf --audit
 
 ---
 
-## 24. Comprehensive Test Suite
+## 24. Gödelian Incompleteness & Black Cone Event Horizon (`goedel.py`)
 
-Run all **138 unit tests** across all **17 engines** with a single command:
+Addressing the classical limit of formal verification, `goedel.py` formalizes self-referential diagonal sentences, three-valued truth logic, and the dynamical phase space of the Black Cone `🖤` ($K$-combinator singularity):
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│          GÖDELIAN DIAGONAL & BLACK CONE EVENT HORIZON (%🖤)            │
+│                                                                        │
+│   Combinator Simplex (K, S, Y, I) ──> Dynamical Phase Classification   │
+│   - Singularity Collapse          ──> K swallows recursive branches    │
+│   - Stable Attractor Orbit        ──> Periodic limit cycle (e.g. Y(I)) │
+│   - Supercritical Blowout         ──> Unbounded AST expansion          │
+│                               │                                        │
+│                               ▼                                        │
+│            Three-Valued Truth Logic (Łukasiewicz/Kleene)               │
+│            - True (⊤) • False (⊥) • Undecidable Paradox (⟂)            │
+│            - Mathematical Orbit Witness Receipts (AttractorWitness)    │
+│                               │                                        │
+│                               ▼                                        │
+│                 Self-Refuting Polyglot Document                        │
+│                 - Vector Penrose Impossible Tribar                     │
+│                 - Embedded Gödel claim: G <=> not Provable(D)          │
+│                 - 'python3 goedel.pdf --verify' settles incompleteness │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+* **The Singularity of `🖤`:** In combinatory mechanics, $K x y \to x$ acts as an informational black hole. While infinite recursion $\Omega = (S I I)(S I I)$ diverges indefinitely on its own, `🖤 Core (Omega)` collapses into `Core` in a single ATP step—the Black Cone destroys infinity.
+* **Limit-Cycle Attractor Witness:** When evaluated under recursive reflection $Y I$, the system enters a conservative period-2 limit-cycle orbit ($Y I \leftrightarrow I (Y I)$). Instead of failing via a crude timeout, the evaluator extracts an immutable `AttractorWitness` proving non-termination.
+* **Epistemic Incompleteness Settlement:** A document asserting its own unprovability resolves not into a crash or denial of service, but into a certified mathematical proof of Gödelian incompleteness ($\rotatebox[origin=c]{180}{$\top$}$).
+
+```bash
+# Scan phase boundaries across combinators:
+python3 cli.py goedel probe --atp 200
+
+# Compile a self-refuting Gödelian polyglot:
+python3 cli.py goedel compile -e "🔁 🤍" -o goedel_paradox.pdf
+
+# Inspect receipt and telemetry:
+python3 cli.py goedel status goedel_paradox.pdf
+
+# Statically audit and verify incompleteness settlement:
+python3 cli.py goedel verify goedel_paradox.pdf
+
+# Run standalone as self-verifying Python runtime:
+python3 goedel_paradox.pdf --verify
+```
+
+---
+
+## 25. Comprehensive Test Suite
+
+Run all **144 unit tests** across all **18 engines** with a single command:
 ```bash
 # Unified test runner:
 python3 test_all.py
@@ -638,12 +687,14 @@ python3 test_metamorphosis.py  # 7 tests: Program self-contemplation, frozen eva
 python3 test_mycelium.py       # 7 tests: Epistemic mycelium, warrants, divergence records, immune evaluation
 python3 test_colony.py         # 7 tests: Living colony ecosystem, neuro-symbolic oracle, spore dormancy, ledger settlements
 python3 test_morpho_net.py     # 6 tests: Reaction-diffusion critical points, Lafont net compilation, ISO 32000 tree-ring growth
+python3 test_goedel.py         # 6 tests: Event horizon classification, limit cycles, Penrose polyglot
 ```
 
 ---
 
-## 25. Specifications & Theory
+## 26. Specifications & Theory
 
+* [GOEDEL.md](GOEDEL.md) — Gödelian Incompleteness, The Black Cone Event Horizon & Three-Valued Epistemic Logic.
 * [COLONY.md](COLONY.md) — The Living Colony Ecosystem, Neuro-Symbolic Petri Dish & Macro-Evolutionary Dynamics.
 * [MYCELIUM.md](MYCELIUM.md) — Collective Metamorphosis, Warrant Mesh & The Preservation of Phenotypic Diversity.
 * [WARRANT.md](WARRANT.md) — Unified Evidence Types, Witness Quantifier Grades & Epistemic Import from Warrant.
@@ -655,8 +706,8 @@ python3 test_morpho_net.py     # 6 tests: Reaction-diffusion critical points, La
 
 ---
 
-## 26. License
+## 27. License
 
-* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, `interaction.py`, `organism.py`, `cross_proof.py`, `vault.py`, `continuum.py`, `zk_glyph.py`, `mesh.py`, `symbiosis.py`, `quantum.py`, `morphogenesis.py`, `metamorphosis.py`, `mycelium.py`, `colony.py`, `morpho_net.py`, `cli.py`, tests):** AGPL-3.0-only
+* **Code (`glyph.py`, `polyglot.py`, `monad.py`, `crypto.py`, `vector_net.py`, `living_ledger.py`, `interaction.py`, `organism.py`, `cross_proof.py`, `vault.py`, `continuum.py`, `zk_glyph.py`, `mesh.py`, `symbiosis.py`, `quantum.py`, `morphogenesis.py`, `metamorphosis.py`, `mycelium.py`, `colony.py`, `morpho_net.py`, `goedel.py`, `cli.py`, tests):** AGPL-3.0-only
 * **Texts & Polyglot artifacts:** CC BY-SA 4.0
 

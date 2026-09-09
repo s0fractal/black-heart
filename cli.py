@@ -799,6 +799,106 @@ def cmd_ontogeny(args):
         print("Usage: python3 cli.py ontogeny {init,grow,audit,status} ...")
 
 
+def cmd_goedel(args):
+    """Gödelian Incompleteness & Black Cone Event Horizon operations."""
+    from goedel import (
+        probe_black_cone_horizon,
+        construct_goedel_polyglot,
+        audit_goedel_polyglot,
+        GoedelSettlementReceipt,
+        GOEDEL_MANIFEST_PREFIX,
+    )
+    from crypto import generate_keypair
+    import json
+
+    if args.action == "probe":
+        atp = getattr(args, "atp", 200) or 200
+        probes = probe_black_cone_horizon(atp_budget=atp)
+        print("\033[1;36m========================================================================================\033[0m")
+        print("  %🖤 BLACK CONE EVENT HORIZON & ASYMPTOTIC COMBINATOR DYNAMICS")
+        print("\033[1;36m========================================================================================\033[0m\n")
+        print(f"  {'Configuration':<26} | {'Horizon Fate':<22} | {'Grade':<15} | {'Period':<6} | {'ATP'}")
+        print("  " + "-" * 84)
+        for p in probes:
+            print(f"  {p['name']:<26} | {p['horizon_class']:<22} | {p['truth_grade']:<15} | {p.get('period', 0):<6} | {p.get('atp_spent', 0)}")
+        print("\n  \033[1;32m[✓] Phase space boundaries mapped: Singularity Collapse, Attractors, Supercritical Blowout.\033[0m\n")
+
+    elif args.action == "compile":
+        sk_hex = getattr(args, "secret_key", None)
+        if not sk_hex:
+            sk_hex, _ = generate_keypair()
+        out_path = args.output or "goedel_paradox.pdf"
+        expr = args.expr or "🔁 🤍"
+        s_id = args.id or "GOEDEL_SENTENCE_01"
+        rec = construct_goedel_polyglot(
+            output_pdf_path=out_path,
+            secret_key_hex=sk_hex,
+            sentence_expr=expr,
+            sentence_id=s_id
+        )
+        print("\033[1;36m===================================================\033[0m")
+        print(f"  %🖤 GÖDELIAN POLYGLOT COMPILED: {s_id}")
+        print("\033[1;36m===================================================\033[0m")
+        print(f"  Sentence Expression: {rec.initial_term}")
+        print(f"  Truth Grade:         {rec.truth_grade}")
+        print(f"  Horizon Class:       {rec.horizon_class}")
+        print(f"  Limit-Cycle Period:  {rec.cycle_period} steps")
+        print(f"  Witness Hash:        {rec.witness_hash[:32]}...")
+        print(f"  Signer Public Key:   {rec.public_key_hex[:32]}...")
+        print(f"  Saved Polyglot:      {out_path}\n")
+
+    elif args.action == "verify":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        with open(args.file, "rb") as f:
+            data = f.read()
+        ok, msg, info = audit_goedel_polyglot(data)
+        if not ok:
+            print(f"\033[1;31m[FAIL] Gödelian audit rejected: {msg}\033[0m")
+            sys.exit(1)
+        print("\033[1;32m=================================================================\033[0m")
+        print("  [✓ SUCCESS] GÖDELIAN SETTLEMENT PROVEN SOUND")
+        print("\033[1;32m=================================================================\033[0m\n")
+        print(f"  Sentence ID:       {info.get('sentence_id')}")
+        print(f"  Claimed Sentence:  {info.get('initial_term')}")
+        print(f"  Truth Grade:       {info.get('truth_grade')}")
+        print(f"  Dynamical Fate:    {info.get('horizon_class')}")
+        print(f"  Limit-Cycle:       {info.get('cycle_period')} steps")
+        print(f"  ATP Fuel Spent:    {info.get('atp_spent')} units")
+        print(f"  Witness Hash:      ⚓ {info.get('witness_hash')}")
+        print(f"  Signer Public Key: {info.get('public_key_hex')}\n")
+
+    elif args.action == "status":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        with open(args.file, "rb") as f:
+            data = f.read()
+        prefix = GOEDEL_MANIFEST_PREFIX.encode("utf-8")
+        idx = data.rfind(prefix)
+        if idx == -1:
+            print(f"[!] No Gödel receipt manifest found in '{args.file}'.")
+            sys.exit(1)
+        end_idx = data.find(b"\n", idx)
+        raw = data[idx + len(prefix):end_idx].decode("utf-8")
+        manifest = json.loads(raw)
+        print("\033[1;36m=================================================================\033[0m")
+        print("  %🖤 PROJECT BLACK-HEART // GÖDELIAN PARADOX ATLAS")
+        print(f"  Target File: {os.path.basename(args.file)} ({len(data)} bytes)")
+        print("\033[1;36m=================================================================\033[0m\n")
+        print(f"  Sentence ID:       {manifest.get('sentence_id')}")
+        print(f"  Expression:        {manifest.get('initial_term')}")
+        print(f"  Truth Grade:       {manifest.get('truth_grade')}")
+        print(f"  Event Horizon:     {manifest.get('horizon_class')}")
+        print(f"  Limit-Cycle:       {manifest.get('cycle_period')} steps")
+        print(f"  Witness Hash:      {manifest.get('witness_hash')}")
+        print(f"  Document Anchor:   {manifest.get('document_merkle_root')}")
+        print(f"  Signer Public Key: {manifest.get('public_key_hex')}\n")
+    else:
+        print("Usage: python3 cli.py goedel {probe,compile,verify,status} ...")
+
+
 def cmd_shell(args):
     """Interactive Hypervisor REPL for Project Black-Heart."""
     from symbiosis import (
@@ -1150,6 +1250,25 @@ def main():
     p_ont_stat = ont_subs.add_parser("status", help="Display ontogenetic HUD telemetry and digests")
     p_ont_stat.add_argument("file", help="Target ontogenetic PDF polyglot")
 
+    # goedel
+    p_goedel = subparsers.add_parser("goedel", help="Gödelian Incompleteness, Limit Cycles & Black Cone Event Horizon")
+    goedel_subs = p_goedel.add_subparsers(dest="action")
+
+    p_goedel_prb = goedel_subs.add_parser("probe", help="Scan the Black Cone event horizon across combinators")
+    p_goedel_prb.add_argument("--atp", type=int, default=200, help="ATP fuel budget per candidate")
+
+    p_goedel_comp = goedel_subs.add_parser("compile", help="Compile a self-refuting Gödelian polyglot PDF")
+    p_goedel_comp.add_argument("-e", "--expr", default="🔁 🤍", help="Combinator sentence expression")
+    p_goedel_comp.add_argument("-i", "--id", default="GOEDEL_DIAGONAL_01", help="Sentence claim identifier")
+    p_goedel_comp.add_argument("-o", "--output", default="goedel_paradox.pdf", help="Output PDF file path")
+    p_goedel_comp.add_argument("--secret-key", default=None, help="Author secret key hex (optional)")
+
+    p_goedel_ver = goedel_subs.add_parser("verify", help="Statically audit and replay a Gödelian polyglot")
+    p_goedel_ver.add_argument("file", help="Target Gödelian PDF polyglot")
+
+    p_goedel_stat = goedel_subs.add_parser("status", help="Inspect a Gödelian polyglot's receipt and telemetry")
+    p_goedel_stat.add_argument("file", help="Target Gödelian PDF polyglot")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -1188,6 +1307,8 @@ def main():
         cmd_colony(args)
     elif args.command == "ontogeny":
         cmd_ontogeny(args)
+    elif args.command == "goedel":
+        cmd_goedel(args)
     else:
         parser.print_help()
 
