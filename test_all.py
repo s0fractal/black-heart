@@ -41,6 +41,7 @@ SUITES = [
     ("IPFS Ontogenetic Quine Diary", "test_ipfs_diary"),
     ("Mycelial Consensus Agora", "test_agora"),
     ("Autopoietic Quine Organisms", "test_autopoiesis"),
+    ("Morphogenetic Autopoiesis Master Synthesis", "test_morpho_autopoiesis"),
 ]
 
 def run_all_tests() -> bool:

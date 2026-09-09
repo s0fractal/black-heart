@@ -981,6 +981,7 @@ To address the security boundaries of executable documents, Project Black-Heart 
 
 ## 31. Specifications & Theory
 
+* [MORPHO_AUTOPOIESIS.md](MORPHO_AUTOPOIESIS.md) — Morphogenetic Autopoiesis & Mycelial Federation Master Synthesis (Grok 1 + 3 + 5).
 * [AUTOPOIESIS.md](AUTOPOIESIS.md) — Self-Contemplating Autopoietic Quine Organisms, In-Place Evolution & Empirical Ledgers.
 * [AGORA.md](AGORA.md) — Mycelial Social Democracy, Quadratic Voting & Consensus Parliament.
 * [IPFS_DIARY.md](IPFS_DIARY.md) — Self-Preserving Ontogenetic Diary, Merkle-DAG Provenance & LLM Inner Voice Continuum.

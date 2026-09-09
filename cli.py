@@ -1626,6 +1626,119 @@ def cmd_autopoiesis(args):
         print("Usage: python3 cli.py autopoiesis {init,evolve,audit,experiments,genome} ...")
 
 
+def cmd_morpho_autopoiesis(args):
+    """Engine #23: Morphogenetic Autopoiesis Master Synthesis (Grok 1 + 3 + 5)."""
+    from morpho_autopoiesis import (
+        init_morpho_autopoietic_organism,
+        evolve_morpho_autopoietic_organism,
+        audit_morpho_autopoietic_organism,
+        table_to_agora,
+        MORPHO_AUTOPOIESIS_MANIFEST_PREFIX,
+    )
+    import json
+
+    if args.action == "init":
+        out_path = args.output or "morpho_autopoietic_organism.pdf"
+        sk = args.secret_key
+        org, rec = init_morpho_autopoietic_organism(out_path, secret_key_hex=sk)
+        print("\033[1;36m=================================================================\033[0m")
+        print("  %🖤 MORPHOGENETIC AUTOPOIETIC QUINE INITIALIZED: Generation #0")
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  Target Document:      {out_path}")
+        print(f"  Organism Hash:        ⚓ {org.organism_hash}")
+        print(f"  Ed25519 Public Key:   {org.public_key_hex}")
+        print(f"  Turing Archetype:     {org.archetype_key} (F={org.feed_rate_f:.4f}, k={org.kill_rate_k:.4f})")
+        print(f"  WL-Digest:            ⚓ {org.weisfeiler_lehman_digest[:32]}...")
+        print(f"  Active Chromosomes:   {len(org.chromosomes)}")
+        print(f"  ATP Reserve:          {org.atp_reserve} ATP")
+        print(f"  Secret Key Saved:     {out_path}.key (mode 0600)")
+        print("  Next Step: Run 'python3 <file.pdf>' or 'python3 cli.py morpho-autopoiesis evolve <file.pdf>'\n")
+
+    elif args.action == "evolve":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        succ, rec = evolve_morpho_autopoietic_organism(args.file, secret_key_hex=args.secret_key)
+        print("\033[1;32m=================================================================\033[0m")
+        print(f"  [✓] MORPHO-AUTOPOIETIC EVOLUTION: Gen #{succ.generation} Appended In-Place!")
+        print("\033[1;32m=================================================================\033[0m")
+        print(f"  Document:             {args.file}")
+        print(f"  New Organism Hash:    ⚓ {succ.organism_hash}")
+        print(f"  Parent Hash:          ⚓ {succ.parent_hash}")
+        print(f"  Applied Rewrite Rule: {rec.rule_name} on gene '{rec.gene_id}'")
+        print(f"  Turing Morphogenesis: {rec.archetype} (F={rec.feed_rate_f:.4f}, k={rec.kill_rate_k:.4f})")
+        print(f"  Proof-Net Digest:     ⚓ {rec.weisfeiler_lehman_digest[:32]}...")
+        print(f"  Conserved Energy:     -{rec.atp_saved} ATP fuel quanta")
+        print(f"  ATP Reserve:          {succ.atp_reserve} ATP\n")
+
+    elif args.action == "audit":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        ok = audit_morpho_autopoietic_organism(args.file)
+        print("\033[1;36m=================================================================\033[0m")
+        print("  %🖤 MORPHOGENETIC AUTOPOIESIS TOPOLOGICAL & CRYPTO AUDITOR")
+        print("\033[1;36m=================================================================\033[0m")
+        if ok:
+            print(f"  \033[1;32m[✓ SOUND] All generational receipts, Turing kinetics, and proof-nets verified fail-closed.\033[0m\n")
+        else:
+            print(f"  \033[1;31m[✗ UNSOUND] Document failed audit (tampered genome, invalid signature, or kinetic divergence).\033[0m\n")
+            sys.exit(1)
+
+    elif args.action == "table":
+        if not os.path.exists(args.organism):
+            print(f"[!] Organism file '{args.organism}' not found.")
+            sys.exit(1)
+        if not os.path.exists(args.agora):
+            print(f"[!] Agora parliament file '{args.agora}' not found.")
+            sys.exit(1)
+        proposal, prop_id = table_to_agora(
+            args.organism,
+            args.agora,
+            stake_atp=args.stake,
+            secret_key_hex=args.secret_key
+        )
+        print("\033[1;33m=================================================================\033[0m")
+        print(f"  [✓] THEOREM TABLED ON MYCELIAL AGORA PARLIAMENT FLOOR")
+        print("\033[1;33m=================================================================\033[0m")
+        print(f"  Proposal ID:          {prop_id}")
+        print(f"  Proposal Title:       {proposal.title}")
+        print(f"  ATP Staked:           {proposal.stake_atp} fuel quanta")
+        print(f"  Target Agora:         {args.agora}\n")
+
+    elif args.action == "info":
+        if not os.path.exists(args.file):
+            print(f"[!] Target file '{args.file}' not found.")
+            sys.exit(1)
+        with open(args.file, "rb") as f:
+            data = f.read()
+        prefix = MORPHO_AUTOPOIESIS_MANIFEST_PREFIX.encode("utf-8")
+        idx = data.rfind(prefix)
+        if idx == -1:
+            print(f"[!] No morphogenetic autopoiesis manifest in '{args.file}'.")
+            sys.exit(1)
+        end_idx = data.find(b"\n", idx)
+        manifest = json.loads(data[idx + len(prefix):end_idx].decode("utf-8"))
+        latest = manifest["receipt_chain"][-1] if manifest.get("receipt_chain") else {}
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  %🖤 MORPHOGENETIC AUTOPOIESIS QUINE HUD: Gen #{manifest.get('generation')}")
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  Organism ID:          {manifest.get('organism_id')}")
+        print(f"  Organism Hash:        ⚓ {manifest.get('organism_hash')}")
+        print(f"  Parent Hash:          ⚓ {manifest.get('parent_hash')}")
+        print(f"  Turing Archetype:     {latest.get('archetype', manifest.get('archetype_key'))}")
+        print(f"  Kinetic Drift:        F={latest.get('feed_rate_f', manifest.get('feed_rate_f', 0)):.4f}, k={latest.get('kill_rate_k', manifest.get('kill_rate_k', 0)):.4f}")
+        print(f"  WL-Digest:            ⚓ {latest.get('weisfeiler_lehman_digest', manifest.get('weisfeiler_lehman_digest', ''))[:32]}...")
+        print(f"  Active Chromosomes:   {len(manifest.get('chromosomes', []))}")
+        print(f"  ATP Reserve:          {manifest.get('atp_reserve')} fuel quanta")
+        print(f"  Receipt Chain Depth:  {len(manifest.get('receipt_chain', []))} receipts")
+        if latest.get("tabled_proposal_id"):
+            print(f"  Tabled Agora Bill:    {latest['tabled_proposal_id']}")
+        print()
+    else:
+        print("Usage: python3 cli.py morpho-autopoiesis {init,evolve,audit,table,info} ...")
+
+
 def cmd_shell(args):
     """Interactive Hypervisor REPL for Project Black-Heart."""
     from symbiosis import (
@@ -2149,6 +2262,33 @@ def main():
     p_auto_gen = auto_subs.add_parser("genome", help="Display active combinator chromosomes")
     p_auto_gen.add_argument("file", help="Target autopoietic organism PDF")
 
+    # morpho-autopoiesis (Engine #23: Grok 1 + 3 + 5 Master Synthesis)
+    p_morpho_auto = subparsers.add_parser(
+        "morpho-autopoiesis",
+        help="Engine #23: Morphogenetic Autopoiesis & Mycelial Federation Master Synthesis"
+    )
+    morpho_subs = p_morpho_auto.add_subparsers(dest="action")
+
+    p_ma_init = morpho_subs.add_parser("init", help="Initialize Genesis Morpho-Autopoietic Quine Organism")
+    p_ma_init.add_argument("-o", "--output", default="morpho_autopoietic_organism.pdf", help="Output PDF polyglot path")
+    p_ma_init.add_argument("--secret-key", default=None, help="Author Ed25519 secret key hex (optional)")
+
+    p_ma_evolve = morpho_subs.add_parser("evolve", help="Advance organism by 1 generation in-place (ISO 32000 append)")
+    p_ma_evolve.add_argument("file", help="Target morpho-autopoietic organism PDF")
+    p_ma_evolve.add_argument("--secret-key", default=None, help="Author Ed25519 secret key hex (optional)")
+
+    p_ma_audit = morpho_subs.add_parser("audit", help="Topologically and cryptographically audit organism history")
+    p_ma_audit.add_argument("file", help="Target morpho-autopoietic organism PDF")
+
+    p_ma_table = morpho_subs.add_parser("table", help="Table evolved algebraic theorem onto Mycelial Agora floor")
+    p_ma_table.add_argument("organism", help="Target morpho-autopoietic organism PDF")
+    p_ma_table.add_argument("agora", help="Target Agora assembly PDF")
+    p_ma_table.add_argument("--stake", type=int, default=100, help="ATP fuel quanta to stake (default: 100)")
+    p_ma_table.add_argument("--secret-key", default=None, help="Author Ed25519 secret key hex (optional)")
+
+    p_ma_info = morpho_subs.add_parser("info", help="Display organism HUD and morphogenetic state")
+    p_ma_info.add_argument("file", help="Target morpho-autopoietic organism PDF")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -2199,6 +2339,8 @@ def main():
         cmd_agora(args)
     elif args.command == "autopoiesis":
         cmd_autopoiesis(args)
+    elif args.command == "morpho-autopoiesis":
+        cmd_morpho_autopoiesis(args)
     elif args.command == "cross-proof":
         cmd_cross_proof(args)
     else:

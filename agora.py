@@ -973,6 +973,33 @@ def grow_agora_page(
 
     return compute_cidv1_for_file(pdf_path)
 
+def audit_agora_parliament(filepath: str) -> bool:
+    """Statically audits all session receipts in an Agora Parliament PDF polyglot."""
+    if not os.path.exists(filepath):
+        return False
+    try:
+        with open(filepath, "rb") as f:
+            content = f.read()
+        prefix = AGORA_MANIFEST_PREFIX.encode("utf-8")
+        idx = content.rfind(prefix)
+        if idx == -1:
+            return False
+        end_idx = content.find(b"\n", idx)
+        manifest_data = json.loads(content[idx + len(prefix):end_idx].decode("utf-8"))
+        receipts = [ConsensusSettlementReceipt.from_dict(d) for d in manifest_data]
+        if not receipts:
+            return False
+        for i, r in enumerate(receipts):
+            if r.generation != i:
+                return False
+            if r.receipt_hash != r.compute_hash():
+                return False
+            if r.generation > 0 and not r.proposal.verify_signature():
+                return False
+        return True
+    except Exception:
+        return False
+
 # ============================================================================
 # 6. HIGH-LEVEL AGORA FACTORY
 # ============================================================================
