@@ -44,7 +44,9 @@ SUITES = [
     ("Morphogenetic Autopoiesis Master Synthesis", "test_morpho_autopoiesis"),
     ("Epistemic Kernel & Unified Edge-Claims", "test_warrant_kernel"),
     ("Controlled Forgetting & Epistemic Retirement", "test_controlled_forgetting"),
+    ("Autonomic Epistemic Immune System", "test_epistemic_immune"),
 ]
+
 
 
 def run_all_tests() -> bool:

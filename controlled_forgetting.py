@@ -432,6 +432,11 @@ class EpistemicTombstoneRegistry:
         return reg
 
 
+# ResurrectionGuard alias for EpistemicTombstoneRegistry
+ResurrectionGuard = EpistemicTombstoneRegistry
+
+
+
 # ============================================================================
 # 6. ISO 32000 PDF POLYGLOT TOMBSTONE VISUALIZER
 # ============================================================================

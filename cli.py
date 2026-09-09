@@ -2038,6 +2038,158 @@ def cmd_controlled_forgetting(args):
         print("Usage: python3 cli.py warrant-forget {retire,audit,readopt,surface} ...")
 
 
+def cmd_epistemic_immune(args):
+    """Engine #26: Autonomic Epistemic Immune System & Metabolic Self-Healing."""
+    import crypto
+    import epistemic_immune
+    from organism import Chromosome
+    from epistemic_immune import (
+        ImmuneHealthStatus, EpistemicOrganism, ResurrectionDefense,
+        CounterexampleMetabolism, HypothesisElevationCycle,
+        HorizontalInoculation, StarvationAutophagy,
+        generate_immune_organism_pdf, append_immune_hud_to_pdf
+    )
+    import controlled_forgetting
+    from controlled_forgetting import EpistemicTombstoneRegistry, RetirementMode
+
+    def load_organism(path: str) -> EpistemicOrganism:
+        if not os.path.exists(path):
+            print(f"[!] File not found: {path}")
+            sys.exit(1)
+        with open(path, "rb") as f:
+            data = f.read()
+        prefix = bytes([0x23, 0x20, 0x25, 0xf0, 0x9f, 0x96, 0xa4]) + b" IMMUNE_METABOLISM_MANIFEST: "
+        idx = data.rfind(prefix)
+        if idx != -1:
+            end = data.find(b"\n", idx)
+            d = json.loads(data[idx + len(prefix):end].decode("utf-8"))
+            return EpistemicOrganism.from_dict(d)
+        try:
+            d = json.loads(data.decode("utf-8"))
+            return EpistemicOrganism.from_dict(d)
+        except Exception:
+            print(f"[!] Could not parse IMMUNE_METABOLISM_MANIFEST from {path}")
+            sys.exit(1)
+
+    if args.action == "init":
+        out_path = args.output or "immune_organism.pdf"
+        sk, pk = crypto.generate_keypair()
+        c1 = Chromosome("GENE-CORE-01", "Core Sovereign", "S K K", "I", vital=True)
+        c2 = Chromosome("GENE-EXP-01", "Metabolic Redex", "S (K (S I)) (K I)", "I", vital=False)
+        org = EpistemicOrganism(
+            organism_id=f"ORG-IMMUNE-{pk[:8]}",
+            generation=0,
+            chromosomes=[c1, c2],
+            public_key_hex=pk,
+            atp_reserve=600,
+            active_axioms=["I x -> x", "K x y -> x"]
+        )
+        generate_immune_organism_pdf(org, out_path)
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  %🖤 IMMUNE ORGANISM INITIALIZED (EPISTEMIC-IMMUNE-0.1)")
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  Organism ID:    {org.organism_id}")
+        print(f"  Target File:    {out_path}")
+        print(f"  ATP Fuel:       {org.atp_reserve} ATP")
+        print(f"  Public Key:     {pk}")
+        print(f"  Health Status:  {org.get_health_status().value}\n")
+
+    elif args.action == "status":
+        org = load_organism(args.file)
+        status = org.get_health_status()
+        col = "\033[1;32m" if status == ImmuneHealthStatus.HOMEOSTASIS else ("\033[1;33m" if status == ImmuneHealthStatus.METABOLIC_STRESS else "\033[1;31m")
+        total_neg_space = sum(t.negative_space_coverage for t in org.tombstone_registry.tombstones.values())
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  %🖤 EPISTEMIC IMMUNE STATUS: {args.file}")
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  Organism ID:         {org.organism_id} (Gen #{org.generation})")
+        print(f"  Health Status:       {col}[{status.value}]\033[0m")
+        print(f"  ATP Fuel Reserve:    {org.atp_reserve} ATP")
+        print(f"  Active Chromosomes:  {len(org.chromosomes)}")
+        print(f"  Active Axioms:       {len(org.active_axioms)} ({', '.join(org.active_axioms) if org.active_axioms else 'None'})")
+        print(f"  Tombstone Defenses:  {len(org.tombstone_registry.tombstones)} (Inoculated: {org.inoculated_tombstones_count})")
+        print(f"  Pruned Search Space: {total_neg_space:.2f} AST search volume")
+        print(f"  Fuel Reclaimed:      +{org.total_bounties_reclaimed} ATP")
+        print(f"  Autophagy Rescues:   {org.autophagy_events_count}\n")
+
+    elif args.action == "inoculate":
+        target_path = args.target
+        donor_path = args.donor
+        target_org = load_organism(target_path)
+        donor_org = load_organism(donor_path)
+
+        report = HorizontalInoculation.inoculate(target_org, donor_org.tombstone_registry)
+        out_path = args.output or target_path
+
+        if os.path.exists(out_path):
+            with open(out_path, "rb") as f:
+                src_bytes = f.read()
+            append_immune_hud_to_pdf(src_bytes, out_path, target_org)
+        else:
+            generate_immune_organism_pdf(target_org, out_path)
+
+        print("\033[1;32m=================================================================\033[0m")
+        print(f"  %🖤 SWARM INOCULATION COMPLETE (EPISTEMIC-IMMUNE-0.1)")
+        print("\033[1;32m=================================================================\033[0m")
+        print(f"  Target Organism:    {target_org.organism_id}")
+        print(f"  Donor Organism:     {donor_org.organism_id}")
+        print(f"  Absorbed Defenses:  +{report.absorbed_tombstones_count} tombstones")
+        print(f"  Pruned Search Vol:  +{report.pruned_search_space_volume} AST space")
+        print(f"  Total Defenses:     {report.total_active_tombstones} active tombstones\n")
+
+    elif args.action == "autophagy":
+        path = args.file
+        org = load_organism(path)
+        sk, pk = crypto.generate_keypair()
+        thresh = args.threshold or 80
+        target_atp = args.target_atp or 200
+
+        report = StarvationAutophagy.trigger_autophagy(org, sk, pk, thresh, target_atp)
+        out_path = args.output or path
+
+        if report.triggered:
+            with open(path, "rb") as f:
+                src_bytes = f.read()
+            append_immune_hud_to_pdf(src_bytes, out_path, org)
+
+            print("\033[1;33m=================================================================\033[0m")
+            print(f"  %🖤 STARVATION AUTOPHAGY EXECUTED")
+            print("\033[1;33m=================================================================\033[0m")
+            print(f"  Initial ATP:        {report.initial_atp} ATP (STARVATION)")
+            print(f"  Pruned Chromosomes: {', '.join(report.pruned_chromosomes)}")
+            print(f"  Reclaimed Fuel:     +{report.reclaimed_fuel} ATP")
+            print(f"  Final ATP Reserve:  {report.final_atp} ATP [{report.status_after.value}]\n")
+        else:
+            print(f"[i] Organism is not in starvation ({org.atp_reserve} > {thresh} ATP). Autophagy not required.")
+
+    elif args.action == "elevate":
+        path = args.file
+        org = load_organism(path)
+        sk, pk = crypto.generate_keypair()
+        res = HypothesisElevationCycle.evaluate_and_elevate(org, sk, pk)
+        out_path = args.output or path
+
+        if res:
+            promoted, ret_rec = res
+            with open(path, "rb") as f:
+                src_bytes = f.read()
+            append_immune_hud_to_pdf(src_bytes, out_path, org)
+
+            print("\033[1;32m=================================================================\033[0m")
+            print(f"  %🖤 HYPOTHESIS ELEVATED TO AXIOMATIC IDENTITY (E -> A)")
+            print("\033[1;32m=================================================================\033[0m")
+            print(f"  Rule Promoted:      {promoted.tau}")
+            print(f"  Grade:              [A-AXIOMATIC]")
+            print(f"  New Claim ID:       {promoted.claim_id}")
+            print(f"  Superseded Claim:   {ret_rec.target_id}")
+            print(f"  Active Axiom Bank:  {', '.join(org.active_axioms)}\n")
+        else:
+            print("[i] No empirical hypotheses qualified for axiomatic elevation at this time.")
+
+    else:
+        print("Usage: python3 cli.py epistemic-immune {init,status,inoculate,autophagy,elevate} ...")
+
+
 def cmd_shell(args):
 
     """Interactive Hypervisor REPL for Project Black-Heart."""
@@ -2634,6 +2786,34 @@ def main():
     p_wf_surface = wf_subs.add_parser("surface", help="Display active evaluation surface vs pruned negative space substrate")
     p_wf_surface.add_argument("file", help="Target polyglot PDF or JSON registry")
 
+    # epistemic-immune (Engine #26: EPISTEMIC-IMMUNE-0.1 Autonomic Epistemic Immune System)
+    p_ei = subparsers.add_parser(
+        "epistemic-immune",
+        help="Engine #26: Autonomic Epistemic Immune System & Metabolic Self-Healing (EPISTEMIC-IMMUNE-0.1)"
+    )
+    ei_subs = p_ei.add_subparsers(dest="action")
+
+    p_ei_init = ei_subs.add_parser("init", help="Initialize a fresh autonomous immune organism polyglot PDF")
+    p_ei_init.add_argument("-o", "--output", default="immune_organism.pdf", help="Output PDF path")
+
+    p_ei_status = ei_subs.add_parser("status", help="Display organism immune health status, ATP fuel gauge, and defenses")
+    p_ei_status.add_argument("file", help="Target immune organism polyglot PDF or JSON file")
+
+    p_ei_inoc = ei_subs.add_parser("inoculate", help="Inoculate target organism with donor organism's tombstones")
+    p_ei_inoc.add_argument("target", help="Target organism to receive defenses")
+    p_ei_inoc.add_argument("donor", help="Donor organism providing tombstones")
+    p_ei_inoc.add_argument("-o", "--output", help="Output PDF path (default: overwrite target)")
+
+    p_ei_auto = ei_subs.add_parser("autophagy", help="Trigger metabolic starvation autophagy to reclaim fuel")
+    p_ei_auto.add_argument("file", help="Target starved organism file")
+    p_ei_auto.add_argument("--threshold", type=int, default=80, help="Starvation ATP threshold")
+    p_ei_auto.add_argument("--target-atp", type=int, default=200, help="Target recovery ATP reserve")
+    p_ei_auto.add_argument("-o", "--output", help="Output PDF path")
+
+    p_ei_elev = ei_subs.add_parser("elevate", help="Scan empirical hypotheses and promote confluent rules to axioms (E -> A)")
+    p_ei_elev.add_argument("file", help="Target organism file")
+    p_ei_elev.add_argument("-o", "--output", help="Output PDF path")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -2690,10 +2870,13 @@ def main():
         cmd_warrant_kernel(args)
     elif args.command == "warrant-forget":
         cmd_controlled_forgetting(args)
+    elif args.command == "epistemic-immune":
+        cmd_epistemic_immune(args)
     elif args.command == "cross-proof":
         cmd_cross_proof(args)
     else:
         parser.print_help()
+
 
 
 if __name__ == "__main__":
