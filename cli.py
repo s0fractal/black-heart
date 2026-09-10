@@ -100,7 +100,8 @@ def cmd_repl(args):
         else:
             print(f"  \033[1;33mSuspended Thunk:\033[0m {result.term}")
             print(f"  \033[1;33mStatus:     \033[0m ⏳ SUSPENDED after {result.atp_spent} ATP "
-                  f"— not a normal form. Raise the budget with :atp <N> to continue.\n")
+                  f"— not a normal form. This thunk is not retained; :atp <N> sets the "
+                  f"budget for expressions entered after it.\n")
 
 def cmd_keygen(args):
     """Generates an RFC 8032 Ed25519 keypair."""
