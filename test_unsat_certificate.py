@@ -547,6 +547,106 @@ class FormalCreditGateTest(unittest.TestCase):
         self.assertEqual(decision.reason, "NO_CALLER_BINDING")
 
 
+class OutputTargetBindingTest(unittest.TestCase):
+    """Credit is spent on a result, so the result is bound too (K1).
+
+    The inputs were bound and the output was not: `scoped_admission` travelled
+    in the report and became the signed successor, so a caller could authorize
+    one question while the report chose where the answer pointed.
+    """
+
+    def setUp(self):
+        import crypto
+        self.sk, self.pk = crypto.generate_keypair()
+        self.gate = FormalCreditGateTest("test_J2_a_bound_caller_assertion_earns_grade_A")
+        self.gate.setUp()
+        self.triad = self.gate._triad()
+        self.receipt = self.gate._receipt_for(self.triad)
+
+    def _admission(self, candidate="33" * 32, budget=9999, policy="another-policy"):
+        from scoped_admission import ScopedAdmission
+        return ScopedAdmission.create(
+            retest_id="22" * 32, candidate_digest=candidate,
+            evaluator_digest="55" * 32, requirement_digest="66" * 32,
+            context={"budget_steps": budget}, policy_id=policy)
+
+    def _binding(self, successor_hash=None):
+        import dialectic_kernel as dk
+        return dk.FormalCreditBinding(
+            subject_digest=dk.triad_subject_digest(self.triad),
+            formula_sha256=sm.formula_digest(self.gate.formula),
+            successor_hash=successor_hash)
+
+    def _elevate(self, binding, admission=None):
+        import dialectic_kernel as dk
+        report = self.gate._report(self.gate.real, receipt=self.receipt, triad=self.triad)
+        report.scoped_admission = admission
+        return dk.elevate_triad_to_warrant(report, self.sk, self.pk, credit_binding=binding)
+
+    def test_K1_unbound_credit_points_at_the_subject_not_at_the_report(self):
+        import dialectic_kernel as dk
+        from warrant_kernel import EvidenceGrade
+        claim = self._elevate(self._binding())
+        self.assertEqual(claim.grade, EvidenceGrade.AXIOMATIC)
+        self.assertEqual(
+            claim.successor_hash,
+            dk.subject_derived_successor(dk.triad_subject_digest(self.triad)))
+
+    def test_K2_an_unauthorized_admission_cannot_ride_along(self):
+        """None -> foreign admission, with the binding held fixed."""
+        from warrant_kernel import EvidenceGrade
+        foreign = self._admission()
+        claim = self._elevate(self._binding(), admission=foreign)
+        self.assertEqual(claim.grade, EvidenceGrade.EMPIRICAL)
+
+    def test_K3_a_bound_target_is_the_one_signed(self):
+        """Positive: the caller names the target it authorizes."""
+        from warrant_kernel import EvidenceGrade
+        admission = self._admission(candidate=self.triad.thesis_candidate_digest, budget=140,
+                                    policy="this-policy")
+        claim = self._elevate(self._binding(admission.admission_id), admission=admission)
+        self.assertEqual(claim.grade, EvidenceGrade.AXIOMATIC)
+        self.assertEqual(claim.successor_hash, admission.admission_id)
+
+    def test_K4_admission_A_cannot_become_admission_B(self):
+        from warrant_kernel import EvidenceGrade
+        authorized = self._admission(candidate=self.triad.thesis_candidate_digest, budget=140)
+        other = self._admission()
+        self.assertNotEqual(authorized.admission_id, other.admission_id)
+        binding = self._binding(authorized.admission_id)
+        self.assertEqual(self._elevate(binding, admission=authorized).grade,
+                         EvidenceGrade.AXIOMATIC)
+        self.assertEqual(self._elevate(binding, admission=other).grade,
+                         EvidenceGrade.EMPIRICAL)
+
+    def test_K5_an_admission_whose_id_does_not_match_its_body(self):
+        import dataclasses
+        from warrant_kernel import EvidenceGrade
+        authorized = self._admission(candidate=self.triad.thesis_candidate_digest, budget=140)
+        tampered = dataclasses.replace(authorized, context={"budget_steps": 1})
+        # The id still says what it said, so a consumer reading only the id is fooled.
+        self.assertEqual(tampered.admission_id, authorized.admission_id)
+        claim = self._elevate(self._binding(authorized.admission_id), admission=tampered)
+        # Credit is not redirected: the signed target is the bound one either way.
+        self.assertEqual(claim.successor_hash, authorized.admission_id)
+        self.assertIn(claim.grade, (EvidenceGrade.AXIOMATIC, EvidenceGrade.EMPIRICAL))
+
+    def test_K6_removing_the_authorized_admission_is_also_refused(self):
+        from warrant_kernel import EvidenceGrade
+        authorized = self._admission(candidate=self.triad.thesis_candidate_digest, budget=140)
+        binding = self._binding(authorized.admission_id)
+        self.assertEqual(self._elevate(binding, admission=None).grade,
+                         EvidenceGrade.EMPIRICAL)
+
+    def test_K7_grade_E_still_takes_its_successor_from_the_report(self):
+        """The stated contract for the branch that claims nothing."""
+        from warrant_kernel import EvidenceGrade
+        foreign = self._admission()
+        claim = self._elevate(binding=None, admission=foreign)
+        self.assertEqual(claim.grade, EvidenceGrade.EMPIRICAL)
+        self.assertEqual(claim.successor_hash, foreign.admission_id)
+
+
 class ProducerBindingTest(unittest.TestCase):
     """The producer does not invent the formula it then checks against."""
 

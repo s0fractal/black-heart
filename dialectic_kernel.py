@@ -180,6 +180,12 @@ class FormalCreditBinding:
     """
     subject_digest: str
     formula_sha256: str
+    # The output node this credit may be spent on. A claim is a signed edge to
+    # somewhere, so binding only the inputs leaves the caller authorizing one
+    # question and the report choosing where the answer points. None means the
+    # caller authorized no external target, and the successor is then derived
+    # from the bound subject alone.
+    successor_hash: Optional[str] = None
     scope: str = "caller-asserted CNF encoding of the settled theorem"
 
 
@@ -187,6 +193,17 @@ class FormalCreditBinding:
 class FormalCreditDecision:
     granted: bool
     reason: str
+    # Where a granted claim is allowed to point. Never read from the report.
+    successor_hash: Optional[str] = None
+
+
+def subject_derived_successor(subject_digest: str) -> str:
+    """The output target when the caller authorized no external one.
+
+    Derived from the bound subject, so a claim carrying formal credit cannot be
+    aimed by whoever supplies the report.
+    """
+    return sha256_hex(("dialectic.credit-successor.v1:" + subject_digest).encode("utf-8"))
 
 
 def evaluate_formal_credit(
@@ -221,7 +238,32 @@ def evaluate_formal_credit(
     checked = verify_refutation_receipt(receipt, subject, report.proof_dag)
     if checked.status != RefutationStatus.VERIFIED_REFUTATION:
         return FormalCreditDecision(False, f"REFUTATION_{checked.status.value}: {checked.reason}")
-    return FormalCreditDecision(True, "checked refutation of the formula bound by the caller")
+
+    # The result the credit is spent on is bound as well as the inputs it rests
+    # on. `scoped_admission` travels in the report and becomes the signed
+    # successor, so an unbound one lets a report aim an authorized credit at a
+    # node the caller never saw.
+    admission = report.scoped_admission
+    if binding.successor_hash is None:
+        if admission is not None:
+            return FormalCreditDecision(
+                False, "OUTPUT_TARGET_NOT_BOUND: the report names a scoped admission "
+                       f"({getattr(admission, 'admission_id', '?')[:16]}) that the caller "
+                       "did not authorize; bind it in FormalCreditBinding.successor_hash")
+        return FormalCreditDecision(
+            True, "checked refutation of the formula bound by the caller",
+            successor_hash=subject_derived_successor(subject))
+
+    reported = (getattr(admission, "admission_id", None) if admission is not None
+                else sha256_hex(report.triad.settled_theorem.encode("utf-8")))
+    if reported != binding.successor_hash:
+        return FormalCreditDecision(
+            False, "OUTPUT_TARGET_MISMATCH: the caller authorized "
+                   f"{binding.successor_hash[:16]}, the report points at "
+                   f"{(reported or 'nothing')[:16]}")
+    return FormalCreditDecision(
+        True, "checked refutation of the formula bound by the caller",
+        successor_hash=binding.successor_hash)
 
 
 @dataclass
@@ -518,6 +560,23 @@ def elevate_triad_to_warrant(
     What it does not say: that the assertion is correct. Whether the CNF encodes
     the theorem, and whether that caller was entitled, are decided outside this
     module by whoever passes the binding.
+
+    Where every field of the signed claim comes from, since a claim is only as
+    bound as its weakest field:
+
+      parent_hash      caller argument
+      tau              constant
+      omega            report (triad.antithesis_refusal_id) - covered by the
+                       subject digest, so a change refuses the credit
+      polarity         constant
+      witness          report (triad) - covered by the subject digest
+      successor_hash   caller: bound target, or derived from the bound subject.
+                       NEVER report.scoped_admission when credit is granted
+      signature        caller key
+
+    A Grade E claim still takes its successor from the report. It carries no
+    formal credit and asserts nothing that a target could borrow; that is the
+    contract, stated rather than left to be discovered.
     """
     triad = report.triad
     credit = evaluate_formal_credit(report, credit_binding)
@@ -539,11 +598,15 @@ def elevate_triad_to_warrant(
             delta_size=0
         )
 
-    succ_hash = (
-        report.scoped_admission.admission_id
-        if report.scoped_admission
-        else sha256_hex(triad.settled_theorem.encode("utf-8"))
-    )
+    if credit.granted:
+        # Bound target only. The report cannot aim a claim that carries credit.
+        succ_hash = credit.successor_hash
+    else:
+        succ_hash = (
+            report.scoped_admission.admission_id
+            if report.scoped_admission
+            else sha256_hex(triad.settled_theorem.encode("utf-8"))
+        )
 
     return EdgeClaim.create_and_sign(
         parent_hash=parent_hash,
