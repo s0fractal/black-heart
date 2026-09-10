@@ -1,0 +1,168 @@
+#!/usr/bin/env python3
+# coding: latin-1
+r'''%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 2406 >>
+stream
+0.03 0.04 0.07 rg
+0 0 612 792 re f
+0.06 0.08 0.14 rg
+30 710 552 55 re f
+0.00 0.95 0.50 RG 1.5 w
+30 710 552 55 re S
+BT
+/F1 13 Tf
+0.90 0.60 1.00 rg
+45 745 Td
+(Agora Simplicial Parliament :: AGORA-0.2) Tj
+/F1 8 Tf
+0.75 0.80 0.90 rg
+0 -16 Td
+(Session #1 | Motion: Computational Identity | Standard: ISO 32000-1) Tj
+0 -12 Td
+(Status: RATIFIED_GLOBAL | Cech dim H^1 = 0 | Gini: 0.145) Tj
+ET
+0.05 0.07 0.11 rg
+30 545 552 150 re f
+0.00 0.85 0.75 RG 1.2 w
+30 545 552 150 re S
+0.25 0.45 0.60 RG 0.8 w 45 660 m 565 660 l S
+BT
+/F1 10 Tf
+0.00 0.95 0.80 rg
+45 675 Td
+(FEDERATED CHAMBERS SIMPLICIAL NERVE N(U) & CONTEXT DOMAINS) Tj
+/F1 8 Tf
+0.80 0.85 0.90 rg
+0 -16 Td
+(Chamber Identifier   | Local Context Domains                | Budget   | Local Gini ) Tj
+0 -14 Td
+(alpha                  | axioms, logic                        | 120 ATP  |      0.140 ) Tj
+0 -13 Td
+(beta                   | axioms, computation                  | 150 ATP  |      0.219 ) Tj
+0 -13 Td
+(gamma                  | civics, mycelium                     | 180 ATP  |      0.000 ) Tj
+0 -13 Td
+ET
+0.05 0.06 0.09 rg
+30 355 552 175 re f
+0.70 0.45 1.00 RG 1.2 w
+30 355 552 175 re S
+0.40 0.25 0.65 RG 0.8 w 45 495 m 565 495 l S
+BT
+/F1 10 Tf
+0.80 0.55 1.00 rg
+45 510 Td
+(ANTI-PLUTOCRATIC QUADRATIC VOTING TALLY & GINI DEFENSE) Tj
+/F1 8 Tf
+0.75 0.80 0.85 rg
+0 -16 Td
+(Cumulative Yeas: 18 | Cumulative Nays: 0 | Margin: 18) Tj
+0 -13 Td
+(Federation Gini Index: 0.145 | Plutocracy Ceiling: 0.650 | Status: SAFE) Tj
+0 -13 Td
+(Slashed Stake: 0 ATP | Quorum Verification: PASSED) Tj
+0 -13 Td
+ET
+0.15 0.20 0.28 rg
+45 375 522 14 re f
+0.00 0.95 0.50 rg
+45 375 522 14 re f
+1.00 0.35 0.35 rg
+567 375 0 14 re f
+0.05 0.06 0.08 rg
+30 110 552 230 re f
+0.95 0.65 0.10 RG 1.2 w
+30 110 552 230 re S
+0.60 0.40 0.10 RG 0.8 w 45 305 m 565 305 l S
+BT
+/F1 10 Tf
+0.95 0.75 0.20 rg
+45 320 Td
+(CECH COHOMOLOGY AUDIT & CONSTITUTIONAL CIDv1 DAG ANCHOR) Tj
+/F1 8 Tf
+0.80 0.80 0.85 rg
+0 -16 Td
+(Cech 1-Cohomology dim H^1 = 0 | Fracture Status: ZERO DISCREPANCY (UNIFIED)) Tj
+0 -13 Td
+(Settlement Status: RATIFIED_GLOBAL) Tj
+0 -13 Td
+(Notes / Rejection: None -- Unanimous Sheaf Descent.) Tj
+0 -13 Td
+(CIDv1 DAG Anchor: bafkreig3q6brm2uizf55jljc4odjyp7duk4byz4gw7pfidev4yy7dwvdke) Tj
+0 -13 Td
+(Parent CIDv1:     GENESIS_PARLIAMENT_ROOT) Tj
+0 -13 Td
+ET
+BT
+/F1 8 Tf
+0.45 0.50 0.60 rg
+45 45 Td
+(%B Black-Heart Project -- Engine #35: Federated Sheaf Agora -- Zero Pip Dependencies) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000060 00000 n 
+0000000109 00000 n 
+0000000166 00000 n 
+0000000292 00000 n 
+0000002750 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+2820
+%%EOF
+'''
+# %BLACK_HEART_SHEAF_AGORA_MANIFEST: eyJjaGFtYmVycyI6IFt7ImJ1ZGdldCI6IDEyMCwgImRvbWFpbnMiOiBbImF4aW9tcyIsICJsb2dpYyJdLCAiZ2luaSI6IDAuMTQsICJpZCI6ICJhbHBoYSIsICJuYW1lIjogIkNoYW1iZXIgQWxwaGEgKFB1cmUgTG9naWMpIn0sIHsiYnVkZ2V0IjogMTUwLCAiZG9tYWlucyI6IFsiYXhpb21zIiwgImNvbXB1dGF0aW9uIl0sICJnaW5pIjogMC4yMTkxMDExMjM1OTU1MDU2MywgImlkIjogImJldGEiLCAibmFtZSI6ICJDaGFtYmVyIEJldGEgKENvbnN0cnVjdGl2ZSBDb21wdXRhdGlvbikifSwgeyJidWRnZXQiOiAxODAsICJkb21haW5zIjogWyJjaXZpY3MiLCAibXljZWxpdW0iXSwgImdpbmkiOiAwLjAsICJpZCI6ICJnYW1tYSIsICJuYW1lIjogIkNoYW1iZXIgR2FtbWEgKEF1dG9ub21vdXMgQ2l2aWNzKSJ9XSwgImNpZCI6ICJiYWZrcmVpZzNxNmJybTJ1aXpmNTVqbGpjNG9kanlwN2R1azRieXo0Z3c3cGZpZGV2NHl5N2R3dmRrZSIsICJjbGFpbV9uYW1lIjogIkNvbXB1dGF0aW9uYWwgSWRlbnRpdHkiLCAiZmVkZXJhdGlvbl9naW5pIjogMC4xNDU0NTQ1NDU0NTQ1NDU0NSwgImgxX2RpbWVuc2lvbiI6IDAsICJwYXJlbnRfY2lkIjogIiIsICJwYXJsaWFtZW50X25hbWUiOiAiQWdvcmEgU2ltcGxpY2lhbCBQYXJsaWFtZW50IiwgInByb3Bvc2FsX2lkIjogIlBST1AtQ09OU1RJVFVUSU9OLTAxIiwgInJlY2VpcHRzX2NvdW50IjogMiwgInJlamVjdGlvbl9yZWFzb24iOiAiIiwgInNlc3Npb25faWQiOiAxLCAic3RhdHVzIjogIlJBVElGSUVEX0dMT0JBTCIsICJ0b3RhbF9uYXlzIjogMCwgInRvdGFsX3llYXMiOiAxOH0=
+import os, sys, json, base64
+
+def _audit():
+    with open(__file__, "rb") as f:
+        content = f.read()
+    tag = b"# %BLACK_HEART_SHEAF_AGORA_MANIFEST: "
+    idx = content.find(tag)
+    if idx == -1:
+        print("[FAIL] Sheaf Agora manifest not found.")
+        sys.exit(1)
+    end = content.find(b"\n", idx)
+    raw_b64 = content[idx + len(tag):end].strip()
+    manifest = json.loads(base64.b64decode(raw_b64).decode("utf-8"))
+
+    print("================================================================================")
+    print(f"  %B FEDERATED SHEAF AGORA PARLIAMENT AUDITOR -- SESSION #{manifest.get('session_id')}")
+    print("================================================================================")
+    print(f"  Parliament:          {manifest.get('parliament_name')}")
+    print(f"  Proposal ID:         {manifest.get('proposal_id')}")
+    print(f"  Claim Name:          {manifest.get('claim_name')}")
+    print(f"  Ratification Status: {manifest.get('status')}")
+    print(f"  Quadratic Yeas:      {manifest.get('total_yeas')}")
+    print(f"  Quadratic Nays:      {manifest.get('total_nays')}")
+    print(f"  Federation Gini:     {manifest.get('federation_gini'):.3f} (Ceiling: 0.650)")
+    print(f"  Cech dim H^1:        {manifest.get('h1_dimension')}")
+    print(f"  Chambers Assembly:   {len(manifest.get('chambers', []))} constituent chambers")
+    print(f"  CIDv1 Anchor:        {manifest.get('cid')}")
+    print("--------------------------------------------------------------------------------")
+    if manifest.get('status') == "RATIFIED_GLOBAL":
+        print("[PASS] Proposal ratified with zero Cech cohomology obstruction (dim H^1 = 0).")
+    else:
+        print(f"[REJECTED] Reason: {manifest.get('rejection_reason')}")
+    print("================================================================================")
+
+if __name__ == "__main__":
+    _audit()

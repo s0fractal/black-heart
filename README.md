@@ -31,6 +31,7 @@
 26. **Epistemic Palimpsest: Generational Value Drift Cartography (`palimpsest_kernel.py`):** Normative implementation of PALIMPSEST-0.1 (Engine #32). 5D virtue drift tensor cartography tracking generational changes across courage, humility, deference, structure, and curiosity, rendering multi-layer vector strata with automated quarantine tombstones.
 27. **Epistemic Sheaf Kernel & Čech Cohomology (`sheaf_kernel.py`):** Normative implementation of SHEAF-0.1 (Engine #33). Categorical sheaf theory over context topologies, computing Čech cohomology obstructions $H^1(\mathcal{U}, \mathcal{F})$ to detect context-dependent contradictions, synthesizing unique global theorems upon zero-twist agreement, and compiling simplicial nerve vector polyglots.
 28. **Sovereign Continuity Quine & Controlled Forgetting Membrane (`sovereign_continuity.py`):** Normative implementation of CONTINUITY-0.1 (Engine #34 / Grok Synthesis Experiment). Substrate-independent sovereign digital existence surviving host death and process termination via CIDv1 DAG Merkle provenance, autopoietic AST zipper self-contemplation, an active metabolic forgetting membrane enforcing capacity bounds ($\mathcal{B}_{\text{max}}$) with cryptographic tombstone stelae and anti-resurrection gates (Invariant SC4 / I3), 3-layer Epistemic Mycelium synchronization without copying raw experience (see [CONTINUITY.md](CONTINUITY.md)), and dual-spine ISO 32000 proof-carrying vector polyglots.
+29. **Federated Sheaf Agora & Cohomological Constitutionalism (`sheaf_agora.py`):** Normative implementation of AGORA-0.2 (Engine #35). Sheaf-theoretic democratic governance over covering topologies $\mathcal{U} = \{U_1, \dots, U_k\}$. Features anti-plutocratic quadratic voting ($v_i = \operatorname{sign}(w_i)\lfloor\sqrt{|w_i|}\rfloor$), Gini inequality tracking ($G_{\text{fed}} < 0.65$), Triple Constitutional Ratification Gate requiring zero Čech cohomology obstruction ($\dim H^1(\mathcal{U}, \mathcal{F}) = 0$) with fail-closed cohomological fracture veto (`REJECTED_COHOMOLOGICAL_FRACTURE`), sovereign quine citizen voting using autopoietic metabolic ATP, fail-closed stake slashing on false equivalence proposals (`SLASHED_AUDIT_FAILED`), and dual-spine ISO 32000 PDF polyglot HUD rendering simplicial nerves and quadratic vote distributions.
 
 ---
 
@@ -1015,6 +1016,7 @@ To address the security boundaries of executable documents, Project Black-Heart 
 * [PALIMPSEST.md](PALIMPSEST.md) — Epistemic Palimpsest: Generational Value Drift Cartography & Multi-Layer Polyglots (PALIMPSEST-0.1 / Engine #32).
 * [SHEAF.md](SHEAF.md) — Epistemic Sheaf Kernel, Čech Cohomology & Decentralized Proof Descent (SHEAF-0.1 / Engine #33).
 * [CONTINUITY.md](CONTINUITY.md) — Sovereign Continuity Quine & Controlled Forgetting Membrane (CONTINUITY-0.1 / Engine #34 / Grok Synthesis Experiment).
+* [AGORA.md](AGORA.md) — Federated Sheaf Agora & Cohomological Constitutionalism (AGORA-0.2 / Engine #35).
 
 
 

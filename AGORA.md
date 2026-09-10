@@ -118,3 +118,60 @@ python3 cli.py agora lineage parliament.pdf
 # 4. Cryptographically audit all parliamentary sessions
 python3 cli.py agora audit parliament.pdf
 ```
+
+---
+
+## 7. AGORA-0.2: Federated Sheaf Agora & Cohomological Constitutionalism
+
+In decentralized multi-agent federations, governance cannot assume a single flat global context without inviting tyranny of the majority or irreconcilable ideological fractures. **Engine #35 (`sheaf_agora.py`)** elevates the parliament to a **Sheaf-Theoretic Federation** over a covering topology $\mathcal{U} = \{U_1, U_2, \dots, U_k\}$.
+
+```
+                  [ FEDERATED PARLIAMENTARY COVER U ]
+           U_1: Chamber Alpha (Pure SKI | Budget 120 ATP)
+           U_2: Chamber Beta  (Linear Logic | Budget 150 ATP)
+           U_3: Chamber Gamma (Interaction Nets | Budget 180 ATP)
+                                   |
+                                   v
+             [ Local Quadratic Ballots & Gini Calculations ]
+           v_i = sign(w_i) * floor(sqrt(|w_i|)),  G_k in [0, 1]
+                                   |
+                                   v
+             [ Triple Constitutional Ratification Gate ]
+             1. Political Supermajority: Yeas >= 66.7%
+             2. Anti-Plutocracy Gini:   G_fed < 0.65
+             3. Čech Descent:           dim H^1(U, F) == 0
+                                   |
+                +------------------+------------------+
+                |                                     |
+                v                                     v
+       delta s_{ij} == 0                     delta s_{ij} != 0
+        (Zero Obstruction)                  (Cohomological Fracture)
+                |                                     |
+                v                                     v
+       [ RATIFIED GLOBALLY ]                [ FAIL-CLOSED VETO ]
+```
+
+### 7.1 Formal Invariants (FSA1–FSA6)
+
+* **FSA1 (Federated Chamber Separation):**  
+  Each chamber $U_k$ operates within its bounded context, domain invariants, and local fuel limit. Local voting takes place within the chamber.
+
+* **FSA2 (Anti-Plutocratic Quadratic Assembly):**  
+  Voting power across the federation strictly follows:
+  $$v_i = \operatorname{sign}(w_i) \cdot \lfloor\sqrt{|w_i|}\rfloor$$
+  Oligarchical concentration of ATP cannot overpower grassroots majorities.
+
+* **FSA3 (Gini Inequality Telemetry & Plutocracy Ceiling):**  
+  The parliament tracks the federation-wide Gini index $G_{\text{fed}}$. If $G_{\text{fed}} \ge 0.65$, a Plutocracy Alert is recorded in the settlement receipt.
+
+* **FSA4 (Čech Cohomological Veto):**  
+  Political supermajority ($\ge 66.7\%$) is a necessary but **insufficient** condition for ratification. A proposal MUST achieve zero Čech cohomology obstruction:
+  $$\dim H^1(\mathcal{U}, \mathcal{F}) = 0$$
+  If any pairwise 1-cocycle $(\delta s)_{ij} \ne 0$, the bill is blocked fail-closed with status `REJECTED_COHOMOLOGICAL_FRACTURE`.
+
+* **FSA5 (Fail-Closed Theorem Soundness & Stake Slashing):**  
+  If a motion proposes an algebraic equivalence that reduces to false or diverges under test fixtures, the proposer's pledged stake is slashed: 50% permanently burned, 50% redistributed to Nay voters.
+
+* **FSA6 (Dual-Spine ISO 32000 Polyglot HUD):**  
+  The parliament compiles into a self-contained ISO 32000 PDF polyglot rendering the chamber simplicial nerve $\mathcal{N}(\mathcal{U})$, quadratic vote distributions, and Lorenz/Gini curves, with an embedded standalone Python CLI auditor (`python3 sheaf_parliament.pdf --audit`).
+

@@ -3195,6 +3195,197 @@ def cmd_sovereign(args):
         print("Usage: python3 cli.py sovereign {genesis,step,migrate,audit,pdf} ...")
 
 
+def cmd_sheaf_agora(args):
+    """Command handler for Engine #35: Federated Sheaf Agora & Cohomological Constitutionalism (AGORA-0.2)."""
+    import sheaf_agora
+    from sheaf_agora import (
+        FederatedAgoraParliament,
+        FederatedChamber,
+        FederatedProposal,
+        FederatedBallot,
+        RatificationStatus,
+        generate_sheaf_agora_pdf
+    )
+    from sheaf_kernel import EpistemicContext
+    from agora import ProposalType, VoteDirection
+    from crypto import generate_keypair
+
+    action = getattr(args, "action", "init")
+
+    if action in ("init", "session"):
+        parliament = FederatedAgoraParliament("Constitutional Sheaf Parliament")
+        ctx_alpha = EpistemicContext.create("Chamber Alpha", ["logic", "axioms"], 120)
+        ctx_beta = EpistemicContext.create("Chamber Beta", ["computation", "axioms"], 150)
+        ctx_gamma = EpistemicContext.create("Chamber Gamma", ["mycelium", "civics"], 180)
+        parliament.register_chamber(FederatedChamber("alpha", "Chamber Alpha", ctx_alpha))
+        parliament.register_chamber(FederatedChamber("beta", "Chamber Beta", ctx_beta))
+        parliament.register_chamber(FederatedChamber("gamma", "Chamber Gamma", ctx_gamma))
+
+        sk_sp, pk_sp = generate_keypair()
+        prop = FederatedProposal(
+            proposal_id="PROP-001",
+            title="Universal Identity Axiom",
+            proposal_type=ProposalType.THEOREM_CONGRUENCE,
+            claim_name="Computational Identity",
+            sponsor_pk_hex=pk_sp,
+            stake_atp=50,
+            chamber_terms={
+                "alpha": "(K I) (K I)",
+                "beta": "I",
+                "gamma": "I"
+            },
+            target_nf="I"
+        )
+        prop.sign(sk_sp)
+        parliament.table_proposal(prop)
+
+        # Cast quadratic ballots across constituent chambers
+        for ch_id, stake in [("alpha", 36), ("beta", 49), ("gamma", 25)]:
+            sk_v, pk_v = generate_keypair()
+            b = FederatedBallot(
+                voter_pk_hex=pk_v,
+                chamber_id=ch_id,
+                proposal_id="PROP-001",
+                pledged_atp=stake,
+                direction=VoteDirection.AYE
+            )
+            b.sign(sk_v)
+            parliament.cast_ballot(b)
+
+        receipt = parliament.resolve_session("PROP-001")
+        print("\033[1;36m=================================================================\033[0m")
+        print("  Engine #35:      Federated Sheaf Agora — Session Resolved")
+        print("=================================================================")
+        print(f"  Proposal ID:     {receipt.proposal_id} ({receipt.claim_name})")
+        print(f"  Status:          \033[1;32m{receipt.status.value}\033[0m")
+        print(f"  Quadratic Yeas:  {receipt.total_yeas} | Nays: {receipt.total_nays}")
+        print(f"  Federation Gini: {receipt.federation_gini:.3f} (Ceiling: 0.650)")
+        print(f"  Čech dim H^1:    {receipt.h1_dimension} (Zero Obstruction)")
+        print(f"  CIDv1 DAG:       {receipt.cid}\n")
+
+    elif action == "vote":
+        # Demonstrate Anti-Plutocratic Quadratic Defense: 10 Grassroots vs 1 Oligarch
+        parliament = FederatedAgoraParliament("Agora Quadratic Assembly")
+        ctx = EpistemicContext.create("Assembly", ["civics"], 100)
+        ch = FederatedChamber("assembly", "Assembly", ctx)
+        parliament.register_chamber(ch)
+
+        sk_oli, pk_oli = generate_keypair()
+        b_oli = FederatedBallot(
+            voter_pk_hex=pk_oli, chamber_id="assembly", proposal_id="P-PLUTO",
+            pledged_atp=100, direction=VoteDirection.NAY
+        )
+        b_oli.sign(sk_oli)
+        parliament.cast_ballot(b_oli)
+
+        for _ in range(10):
+            sk_g, pk_g = generate_keypair()
+            b_g = FederatedBallot(
+                voter_pk_hex=pk_g, chamber_id="assembly", proposal_id="P-PLUTO",
+                pledged_atp=4, direction=VoteDirection.AYE
+            )
+            b_g.sign(sk_g)
+            parliament.cast_ballot(b_g)
+
+        yeas, nays = ch.local_tally()
+        print("\033[1;36m=================================================================\033[0m")
+        print("  Engine #35:      Anti-Plutocratic Quadratic Voting Telemetry")
+        print("=================================================================")
+        print(f"  Oligarch:        1 voter with 100 ATP -> floor(sqrt(100)) = {nays} Nays")
+        print(f"  Grassroots:      10 voters with 4 ATP each -> 10 * floor(sqrt(4)) = {yeas} Yeas")
+        print(f"  Total Wealth:    Oligarch: 100 ATP vs Grassroots: 40 ATP")
+        print(f"  Assembly Result: \033[1;32mGRASSROOTS VICTORY ({yeas} Yeas vs {nays} Nays)\033[0m")
+        print(f"  Local Gini:      {ch.local_gini():.3f}\n")
+
+    elif action == "fracture":
+        # Demonstrate fail-closed Čech Cohomology Fracture Veto
+        parliament = FederatedAgoraParliament("Fracture Parliament")
+        ctx1 = EpistemicContext.create("Jurisdiction A", ["consensus", "alpha"], 120)
+        ctx2 = EpistemicContext.create("Jurisdiction B", ["consensus", "beta"], 120)
+        parliament.register_chamber(FederatedChamber("j_a", "Jurisdiction A", ctx1))
+        parliament.register_chamber(FederatedChamber("j_b", "Jurisdiction B", ctx2))
+
+        sk_sp, pk_sp = generate_keypair()
+        prop = FederatedProposal(
+            proposal_id="PROP-FRACTURE",
+            title="Fracturing Resolution",
+            proposal_type=ProposalType.CONSTITUTIONAL_AMENDMENT,
+            claim_name="Consensus Rule Collision",
+            sponsor_pk_hex=pk_sp,
+            stake_atp=20,
+            chamber_terms={"j_a": "K", "j_b": "K I"},
+            target_nf="N/A"
+        )
+        prop.sign(sk_sp)
+        parliament.table_proposal(prop)
+
+        for ch_id in ("j_a", "j_b"):
+            sk_v, pk_v = generate_keypair()
+            b = FederatedBallot(
+                voter_pk_hex=pk_v, chamber_id=ch_id, proposal_id="PROP-FRACTURE",
+                pledged_atp=25, direction=VoteDirection.AYE
+            )
+            b.sign(sk_v)
+            parliament.cast_ballot(b)
+
+        receipt = parliament.resolve_session("PROP-FRACTURE")
+        print("\033[1;36m=================================================================\033[0m")
+        print("  Engine #35:      Čech Cohomological Fracture Veto")
+        print("=================================================================")
+        print(f"  Political Vote:  {receipt.total_yeas} Yeas vs 0 Nays (100% Supermajority)")
+        print(f"  Ratification:    \033[1;31m{receipt.status.value}\033[0m")
+        print(f"  Čech dim H^1:    {receipt.h1_dimension} (Topological Fracture Detected)")
+        print(f"  Rejection Note:  {receipt.rejection_reason}\n")
+
+    elif action == "pdf":
+        out_pdf = getattr(args, "output", "sheaf_agora_parliament.pdf") or "sheaf_agora_parliament.pdf"
+        parliament = FederatedAgoraParliament("Federated Agora Parliament")
+        ctx_alpha = EpistemicContext.create("Chamber Alpha", ["logic", "axioms"], 120)
+        ctx_beta = EpistemicContext.create("Chamber Beta", ["computation", "axioms"], 150)
+        ctx_gamma = EpistemicContext.create("Chamber Gamma", ["mycelium", "civics"], 180)
+        parliament.register_chamber(FederatedChamber("alpha", "Chamber Alpha", ctx_alpha))
+        parliament.register_chamber(FederatedChamber("beta", "Chamber Beta", ctx_beta))
+        parliament.register_chamber(FederatedChamber("gamma", "Chamber Gamma", ctx_gamma))
+
+        sk_sp, pk_sp = generate_keypair()
+        prop = FederatedProposal(
+            proposal_id="PROP-CONSTITUTION-01",
+            title="Foundational Identity Axiom",
+            proposal_type=ProposalType.THEOREM_CONGRUENCE,
+            claim_name="Computational Identity",
+            sponsor_pk_hex=pk_sp,
+            stake_atp=50,
+            chamber_terms={
+                "alpha": "(K I) (K I)",
+                "beta": "I",
+                "gamma": "I"
+            },
+            target_nf="I"
+        )
+        prop.sign(sk_sp)
+        parliament.table_proposal(prop)
+
+        for ch_id, stake in [("alpha", 49), ("beta", 36), ("gamma", 25)]:
+            sk_v, pk_v = generate_keypair()
+            b = FederatedBallot(
+                voter_pk_hex=pk_v, chamber_id=ch_id, proposal_id="PROP-CONSTITUTION-01",
+                pledged_atp=stake, direction=VoteDirection.AYE
+            )
+            b.sign(sk_v)
+            parliament.cast_ballot(b)
+
+        receipt = parliament.resolve_session("PROP-CONSTITUTION-01")
+        generate_sheaf_agora_pdf(parliament, receipt, out_pdf)
+        print("\033[1;36m=================================================================\033[0m")
+        print("  Engine #35:      Federated Sheaf Agora (ISO 32000 Vector Polyglot)")
+        print("=================================================================")
+        print(f"  Output Polyglot: \033[1;32m{out_pdf}\033[0m")
+        print(f"  Status:          {receipt.status.value} (Čech dim H^1 = {receipt.h1_dimension})")
+        print(f"  Standalone Run:  python3 {out_pdf}\n")
+    else:
+        print("Usage: python3 cli.py sheaf-agora {init,vote,fracture,pdf} ...")
+
+
 def cmd_shell(args):
 
 
@@ -3241,6 +3432,7 @@ def cmd_shell(args):
             print("  palimpsest <a_idx> <b_idx>   - Measure 5D value drift cartography between two organisms")
             print("  admission [cand] [budget]    - Assess and retest scoped admission without permission leakage")
             print("  sheaf [claim]                - Verify local-to-global sheaf descent and Čech cohomology")
+            print("  sheaf-agora [action]         - Simulate federated agora session, quadratic voting, or Čech fracture")
             print("  sovereign [step|genesis]     - Advance sovereign continuity quine and metabolic membrane")
             print("  eval <expr>                  - Evaluate SKIY combinator expression with ATP meter")
             print("  exit / quit                  - Halts the hypervisor\n")
@@ -3480,6 +3672,13 @@ def cmd_shell(args):
                     print(f"  [✓] Sovereign Gen #{r.generation} stepped. CID: {r.cid[:24]}... | ATP: +{r.atp_cumulative_saved} | Cost: {r.active_cost}/{r.metabolic_budget}")
             except Exception as e:
                 print(f"[!] Sovereign command failed: {e}")
+        elif cmd in ("sheaf-agora", "sheaf_agora"):
+            try:
+                import argparse
+                action = parts[1] if len(parts) > 1 else "init"
+                cmd_sheaf_agora(argparse.Namespace(action=action, output=None))
+            except Exception as e:
+                print(f"[!] Sheaf Agora command failed: {e}")
         else:
             print(f"[!] Unknown command '{cmd}'. Type 'help' for available commands.")
 
@@ -4149,6 +4348,18 @@ def main():
     p_sv_pdf.add_argument("-o", "--output", default="sovereign_organism.pdf", help="Output PDF path")
     p_sv_pdf.add_argument("--capacity", type=int, default=300, help="Metabolic ATP capacity")
 
+    # sheaf-agora (Engine #35: Federated Sheaf Agora & Cohomological Constitutionalism — AGORA-0.2)
+    p_sa = subparsers.add_parser(
+        "sheaf-agora",
+        help="Engine #35: Federated Sheaf Agora & Cohomological Constitutionalism (AGORA-0.2)"
+    )
+    sa_subs = p_sa.add_subparsers(dest="action")
+    p_sa_init = sa_subs.add_parser("init", help="Simulate federated agora parliament session and resolution")
+    p_sa_vote = sa_subs.add_parser("vote", help="Demonstrate anti-plutocratic quadratic voting defense")
+    p_sa_frac = sa_subs.add_parser("fracture", help="Demonstrate fail-closed Čech cohomological fracture veto")
+    p_sa_pdf = sa_subs.add_parser("pdf", help="Compile ISO 32000 vector polyglot parliament certificate")
+    p_sa_pdf.add_argument("-o", "--output", default="sheaf_agora_parliament.pdf", help="Output PDF path")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -4227,6 +4438,8 @@ def main():
         cmd_sheaf(args)
     elif args.command == "sovereign":
         cmd_sovereign(args)
+    elif args.command == "sheaf-agora":
+        cmd_sheaf_agora(args)
     else:
         parser.print_help()
 

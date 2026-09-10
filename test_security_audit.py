@@ -1767,6 +1767,107 @@ class TestSecurityAuditG1toG9(unittest.TestCase):
         self.assertIn("REJECTED", reason)
         self.assertEqual(len(org.synapse.divergence_antibodies), 1)
 
+        # 4. Federated Sheaf Agora Negative Controls (Engine #35: AGORA-0.2)
+        from sheaf_agora import (
+            FederatedAgoraParliament,
+            FederatedChamber,
+            FederatedProposal,
+            FederatedBallot,
+            RatificationStatus
+        )
+        from sheaf_kernel import EpistemicContext
+        from agora import ProposalType, VoteDirection
+
+        # Invariant FSA4: 100% affirmative political vote CANNOT bypass non-zero Čech cohomology fracture
+        fed_parliament = FederatedAgoraParliament("Security Test Parliament")
+        sec_ctx1 = EpistemicContext.create("Sec Chamber 1", ["consensus", "ledger"], 100)
+        sec_ctx2 = EpistemicContext.create("Sec Chamber 2", ["consensus", "execution"], 100)
+        fed_parliament.register_chamber(FederatedChamber("sec_ch1", "Sec Chamber 1", sec_ctx1))
+        fed_parliament.register_chamber(FederatedChamber("sec_ch2", "Sec Chamber 2", sec_ctx2))
+
+        sk_sp, pk_sp = C.generate_keypair()
+        sk_vt, pk_vt = C.generate_keypair()
+
+        fracture_prop = FederatedProposal(
+            proposal_id="sec-prop-fracture",
+            title="Fracturing Amendment",
+            proposal_type=ProposalType.CONSTITUTIONAL_AMENDMENT,
+            claim_name="Consensus Collision Rule",
+            sponsor_pk_hex=pk_sp,
+            stake_atp=25,
+            chamber_terms={
+                "sec_ch1": "K",      # reduces to 🖤
+                "sec_ch2": "K I"     # reduces to 🖤 (🤍)
+            },
+            target_nf="N/A"
+        )
+        fracture_prop.sign(sk_sp)
+        fed_parliament.table_proposal(fracture_prop)
+
+        # 100% Affirmative voting across all chambers
+        b_aye1 = FederatedBallot(
+            voter_pk_hex=pk_vt, chamber_id="sec_ch1", proposal_id="sec-prop-fracture",
+            pledged_atp=100, direction=VoteDirection.AYE
+        )
+        b_aye1.sign(sk_vt)
+        fed_parliament.cast_ballot(b_aye1)
+
+        b_aye2 = FederatedBallot(
+            voter_pk_hex=pk_vt, chamber_id="sec_ch2", proposal_id="sec-prop-fracture",
+            pledged_atp=100, direction=VoteDirection.AYE
+        )
+        b_aye2.sign(sk_vt)
+        fed_parliament.cast_ballot(b_aye2)
+
+        fracture_receipt = fed_parliament.resolve_session("sec-prop-fracture")
+        self.assertEqual(
+            fracture_receipt.status,
+            RatificationStatus.REJECTED_COHOMOLOGICAL_FRACTURE,
+            "Invariant FSA4: Unanimous political vote must not override Čech cohomology obstruction"
+        )
+        self.assertGreater(fracture_receipt.h1_dimension, 0)
+
+        # Invariant FSA2: Forged ballot signature or tampered stake must be rejected
+        forged_ballot = FederatedBallot(
+            voter_pk_hex=pk_vt, chamber_id="sec_ch1", proposal_id="sec-prop-fracture",
+            pledged_atp=49, direction=VoteDirection.AYE
+        )
+        forged_ballot.sign(sk_vt)
+        # Adversary inflates pledged ATP after signing
+        forged_ballot.pledged_atp = 999999
+        self.assertFalse(forged_ballot.verify(), "Tampered ballot must fail signature verification")
+        with self.assertRaises(ValueError):
+            fed_parliament.cast_ballot(forged_ballot)
+
+        # Invariant FSA5: False algebraic equivalence proposal gets slashed even with affirmative votes
+        false_prop = FederatedProposal(
+            proposal_id="sec-prop-falsehood",
+            title="Falsehood Motion",
+            proposal_type=ProposalType.THEOREM_CONGRUENCE,
+            claim_name="Falsehood Claim K I == I",
+            sponsor_pk_hex=pk_sp,
+            stake_atp=100,
+            chamber_terms={"sec_ch1": "K I"},
+            target_nf="I"
+        )
+        false_prop.sign(sk_sp)
+        fed_parliament.table_proposal(false_prop)
+
+        b_fake_aye = FederatedBallot(
+            voter_pk_hex=pk_vt, chamber_id="sec_ch1", proposal_id="sec-prop-falsehood",
+            pledged_atp=64, direction=VoteDirection.AYE
+        )
+        b_fake_aye.sign(sk_vt)
+        fed_parliament.cast_ballot(b_fake_aye)
+
+        false_receipt = fed_parliament.resolve_session("sec-prop-falsehood")
+        self.assertEqual(
+            false_receipt.status,
+            RatificationStatus.SLASHED_AUDIT_FAILED,
+            "Invariant FSA5: False equivalence proposal must be slashed fail-closed"
+        )
+        self.assertEqual(false_receipt.slashed_stake, 100)
+
 
 if __name__ == "__main__":
     unittest.main()

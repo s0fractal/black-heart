@@ -55,6 +55,7 @@ SUITES = [
     ("Epistemic Palimpsest — Value Drift Cartography", "test_palimpsest_kernel"),
     ("Epistemic Sheaf Kernel & Čech Cohomology", "test_sheaf_kernel"),
     ("Sovereign Continuity Quine & Forgetting Membrane", "test_sovereign_continuity"),
+    ("Federated Sheaf Agora & Cohomological Constitutionalism", "test_sheaf_agora"),
 ]
 
 
