@@ -14,7 +14,7 @@ import unittest
 import glyph
 from glyph import K, I, S, parse, evaluate, tree_size, App, Comb, Var
 import smt_kernel
-from smt_kernel import verify_unsat_certificate
+from smt_kernel import check_proof_dag_structure
 import cegis_kernel
 from cegis_kernel import (
     Example, SynthesisStatus, CertifiedSynthesisResult,
@@ -62,7 +62,7 @@ class TestCEGISKernel(unittest.TestCase):
         self.assertGreater(synth.explored_count, 0)
 
     def test_03_cegis_loop_identity(self):
-        """Synthesize identity combinator with certified SMT verification."""
+        """Synthesize the identity combinator; the SMT proof object is shape-checked only."""
         cegis = CEGISLoop(verifier_domain=["a", "b", "c"])
         result = cegis.synthesize(lambda inp: inp[0], input_arity=1)
 
@@ -70,7 +70,7 @@ class TestCEGISKernel(unittest.TestCase):
         self.assertIsNotNone(result.program)
         self.assertEqual(result.program_str, str(I))
         self.assertIsNotNone(result.proof_dag)
-        self.assertTrue(verify_unsat_certificate(result.proof_dag))
+        self.assertTrue(check_proof_dag_structure(result.proof_dag))  # shape only; not a checked refutation
         self.assertGreater(result.smt_verifications, 0)
 
     def test_04_cegis_loop_identity_skk(self):
@@ -87,7 +87,7 @@ class TestCEGISKernel(unittest.TestCase):
         self.assertIsNotNone(result.program)
         # S K K is App(App(S, K), K)
         self.assertEqual(result.program, App(App(S, K), K))
-        self.assertTrue(verify_unsat_certificate(result.proof_dag))
+        self.assertTrue(check_proof_dag_structure(result.proof_dag))  # shape only; not a checked refutation
         self.assertGreater(result.candidates_pruned_oe, 0)
 
     def test_05_cegis_loop_constant_selectors(self):
@@ -125,12 +125,16 @@ class TestCEGISKernel(unittest.TestCase):
         self.assertEqual(result.program, App(K, Var("a")))
 
     def test_07_combinator_superoptimizer(self):
-        """Superoptimize bloated combinator S K K into minimal normal form I with SMT certificate."""
+        """Superoptimize bloated combinator S K K into minimal normal form I.
+
+        The accompanying SMT proof object is shape-checked only; whether it
+        carries any formal credit is a separate question.
+        """
         res_opt = superoptimize_combinator("S K K")
         self.assertEqual(res_opt.status, SynthesisStatus.PROVED_CORRECT)
         self.assertEqual(res_opt.program, I)
         self.assertAlmostEqual(res_opt.ast_size_reduction, 0.8, places=2)
-        self.assertTrue(verify_unsat_certificate(res_opt.proof_dag))
+        self.assertTrue(check_proof_dag_structure(res_opt.proof_dag))  # shape only
 
         # Also test Python constructor string format
         res_opt2 = superoptimize_combinator("App(App(Comb('🌿'), Comb('🖤')), Comb('🖤'))")

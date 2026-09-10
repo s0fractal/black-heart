@@ -284,12 +284,20 @@ class TestDialecticKernel(unittest.TestCase):
         self.assertIsNone(delta)
 
     def test_08_e_to_a_warrant_elevation(self):
-        """Grade A warrant generation for SMT-certified dialectical synthesis."""
+        """Grade A requires a receipt that re-verifies against this triad.
+
+        The fixture used to set `smt_verified=True` and get an axiomatic
+        warrant, which graded a boolean rather than a derivation. It now
+        supplies a refutation bound to these exact operands, and a second pass
+        shows the same report without that binding stays EMPIRICAL.
+        """
+        import smt_kernel as sm
+        from dialectic_kernel import triad_subject_digest, FormalCreditBinding
         synth = PreconditionSynthesizer()
         cand_fn = lambda x: str(int(x) ** 2) if int(x) <= 3 else "0"
         spec_fn = lambda x: str(int(x) ** 2)
         domain = ["1", "2", "3"]
-        guard, proof_dag = synth.synthesize_domain_guard(cand_fn, spec_fn, domain)
+        guard, _ = synth.synthesize_domain_guard(cand_fn, spec_fn, domain)
 
         triad = DialecticalTriad(
             thesis_candidate_digest=sha256_hex(b"cand"),
@@ -300,19 +308,50 @@ class TestDialecticKernel(unittest.TestCase):
             status=DialecticalStatus.SYNTHESIS_ACHIEVED,
             settled_theorem="Proved equivalence on admissible domain."
         )
+
+        # A checked refutation of the formula this caller names, bound to the triad.
+        formula = [[1], [-1]]
+        proof_dag = {
+            1: sm.ResolutionProofNode(clause_id=1, clause=[1], rule="input"),
+            2: sm.ResolutionProofNode(clause_id=2, clause=[-1], rule="input"),
+            3: sm.ResolutionProofNode(clause_id=3, clause=[], rule="learned",
+                                      antecedents=[1, 2], pivot_vars=[1]),
+        }
+        receipt = sm.issue_refutation_receipt(triad_subject_digest(triad), formula, proof_dag)
+        self.assertIsNotNone(receipt)
+
         report = DialecticalDiscoveryReport(
             triad=triad,
             smt_verified=True,
+            refutation_receipt=receipt,
             proof_dag=proof_dag,
             elapsed_sec=0.01
         )
 
-        warrant = elevate_triad_to_warrant(report, self.sk_author, self.pk_author)
+        # The binding is what a caller entitled to spend this credit asserts. It
+        # is computed here, by that caller, and never read out of the report.
+        binding = FormalCreditBinding(
+            subject_digest=triad_subject_digest(triad),
+            formula_sha256=sm.formula_digest(formula))
+
+        warrant = elevate_triad_to_warrant(report, self.sk_author, self.pk_author,
+                                           credit_binding=binding)
         self.assertEqual(warrant.grade, EvidenceGrade.AXIOMATIC)
         self.assertEqual(warrant.polarity, Polarity.AFFIRM)
         self.assertEqual(warrant.author_pk_hex, self.pk_author)
-
         self.assertTrue(warrant.verify_signature())
+
+        # Negative controls on the same fixture, one per way of asking for
+        # credit the caller never granted.
+        self.assertEqual(
+            elevate_triad_to_warrant(report, self.sk_author, self.pk_author).grade,
+            EvidenceGrade.EMPIRICAL, "no caller binding")
+        unbound = DialecticalDiscoveryReport(
+            triad=triad, smt_verified=True, proof_dag=proof_dag, elapsed_sec=0.01)
+        self.assertEqual(
+            elevate_triad_to_warrant(unbound, self.sk_author, self.pk_author,
+                                     credit_binding=binding).grade,
+            EvidenceGrade.EMPIRICAL, "flag set, no receipt")
 
     def test_09_iso32000_polyglot_pdf_and_audit(self):
         """Test ISO 32000 vector polyglot generation and standalone Python auditor execution."""

@@ -37,14 +37,19 @@ import math
 import hashlib
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, Tuple, Set, Union, Callable
+from typing import List, Dict, Any, Optional, Tuple, Set, Union, Callable, Iterable
 
 import glyph
 from glyph import Term, Comb, Var, App, K, I, S, parse, evaluate, tree_size
 import warrant_kernel
 from warrant_kernel import EvidenceGrade, EdgeClaim, AxiomaticWitness, EmpiricalWitness, Polarity
 import smt_kernel
-from smt_kernel import SMTSolver, SMTStatus, verify_unsat_certificate
+from smt_kernel import (
+    SMTSolver, SMTStatus,
+    check_resolution_refutation, RefutationStatus,
+    RefutationReceipt, issue_refutation_receipt, verify_refutation_receipt,
+    formula_digest,
+)
 import scoped_admission
 from scoped_admission import (
     RefusalRecord, RefusalReason, ReevaluationRequest, ReevalEligibility,
@@ -118,6 +123,149 @@ class DialecticalTriad:
     settled_theorem: str
 
 
+CREDIT_SUBJECT_PROFILE = "dialectic.credit-subject.v2"
+
+
+def triad_subject_digest(triad: "DialecticalTriad") -> str:
+    """Every operand the claimed credit is allowed to rest on, serialized.
+
+    v1 hashed the candidate digest, the refusal id and the settled-theorem
+    prose, and left out the guard and the context delta — the two things a
+    Grade A warrant actually spends, since the witness quotes the delta and the
+    admission rests on the guard. Both could be swapped underneath an unchanged
+    digest. A readable summary is not a substitute for structured operands.
+
+    Anything a downstream claim consumes belongs here. If a field is left out,
+    the resulting claim may not derive credit from it.
+    """
+    guard = triad.precondition
+    delta = triad.synthesis_delta
+    payload = json.dumps({
+        "profile": CREDIT_SUBJECT_PROFILE,
+        "thesis_candidate_digest": triad.thesis_candidate_digest,
+        "antithesis_refusal_id": triad.antithesis_refusal_id,
+        "refusal_reason": getattr(triad.refusal_reason, "value", str(triad.refusal_reason)),
+        "status": getattr(triad.status, "value", str(triad.status)),
+        "settled_theorem": triad.settled_theorem,
+        "precondition": None if guard is None else {
+            "guard_id": guard.guard_id,
+            "admissible_domain": list(guard.admissible_domain),
+            "excluded_domain": list(guard.excluded_domain),
+            "smt_formula": guard.smt_formula,
+        },
+        "synthesis_delta": None if delta is None else {
+            "old_budget_steps": delta.old_budget_steps,
+            "recommended_budget_steps": delta.recommended_budget_steps,
+            "delta_steps": delta.delta_steps,
+            "growth_ratio": repr(delta.growth_ratio),
+            "confidence": repr(delta.confidence),
+        },
+    }, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return sha256_hex(payload.encode("utf-8"))
+
+
+@dataclass(frozen=True)
+class FormalCreditBinding:
+    """What the caller entitled to spend this credit says it is about.
+
+    This must reach the consumer through its own channel — a trusted caller, a
+    configuration, an operator decision — and must NEVER be rebuilt from the
+    report being graded. Everything inside a report is constructible by whoever
+    hands it over, so a report compared against itself binds nothing.
+
+    The trust boundary, stated: this type does not authenticate anybody. It
+    records that some caller with the authority to make this call asserted that
+    `formula_sha256` is the encoding of `subject_digest`. Whether that caller
+    was entitled is decided outside this module, by whoever chose to pass it.
+    """
+    subject_digest: str
+    formula_sha256: str
+    # The output node this credit may be spent on. A claim is a signed edge to
+    # somewhere, so binding only the inputs leaves the caller authorizing one
+    # question and the report choosing where the answer points. None means the
+    # caller authorized no external target, and the successor is then derived
+    # from the bound subject alone.
+    successor_hash: Optional[str] = None
+    scope: str = "caller-asserted CNF encoding of the settled theorem"
+
+
+@dataclass(frozen=True)
+class FormalCreditDecision:
+    granted: bool
+    reason: str
+    # Where a granted claim is allowed to point. Never read from the report.
+    successor_hash: Optional[str] = None
+
+
+def subject_derived_successor(subject_digest: str) -> str:
+    """The output target when the caller authorized no external one.
+
+    Derived from the bound subject, so a claim carrying formal credit cannot be
+    aimed by whoever supplies the report.
+    """
+    return sha256_hex(("dialectic.credit-successor.v1:" + subject_digest).encode("utf-8"))
+
+
+def evaluate_formal_credit(
+    report: "DialecticalDiscoveryReport",
+    binding: Optional[FormalCreditBinding],
+) -> FormalCreditDecision:
+    """Decide whether this report may carry formal credit, trusting only `binding`.
+
+    Order matters: the caller's expectation is compared against the operands
+    being graded FIRST, so a receipt that was retargeted to match those operands
+    still has to match a formula the caller named, and the mathematics is
+    re-derived last.
+    """
+    if binding is None:
+        return FormalCreditDecision(False, "NO_CALLER_BINDING")
+    if not isinstance(binding, FormalCreditBinding):
+        return FormalCreditDecision(False, "BINDING_WRONG_TYPE")
+
+    subject = triad_subject_digest(report.triad)
+    if binding.subject_digest != subject:
+        return FormalCreditDecision(
+            False, "BINDING_IS_FOR_ANOTHER_SUBJECT: the operands being graded are "
+                   f"{subject[:16]}, the caller bound {binding.subject_digest[:16]}")
+
+    receipt = report.refutation_receipt
+    if receipt is None:
+        return FormalCreditDecision(False, "NO_REFUTATION_RECEIPT")
+    if formula_digest(receipt.formula) != binding.formula_sha256:
+        return FormalCreditDecision(
+            False, "RECEIPT_CARRIES_A_FORMULA THE CALLER DID NOT BIND")
+
+    checked = verify_refutation_receipt(receipt, subject, report.proof_dag)
+    if checked.status != RefutationStatus.VERIFIED_REFUTATION:
+        return FormalCreditDecision(False, f"REFUTATION_{checked.status.value}: {checked.reason}")
+
+    # The result the credit is spent on is bound as well as the inputs it rests
+    # on. `scoped_admission` travels in the report and becomes the signed
+    # successor, so an unbound one lets a report aim an authorized credit at a
+    # node the caller never saw.
+    admission = report.scoped_admission
+    if binding.successor_hash is None:
+        if admission is not None:
+            return FormalCreditDecision(
+                False, "OUTPUT_TARGET_NOT_BOUND: the report names a scoped admission "
+                       f"({getattr(admission, 'admission_id', '?')[:16]}) that the caller "
+                       "did not authorize; bind it in FormalCreditBinding.successor_hash")
+        return FormalCreditDecision(
+            True, "checked refutation of the formula bound by the caller",
+            successor_hash=subject_derived_successor(subject))
+
+    reported = (getattr(admission, "admission_id", None) if admission is not None
+                else sha256_hex(report.triad.settled_theorem.encode("utf-8")))
+    if reported != binding.successor_hash:
+        return FormalCreditDecision(
+            False, "OUTPUT_TARGET_MISMATCH: the caller authorized "
+                   f"{binding.successor_hash[:16]}, the report points at "
+                   f"{(reported or 'nothing')[:16]}")
+    return FormalCreditDecision(
+        True, "checked refutation of the formula bound by the caller",
+        successor_hash=binding.successor_hash)
+
+
 @dataclass
 class DialecticalDiscoveryReport:
     """
@@ -127,7 +275,15 @@ class DialecticalDiscoveryReport:
     request: Optional[ReevaluationRequest] = None
     retest_result: Optional[RetestResult] = None
     scoped_admission: Optional[ScopedAdmission] = None
+    # Reporting only. Formal credit is NOT taken from this flag: a report is a
+    # mutable public object, so anyone can set it. The grade is decided by
+    # re-checking `refutation_receipt` at the credit boundary.
     smt_verified: bool = False
+    smt_refutation_check: str = RefutationStatus.INVALID.value
+    # Present only when the caller supplied the formula it wanted refuted, bound
+    # to this triad's operands. Absent means exactly that, and is reported as
+    # MISSING_FORMULA_BINDING rather than being inferred from the proof.
+    refutation_receipt: Optional[RefutationReceipt] = None
     proof_dag: Optional[Dict[int, Any]] = None
     elapsed_sec: float = 0.0
 
@@ -274,7 +430,8 @@ class DialecticalOrchestrator:
         refusal_id: str,
         candidate_bytes: bytes,
         executor_fn: Callable[[bytes, Dict[str, Any]], Tuple[RetestOutcome, int, bytes]],
-        researcher_hypothesis: Optional[str] = None
+        researcher_hypothesis: Optional[str] = None,
+        formula_clauses: Optional[Iterable[Iterable[int]]] = None
     ) -> DialecticalDiscoveryReport:
         """
         Full autonomous discovery and promotion loop:
@@ -343,7 +500,23 @@ class DialecticalOrchestrator:
         )
 
         proof_dag = getattr(retest, "proof_dag", None)
-        smt_verified = (proof_dag is not None and verify_unsat_certificate(proof_dag))
+        # The formula comes from the caller or there is no formal credit. Reading
+        # the proof's own `input` nodes and calling them the axioms would let any
+        # self-consistent contradiction stand in for the theorem actually asked
+        # about: a checked refutation of {p, not p} says nothing about this
+        # candidate. Absence of a formula is reported as such, not inferred away.
+        receipt = None
+        if proof_dag is None:
+            refutation = "NO_PROOF"
+            smt_verified = False
+        elif formula_clauses is None:
+            refutation = "MISSING_FORMULA_BINDING"
+            smt_verified = False
+        else:
+            subject = triad_subject_digest(triad)
+            receipt = issue_refutation_receipt(subject, formula_clauses, proof_dag)
+            refutation = check_resolution_refutation(formula_clauses, proof_dag).status.value
+            smt_verified = receipt is not None
 
         return DialecticalDiscoveryReport(
             triad=triad,
@@ -351,6 +524,8 @@ class DialecticalOrchestrator:
             retest_result=retest,
             scoped_admission=adm,
             smt_verified=smt_verified,
+            smt_refutation_check=refutation,
+            refutation_receipt=receipt,
             proof_dag=proof_dag,
             elapsed_sec=time.time() - t_start
         )
@@ -360,14 +535,52 @@ def elevate_triad_to_warrant(
     report: DialecticalDiscoveryReport,
     author_sk_hex: str,
     author_pk_hex: str,
-    parent_hash: str = "0" * 64
+    parent_hash: str = "0" * 64,
+    credit_binding: Optional[FormalCreditBinding] = None
 ) -> EdgeClaim:
     """
-    Elevates an SMT-certified Dialectical Synthesis into a sovereign Grade A (Axiomatic)
-    Warrant EdgeClaim, or Grade E (Empirical) if SMT refutation proof DAG is absent.
+    Elevates a Dialectical Synthesis whose refutation was CHECKED into a Grade A
+    (Axiomatic) Warrant EdgeClaim, and otherwise into Grade E (Empirical).
+
+    Grade A requires `credit_binding`, supplied by the caller and NOT taken from
+    the report. Without it the claim is Grade E, always. Everything a report
+    carries — the flag, the receipt, the receipt's subject label — is
+    constructible by whoever hands the report over, so comparing a report
+    against itself establishes nothing; the retargeting is a one-line
+    `dataclasses.replace` away.
+
+    Given a binding, three things must hold: the caller's subject digest equals
+    the digest of the operands actually being graded, the receipt carries the
+    formula the caller named, and the refutation re-derives here.
+
+    What a Grade A says: someone entitled to make this call asserted that a
+    named CNF encodes this synthesis, and every resolution step of a refutation
+    of that CNF was re-derived against these exact operands.
+
+    What it does not say: that the assertion is correct. Whether the CNF encodes
+    the theorem, and whether that caller was entitled, are decided outside this
+    module by whoever passes the binding.
+
+    Where every field of the signed claim comes from, since a claim is only as
+    bound as its weakest field:
+
+      parent_hash      caller argument
+      tau              constant
+      omega            report (triad.antithesis_refusal_id) - covered by the
+                       subject digest, so a change refuses the credit
+      polarity         constant
+      witness          report (triad) - covered by the subject digest
+      successor_hash   caller: bound target, or derived from the bound subject.
+                       NEVER report.scoped_admission when credit is granted
+      signature        caller key
+
+    A Grade E claim still takes its successor from the report. It carries no
+    formal credit and asserts nothing that a target could borrow; that is the
+    contract, stated rather than left to be discovered.
     """
     triad = report.triad
-    if report.proof_dag is not None and report.smt_verified:
+    credit = evaluate_formal_credit(report, credit_binding)
+    if credit.granted:
         witness = AxiomaticWitness(
             derivation_steps=[
                 f"Antithesis: {triad.antithesis_refusal_id}",
@@ -385,11 +598,15 @@ def elevate_triad_to_warrant(
             delta_size=0
         )
 
-    succ_hash = (
-        report.scoped_admission.admission_id
-        if report.scoped_admission
-        else sha256_hex(triad.settled_theorem.encode("utf-8"))
-    )
+    if credit.granted:
+        # Bound target only. The report cannot aim a claim that carries credit.
+        succ_hash = credit.successor_hash
+    else:
+        succ_hash = (
+            report.scoped_admission.admission_id
+            if report.scoped_admission
+            else sha256_hex(triad.settled_theorem.encode("utf-8"))
+        )
 
     return EdgeClaim.create_and_sign(
         parent_hash=parent_hash,

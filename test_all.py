@@ -52,6 +52,7 @@ SUITES = [
     ("Epistemic Swarm Membrane & Quine Symbiosis", "test_epistemic_swarm"),
     ("Epistemic E-Graph Kernel & Equality Saturation", "test_egraph_kernel"),
     ("Sovereign SMT Kernel & First-Order DPLL(T) Verifier", "test_smt_kernel"),
+    ("UNSAT Certificate: Structure vs Checked Refutation", "test_unsat_certificate"),
     ("Counterexample-Guided Inductive Synthesis (CEGIS)", "test_cegis_kernel"),
     ("Scoped Re-Admission & Conditional Reopening", "test_scoped_admission"),
     ("Dialectical Discovery & Automated Hypothesis Generation", "test_dialectic_kernel"),
