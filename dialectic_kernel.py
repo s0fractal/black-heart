@@ -37,7 +37,7 @@ import math
 import hashlib
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, Tuple, Set, Union, Callable
+from typing import List, Dict, Any, Optional, Tuple, Set, Union, Callable, Iterable
 
 import glyph
 from glyph import Term, Comb, Var, App, K, I, S, parse, evaluate, tree_size
@@ -47,6 +47,7 @@ import smt_kernel
 from smt_kernel import (
     SMTSolver, SMTStatus,
     check_resolution_refutation, RefutationStatus,
+    RefutationReceipt, issue_refutation_receipt, verify_refutation_receipt,
 )
 import scoped_admission
 from scoped_admission import (
@@ -121,6 +122,21 @@ class DialecticalTriad:
     settled_theorem: str
 
 
+def triad_subject_digest(triad: "DialecticalTriad") -> str:
+    """The operands a refutation must be about if it is to grade this triad.
+
+    Anything that changes the question changes this digest, so a receipt issued
+    for one synthesis cannot be spent on another.
+    """
+    payload = "|".join([
+        "dialectic.subject.v1",
+        triad.thesis_candidate_digest,
+        triad.antithesis_refusal_id,
+        triad.settled_theorem,
+    ])
+    return sha256_hex(payload.encode("utf-8"))
+
+
 @dataclass
 class DialecticalDiscoveryReport:
     """
@@ -130,11 +146,15 @@ class DialecticalDiscoveryReport:
     request: Optional[ReevaluationRequest] = None
     retest_result: Optional[RetestResult] = None
     scoped_admission: Optional[ScopedAdmission] = None
-    # True only when a refutation was checked step by step. It is not a
-    # statement that the proof's axioms are the formula anyone asked about:
-    # see smt_refutation_check and the note where this field is filled.
+    # Reporting only. Formal credit is NOT taken from this flag: a report is a
+    # mutable public object, so anyone can set it. The grade is decided by
+    # re-checking `refutation_receipt` at the credit boundary.
     smt_verified: bool = False
     smt_refutation_check: str = RefutationStatus.INVALID.value
+    # Present only when the caller supplied the formula it wanted refuted, bound
+    # to this triad's operands. Absent means exactly that, and is reported as
+    # MISSING_FORMULA_BINDING rather than being inferred from the proof.
+    refutation_receipt: Optional[RefutationReceipt] = None
     proof_dag: Optional[Dict[int, Any]] = None
     elapsed_sec: float = 0.0
 
@@ -281,7 +301,8 @@ class DialecticalOrchestrator:
         refusal_id: str,
         candidate_bytes: bytes,
         executor_fn: Callable[[bytes, Dict[str, Any]], Tuple[RetestOutcome, int, bytes]],
-        researcher_hypothesis: Optional[str] = None
+        researcher_hypothesis: Optional[str] = None,
+        formula_clauses: Optional[Iterable[Iterable[int]]] = None
     ) -> DialecticalDiscoveryReport:
         """
         Full autonomous discovery and promotion loop:
@@ -350,20 +371,23 @@ class DialecticalOrchestrator:
         )
 
         proof_dag = getattr(retest, "proof_dag", None)
-        # Every resolution step is checked. The clause set is the one the proof
-        # declares as its own inputs, which is the strongest binding available
-        # from a result object here: it catches a step that does not resolve,
-        # and it does NOT establish that those inputs are the formula under
-        # discussion. A caller holding that formula should re-check with it.
+        # The formula comes from the caller or there is no formal credit. Reading
+        # the proof's own `input` nodes and calling them the axioms would let any
+        # self-consistent contradiction stand in for the theorem actually asked
+        # about: a checked refutation of {p, not p} says nothing about this
+        # candidate. Absence of a formula is reported as such, not inferred away.
+        receipt = None
         if proof_dag is None:
-            refutation = RefutationStatus.INVALID.value
+            refutation = "NO_PROOF"
+            smt_verified = False
+        elif formula_clauses is None:
+            refutation = "MISSING_FORMULA_BINDING"
             smt_verified = False
         else:
-            declared_inputs = [n.clause for n in proof_dag.values()
-                               if getattr(n, "rule", None) == "input"]
-            report_check = check_resolution_refutation(declared_inputs, proof_dag)
-            refutation = report_check.status.value
-            smt_verified = (report_check.status == RefutationStatus.VERIFIED_REFUTATION)
+            subject = triad_subject_digest(triad)
+            receipt = issue_refutation_receipt(subject, formula_clauses, proof_dag)
+            refutation = check_resolution_refutation(formula_clauses, proof_dag).status.value
+            smt_verified = receipt is not None
 
         return DialecticalDiscoveryReport(
             triad=triad,
@@ -372,6 +396,7 @@ class DialecticalOrchestrator:
             scoped_admission=adm,
             smt_verified=smt_verified,
             smt_refutation_check=refutation,
+            refutation_receipt=receipt,
             proof_dag=proof_dag,
             elapsed_sec=time.time() - t_start
         )
@@ -387,13 +412,23 @@ def elevate_triad_to_warrant(
     Elevates a Dialectical Synthesis whose refutation was CHECKED into a Grade A
     (Axiomatic) Warrant EdgeClaim, and otherwise into Grade E (Empirical).
 
-    Grade A here requires `smt_verified`, i.e. every resolution step of the
-    proof was re-derived. A well-formed proof object is not enough: shape was
-    what this gate used to accept, and shape cannot tell a refutation from a
-    certificate for a satisfiable formula.
+    Grade A requires a refutation receipt that RE-VERIFIES here, against the
+    proof in hand and against this triad's own operands. The report's
+    `smt_verified` flag is not consulted: a report is a mutable public object,
+    so grading on that field grants an axiomatic warrant to whoever sets a
+    boolean. Re-checking at the producer cannot protect this boundary either,
+    because the object can be built without ever passing through it.
+
+    What a Grade A here does and does not say: every resolution step was
+    re-derived, against a formula the requester named and bound to these
+    operands. That the formula encodes the settled theorem remains the
+    requester's assertion, recorded in the receipt's subject digest rather than
+    proven; a caller who wants more must check the encoding itself.
     """
     triad = report.triad
-    if report.proof_dag is not None and report.smt_verified:
+    credit = verify_refutation_receipt(
+        report.refutation_receipt, triad_subject_digest(triad), report.proof_dag)
+    if credit.status == RefutationStatus.VERIFIED_REFUTATION:
         witness = AxiomaticWitness(
             derivation_steps=[
                 f"Antithesis: {triad.antithesis_refusal_id}",

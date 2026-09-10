@@ -44,7 +44,7 @@ import hashlib
 import warnings
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, Tuple, Set, Union, Callable, Iterable
+from typing import List, Dict, Any, Optional, Tuple, Set, Union, Callable, Iterable, FrozenSet
 
 import controlled_forgetting
 from controlled_forgetting import EpistemicTombstoneRegistry
@@ -1336,15 +1336,16 @@ def check_resolution_refutation(
 
     axioms = {_clause_key(c) for c in formula_clauses}
 
-    empty_nodes = [n for n in proof_dag.values()
-                   if isinstance(n, ResolutionProofNode) and len(n.clause) == 0]
-    if not empty_nodes:
+    # Endpoints are selected BY MAP KEY. A node's own `clause_id` field is data
+    # inside the certificate, so using it to choose what to verify would let a
+    # forged empty node redirect the check onto a genuine, non-empty axiom and
+    # report a satisfiable formula refuted in zero steps.
+    empty_keys = sorted(k for k, n in proof_dag.items()
+                        if isinstance(n, ResolutionProofNode) and len(n.clause) == 0)
+    if not empty_keys:
         return RefutationReport(RefutationStatus.INVALID,
                                 "no empty clause: the proof derives no contradiction")
 
-    # Check the sub-proof that actually reaches an empty clause, so unrelated
-    # junk elsewhere in the DAG neither rescues nor condemns the derivation.
-    target = empty_nodes[0]
     checked: Dict[int, bool] = {}
     in_progress: set = set()
     steps = 0
@@ -1359,6 +1360,13 @@ def check_resolution_refutation(
         node = proof_dag.get(nid)
         if not isinstance(node, ResolutionProofNode):
             return RefutationReport(RefutationStatus.INVALID, f"unknown antecedent {nid}")
+        if node.clause_id != nid:
+            # Identity binding: the object filed under a key must be the node
+            # that key names, at every step and not only at the endpoint.
+            return RefutationReport(
+                RefutationStatus.INVALID,
+                f"node filed under key {nid} declares clause_id {node.clause_id}; "
+                "a certificate may not rename its own nodes")
 
         in_progress.add(nid)
         try:
@@ -1428,12 +1436,107 @@ def check_resolution_refutation(
         finally:
             in_progress.discard(nid)
 
-    report = check(target.clause_id)
+    first_failure: Optional[RefutationReport] = None
+    for key in empty_keys:
+        report = check(key)
+        if report.status == RefutationStatus.VERIFIED_REFUTATION:
+            endpoint = proof_dag[key]
+            if len(endpoint.clause) != 0:
+                return RefutationReport(
+                    RefutationStatus.INVALID,
+                    f"the verified endpoint {key} does not carry the empty clause")
+            return RefutationReport(
+                RefutationStatus.VERIFIED_REFUTATION,
+                f"empty clause at node {key} derived from the formula in {steps} "
+                "checked resolution steps", checked_steps=steps)
+        if first_failure is None:
+            first_failure = report
+    return first_failure
+
+
+@dataclass(frozen=True)
+class RefutationReceipt:
+    """A checked refutation, bound to the subject it was checked for.
+
+    Issued only by `issue_refutation_receipt`, and worth exactly as much as the
+    re-check a consumer performs with it: it carries the formula, so a consumer
+    never has to take the issuer's word for either the clauses or the verdict.
+
+    `subject_digest` is supplied by whoever asked for the check. It records
+    WHICH question this refutation was requested for, so credit cannot be moved
+    onto a different candidate later. It does not establish that the formula
+    encodes that question — that step is the caller's assertion, and this type
+    exists so the assertion is at least attributable and re-checkable.
+    """
+    subject_digest: str
+    formula: Tuple[FrozenSet[int], ...]
+    proof_digest: str
+    checked_steps: int
+
+    def formula_clauses(self) -> List[List[int]]:
+        return [sorted(c) for c in self.formula]
+
+
+def proof_dag_digest(proof_dag: Dict[int, ResolutionProofNode]) -> str:
+    """Content digest over the proof as filed, keys included."""
+    payload = json.dumps(
+        [[int(k), sorted(proof_dag[k].clause), proof_dag[k].rule,
+          sorted(proof_dag[k].antecedents), sorted(proof_dag[k].pivot_vars)]
+         for k in sorted(proof_dag)],
+        sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def issue_refutation_receipt(
+    subject_digest: str,
+    formula_clauses: Iterable[Iterable[int]],
+    proof_dag: Dict[int, ResolutionProofNode],
+    max_steps: int = 100_000,
+) -> Optional[RefutationReceipt]:
+    """Check the refutation and, only if it verifies, bind it to `subject_digest`.
+
+    Returns None for every other outcome, so there is no receipt object that
+    stands for an unchecked, unsupported or invalid proof.
+    """
+    formula = tuple(frozenset(c) for c in formula_clauses)
+    report = check_resolution_refutation(formula, proof_dag, max_steps=max_steps)
     if report.status != RefutationStatus.VERIFIED_REFUTATION:
-        return report
-    return RefutationReport(RefutationStatus.VERIFIED_REFUTATION,
-                            f"empty clause derived from the formula in {steps} "
-                            "checked resolution steps", checked_steps=steps)
+        return None
+    return RefutationReceipt(
+        subject_digest=subject_digest,
+        formula=formula,
+        proof_digest=proof_dag_digest(proof_dag),
+        checked_steps=report.checked_steps,
+    )
+
+
+def verify_refutation_receipt(
+    receipt: Optional[RefutationReceipt],
+    subject_digest: str,
+    proof_dag: Optional[Dict[int, ResolutionProofNode]],
+    max_steps: int = 100_000,
+) -> RefutationReport:
+    """Re-derive everything a receipt asserts, for a consumer that trusts nothing.
+
+    The receipt is re-checked against the proof actually in hand and against the
+    subject actually being graded. A consumer that calls this cannot be moved by
+    a flag someone set on a report object.
+    """
+    if receipt is None:
+        return RefutationReport(RefutationStatus.INVALID, "no refutation receipt")
+    if not isinstance(receipt, RefutationReceipt):
+        return RefutationReport(RefutationStatus.INVALID, "not a refutation receipt")
+    if proof_dag is None:
+        return RefutationReport(RefutationStatus.INVALID, "no proof to re-check")
+    if receipt.subject_digest != subject_digest:
+        return RefutationReport(
+            RefutationStatus.INVALID,
+            "receipt was issued for a different subject: it says "
+            f"{receipt.subject_digest[:16]}, this one is {subject_digest[:16]}")
+    if receipt.proof_digest != proof_dag_digest(proof_dag):
+        return RefutationReport(RefutationStatus.INVALID,
+                                "receipt was issued for a different proof")
+    return check_resolution_refutation(receipt.formula, proof_dag, max_steps=max_steps)
 
 
 def check_proof_dag_structure(proof_dag: Dict[int, ResolutionProofNode]) -> bool:
@@ -1634,6 +1737,12 @@ def smt_result_manifest(result: SMTResult) -> Dict[str, Any]:
     else:
         manifest["proof_structure_ok"] = False
         manifest["refutation_check"] = RefutationStatus.INVALID.value
+    # Carried in the output, not only in a docstring: the clauses checked here
+    # are the ones the proof declares for itself, so a reader must not take the
+    # adjacent formula text as the proven subject. Binding a refutation to a
+    # named subject is what issue_refutation_receipt is for.
+    manifest["refutation_check_scope"] = "self_declared_input_nodes"
+    manifest["refutation_check_binds_formula_text"] = False
     return manifest
 
 

@@ -293,25 +293,112 @@ class StructureIsNotRefutationTest(unittest.TestCase):
         self.assertNotIn("is_verified", manifest)
         self.assertTrue(manifest["proof_structure_ok"])
         self.assertEqual(manifest["refutation_check"], RefutationStatus.INVALID.value)
+        # The scope travels with the value, so a reader of the output alone
+        # cannot take the adjacent formula text for the proven subject.
+        self.assertEqual(manifest["refutation_check_scope"], "self_declared_input_nodes")
+        self.assertIs(manifest["refutation_check_binds_formula_text"], False)
+
+
+class IdentityBindingTest(unittest.TestCase):
+    """A certificate may not rename its own nodes (F1)."""
+
+    def test_F1_empty_node_cannot_redirect_to_a_nonempty_axiom(self):
+        """{p} is satisfiable; the empty node in slot 2 points at the real axiom."""
+        proof = {1: inp(1, [1]), 2: Node(clause_id=1, clause=[], rule="input")}
+        report = check_resolution_refutation([[1]], proof)
+        self.assertEqual(report.status, RefutationStatus.INVALID, report.reason)
+        self.assertIn("clause_id", report.reason)
+
+    def test_F1b_intermediate_node_key_mismatch(self):
+        """Not only the endpoint: a renamed node anywhere breaks the chain."""
+        proof = {1: inp(1, [1]), 2: inp(2, [-1]),
+                 3: Node(clause_id=99, clause=[], rule="learned",
+                         antecedents=[1, 2], pivot_vars=[1])}
+        report = check_resolution_refutation([[1], [-1]], proof)
+        self.assertEqual(report.status, RefutationStatus.INVALID, report.reason)
+
+    def test_F1c_a_second_empty_node_does_not_rescue_a_broken_one(self):
+        """Any endpoint with a fully checked derivation refutes; a bad one does not."""
+        good = {1: inp(1, [1]), 2: inp(2, [-1]),
+                3: Node(clause_id=3, clause=[], rule="learned", antecedents=[1], pivot_vars=[1]),
+                4: res(4, [], [1, 2], 1)}
+        self.assertEqual(check_resolution_refutation([[1], [-1]], good).status,
+                         RefutationStatus.VERIFIED_REFUTATION)
+        only_bad = {k: v for k, v in good.items() if k != 4}
+        self.assertEqual(check_resolution_refutation([[1], [-1]], only_bad).status,
+                         RefutationStatus.INVALID)
+
+    def test_F1d_honest_proofs_are_unaffected(self):
+        self.assertEqual(
+            check_resolution_refutation([[1], [-1]],
+                                        dag(inp(1, [1]), inp(2, [-1]), res(3, [], [1, 2], 1))).status,
+            RefutationStatus.VERIFIED_REFUTATION)
+        self.assertEqual(check_resolution_refutation([[]], dag(inp(1, []))).status,
+                         RefutationStatus.VERIFIED_REFUTATION)
+
+
+class ReceiptTest(unittest.TestCase):
+    """A receipt is only worth the re-check a consumer performs with it."""
+
+    def setUp(self):
+        self.real = dag(inp(1, [1]), inp(2, [-1]), res(3, [], [1, 2], 1))
+        self.invalid = dag(inp(1, [1]),
+                           Node(clause_id=2, clause=[], rule="learned", antecedents=[1]))
+
+    def test_G1_no_receipt_for_an_unverified_refutation(self):
+        self.assertIsNone(sm.issue_refutation_receipt("s", [[1]], self.real))
+        self.assertIsNone(sm.issue_refutation_receipt("s", [[1]], self.invalid))
+
+    def test_G2_receipt_reverifies_only_for_its_own_subject_and_proof(self):
+        receipt = sm.issue_refutation_receipt("subject-A", [[1], [-1]], self.real)
+        self.assertIsNotNone(receipt)
+        self.assertEqual(
+            sm.verify_refutation_receipt(receipt, "subject-A", self.real).status,
+            RefutationStatus.VERIFIED_REFUTATION)
+        for label, args, fragment in (
+            ("another subject", ("subject-B", self.real), "different subject"),
+            ("another proof", ("subject-A", self.invalid), "different proof"),
+        ):
+            with self.subTest(case=label):
+                out = sm.verify_refutation_receipt(receipt, *args)
+                self.assertEqual(out.status, RefutationStatus.INVALID, out.reason)
+                self.assertIn(fragment, out.reason)
+
+    def test_G3_a_receipt_cannot_be_handcrafted_around_the_check(self):
+        """The formula travels inside the receipt, so it is re-run, not trusted."""
+        forged = sm.RefutationReceipt(
+            subject_digest="subject-A",
+            formula=(frozenset([1]),),
+            proof_digest=sm.proof_dag_digest(self.invalid),
+            checked_steps=99)
+        out = sm.verify_refutation_receipt(forged, "subject-A", self.invalid)
+        self.assertEqual(out.status, RefutationStatus.INVALID, out.reason)
+
+    def test_G4_missing_receipt_is_its_own_answer(self):
+        out = sm.verify_refutation_receipt(None, "subject-A", self.real)
+        self.assertEqual(out.status, RefutationStatus.INVALID)
+        self.assertIn("no refutation receipt", out.reason)
 
 
 class FormalCreditGateTest(unittest.TestCase):
     """The admission this package exists to close.
 
-    A dialectical synthesis was elevated to Grade A (AXIOMATIC) whenever its
-    proof object was shaped like a proof. Shape cannot tell a refutation from a
-    certificate for a satisfiable formula, so the grade was granted on a
-    predicate that establishes nothing about the theorem.
+    A dialectical synthesis was elevated to Grade A (AXIOMATIC) on proof shape,
+    then on a mutable flag. Both are decided by whoever builds the report
+    object, so neither establishes anything about the theorem.
     """
 
     def setUp(self):
         import crypto
         self.sk, self.pk = crypto.generate_keypair()
+        self.real = dag(inp(1, [1]), inp(2, [-1]), res(3, [], [1, 2], 1))
+        self.invalid = dag(inp(1, [1]),
+                           Node(clause_id=2, clause=[], rule="learned", antecedents=[1]))
 
-    def _report(self, proof, smt_verified):
+    def _triad(self):
         import dialectic_kernel as dk
         from scoped_admission import RefusalReason
-        triad = dk.DialecticalTriad(
+        return dk.DialecticalTriad(
             thesis_candidate_digest="ab" * 32,
             antithesis_refusal_id="cd" * 32,
             refusal_reason=RefusalReason.RESOURCE_LIMIT,
@@ -320,38 +407,107 @@ class FormalCreditGateTest(unittest.TestCase):
             status=dk.DialecticalStatus.SYNTHESIS_ACHIEVED,
             settled_theorem="Settled under envelope budget_steps=140",
         )
+
+    def _report(self, proof, smt_verified=False, receipt=None, triad=None):
+        import dialectic_kernel as dk
         return dk.DialecticalDiscoveryReport(
-            triad=triad, smt_verified=smt_verified, proof_dag=proof, elapsed_sec=0.01)
+            triad=triad or self._triad(), smt_verified=smt_verified,
+            refutation_receipt=receipt, proof_dag=proof, elapsed_sec=0.01)
 
-    def test_E1_a_shape_only_proof_does_not_earn_grade_A(self):
+    def test_H1_a_set_flag_earns_nothing(self):
+        """The consumer re-checks; it does not read the field."""
         import dialectic_kernel as dk
         from warrant_kernel import EvidenceGrade
-        shape_only = dag(inp(1, [1]),
-                         Node(clause_id=2, clause=[], rule="learned", antecedents=[1]))
-        self.assertTrue(check_proof_dag_structure(shape_only))
-        self.assertEqual(
-            check_resolution_refutation([[1]], shape_only).status, RefutationStatus.INVALID)
-        warrant = dk.elevate_triad_to_warrant(
-            self._report(shape_only, smt_verified=False), self.sk, self.pk)
-        self.assertEqual(warrant.grade, EvidenceGrade.EMPIRICAL)
+        report = self._report(self.invalid, smt_verified=True)
+        claim = dk.elevate_triad_to_warrant(report, self.sk, self.pk)
+        self.assertEqual(claim.grade, EvidenceGrade.EMPIRICAL)
 
-    def test_E2_a_checked_refutation_still_earns_grade_A(self):
+    def test_H2_grade_A_requires_a_receipt_that_reverifies_here(self):
+        """The positive control exercises the binding, not a boolean."""
         import dialectic_kernel as dk
         from warrant_kernel import EvidenceGrade
+        triad = self._triad()
+        subject = dk.triad_subject_digest(triad)
+        receipt = sm.issue_refutation_receipt(subject, [[1], [-1]], self.real)
+        self.assertIsNotNone(receipt)
+        claim = dk.elevate_triad_to_warrant(
+            self._report(self.real, receipt=receipt, triad=triad), self.sk, self.pk)
+        self.assertEqual(claim.grade, EvidenceGrade.AXIOMATIC)
+
+    def test_H3_a_receipt_for_another_synthesis_is_not_spendable_here(self):
+        import dialectic_kernel as dk
+        from warrant_kernel import EvidenceGrade
+        import dataclasses
+        other = dataclasses.replace(self._triad(),
+                                    settled_theorem="A different settled theorem.")
+        receipt = sm.issue_refutation_receipt(
+            dk.triad_subject_digest(other), [[1], [-1]], self.real)
+        claim = dk.elevate_triad_to_warrant(
+            self._report(self.real, smt_verified=True, receipt=receipt), self.sk, self.pk)
+        self.assertEqual(claim.grade, EvidenceGrade.EMPIRICAL)
+
+    def test_H4_a_receipt_does_not_travel_to_another_proof(self):
+        import dialectic_kernel as dk
+        from warrant_kernel import EvidenceGrade
+        triad = self._triad()
+        receipt = sm.issue_refutation_receipt(
+            dk.triad_subject_digest(triad), [[1], [-1]], self.real)
+        claim = dk.elevate_triad_to_warrant(
+            self._report(self.invalid, receipt=receipt, triad=triad), self.sk, self.pk)
+        self.assertEqual(claim.grade, EvidenceGrade.EMPIRICAL)
+
+
+class ProducerBindingTest(unittest.TestCase):
+    """The producer does not invent the formula it then checks against."""
+
+    def _orchestrator(self, proof):
+        import dialectic_kernel as dk
+        from types import SimpleNamespace as NS
+        from unittest.mock import Mock
+        from scoped_admission import RefusalReason, RetestOutcome
+        refusal = NS(record_id="ab" * 32, candidate_digest="cd" * 32,
+                     evaluator_digest="ef" * 32, requirement_digest="01" * 32,
+                     context={"budget_steps": 80}, outcome_type=RefusalReason.RESOURCE_LIMIT)
+        registry = NS(
+            refusals={refusal.record_id: refusal},
+            execute_retest=Mock(return_value=NS(outcome=RetestOutcome.SUCCESS, proof_dag=proof)),
+            grant_scoped_admission=Mock(return_value=NS(admission_id="02" * 32)))
+        orch = dk.DialecticalOrchestrator(registry)
+        orch.explorer = NS(explore_boundary=lambda _: (
+            dk.DialecticalStatus.SYNTHESIS_ACHIEVED,
+            dk.ContextDelta(80, 140, 60, 1.75, 0.95), "probe"))
+        return orch, refusal
+
+    def test_I1_without_a_supplied_formula_there_is_no_credit(self):
+        """A contradiction the proof selected for itself is not the theorem asked about."""
         real = dag(inp(1, [1]), inp(2, [-1]), res(3, [], [1, 2], 1))
-        self.assertEqual(check_resolution_refutation([[1], [-1]], real).status,
-                         RefutationStatus.VERIFIED_REFUTATION)
-        warrant = dk.elevate_triad_to_warrant(
-            self._report(real, smt_verified=True), self.sk, self.pk)
-        self.assertEqual(warrant.grade, EvidenceGrade.AXIOMATIC)
+        orch, refusal = self._orchestrator(real)
+        report = orch.discover_and_promote(refusal.record_id, b"unrelated candidate", lambda *a: None)
+        self.assertFalse(report.smt_verified)
+        self.assertIsNone(report.refutation_receipt)
+        self.assertEqual(report.smt_refutation_check, "MISSING_FORMULA_BINDING")
 
-    def test_E3_the_producer_only_sets_the_flag_on_a_checked_refutation(self):
-        """Gating the grade is not enough if the flag itself is filled by shape."""
+    def test_I2_a_supplied_formula_is_the_one_checked(self):
+        """And the receipt it issues is bound to this triad, not to the proof."""
         import dialectic_kernel as dk
-        import inspect
-        src = inspect.getsource(dk)
-        self.assertIn("check_resolution_refutation", src)
-        self.assertNotIn("smt_verified = check_proof_dag_structure", src)
+        real = dag(inp(1, [1]), inp(2, [-1]), res(3, [], [1, 2], 1))
+        orch, refusal = self._orchestrator(real)
+        report = orch.discover_and_promote(
+            refusal.record_id, b"candidate", lambda *a: None, formula_clauses=[[1], [-1]])
+        self.assertTrue(report.smt_verified)
+        self.assertIsNotNone(report.refutation_receipt)
+        self.assertEqual(report.refutation_receipt.subject_digest,
+                         dk.triad_subject_digest(report.triad))
+        self.assertEqual(report.refutation_receipt.formula_clauses(), [[1], [-1]])
+
+    def test_I3_a_supplied_formula_that_is_not_refuted_earns_nothing(self):
+        real = dag(inp(1, [1]), inp(2, [-1]), res(3, [], [1, 2], 1))
+        orch, refusal = self._orchestrator(real)
+        report = orch.discover_and_promote(
+            refusal.record_id, b"candidate", lambda *a: None, formula_clauses=[[1]])
+        self.assertFalse(report.smt_verified)
+        self.assertIsNone(report.refutation_receipt)
+        self.assertEqual(report.smt_refutation_check, RefutationStatus.INVALID.value)
 
 
 if __name__ == "__main__":
