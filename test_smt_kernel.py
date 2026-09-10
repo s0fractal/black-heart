@@ -17,7 +17,7 @@ from smt_kernel import (
     SMTTerm, Const, BoolConst, App, Eq, Distinct, Not, And, Or, Implies, Xor, Ite,
     SMTLIBParser, TseitinTransformer, CDCLSolver, EUFTheorySolver,
     SMTSolver, SMTStatus, SMTResult,
-    verify_unsat_certificate, smt_refute_tombstone,
+    verify_unsat_certificate, smt_refute_tombstone, QuarantineVerdict,
     generate_smt_pdf, append_smt_hud
 )
 from controlled_forgetting import EpistemicTombstoneRegistry, RetirementRecord, RetirementMode
@@ -233,15 +233,28 @@ class TestSMTKernel(unittest.TestCase):
         )
         registry.tombstones[tomb.record_id] = tomb
 
-        # Candidate formula that entails the poisoned tombstone
-        toxic_formula = """
-        (declare-const comb_poison_comb_00 U)
-        (declare-const comb_poison U)
-        (assert (= comb_poison_comb_00 comb_poison))
+        # The retired statement, in the candidate's own vocabulary, supplied by
+        # the caller: a retirement record carries a subject, not a formula.
+        retired = {tomb.record_id: "(= toxic safe)"}
+        declarations = """
+        (declare-const toxic U)
+        (declare-const safe U)
         """
-        report = smt_refute_tombstone(toxic_formula, registry)
-        self.assertFalse(report.is_safe)
-        self.assertEqual(report.verdict, "QUARANTINED_EPISTEMIC_VIOLATION")
+
+        # A candidate that PROVES the retired statement is quarantined.
+        entailing = declarations + "(assert (= toxic safe))"
+        report = smt_refute_tombstone(entailing, registry, retired)
+        self.assertEqual(report.verdict, QuarantineVerdict.ENTAILS_RETIRED_STATEMENT)
+        self.assertEqual(report.quarantined_tombstones, [tomb.record_id])
+
+        # One that merely fails to contradict it is not. The previous check
+        # asserted the candidate together with an invented equality and
+        # quarantined on SAT, so consistency counted as derivation and a
+        # candidate asserting nothing at all was quarantined.
+        merely_consistent = declarations + "(assert (= toxic toxic))"
+        clean = smt_refute_tombstone(merely_consistent, registry, retired)
+        self.assertEqual(clean.verdict, QuarantineVerdict.NO_ENTAILMENT_FOUND)
+        self.assertEqual(clean.quarantined_tombstones, [])
 
     def test_10_iso32000_polyglot_pdf_and_standalone_audit(self):
         """Test generating ISO 32000 polyglot PDF and executing Latin-1 audit runner."""

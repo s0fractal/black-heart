@@ -1662,52 +1662,140 @@ def verify_unsat_certificate(proof_dag: Dict[int, ResolutionProofNode]) -> bool:
 # 8. EPISTEMIC TOMBSTONE QUARANTINE INTEGRATION
 # ============================================================================
 
+class TombstoneCheckStatus(str, Enum):
+    """What was established about one retired statement."""
+    ENTAILED = "ENTAILED"                       # the candidate proves it
+    NOT_ENTAILED = "NOT_ENTAILED"               # the candidate leaves it open or false
+    UNKNOWN = "UNKNOWN"                         # the solver did not decide
+    NO_STATEMENT_SUPPLIED = "NO_STATEMENT_SUPPLIED"   # nothing to check it against
+
+
+class QuarantineVerdict(str, Enum):
+    """The overall answer. There is no verdict meaning "sound"."""
+    ENTAILS_RETIRED_STATEMENT = "ENTAILS_RETIRED_STATEMENT"
+    NO_ENTAILMENT_FOUND = "NO_ENTAILMENT_FOUND"
+    INCONCLUSIVE = "INCONCLUSIVE"
+    NOTHING_CHECKED = "NOTHING_CHECKED"
+
+
+@dataclass(frozen=True)
+class TombstoneCheck:
+    tombstone_id: str
+    status: TombstoneCheckStatus
+    reason: str
+
+
 @dataclass
 class EpistemicRefutationReport:
-    is_safe: bool
-    verdict: str
+    """Per-tombstone outcomes and the verdict they add up to.
+
+    `is_safe` is gone. It said "this organism is sound" on the strength of a
+    quarantine list being empty, which is also what an empty registry and an
+    unanswerable question produce. Read `verdict` and `checks`.
+    """
+    verdict: QuarantineVerdict
+    checks: List[TombstoneCheck]
     quarantined_tombstones: List[str]
-    smt_status: SMTStatus
-    proof_depth: int
+    checked_count: int
+    unchecked_count: int
 
 
 def smt_refute_tombstone(
     candidate_formula_smt2: str,
-    tombstone_registry: EpistemicTombstoneRegistry
+    tombstone_registry: EpistemicTombstoneRegistry,
+    retired_statements: Optional[Dict[str, str]] = None,
+    solver: Optional["SMTSolver"] = None,
 ) -> EpistemicRefutationReport:
-    """Evaluates whether candidate organism theorems entail a quarantined tombstone claim."""
-    solver = SMTSolver()
-    quarantined = []
+    """Does the candidate's theory ENTAIL a statement that was retired?
 
-    for tid, tombstone in tombstone_registry.tombstones.items():
-        target_name = getattr(tombstone, "target_id", getattr(tombstone, "record_id", str(tid)))
-        safe_target = "".join(c if c.isalnum() else "_" for c in target_name[:16])
-        test_script = f"""
-        (set-logic QF_UF)
-        (declare-sort U 0)
-        {candidate_formula_smt2}
-        (assert (= (comb_{safe_target}) (comb_poison)))
-        (check-sat)
-        """
-        res = solver.solve_smt2(test_script)
-        if res.status == SMTStatus.SAT:
+    The predicate, stated: for a retired statement P, the candidate entails P
+    exactly when `candidate ∧ ¬P` is unsatisfiable. That is what quarantine
+    should mean, and it is what is checked here.
+
+    What was checked before was `candidate ∧ (invented_symbol = poison)` for
+    SATISFIABILITY. Consistency with a claim is not derivation of it, almost
+    every theory is consistent with almost every fresh equality, and both
+    symbols were minted by the checker rather than taken from the candidate or
+    the tombstone. Measured on the base commit, a candidate asserting `q = q`
+    was quarantined, an unrelated candidate was quarantined, and an EMPTY
+    candidate formula was quarantined: saying nothing was a violation.
+
+    `retired_statements` maps a tombstone id to an SMT-LIB2 boolean term in the
+    candidate's own vocabulary, and it comes FROM THE CALLER. A RetirementRecord
+    carries a subject and a loss declaration, not a formula, so there is nothing
+    in the registry to derive this from; inventing a symbol from an id is what
+    produced the defect. A tombstone with no statement supplied is reported as
+    unchecked, never as passed.
+
+    No outcome here means the organism is sound. Not entailing the retired
+    statements that could be checked is exactly that and nothing more.
+    """
+    solver = solver or SMTSolver()
+    statements = dict(retired_statements or {})
+    checks: List[TombstoneCheck] = []
+    quarantined: List[str] = []
+
+    for tid in tombstone_registry.tombstones:
+        statement = statements.get(tid)
+        if statement is None:
+            checks.append(TombstoneCheck(
+                tid, TombstoneCheckStatus.NO_STATEMENT_SUPPLIED,
+                "no retired statement was supplied for this tombstone, so nothing "
+                "about it was decided"))
+            continue
+
+        # Entailment: refute the negation.
+        script = (
+            "(set-logic QF_UF)\n"
+            "(declare-sort U 0)\n"
+            f"{candidate_formula_smt2}\n"
+            f"(assert (not {statement}))\n"
+            "(check-sat)\n"
+        )
+        try:
+            res = solver.solve_smt2(script)
+        except Exception as exc:
+            checks.append(TombstoneCheck(
+                tid, TombstoneCheckStatus.UNKNOWN,
+                f"the solver raised {type(exc).__name__}"))
+            continue
+
+        if res.status == SMTStatus.UNSAT:
+            checks.append(TombstoneCheck(
+                tid, TombstoneCheckStatus.ENTAILED,
+                "the candidate's assertions are inconsistent with the negation of "
+                "the retired statement, so they prove it"))
             quarantined.append(tid)
+        elif res.status == SMTStatus.SAT:
+            checks.append(TombstoneCheck(
+                tid, TombstoneCheckStatus.NOT_ENTAILED,
+                "the candidate's assertions are consistent with the retired "
+                "statement being false, so they do not prove it"))
+        else:
+            checks.append(TombstoneCheck(
+                tid, TombstoneCheckStatus.UNKNOWN,
+                f"the solver returned {res.status.value}"))
+
+    decided = [c for c in checks if c.status in
+               (TombstoneCheckStatus.ENTAILED, TombstoneCheckStatus.NOT_ENTAILED)]
+    unknown = [c for c in checks if c.status is TombstoneCheckStatus.UNKNOWN]
+    unchecked = [c for c in checks if c.status is TombstoneCheckStatus.NO_STATEMENT_SUPPLIED]
 
     if quarantined:
-        return EpistemicRefutationReport(
-            is_safe=False,
-            verdict="QUARANTINED_EPISTEMIC_VIOLATION",
-            quarantined_tombstones=quarantined,
-            smt_status=SMTStatus.SAT,
-            proof_depth=len(quarantined)
-        )
+        verdict = QuarantineVerdict.ENTAILS_RETIRED_STATEMENT
+    elif unknown:
+        verdict = QuarantineVerdict.INCONCLUSIVE
+    elif decided:
+        verdict = QuarantineVerdict.NO_ENTAILMENT_FOUND
+    else:
+        verdict = QuarantineVerdict.NOTHING_CHECKED
 
     return EpistemicRefutationReport(
-        is_safe=True,
-        verdict="CERTIFIED_SOUND_ORGANISM",
-        quarantined_tombstones=[],
-        smt_status=SMTStatus.UNSAT,
-        proof_depth=0
+        verdict=verdict,
+        checks=checks,
+        quarantined_tombstones=quarantined,
+        checked_count=len(decided),
+        unchecked_count=len(unknown) + len(unchecked),
     )
 
 
