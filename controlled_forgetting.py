@@ -85,6 +85,50 @@ def canonical_jcs(data: Any) -> bytes:
     ).encode("utf-8")
 
 
+# ---------------------------------------------------------------------------
+# Field validation for the numbers these records actually spend.
+#
+# `negative_space_coverage` is mu(C), declared as a ratio in [0.0, 1.0]; it is
+# summed into pruned-search-space volume and immune health metrics.
+# `atp_gas_recovered` is metabolic fuel handed back on retirement; it is summed
+# into reclaimed-gas totals. Neither has a meaning outside those ranges, and
+# `bool` is not a quantity of either, so both are refused at construction and
+# at deserialization rather than propagating into an arithmetic total.
+# ---------------------------------------------------------------------------
+
+def _require_ratio(value: Any, field_name: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(
+            f"{field_name} must be a real number in [0.0, 1.0]; got {type(value).__name__}."
+        )
+    try:
+        v = float(value)
+    except OverflowError as exc:
+        raise ValueError(f"{field_name} must lie in [0.0, 1.0].") from exc
+    if not math.isfinite(v):
+        raise ValueError(f"{field_name} must be finite; got {value!r}.")
+    if not (0.0 <= v <= 1.0):
+        raise ValueError(f"{field_name} must lie in [0.0, 1.0]; got {v!r}.")
+    return v
+
+
+def _require_non_negative_int(value: Any, field_name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(
+            f"{field_name} must be an integer quantity; got {type(value).__name__}."
+        )
+    if value < 0:
+        raise ValueError(f"{field_name} must not be negative; got {value}.")
+    return value
+
+
+def _is_record_id(value: Any) -> bool:
+    """A record id is the hex SHA-256 of the canonical body; nothing else."""
+    if not isinstance(value, str) or len(value) != 64:
+        return False
+    return all(c in "0123456789abcdef" for c in value)
+
+
 # ============================================================================
 # 3. NEGATIVE SPACE COVERAGE METRIC (WARRANT.md §9.3)
 # ============================================================================
@@ -170,6 +214,11 @@ class RetirementRecord:
             raise ValueError(
                 f"Retirement mode SUPERSEDED requires a valid non-empty replacement_id."
             )
+        # The two numbers this record spends are checked before it can be signed.
+        self.negative_space_coverage = _require_ratio(
+            self.negative_space_coverage, "negative_space_coverage")
+        self.atp_gas_recovered = _require_non_negative_int(
+            self.atp_gas_recovered, "atp_gas_recovered")
         if not self.record_id:
             self.record_id = self.compute_record_id()
 
@@ -190,18 +239,71 @@ class RetirementRecord:
         body_bytes = canonical_jcs(self.body_dict())
         return hashlib.sha256(body_bytes).hexdigest()
 
+    def validate_body_domain(self) -> None:
+        """Raise unless the numbers this record spends are inside their declared
+        domains, checked against the values carried right now.
+
+        Separate from `verify_signature` on purpose: a signature can correctly
+        authenticate a body that is out of domain, and construction-time
+        validation says nothing about an object that was mutated afterwards or
+        signed by a peer that never used this constructor.
+        """
+        _require_ratio(self.negative_space_coverage, "negative_space_coverage")
+        _require_non_negative_int(self.atp_gas_recovered, "atp_gas_recovered")
+
+    def has_valid_body_domain(self) -> bool:
+        try:
+            self.validate_body_domain()
+        except (ValueError, TypeError):
+            return False
+        return True
+
+    def is_admissible_for(self, subject_id: str) -> bool:
+        """The complete local check before this record may decide anything about
+        `subject_id`: it names that subject, its numbers are in domain, and its
+        signature covers this body.
+
+        The subject test is the slot binding. A genuinely signed retirement of A
+        filed under B is authentic and in domain and still says nothing about B.
+        """
+        return (self.target_id == subject_id
+                and self.has_valid_body_domain()
+                and self.verify_signature())
+
     def signature_message(self) -> bytes:
-        """Domain-separated signing message."""
-        return b"retirement-sig-v1:" + bytes.fromhex(self.record_id)
+        """Domain-separated signing message over the id of the CURRENT body.
+
+        The id is recomputed here rather than read from the field, so a body
+        rewritten under an unchanged `record_id` produces a different message
+        and cannot inherit the old signature.
+        """
+        return b"retirement-sig-v1:" + bytes.fromhex(self.compute_record_id())
 
     def sign(self, secret_key_hex: str):
+        self.record_id = self.compute_record_id()
         msg = self.signature_message()
         self.signature_hex = crypto.sign_hex(secret_key_hex, msg)
 
     def verify_signature(self) -> bool:
+        """True only when the signature covers the body carried on this object.
+
+        Binds canonical body -> recomputed id -> signature, and requires the
+        transported `record_id` to be that same recomputed id. It is evaluated
+        on every call: a record mutated after loading is refused here.
+
+        What this does NOT establish: that the signing key is entitled to
+        retire this subject. Authorization is a separate question and is not
+        answered anywhere in this module.
+        """
         if not self.signature_hex or not self.author_pk_hex:
             return False
-        msg = self.signature_message()
+        try:
+            expected_id = self.compute_record_id()
+            if not _is_record_id(self.record_id) or self.record_id != expected_id:
+                return False
+            msg = self.signature_message()
+        except (ValueError, TypeError, AttributeError):
+            return False
         return crypto.verify_hex(self.author_pk_hex, msg, self.signature_hex)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -213,6 +315,14 @@ class RetirementRecord:
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> RetirementRecord:
+        """Rebuild a record exactly as transported.
+
+        The transported `record_id` is kept verbatim, never recomputed to fit a
+        rewritten body: repairing a foreign record's id would hide the very
+        mismatch `verify_signature` exists to catch. Numbers are refused rather
+        than coerced, so `"0.4"` or `None` is a typed refusal here instead of a
+        silently different body downstream.
+        """
         b = d.get("body", d)
         rec = cls(
             record_id=str(d.get("record_id", "")),
@@ -220,8 +330,10 @@ class RetirementRecord:
             target_digest=str(b["target_digest"]),
             mode=RetirementMode(b["mode"]),
             loss_declaration=str(b["loss_declaration"]),
-            negative_space_coverage=float(b.get("negative_space_coverage", 0.0)),
-            atp_gas_recovered=int(b.get("atp_gas_recovered", 0)),
+            negative_space_coverage=_require_ratio(
+                b.get("negative_space_coverage", 0.0), "negative_space_coverage"),
+            atp_gas_recovered=_require_non_negative_int(
+                b.get("atp_gas_recovered", 0), "atp_gas_recovered"),
             author_pk_hex=str(b["author_pk_hex"]),
             signature_hex=str(d.get("signature_hex", "")),
             replacement_id=b.get("replacement_id"),
@@ -265,17 +377,46 @@ class ReAdoptionRecord:
         body_bytes = canonical_jcs(self.body_dict())
         return hashlib.sha256(body_bytes).hexdigest()
 
+    def is_admissible_for(self, subject_id: str, retirement: RetirementRecord) -> bool:
+        """The complete local check before this record may re-admit `subject_id`.
+
+        It must name that subject, cite the record id of the retirement being
+        cleared, and verify against its own body. The retirement it cites has
+        to be admissible for the same subject in its own right, so a re-adoption
+        cannot borrow authority from a record filed under the wrong slot.
+        """
+        return (self.target_id == subject_id
+                and retirement.is_admissible_for(subject_id)
+                and self.retirement_record_id == retirement.record_id
+                and self.verify_signature())
+
     def signature_message(self) -> bytes:
-        return b"readoption-sig-v1:" + bytes.fromhex(self.record_id)
+        """Domain-separated message over the id of the CURRENT body (see
+        RetirementRecord.signature_message for why it is recomputed)."""
+        return b"readoption-sig-v1:" + bytes.fromhex(self.compute_record_id())
 
     def sign(self, secret_key_hex: str):
+        self.record_id = self.compute_record_id()
         msg = self.signature_message()
         self.signature_hex = crypto.sign_hex(secret_key_hex, msg)
 
     def verify_signature(self) -> bool:
+        """True only when the signature covers the body carried on this object.
+
+        Establishes authorship of this body by the named key. It does not
+        establish that the key may re-admit the subject, and it does not by
+        itself connect the record to a registered retirement: that link is
+        checked where admission is decided (see EpistemicTombstoneRegistry).
+        """
         if not self.signature_hex or not self.author_pk_hex:
             return False
-        msg = self.signature_message()
+        try:
+            expected_id = self.compute_record_id()
+            if not _is_record_id(self.record_id) or self.record_id != expected_id:
+                return False
+            msg = self.signature_message()
+        except (ValueError, TypeError, AttributeError):
+            return False
         return crypto.verify_hex(self.author_pk_hex, msg, self.signature_hex)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -315,16 +456,38 @@ class EpistemicTombstoneRegistry:
         self.readoptions: Dict[str, ReAdoptionRecord] = {}
 
     def is_admitted(self, target_id: str) -> bool:
-        """Returns True if the target is currently in the active surface."""
-        if target_id not in self.tombstones:
+        """True if the target is currently in the active surface.
+
+        A tombstoned subject returns to the active surface only through a
+        re-adoption that (a) verifies against its own body, (b) names this very
+        subject, and (c) names the record id of the retirement actually
+        registered here. The presence of an entry under the right key is not
+        enough: a re-adoption issued against some other retirement of the same
+        subject does not clear this one.
+
+        Fail-closed: if the registered retirement is not itself admissible for
+        this subject — wrong subject for the slot, out-of-domain numbers, or a
+        signature that does not cover its body — the subject stays retired
+        rather than falling out of the gate. Loader validation does not stand in
+        for this: the registry is a mutable public structure and consumers write
+        into it directly.
+        """
+        tomb = self.tombstones.get(target_id)
+        if tomb is None:
             return True
-        # If tombstoned, can only be admitted if legitimately re-adopted
-        return target_id in self.readoptions
+        if not tomb.is_admissible_for(target_id):
+            return False
+        readoption = self.readoptions.get(target_id)
+        if readoption is None:
+            return False
+        return readoption.is_admissible_for(target_id, tomb)
 
     def get_admission_status(self, target_id: str) -> AdmissionStatus:
         if target_id not in self.tombstones:
             return AdmissionStatus.ACTIVE
-        if target_id in self.readoptions:
+        # READOPTED is reported only for a re-adoption that would actually
+        # admit; an unverifiable or unlinked one leaves the subject RETIRED.
+        if self.is_admitted(target_id):
             return AdmissionStatus.READOPTED
         return AdmissionStatus.RETIRED
 
@@ -375,6 +538,11 @@ class EpistemicTombstoneRegistry:
             signature_hex=""
         )
         record.sign(author_sk_hex)
+        if not record.verify_signature():
+            raise ValueError(
+                f"Refusing to register a retirement for '{target_id}': the record "
+                "does not verify against its own body immediately after signing."
+            )
         self.tombstones[target_id] = record
         # Invalidate any earlier re-adoption
         if target_id in self.readoptions:
@@ -394,6 +562,15 @@ class EpistemicTombstoneRegistry:
             raise ValueError(f"Cannot re-adopt '{target_id}': not currently tombstoned.")
 
         ret_rec = self.tombstones[target_id]
+        # A successor must not be issued against a retirement that is not
+        # admissible for this subject. Refusal happens here, before the record
+        # is built, signed or stored, so an inconsistent slot leaves no trace.
+        if not ret_rec.is_admissible_for(target_id):
+            raise ValueError(
+                f"Cannot re-adopt '{target_id}': the registered retirement record is not "
+                f"admissible for it (it names '{ret_rec.target_id}', its declared numbers "
+                "must be in domain, and its signature must cover its own body)."
+            )
         rec = ReAdoptionRecord(
             record_id="",
             target_id=target_id,
@@ -424,11 +601,36 @@ class EpistemicTombstoneRegistry:
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> EpistemicTombstoneRegistry:
+        """Load a registry, refusing any record that does not verify.
+
+        This raises rather than skipping. Dropping an unverifiable *tombstone*
+        would silently return its subject to the active surface, which is the
+        wrong direction to fail; and a caller that cannot tell a loaded
+        registry from a partially loaded one cannot act on either.
+        """
         reg = cls()
         for k, v in d.get("tombstones", {}).items():
-            reg.tombstones[k] = RetirementRecord.from_dict(v)
+            rec = RetirementRecord.from_dict(v)
+            if rec.target_id != k:
+                raise ValueError(
+                    f"Retirement record filed under '{k}' names subject '{rec.target_id}'."
+                )
+            if not rec.verify_signature():
+                raise ValueError(
+                    f"Retirement record for '{k}' does not verify against its own body."
+                )
+            reg.tombstones[k] = rec
         for k, v in d.get("readoptions", {}).items():
-            reg.readoptions[k] = ReAdoptionRecord.from_dict(v)
+            rec = ReAdoptionRecord.from_dict(v)
+            if rec.target_id != k:
+                raise ValueError(
+                    f"Re-adoption record filed under '{k}' names subject '{rec.target_id}'."
+                )
+            if not rec.verify_signature():
+                raise ValueError(
+                    f"Re-adoption record for '{k}' does not verify against its own body."
+                )
+            reg.readoptions[k] = rec
         return reg
 
 
@@ -643,7 +845,13 @@ def audit_retirement():
     end = data.find(b"\\n", idx)
     reg_json = json.loads(data[idx + len(prefix):end].decode('utf-8'))
     import controlled_forgetting
-    reg = controlled_forgetting.EpistemicTombstoneRegistry.from_dict(reg_json)
+    try:
+        reg = controlled_forgetting.EpistemicTombstoneRegistry.from_dict(reg_json)
+    except ValueError as e:
+        # A record whose signature does not cover its body is refused before
+        # any of its fields are printed as audited.
+        print("\\033[1;31m[!] Refusing retirement manifest: " + str(e) + "\\033[0m")
+        sys.exit(1)
     print(f"[*] Audited {{len(reg.tombstones)}} tombstones and {{len(reg.readoptions)}} re-adoptions.\\n")
     all_valid = True
     for tid, t in reg.tombstones.items():
@@ -832,7 +1040,13 @@ def audit_retirement():
     end = data.find(b"\\n", idx)
     reg_json = json.loads(data[idx + len(prefix):end].decode('utf-8'))
     import controlled_forgetting
-    reg = controlled_forgetting.EpistemicTombstoneRegistry.from_dict(reg_json)
+    try:
+        reg = controlled_forgetting.EpistemicTombstoneRegistry.from_dict(reg_json)
+    except ValueError as e:
+        # A record whose signature does not cover its body is refused before
+        # any of its fields are printed as audited.
+        print("\\033[1;31m[!] Refusing retirement manifest: " + str(e) + "\\033[0m")
+        sys.exit(1)
     print(f"[*] Audited {{len(reg.tombstones)}} tombstones and {{len(reg.readoptions)}} re-adoptions.\\n")
     all_valid = True
     for tid, t in reg.tombstones.items():

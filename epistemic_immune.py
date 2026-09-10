@@ -331,6 +331,9 @@ class HypothesisElevationCycle:
 @dataclass
 class InoculationReport:
     absorbed_tombstones_count: int
+    # Records refused at the gate. The name is historical: refusal covers a
+    # signature that does not cover the body, a record filed under a subject it
+    # does not name, and a re-adoption that names no retirement held here.
     rejected_signatures_count: int
     pruned_search_space_volume: float
     total_active_tombstones: int
@@ -353,8 +356,12 @@ class HorizontalInoculation:
         added_volume = 0.0
 
         for tid, tomb in donor_registry.tombstones.items():
-            # Verify Ed25519 signature in domain 'retirement-sig-v1:'
-            if not tomb.verify_signature():
+            # One complete check before absorption: the body names the subject
+            # it is filed under, the numbers it declares are inside their
+            # domains, and the signature covers that body. A correctly signed
+            # record can still carry a coverage figure that is not a ratio, so
+            # refusal precedes both the write and the coverage arithmetic.
+            if not tomb.is_admissible_for(tid):
                 rejected += 1
                 continue
 
@@ -364,10 +371,19 @@ class HorizontalInoculation:
                 absorbed += 1
                 added_volume += tomb.negative_space_coverage
 
-        # Also ingest valid re-adoptions
+        # Re-adoptions re-open the active surface, so they are held to the same
+        # binding plus the link to the retirement the recipient actually holds.
+        # A re-adoption naming some other retirement of the same subject, or
+        # naming none the recipient knows, is refused rather than stored.
         for rid, ro in donor_registry.readoptions.items():
-            if ro.verify_signature():
-                recipient.tombstone_registry.readoptions[rid] = ro
+            # The incoming re-adoption alone is not enough: the retirement it
+            # would clear is the recipient's own, so that record is put through
+            # the same complete check before this one can cite it.
+            local_tomb = recipient.tombstone_registry.tombstones.get(rid)
+            if local_tomb is None or not ro.is_admissible_for(rid, local_tomb):
+                rejected += 1
+                continue
+            recipient.tombstone_registry.readoptions[rid] = ro
 
         recipient.inoculated_tombstones_count += absorbed
 
