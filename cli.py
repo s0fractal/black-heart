@@ -75,14 +75,32 @@ def cmd_repl(args):
             print("  (🖤 🤍) Left Right       --> returns 'Right' (Church FALSE)")
             continue
 
-        # Parse & evaluate
+        # Parse, then evaluate. The two are reported apart: a syntax error is
+        # the caller's line, anything else is this tool failing, and printing
+        # both the same way is how the engine defect below stayed invisible.
         try:
             term = parse(line)
-            norm, atp, digest = evaluate(term, max_atp=current_atp_budget)
-            print(f"  \033[1;32mNormal Form:\033[0m {norm}")
-            print(f"  \033[1;34mSettlement: \033[0m ⚓ ⟨atp:{atp}, hash:{digest[:16]}⟩\n")
+        except (ValueError, RecursionError) as e:
+            print(f"  \033[1;31m[!] Syntax error:\033[0m {e}\n")
+            continue
+
+        try:
+            result = evaluate(term, max_atp=current_atp_budget)
         except Exception as e:
-            print(f"  \033[1;31m[!] Error:\033[0m {e}\n")
+            print(f"  \033[1;31m[!] Evaluation failed:\033[0m {type(e).__name__}: {e}\n")
+            continue
+
+        # `evaluate` returns an EvalResult, and a budget that ran out returns a
+        # SUSPENDED one rather than raising. Reporting that as a normal form
+        # would name a paused reduction as a finished one.
+        if result.is_settled():
+            print(f"  \033[1;32mNormal Form:\033[0m {result.term}")
+            print(f"  \033[1;34mSettlement: \033[0m ⚓ ⟨atp:{result.atp_spent}, "
+                  f"hash:{result.hash[:16]}⟩\n")
+        else:
+            print(f"  \033[1;33mSuspended Thunk:\033[0m {result.term}")
+            print(f"  \033[1;33mStatus:     \033[0m ⏳ SUSPENDED after {result.atp_spent} ATP "
+                  f"— not a normal form. Raise the budget with :atp <N> to continue.\n")
 
 def cmd_keygen(args):
     """Generates an RFC 8032 Ed25519 keypair."""

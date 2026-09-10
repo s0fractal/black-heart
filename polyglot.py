@@ -408,7 +408,11 @@ def main():
             total_atp += atp
             norm_str = str(norm)
             exp_t = parse(exp_str)
-            exp_norm = evaluate(exp_t).term
+            # This runner carries its own engine (defined above in this same
+            # template), and that engine returns a tuple. The library's
+            # EvalResult is not in scope here, so `.term` raised on every
+            # claim and every generated document reported its claims failed.
+            exp_norm, _, _ = evaluate(exp_t)
             exp_norm_str = str(exp_norm)
 
             if norm_str == exp_norm_str:

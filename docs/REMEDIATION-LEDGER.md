@@ -12,9 +12,10 @@ closed it. Nothing here is a claim about findings that were never re-probed.
 |---|---|---|---|---|
 | §3 `cli.py verify` broken on seven routes | `cli.py` verify dispatch | `test_cli_verify.py` 11/11 incl. corrupted artifacts | **ALREADY_FIXED** (PR #1, `816d36b`) | — |
 | §5 `cegis_kernel.parse_term` `eval()` RCE | `cegis_kernel.py` bounded AST parser | injection case inside the same 11/11 | **ALREADY_FIXED** (PR #1) | — |
-| §3 REPL tuple-unpacks `EvalResult` | `cli.py:81` `norm, atp, digest = evaluate(...)` | read in source; REPL not driven this pass | **OPEN** | S2b |
-| §2 Church numerals collapse | `glyph.church_numeral` | probe: n=0..3 all reduce to `x` | **OPEN** | S2a |
+| §3 REPL tuple-unpacks `EvalResult` | `cli.py` REPL | driven as a process: every expression printed `cannot unpack non-iterable EvalResult object` | **BEHAVIOR_FIXED** (S2b) | — |
+| §2 Church numerals collapse | `glyph.church_numeral` | probe: n=0..5 all reduced to `x`; the builder applied the SKI successor to `I` | **BEHAVIOR_FIXED** (S2a) | — |
 | §4 retirement body/id/signature unbound | `controlled_forgetting.py` `verify_signature`, `from_dict`; use sites in `epistemic_immune.HorizontalInoculation.inoculate`, `epistemic_swarm.SwarmInoculationCascade.broadcast_tombstone`, `EpistemicTombstoneRegistry.from_dict`/`is_admitted` | probe: changed `mode`+`atp_gas_recovered` under the same id → `changed_id_matches_body: false`, `changed_signature_valid: true` | **OPEN — this package** | **S1** |
+| Embedded polyglot runner cannot evaluate a claim | `polyglot.py` runner template | generated document: `'tuple' object has no attribute 'term'`, every claim reported failed. Introduced by `579150f` applying the host-side fix to a template whose own engine returns a tuple | **BEHAVIOR_FIXED** (S2b) — the API mismatch only; the runner's separate engine and its trust story stay open | S7/S8 |
 | §6 UNSAT certificate is a DAG shape check | `smt_kernel.verify_unsat_certificate` | probe: `{1:[1,2] input; 2:[] learned←[1]}` accepted | **OPEN** | S3a |
 | §6 CEGIS SMT query independent of operands | `cegis_kernel.py:449-450` both sides equated to one `eval x` | read in source; not re-probed behaviourally | **OPEN** | S3b |
 | §6 `smt_refute_tombstone` quarantines anything | `smt_kernel.py` | not re-probed this pass | **OPEN** | S3c |
