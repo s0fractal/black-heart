@@ -89,7 +89,9 @@ class CacheTests(unittest.TestCase):
     def test_timeout_not_cached(self):
         timeout = {'exit_code': None, 'stdout': '', 'stderr': '', 'state': 'TIMEOUT'}
         with patch.object(C, 'execute', return_value=timeout) as execute:
-            C.run([self.ledger], self.cache)
+            report = C.run([self.ledger], self.cache)
+            self.assertEqual(report['status'], 'INCOMPLETE')
+            self.assertEqual(report['items'][0]['status'], 'UNRESOLVED')
             C.run([self.ledger], self.cache)
             self.assertEqual(execute.call_count, 2)
         self.assertFalse(C.read_cache(self.cache)['entries'])
@@ -157,6 +159,47 @@ class CacheTests(unittest.TestCase):
                                  '--cache', str(self.cache), str(self.ledger)], capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)['items'][0]['origin'], 'EXECUTED_NOW')
+
+    def test_mixed_batch_preserves_order_and_refusals(self):
+        unknown = self.root / 'unknown.pdf'
+        unknown.write_bytes(b'unsupported')
+        missing = self.root / 'missing.pdf'
+        with patch.object(C, 'execute', wraps=C.execute) as execute:
+            report = C.run([unknown, self.ledger, missing], self.cache, batch=True)
+            self.assertEqual(execute.call_count, 1)
+            self.assertEqual(report['status'], 'INCOMPLETE')
+            self.assertEqual([i['path'] for i in report['items']], list(map(str, [unknown, self.ledger, missing])))
+            self.assertEqual([i['origin'] for i in report['items']], ['NOT_RUN', 'EXECUTED_NOW', 'NOT_RUN'])
+            again = C.run([unknown, self.ledger, missing], self.cache, batch=True)
+            self.assertEqual(again['items'][1]['origin'], 'REUSED')
+            self.assertEqual(execute.call_count, 1)
+            self.assertTrue(all('result' not in again['items'][i] for i in (0, 2)))
+
+    def test_all_unsupported_batch_does_not_touch_cache(self):
+        with patch.object(C, 'snapshot') as snapshot:
+            r = C.run([self.root/'missing.pdf'], self.cache, batch=True)
+            self.assertEqual(r['status'], 'INCOMPLETE')
+            snapshot.assert_not_called()
+        self.assertFalse(self.cache.exists())
+
+    def test_strict_mixed_request_still_refuses_before_execution(self):
+        with patch.object(C, 'execute') as execute:
+            with self.assertRaises(OSError):
+                C.run([self.ledger, self.root/'missing.pdf'], self.cache)
+            execute.assert_not_called()
+        self.assertFalse(self.cache.exists())
+
+    def test_batch_cli_nonzero_despite_supported_success(self):
+        unknown = self.root/'unknown.pdf'
+        unknown.write_bytes(b'unknown')
+        p = subprocess.run([sys.executable, '-B', str(C.ROOT/'tools/verify_cached.py'),
+                            '--batch', '--cache', str(self.cache), str(self.ledger), str(unknown)],
+                           capture_output=True, text=True, timeout=30)
+        self.assertEqual(p.returncode, 2, p.stderr)
+        report = json.loads(p.stdout)
+        self.assertEqual(report['status'], 'INCOMPLETE')
+        self.assertEqual(report['items'][0]['result']['exit_code'], 0)
+        self.assertEqual(report['items'][1]['origin'], 'NOT_RUN')
 
     def test_fresh_process_restart_repair_and_cache_loss(self):
         path = self.root / 'subject.pdf'

@@ -29,6 +29,26 @@ Malformed-cache refusals preserve the existing file. `--fresh` does not silently
 discard corrupt cache bytes: remove the disposable cache explicitly or select a
 new path. A timeout is returned but never cached.
 
+For a mixed collection, opt into per-file handling:
+
+```sh
+python3 tools/verify_cached.py --batch --cache /tmp/black-heart-local-cache.json examples/*.pdf
+```
+
+Unsupported or unreadable files become `status: REFUSED`, `origin: NOT_RUN`
+items with a reason, in their original order. Supported files are still checked
+or reused. Any such refusal makes the overall status `INCOMPLETE` and exit code
+2, even if every supported file passes. Unsupported files receive no cached
+verdict. With no supported inputs, no cache is created or read. Without `--batch`,
+the original strict behavior remains: reject the entire request before execution.
+
+Top-level `COMPLETE` means all input checks yielded a completed CLI outcome;
+it does **not** mean they all passed. Each completed item is `CHECKED`, including
+exit-1 refusals. A timeout or abnormal process exit is `UNRESOLVED`, makes the
+report `INCOMPLETE`, and returns exit 1 (unless a per-file refusal requires exit
+2). Always inspect CLI outcomes as well as coverage and origin. Cache corruption
+or a global locking/storage failure still refuses the whole call.
+
 Passing and failing CLI outcomes can both be reused across process restarts.
 A stored refusal applies to its captured bytes and profile, not permanently to
 the filename. Repairing a document produces a different key and a fresh check;

@@ -119,16 +119,29 @@ def save_cache(path, cache):
             os.unlink(name)
 
 
-def run(paths, cache_path, fresh=False, timeout=30):
+def run(paths, cache_path, fresh=False, timeout=30, batch=False):
     # Validate all operands before creating/updating the cache.
     if not paths:
         raise ValueError('NO_OPERANDS')
-    operands = [(str(Path(p).absolute()), bounded(p)) for p in paths]
-    for _, raw in operands:
-        route(raw)
+    operands = []
+    for p in paths:
+        path = str(Path(p).absolute())
+        try:
+            raw = bounded(p)
+            route(raw)
+        except (OSError, ValueError) as error:
+            if not batch:
+                raise
+            operands.append((path, None, {'path': path, 'status': 'REFUSED',
+                                         'origin': 'NOT_RUN', 'reason': str(error)}))
+        else:
+            operands.append((path, raw, None))
+    if not any(error is None for _, _, error in operands):
+        return {'schema': 1, 'authority': 'none', 'status': 'INCOMPLETE',
+                'items': [error for _, _, error in operands]}
     source, profile = snapshot()
     cache_path = Path(cache_path).absolute()
-    if cache_path.resolve() in {Path(p).resolve() for p, _ in operands} or cache_path.suffix == '.py':
+    if cache_path.resolve() in {Path(p).resolve() for p, _, _ in operands} or cache_path.suffix == '.py':
         raise ValueError('CACHE_PATH')
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     with (cache_path.parent / (cache_path.name + '.lock')).open('a+b') as lock:
@@ -138,7 +151,10 @@ def run(paths, cache_path, fresh=False, timeout=30):
             raise ValueError('BUSY') from e
         cache = read_cache(cache_path)
         items = []
-        for path, raw in operands:
+        for path, raw, error in operands:
+            if error is not None:
+                items.append(error)
+                continue
             key = digest(encode({'profile': profile, 'operand': digest(raw)}))
             if not fresh and key in cache['entries']:
                 result = cache['entries'][key]['result']
@@ -148,10 +164,13 @@ def run(paths, cache_path, fresh=False, timeout=30):
                 origin = 'EXECUTED_NOW'
                 if result['state'] == 'COMPLETED' and result['exit_code'] in (0, 1):
                     cache['entries'][key] = {'result': result, 'sha256': digest(encode(result))}
-            items.append({'path': path, 'operand_sha256': digest(raw), 'origin': origin,
+            status = 'CHECKED' if result['state'] == 'COMPLETED' and result['exit_code'] in (0, 1) else 'UNRESOLVED'
+            items.append({'path': path, 'status': status, 'operand_sha256': digest(raw), 'origin': origin,
                           'profile_sha256': profile, 'result': result})
         save_cache(cache_path, cache)
-    return {'schema': 1, 'authority': 'none', 'items': items}
+    return {'schema': 1, 'authority': 'none',
+            'status': 'INCOMPLETE' if any(i['status'] != 'CHECKED' for i in items) else 'COMPLETE',
+            'items': items}
 
 
 def main():
@@ -159,13 +178,17 @@ def main():
     parser.add_argument('files', nargs='+')
     parser.add_argument('--cache', type=Path, required=True)
     parser.add_argument('--fresh', action='store_true')
+    parser.add_argument('--batch', action='store_true',
+                        help='report unsupported/unreadable inputs individually; overall exit remains nonzero')
     args = parser.parse_args()
     try:
-        report = run(args.files, args.cache, args.fresh)
+        report = run(args.files, args.cache, args.fresh, batch=args.batch)
     except (OSError, ValueError, TypeError) as e:
         print(json.dumps({'status': 'REFUSED', 'reason': str(e)}))
         return 2
     print(json.dumps(report, ensure_ascii=False))
+    if any(i['status'] == 'REFUSED' for i in report['items']):
+        return 2
     return 0 if all(i['result']['exit_code'] == 0 for i in report['items']) else 1
 
 
