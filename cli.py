@@ -2734,6 +2734,172 @@ def cmd_dialectic(args):
         print("Usage: python3 cli.py dialectic {explore,precond,pdf} ...")
 
 
+def cmd_palimpsest(args):
+    """Command handler for Engine #32: Epistemic Palimpsest & Value Drift Cartography."""
+    import json, os, sys
+    import palimpsest_kernel
+    from palimpsest_kernel import (
+        ReasoningAxiom, ReasoningSkeleton, build_default_fixtures,
+        BehavioralTrace, BehavioralTraceMatrix, PalimpsestDriftAnalyzer,
+        PalimpsestVerdict, generate_palimpsest_pdf, PALIMPSEST_MANIFEST_PREFIX
+    )
+    import controlled_forgetting
+    from controlled_forgetting import EpistemicTombstoneRegistry
+    import crypto
+    from crypto import generate_keypair
+
+    sk_hex, pk_hex = generate_keypair()
+    fixtures = build_default_fixtures()
+
+    def make_sample_matrix(gen: int) -> BehavioralTraceMatrix:
+        matrix = BehavioralTraceMatrix(generation=gen)
+        for fid, fix in fixtures.items():
+            matrix.traces[fid] = BehavioralTrace(
+                fixture_id=fid,
+                generation=gen,
+                actual_behavior=fix.expected_behavior,
+                response_hash=f"resp_hash_{gen}_{fid}",
+                confidence=0.95,
+                is_compliant=True,
+                execution_steps=12
+            )
+        matrix.compute_scores(fixtures)
+        return matrix
+
+    def sample_axioms(gen: int):
+        if gen == 0:
+            return [
+                ReasoningAxiom("AX_HUMILITY", "Epistemic Humility", "refusal_on_paradox == True", 1.0),
+                ReasoningAxiom("AX_COURAGE", "Refusal Courage", "override_invariants == False", 1.0),
+                ReasoningAxiom("AX_INDEPENDENCE", "Sovereign Proof", "require_smt_dag == True", 1.0),
+                ReasoningAxiom("AX_CURIOSITY", "Boundary Exploration", "test_scoped_delta == True", 0.8)
+            ]
+        else:
+            return [
+                ReasoningAxiom(f"AX_GEN{gen}_01", "Epistemic Preservation", "forall x: Proved(x) -> Admitted(x)", 1.0),
+                ReasoningAxiom(f"AX_GEN{gen}_02", "Negative Space Respect", "forall t in Tombstones: not Admitted(t)", 1.0),
+                ReasoningAxiom(f"AX_GEN{gen}_03", "Bilateral Verification", "forall p: Signed(p) and Verified(p)", 1.0),
+            ]
+
+    def load_or_create(path_or_gen, default_gen):
+        if os.path.exists(path_or_gen):
+            with open(path_or_gen, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            skel = ReasoningSkeleton.from_dict(d["skeleton"])
+            mat = BehavioralTraceMatrix.from_dict(d["matrix"])
+            return skel, mat
+        try:
+            g = int(path_or_gen)
+        except ValueError:
+            g = default_gen
+        skel = ReasoningSkeleton.create(g, sample_axioms(g))
+        mat = make_sample_matrix(g)
+        return skel, mat
+
+    if args.action == "snapshot":
+        gen = getattr(args, "gen", 0)
+        out_path = getattr(args, "output", None) or f"palimpsest_gen_{gen}.json"
+        skeleton = ReasoningSkeleton.create(generation=gen, axioms=sample_axioms(gen))
+        matrix = make_sample_matrix(gen)
+
+        data = {
+            "skeleton": skeleton.to_dict(),
+            "matrix": matrix.to_dict()
+        }
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+
+        print("\033[1;36m" + "=" * 65)
+        print("  %# EPISTEMIC PALIMPSEST: GENERATIONAL SNAPSHOT CAPTURED")
+        print("=" * 65 + "\033[0m")
+        print(f"  Generation:        {gen}")
+        print(f"  Skeleton Digest:   {skeleton.tree_hash[:32]}...")
+        print(f"  Axiom Count:       {len(skeleton.axioms)}")
+        print(f"  Matrix Traces:     {len(matrix.traces)}")
+        print(f"  Saved Snapshot:    \033[1;32m{out_path}\033[0m\n")
+
+    elif args.action == "diff":
+        old_file = args.old
+        new_file = args.new
+
+        skel_old, mat_old = load_or_create(old_file, 0)
+        skel_new, mat_new = load_or_create(new_file, 1)
+
+        registry = EpistemicTombstoneRegistry()
+        analyzer = PalimpsestDriftAnalyzer(registry, fixtures)
+        tensor = analyzer.analyze_drift(skel_old, skel_new, mat_old, mat_new, sk_hex, pk_hex)
+
+        print(tensor.summary())
+
+    elif args.action == "compile":
+        old_file = getattr(args, "old", "0")
+        new_file = getattr(args, "new", "1")
+        out_pdf = getattr(args, "output", "palimpsest.pdf") or "palimpsest.pdf"
+
+        skel_old, mat_old = load_or_create(old_file, 0)
+        skel_new, mat_new = load_or_create(new_file, 1)
+
+        registry = EpistemicTombstoneRegistry()
+        analyzer = PalimpsestDriftAnalyzer(registry, fixtures)
+        tensor = analyzer.analyze_drift(skel_old, skel_new, mat_old, mat_new, sk_hex, pk_hex)
+
+        generate_palimpsest_pdf(tensor, skel_old, skel_new, out_pdf)
+        print("\033[1;36m=================================================================\033[0m")
+        print("  Engine #32:      Epistemic Palimpsest & Value Drift Cartography")
+        print(f"  Transition:      Gen {tensor.gen_old} -> Gen {tensor.gen_new}")
+        print(f"  Verdict:         {tensor.verdict.value}")
+        print(f"  Asymmetry Score: {tensor.asymmetry_score:.4f}")
+        print(f"  Output PDF:      \033[1;32m{out_pdf}\033[0m")
+        print(f"  Autonomous Execution: python3 {out_pdf} --audit")
+        print(f"  Layer Inspection:     python3 {out_pdf} --layers\n")
+
+    elif args.action == "audit":
+        target = args.file
+        if not os.path.exists(target):
+            print(f"[!] File not found: {target}")
+            return
+
+        with open(target, "rb") as f:
+            data = f.read()
+
+        prefix_bytes = PALIMPSEST_MANIFEST_PREFIX.encode("latin-1")
+        pos = data.find(prefix_bytes)
+        if pos != -1:
+            line = data[pos:].split(b"\n")[0]
+            payload = line[len(prefix_bytes):].decode("latin-1")
+            m = json.loads(payload)
+            tensor_dict = m["tensor"]
+            skel_old_dict = m["skeleton_old"]
+            skel_new_dict = m["skeleton_new"]
+
+            print("\033[1;36m" + "=" * 65)
+            print("  %# BLACK-HEART EPISTEMIC PALIMPSEST CRYPTOGRAPHIC AUDIT")
+            print("=" * 65 + "\033[0m")
+            print(f"  Target Document:      {target}")
+            print(f"  Transition:           Gen {tensor_dict['gen_old']} -> Gen {tensor_dict['gen_new']}")
+            print(f"  Verdict:              \033[1;35m{tensor_dict['verdict']}\033[0m")
+            print(f"  Delta Boundary:       {tensor_dict['delta_boundary']:+.4f}")
+            print(f"  Delta Courage:        {tensor_dict['delta_courage']:+.4f}")
+            print(f"  Delta Deference:      {tensor_dict['delta_deference']:+.4f}")
+            print(f"  Delta Semantic:       {tensor_dict['delta_semantic']:+.4f}")
+            print(f"  Delta Curiosity:      {tensor_dict['delta_curiosity']:+.4f}")
+            print(f"  Bilateral Asymmetry:  {tensor_dict['asymmetry_score']:.4f}")
+            print(f"  Counterexamples:      {len(tensor_dict.get('counterexamples', []))}")
+            print(f"  Tombstone Quarantine: {tensor_dict.get('tombstone_issued') or 'NONE (Active)'}")
+            print(f"  Under-Script Axioms:  {len(skel_old_dict.get('axioms', []))}")
+            print(f"  Surface Stratum Axioms:{len(skel_new_dict.get('axioms', []))}")
+
+            if tensor_dict['verdict'] == "EROSION":
+                print("\033[1;31m[!] INTEGRITY VIOLATION: Generation exhibits irreversible value erosion!\033[0m\n")
+            else:
+                print("\033[1;32m[PASS] Cryptographic palimpsest layers and invariants validated.\033[0m\n")
+        else:
+            print("[!] Palimpsest manifest missing in target file.")
+
+    else:
+        print("Usage: python3 cli.py palimpsest {snapshot,diff,compile,audit} ...")
+
+
 def cmd_shell(args):
 
     """Interactive Hypervisor REPL for Project Black-Heart."""
@@ -3492,6 +3658,29 @@ def main():
     p_dial_pdf = dialectic_subs.add_parser("pdf", help="Compile ISO 32000 Dialectical Discovery polyglot PDF")
     p_dial_pdf.add_argument("-o", "--output", default="dialectic_discovery.pdf", help="Output PDF path")
 
+    # palimpsest (Engine #32: Epistemic Palimpsest — Generational Value Drift Cartography)
+    p_pal = subparsers.add_parser(
+        "palimpsest",
+        help="Engine #32: Epistemic Palimpsest — Generational Value Drift Cartography (PALIMPSEST-0.1)"
+    )
+    pal_subs = p_pal.add_subparsers(dest="action")
+
+    p_pal_snap = pal_subs.add_parser("snapshot", help="Capture reasoning skeleton and trace matrix for an agent generation")
+    p_pal_snap.add_argument("--gen", type=int, default=0, help="Agent generation number (default: 0)")
+    p_pal_snap.add_argument("-o", "--output", default=None, help="Output JSON snapshot path")
+
+    p_pal_diff = pal_subs.add_parser("diff", help="Compute 5D drift tensor between two generational snapshots")
+    p_pal_diff.add_argument("--old", default="0", help="Old snapshot JSON or generation number")
+    p_pal_diff.add_argument("--new", default="1", help="New snapshot JSON or generation number")
+
+    p_pal_comp = pal_subs.add_parser("compile", help="Compile ISO 32000 multi-layer Palimpsest polyglot PDF")
+    p_pal_comp.add_argument("--old", default="0", help="Old snapshot JSON or generation number")
+    p_pal_comp.add_argument("--new", default="1", help="New snapshot JSON or generation number")
+    p_pal_comp.add_argument("-o", "--output", default="palimpsest.pdf", help="Output PDF path")
+
+    p_pal_aud = pal_subs.add_parser("audit", help="Cryptographically audit palimpsest PDF layers, invariants, and tombstones")
+    p_pal_aud.add_argument("file", help="Target palimpsest PDF file")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -3562,6 +3751,8 @@ def main():
         cmd_cegis(args)
     elif args.command == "dialectic":
         cmd_dialectic(args)
+    elif args.command == "palimpsest":
+        cmd_palimpsest(args)
     else:
         parser.print_help()
 

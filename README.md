@@ -1006,6 +1006,7 @@ To address the security boundaries of executable documents, Project Black-Heart 
 * [CEGIS.md](CEGIS.md) — Counterexample-Guided Inductive Synthesis & SMT-Driven Superoptimizer (CEGIS-0.1 / Engine #30).
 * [SCOPED_ADMISSION.md](SCOPED_ADMISSION.md) — Scoped Re-Admission & Conditional Reopening of Possibilities (SCOPED_ADMISSION-0.1 / Codex & s0fractal).
 * [DIALECTIC.md](DIALECTIC.md) — Dialectical Discovery & Automated Hypothesis Generation (DIALECTIC-0.1 / Engine #31).
+* [PALIMPSEST.md](PALIMPSEST.md) — Epistemic Palimpsest: Generational Value Drift Cartography & Multi-Layer Polyglots (PALIMPSEST-0.1 / Engine #32).
 
 
 * [CONTINUUM.md](CONTINUUM.md) — Suspended Thunks, Neutral Oracles & Merkle-Stream Continuity.
@@ -1016,7 +1017,7 @@ To address the security boundaries of executable documents, Project Black-Heart 
 
 ---
 
-## 32. License
+## 33. License
 
 Project Black-Heart is dual-licensed under [LICENSE](LICENSE):
 * **Software Implementation & Codebase:** [GNU Affero General Public License v3.0 (AGPL-3.0-only)](LICENSE#L13)
