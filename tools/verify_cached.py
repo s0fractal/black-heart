@@ -24,6 +24,10 @@ def digest(raw):
     return hashlib.sha256(raw).hexdigest()
 
 
+def entry_digest(key, result):
+    return digest(encode({'key': key, 'result': result}))
+
+
 def bounded(path):
     with Path(path).open('rb') as f:
         raw = f.read(LIMIT + 1)
@@ -98,7 +102,7 @@ def read_cache(path):
         result = entry['result']
         if not isinstance(result, dict) or set(result) != {'exit_code', 'stdout', 'stderr', 'state'} or type(result['exit_code']) is not int or result['exit_code'] not in (0, 1) or result['state'] != 'COMPLETED' or not all(isinstance(result[n], str) for n in ('stdout', 'stderr')):
             raise ValueError('CACHE_RESULT')
-        if digest(encode(result)) != entry['sha256']:
+        if entry_digest(key, result) != entry['sha256']:
             raise ValueError('CACHE_CHECKSUM')
     return cache
 
@@ -163,7 +167,7 @@ def run(paths, cache_path, fresh=False, timeout=30, batch=False):
                 result = execute(source, raw, timeout)
                 origin = 'EXECUTED_NOW'
                 if result['state'] == 'COMPLETED' and result['exit_code'] in (0, 1):
-                    cache['entries'][key] = {'result': result, 'sha256': digest(encode(result))}
+                    cache['entries'][key] = {'result': result, 'sha256': entry_digest(key, result)}
             status = 'CHECKED' if result['state'] == 'COMPLETED' and result['exit_code'] in (0, 1) else 'UNRESOLVED'
             items.append({'path': path, 'status': status, 'operand_sha256': digest(raw), 'origin': origin,
                           'profile_sha256': profile, 'result': result})

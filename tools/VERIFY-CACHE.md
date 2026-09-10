@@ -73,8 +73,11 @@ complete PDF validity. A cached passing outcome is not a fresh execution.
 
 ## Trust and storage
 
-This is a **trusted-local** cache. Entry checksums detect accidental corruption,
-not a malicious writer who can replace both data and checksum. Do not import
+This is a **trusted-local** cache. Entry checksums bind both the lookup key and
+the result, detecting accidental corruption or intact entries swapped between
+keys. Earlier experimental value-only checksums refuse with `CACHE_CHECKSUM`;
+discard that disposable cache or choose a new path. This does not protect against
+a malicious writer who can replace both data and checksum. Do not import
 cache files from an untrusted producer or use this as a substitute for a fresh
 release/security gate. Stdlib and shared-library bytes are not individually
 hashed; this is a same-host profile, not a hermetic cross-machine proof.

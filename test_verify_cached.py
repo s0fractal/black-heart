@@ -64,7 +64,7 @@ class CacheTests(unittest.TestCase):
 
     def test_entry_checksum_and_shape(self):
         result = {'exit_code': 0, 'stdout': '', 'stderr': '', 'state': 'COMPLETED'}
-        valid = {'schema': 1, 'entries': {'a'*64: {'result': result, 'sha256': C.digest(C.encode(result))}}}
+        valid = {'schema': 1, 'entries': {'a'*64: {'result': result, 'sha256': C.entry_digest('a'*64, result)}}}
         altered = copy.deepcopy(valid)
         altered['entries']['a'*64]['result']['exit_code'] = 1
         self.cache.write_bytes(C.encode(altered))
@@ -85,6 +85,18 @@ class CacheTests(unittest.TestCase):
                 r = C.run([self.ledger], self.cache)
                 self.assertEqual(r['items'][0]['origin'], 'EXECUTED_NOW')
                 self.assertEqual(execute.call_args.args[0]['artifact_audit.py'], files['artifact_audit.py'])
+
+    def test_swapped_intact_entries_refuse(self):
+        passed = {'exit_code': 0, 'stdout': 'pass', 'stderr': '', 'state': 'COMPLETED'}
+        failed = {'exit_code': 1, 'stdout': 'refusal', 'stderr': '', 'state': 'COMPLETED'}
+        entries = {k: {'result': r, 'sha256': C.entry_digest(k, r)}
+                   for k, r in [('a'*64, passed), ('b'*64, failed)]}
+        self.cache.write_bytes(C.encode({'schema': 1, 'entries': entries}))
+        self.assertEqual(C.read_cache(self.cache)['entries']['a'*64]['result']['exit_code'], 0)
+        entries['a'*64], entries['b'*64] = entries['b'*64], entries['a'*64]
+        self.cache.write_bytes(C.encode({'schema': 1, 'entries': entries}))
+        with self.assertRaisesRegex(ValueError, 'CACHE_CHECKSUM'):
+            C.read_cache(self.cache)
 
     def test_timeout_not_cached(self):
         timeout = {'exit_code': None, 'stdout': '', 'stderr': '', 'state': 'TIMEOUT'}
