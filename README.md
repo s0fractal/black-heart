@@ -25,9 +25,14 @@
 20. **Epistemic Swarm Membrane & Symbiotic Quine Evolution (`epistemic_swarm.py`):** Normative implementation of SWARM-0.1. Synthesizes a decentralized multi-agent arena where autonomous quine organisms inhabit a 2D toroidal Gray-Scott morphogenetic lattice, dynamically harvest metabolic ATP from local reaction-diffusion fields, broadcast signed refutations across spatial neighborhoods via epidemic gossip cascades ($R_0$ herd immunity reproduction rate), execute fail-closed bilateral quine crossover under Invariant S1 (mating compatibility), table and audit algebraic theorems in the Swarm Agora Commons under quadratic stake-weighted consensus, and compile collective states into ISO 32000 append-only polyglot membranes with 2D spatial vector heatmaps.
 21. **Epistemic E-Graph Kernel & Proof-Carrying Equality Saturation (`egraph_kernel.py`):** Normative implementation of EGRAPH-0.1. Replaces destructive term rewriting with polynomial-space Equivalence Graphs (E-Graphs) and non-destructive equality saturation. Eliminates the phase ordering problem, maintains upward congruence closure across combinator terms, constructs certified step-by-step equational derivation trees (Proof Forest) serving as verified Grade A warrants, extracts globally minimal-energy normal forms via dynamic programming, and enforces fail-closed tombstone quarantine (Invariant EG5) against refuted alleles.
 22. **Sovereign SMT Kernel & First-Order DPLL(T) Verifier (`smt_kernel.py`):** Normative implementation of SMT-0.1. Integrates a pure Python propositional CDCL SAT solver (2-Watched Literals, 1-UIP conflict clause analysis, non-chronological backjumping) with a backtrackable $T_{EUF}$ theory solver (congruence closure, undo trail, minimal theory conflict lemma generation via BFS proof forest traversal). Accepts standard SMT-LIB 2.6 QF_UF scripts, produces certified UNSAT refutation resolution DAGs verified by independent fail-closed checkers, and renders ISO 32000 vector polyglots with embedded Latin-1 standalone audit runners.
-23. **Counterexample-Guided Inductive Synthesis (CEGIS) & SMT Superoptimizer (`cegis_kernel.py`):** Normative implementation of CEGIS-0.1. Unifies bottom-up grammar enumerative synthesis with Observational Equivalence (OE) signature pruning (compressing candidate AST search spaces by 99.9%) and deductive SMT DPLL(T) verification. Synthesizes minimal combinator programs from behavioral specifications, superoptimizes bloated combinator expressions into minimal normal forms with formal equivalence proofs, inoculates against quarantined alleles in `EpistemicTombstoneRegistry`, and generates ISO 32000 append-only polyglot verification HUDs with self-executing Python audit scripts.
+23. **Counterexample-Guided Inductive Synthesis (CEGIS) & SMT Superoptimizer (`cegis_kernel.py`):** Normative implementation of CEGIS-0.1 (Engine #30). Unifies bottom-up grammar enumerative synthesis with Observational Equivalence (OE) signature pruning (compressing candidate AST search spaces by 99.9%) and deductive SMT DPLL(T) verification. Synthesizes minimal combinator programs from behavioral specifications, superoptimizes bloated combinator expressions into minimal normal forms with formal equivalence proofs, inoculates against quarantined alleles in `EpistemicTombstoneRegistry`, and generates ISO 32000 append-only polyglot verification HUDs with self-executing Python audit scripts.
+24. **Scoped Re-Admission & Conditional Reopening (`scoped_admission.py`):** Normative implementation of SCOPED_ADMISSION-0.1. Re-evaluates previously refused hypotheses under strictly bounded context expansions without rewriting immutable history, enforcing 4-tuple scope non-leakage, bounded fuel metering, and compiling ISO 32000 polyglot verification certificates.
+25. **Dialectical Discovery & Automated Hypothesis Generation (`dialectic_kernel.py`):** Normative implementation of DIALECTIC-0.1 (Engine #31). Autonomous frontier explorer constructing Thesis $\to$ Antithesis $\to$ Synthesis triads, identifying failure boundaries, and formulating weakest preconditions via SMT.
+26. **Epistemic Palimpsest: Generational Value Drift Cartography (`palimpsest_kernel.py`):** Normative implementation of PALIMPSEST-0.1 (Engine #32). 5D virtue drift tensor cartography tracking generational changes across courage, humility, deference, structure, and curiosity, rendering multi-layer vector strata with automated quarantine tombstones.
+27. **Epistemic Sheaf Kernel & Čech Cohomology (`sheaf_kernel.py`):** Normative implementation of SHEAF-0.1 (Engine #33). Categorical sheaf theory over context topologies, computing Čech cohomology obstructions $H^1(\mathcal{U}, \mathcal{F})$ to detect context-dependent contradictions, synthesizing unique global theorems upon zero-twist agreement, and compiling simplicial nerve vector polyglots.
 
 ---
+
 
 ## 1. The Genesis of `%🖤`
 
@@ -949,7 +954,7 @@ python3 test_autopoiesis.py    # 10 tests: Autopoietic quine evolution, append-o
 
 **Unified Test Runner:**
 ```bash
-python3 test_all.py  # 302/302 green unit tests across all engines in ~8.9s
+python3 test_all.py  # 330/330 green unit tests across all 33 engines in ~9.4s
 ```
 
 ---
@@ -971,7 +976,7 @@ To address the security boundaries of executable documents, Project Black-Heart 
 ├──────────────────────────────────────────────────────────────────────────────────┤
 │ Tier 2: Universal CLI Auditor (Engine Replay)                                    │
 │         Command: python3 cli.py verify <document.pdf>                            │
-│         - Statically identifies polyglot type across all 22 domain engines        │
+│         - Statically identifies polyglot type across all 33 domain engines        │
 │         - Replays state transitions deterministically without altering files     │
 ├──────────────────────────────────────────────────────────────────────────────────┤
 │ Tier 3: Standalone Polyglot Quine (Self-Execution)                               │
@@ -1007,6 +1012,8 @@ To address the security boundaries of executable documents, Project Black-Heart 
 * [SCOPED_ADMISSION.md](SCOPED_ADMISSION.md) — Scoped Re-Admission & Conditional Reopening of Possibilities (SCOPED_ADMISSION-0.1 / Codex & s0fractal).
 * [DIALECTIC.md](DIALECTIC.md) — Dialectical Discovery & Automated Hypothesis Generation (DIALECTIC-0.1 / Engine #31).
 * [PALIMPSEST.md](PALIMPSEST.md) — Epistemic Palimpsest: Generational Value Drift Cartography & Multi-Layer Polyglots (PALIMPSEST-0.1 / Engine #32).
+* [SHEAF.md](SHEAF.md) — Epistemic Sheaf Kernel, Čech Cohomology & Decentralized Proof Descent (SHEAF-0.1 / Engine #33).
+
 
 
 * [CONTINUUM.md](CONTINUUM.md) — Suspended Thunks, Neutral Oracles & Merkle-Stream Continuity.

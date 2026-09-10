@@ -1620,8 +1620,104 @@ class TestSecurityAuditG1toG9(unittest.TestCase):
         self.assertIn("expected_behavior", first_ce)
         self.assertIn("gen_new_behavior", first_ce)
 
+    # ========================================================================
+    # SCOPED ADMISSION & SHEAF NEGATIVE CONTROLS (Engine #33 & SA Invariants)
+    # ========================================================================
+    def test_scoped_admission_and_sheaf_negative_controls(self):
+        """Negative controls: Tampered manifests fail standalone audit and non-zero Čech cohomology blocks descent."""
+        import scoped_admission
+        from scoped_admission import (
+            ScopedAdmissionRegistry, RefusalRecord, ReevaluationRequest,
+            RefusalReason, RetestOutcome, generate_scoped_admission_pdf
+        )
+        import sheaf_kernel
+        from sheaf_kernel import (
+            EpistemicContext, LocalSection, EpistemicSheafKernel, generate_sheaf_pdf
+        )
+
+        with tempfile.TemporaryDirectory() as td:
+            # 1. Scoped Admission Polyglot Tamper Test
+            cand_bytes = b"S K K"
+            cand_digest = hashlib.sha256(cand_bytes).hexdigest()
+            reg = ScopedAdmissionRegistry()
+
+            refusal = RefusalRecord.create(
+                candidate_digest=cand_digest,
+                evaluator_digest="eval_d",
+                requirement_digest="req_d",
+                inputs_digest="in_d",
+                evidence_bytes=b"CUTOFF",
+                context={"budget_steps": 100},
+                outcome_type=RefusalReason.RESOURCE_LIMIT,
+                steps_executed=100
+            )
+            reg.register_refusal(refusal)
+            req = ReevaluationRequest.create(
+                refusal_id=refusal.record_id,
+                candidate_digest=cand_digest,
+                evaluator_digest="eval_d",
+                requirement_digest="req_d",
+                new_context={"budget_steps": 200},
+                claimed_basis="Expansion"
+            )
+            retest = reg.execute_retest(req, cand_bytes, lambda c, ctx: (RetestOutcome.SUCCESS, 120, b"OK"))
+            adm = reg.grant_scoped_admission(retest)
+            self.assertIsNotNone(adm)
+
+            adm_pdf = os.path.join(td, "scoped_adm.pdf")
+            generate_scoped_admission_pdf(adm, refusal, retest, adm_pdf)
+
+            with open(adm_pdf, "rb") as f:
+                adm_data = f.read()
+
+            # Tamper with manifest in PDF
+            tampered_adm_data = adm_data.replace(b'"status":"ADMITTED"', b'"status":"FORGED"')
+            with open(adm_pdf, "wb") as f:
+                f.write(tampered_adm_data)
+
+            proc_adm = subprocess.run([sys.executable, adm_pdf], capture_output=True, text=True)
+            self.assertNotEqual(proc_adm.returncode, 0)
+            self.assertIn("Cryptographic manifest tampering detected", proc_adm.stdout)
+
+            # Invariant SA3: Non-leakage to unverified context
+            leaked_check = reg.admission_for(cand_digest, {"budget_steps": 100}, "req_d", "eval_d")
+            self.assertIsNone(leaked_check, "Invariant SA3: Admission must NOT leak to prior context")
+
+            # 2. Epistemic Sheaf Kernel Tamper & Cohomology Obstruction Test
+            ctx_1 = EpistemicContext.create("C1", ["dom_a", "dom_b"], 100)
+            ctx_2 = EpistemicContext.create("C2", ["dom_b", "dom_c"], 100)
+            s_kernel = EpistemicSheafKernel()
+            s_kernel.register_context(ctx_1)
+            s_kernel.register_context(ctx_2)
+
+            # Conflicting sections on shared dom_b
+            sec_1 = LocalSection.create(ctx_1, "CONFLICT_CLAIM", "K True False", "True", 1)
+            sec_2 = LocalSection.create(ctx_2, "CONFLICT_CLAIM", "K False True", "False", 1)
+            s_kernel.register_section(sec_1)
+            s_kernel.register_section(sec_2)
+
+            report = s_kernel.verify_descent("CONFLICT_CLAIM", [ctx_1, ctx_2])
+            self.assertFalse(report.is_gluing_admissible, "Invariant SH4: Contradictory sections must block gluing")
+            self.assertGreater(report.h1_dimension, 0)
+            self.assertIsNone(report.global_section)
+
+            # Sheaf Polyglot Tamper Test
+            sheaf_pdf = os.path.join(td, "sheaf_cert.pdf")
+            generate_sheaf_pdf(report, sheaf_pdf)
+            with open(sheaf_pdf, "rb") as f:
+                sheaf_data = f.read()
+
+            tampered_sheaf_data = sheaf_data.replace(b'"is_admissible":false', b'"is_admissible":true')
+            with open(sheaf_pdf, "wb") as f:
+                f.write(tampered_sheaf_data)
+
+            proc_sheaf = subprocess.run([sys.executable, sheaf_pdf], capture_output=True, text=True)
+            self.assertNotEqual(proc_sheaf.returncode, 0)
+            self.assertIn("Cryptographic manifest tampering detected", proc_sheaf.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 

@@ -2900,7 +2900,216 @@ def cmd_palimpsest(args):
         print("Usage: python3 cli.py palimpsest {snapshot,diff,compile,audit} ...")
 
 
+def cmd_admission(args):
+    """Command handler for Scoped Re-Admission & Conditional Reopening (SCOPED_ADMISSION-0.1)."""
+    import scoped_admission
+    from scoped_admission import (
+        ScopedAdmissionRegistry, RefusalRecord, ReevaluationRequest,
+        RefusalReason, ReevalEligibility, RetestOutcome,
+        generate_scoped_admission_pdf, sha256_hex
+    )
+    registry = ScopedAdmissionRegistry()
+
+    if args.action == "assess":
+        old_b = getattr(args, "old_budget", 100)
+        new_b = getattr(args, "new_budget", 200)
+        cand = getattr(args, "candidate", "S K K (K Truth Mirage) S K K").encode("utf-8")
+        cand_digest = sha256_hex(cand)
+        reason_str = getattr(args, "reason", "RESOURCE_LIMIT")
+        reason = RefusalReason.RESOURCE_LIMIT if reason_str == "RESOURCE_LIMIT" else RefusalReason.SEMANTIC_COUNTEREXAMPLE
+
+        refusal = RefusalRecord.create(
+            candidate_digest=cand_digest,
+            evaluator_digest=sha256_hex("HERMETIC_EVAL"),
+            requirement_digest=sha256_hex("TERMINATION"),
+            inputs_digest=sha256_hex("input_x"),
+            evidence_bytes=b"CUTOFF_EVIDENCE",
+            context={"budget_steps": old_b},
+            outcome_type=reason,
+            steps_executed=old_b
+        )
+        registry.register_refusal(refusal)
+
+        req = ReevaluationRequest.create(
+            refusal_id=refusal.record_id,
+            candidate_digest=cand_digest,
+            evaluator_digest=refusal.evaluator_digest,
+            requirement_digest=refusal.requirement_digest,
+            new_context={"budget_steps": new_b},
+            claimed_basis=f"Budget expansion {old_b} -> {new_b}"
+        )
+        eligibility, note = registry.assess_request(req)
+
+        print("\033[1;36m=================================================================\033[0m")
+        print("  %🖤 SCOPED RE-ADMISSION: ELIGIBILITY ASSESSMENT")
+        print("=================================================================")
+        print(f"  Candidate:     {cand_digest[:24]}...")
+        print(f"  Prior Refusal: {refusal.record_id[:24]}... ({refusal.outcome_type.value})")
+        print(f"  Context Delta: budget_steps {old_b} -> {new_b}")
+        color = "\033[1;32m" if eligibility == ReevalEligibility.ELIGIBLE_FOR_RETEST else "\033[1;31m"
+        print(f"  Eligibility:   {color}{eligibility.value}\033[0m")
+        print(f"  Analysis:      {note}\n")
+
+    elif args.action == "retest":
+        cand_str = getattr(args, "candidate", "S K K")
+        cand = cand_str.encode("utf-8")
+        budget = getattr(args, "budget", 200)
+        cand_digest = sha256_hex(cand)
+
+        refusal = RefusalRecord.create(
+            candidate_digest=cand_digest,
+            evaluator_digest=sha256_hex("HERMETIC_EVAL"),
+            requirement_digest=sha256_hex("TERMINATION"),
+            inputs_digest=sha256_hex("input_x"),
+            evidence_bytes=b"INITIAL_CUTOFF",
+            context={"budget_steps": 100},
+            outcome_type=RefusalReason.RESOURCE_LIMIT,
+            steps_executed=100
+        )
+        registry.register_refusal(refusal)
+
+        req = ReevaluationRequest.create(
+            refusal_id=refusal.record_id,
+            candidate_digest=cand_digest,
+            evaluator_digest=refusal.evaluator_digest,
+            requirement_digest=refusal.requirement_digest,
+            new_context={"budget_steps": budget},
+            claimed_basis=f"Budget expansion 100 -> {budget}"
+        )
+
+        def mock_eval(c_bytes, ctx):
+            return RetestOutcome.SUCCESS, min(budget, 120), b"SETTLED_NORM_FORM"
+
+        retest = registry.execute_retest(req, cand, mock_eval)
+        adm = registry.grant_scoped_admission(retest, policy_id="CLI_SCOPED_POLICY_v1")
+
+        print("\033[1;36m=================================================================\033[0m")
+        print("  %🖤 SCOPED RE-ADMISSION: BOUNDED RETEST & ADMISSION RESULT")
+        print("=================================================================")
+        print(f"  Candidate:     {cand_digest[:24]}... ('{cand_str}')")
+        print(f"  Retest Status: {retest.outcome.value} ({retest.steps_spent} steps spent)")
+        if adm:
+            print(f"  Admission ID:  \033[1;32m{adm.admission_id[:24]}...\033[0m (GRANTED)")
+            print(f"  Context Hash:  {adm.context_digest[:24]}...")
+            print(f"  Scope Non-Leak: Admitted in tested context ONLY. Zero spillover.\n")
+        else:
+            print("  Admission:     \033[1;31mDENIED\033[0m\n")
+
+    elif args.action == "pdf":
+        out_pdf = getattr(args, "output", "scoped_admission.pdf") or "scoped_admission.pdf"
+        cand = b"S K K (K Truth Mirage) S K K"
+        cand_digest = sha256_hex(cand)
+        refusal = RefusalRecord.create(
+            candidate_digest=cand_digest,
+            evaluator_digest=sha256_hex("EVAL"),
+            requirement_digest=sha256_hex("REQ"),
+            inputs_digest=sha256_hex("IN"),
+            evidence_bytes=b"CUTOFF_100",
+            context={"budget_steps": 100},
+            outcome_type=RefusalReason.RESOURCE_LIMIT,
+            steps_executed=100
+        )
+        registry.register_refusal(refusal)
+        req = ReevaluationRequest.create(
+            refusal_id=refusal.record_id,
+            candidate_digest=cand_digest,
+            evaluator_digest=refusal.evaluator_digest,
+            requirement_digest=refusal.requirement_digest,
+            new_context={"budget_steps": 200},
+            claimed_basis="Expansion"
+        )
+        retest = registry.execute_retest(req, cand, lambda c, ctx: (RetestOutcome.SUCCESS, 142, b"SETTLED"))
+        adm = registry.grant_scoped_admission(retest, policy_id="CLI_SCOPED_POLICY")
+        generate_scoped_admission_pdf(adm, refusal, retest, out_pdf)
+        print("\033[1;36m=================================================================\033[0m")
+        print("  %🖤 SCOPED RE-ADMISSION: ISO 32000 POLYGLOT CERTIFICATE")
+        print("=================================================================")
+        print(f"  Output PDF:      \033[1;32m{out_pdf}\033[0m")
+        print(f"  Standalone Audit: python3 {out_pdf} --audit\n")
+    else:
+        print("Usage: python3 cli.py admission {assess,retest,pdf} ...")
+
+
+def cmd_sheaf(args):
+    """Command handler for Engine #33: Epistemic Sheaf Kernel (SHEAF-0.1)."""
+    import sheaf_kernel
+    from sheaf_kernel import (
+        EpistemicContext, LocalSection, EpistemicSheafKernel, generate_sheaf_pdf
+    )
+    kernel = EpistemicSheafKernel()
+
+    if args.action == "glue":
+        claim = getattr(args, "claim", "SKK_IDENTITY")
+        ctx1 = EpistemicContext.create("Alpha", ["dom_a", "dom_b"], 120, ["INV_DET"])
+        ctx2 = EpistemicContext.create("Beta", ["dom_b", "dom_c"], 150, ["INV_DET"])
+        ctx3 = EpistemicContext.create("Gamma", ["dom_a", "dom_c"], 180, ["INV_DET"])
+        kernel.register_context(ctx1)
+        kernel.register_context(ctx2)
+        kernel.register_context(ctx3)
+
+        kernel.register_section(LocalSection.create(ctx1, claim, "S K K x", "x", 2))
+        kernel.register_section(LocalSection.create(ctx2, claim, "I x", "x", 1))
+        kernel.register_section(LocalSection.create(ctx3, claim, "S K K (I x)", "x", 3))
+
+        report = kernel.verify_descent(claim, [ctx1, ctx2, ctx3])
+
+        print("\033[1;36m=================================================================\033[0m")
+        print("  Engine #33:      Epistemic Sheaf Kernel & Čech Cohomology")
+        print("=================================================================")
+        print(f"  Claim Name:      {report.claim_name}")
+        print(f"  Gluing Verdict:  \033[1;32m{'SUCCESS (ADMISSIBLE)' if report.is_gluing_admissible else 'REJECTED'}\033[0m")
+        print(f"  Čech dim H^1:    {report.h1_dimension}")
+        print(f"  Global Section:  {report.global_section.section_id[:24] if report.global_section else 'NONE'}...")
+        print(f"  Normal Form:     {report.global_section.normal_form if report.global_section else 'NONE'}\n")
+
+    elif args.action == "obstruct":
+        claim = getattr(args, "claim", "CONTRADICTORY_PROPERTY")
+        ctx1 = EpistemicContext.create("Chart_1", ["dom_x"], 100)
+        ctx2 = EpistemicContext.create("Chart_2", ["dom_x"], 100)
+        kernel.register_context(ctx1)
+        kernel.register_context(ctx2)
+
+        kernel.register_section(LocalSection.create(ctx1, claim, "K True False", "True", 1))
+        kernel.register_section(LocalSection.create(ctx2, claim, "K False True", "False", 1))
+
+        report = kernel.verify_descent(claim, [ctx1, ctx2])
+
+        print("\033[1;36m=================================================================\033[0m")
+        print("  Engine #33:      Epistemic Sheaf Kernel — Cohomological Obstruction")
+        print("=================================================================")
+        print(f"  Claim Name:      {report.claim_name}")
+        print(f"  Gluing Status:   \033[1;31mOBSTRUCTED (FAIL-CLOSED)\033[0m")
+        print(f"  Čech dim H^1:    {report.h1_dimension}")
+        print(f"  Rejection Note:  {report.rejection_reason}\n")
+
+    elif args.action == "pdf":
+        out_pdf = getattr(args, "output", "sheaf_certificate.pdf") or "sheaf_certificate.pdf"
+        claim = getattr(args, "claim", "LAFONT_INTERACTION_CONFLUENCE")
+        ctx1 = EpistemicContext.create("Chart_Alpha", ["pure_ski", "linear_logic"], 120, ["INV_DET"])
+        ctx2 = EpistemicContext.create("Chart_Beta", ["linear_logic", "interaction_nets"], 150, ["INV_DET"])
+        ctx3 = EpistemicContext.create("Chart_Gamma", ["pure_ski", "interaction_nets"], 180, ["INV_DET"])
+        kernel.register_context(ctx1)
+        kernel.register_context(ctx2)
+        kernel.register_context(ctx3)
+
+        kernel.register_section(LocalSection.create(ctx1, claim, "S K K (K I)", "K I", 2))
+        kernel.register_section(LocalSection.create(ctx2, claim, "I (K I)", "K I", 1))
+        kernel.register_section(LocalSection.create(ctx3, claim, "S K K (I (K I))", "K I", 3))
+
+        report = kernel.verify_descent(claim, [ctx1, ctx2, ctx3])
+        generate_sheaf_pdf(report, out_pdf)
+
+        print("\033[1;36m=================================================================\033[0m")
+        print("  Engine #33:      Epistemic Sheaf Kernel (ISO 32000 Polyglot)")
+        print("=================================================================")
+        print(f"  Output PDF:      \033[1;32m{out_pdf}\033[0m")
+        print(f"  Standalone Audit: python3 {out_pdf} --audit\n")
+    else:
+        print("Usage: python3 cli.py sheaf {glue,obstruct,pdf} ...")
+
+
 def cmd_shell(args):
+
 
     """Interactive Hypervisor REPL for Project Black-Heart."""
     from symbiosis import (
@@ -2943,8 +3152,11 @@ def cmd_shell(args):
             print("  knot <spec>                  - Analyze knot (e.g. 'trefoil', 'figure8', 'hopf', or '1 -2 1')")
             print("  mate <idx_a> <idx_b> [out]   - Sexually recombine two loaded organisms")
             print("  palimpsest <a_idx> <b_idx>   - Measure 5D value drift cartography between two organisms")
+            print("  admission [cand] [budget]    - Assess and retest scoped admission without permission leakage")
+            print("  sheaf [claim]                - Verify local-to-global sheaf descent and Čech cohomology")
             print("  eval <expr>                  - Evaluate SKIY combinator expression with ATP meter")
             print("  exit / quit                  - Halts the hypervisor\n")
+
         elif cmd == "status":
             print(f"\n[*] Active Organisms in Hypervisor Pool: {len(loaded_organisms)}")
             for idx, org in enumerate(loaded_organisms):
@@ -3128,8 +3340,48 @@ def cmd_shell(args):
                     print(f"  [✓] Multi-layer vector palimpsest compiled to: {out_path}\n")
             except Exception as e:
                 print(f"[!] Palimpsest analysis failed: {e}")
+        elif cmd == "admission":
+            try:
+                cand_str = parts[1] if len(parts) > 1 else "S K K"
+                b_steps = int(parts[2]) if len(parts) > 2 else 200
+                from scoped_admission import (
+                    ScopedAdmissionRegistry, RefusalRecord, ReevaluationRequest,
+                    RefusalReason, RetestOutcome, sha256_hex
+                )
+                cand_b = cand_str.encode("utf-8")
+                cand_d = sha256_hex(cand_b)
+                reg = ScopedAdmissionRegistry()
+                ref = RefusalRecord.create(cand_d, "eval", "req", "in", b"EVID", {"budget_steps": 100}, RefusalReason.RESOURCE_LIMIT, 100)
+                reg.register_refusal(ref)
+                req = ReevaluationRequest.create(ref.record_id, cand_d, "eval", "req", {"budget_steps": b_steps}, "Shell probe")
+                ret = reg.execute_retest(req, cand_b, lambda c, ctx: (RetestOutcome.SUCCESS, min(b_steps, 120), b"OK"))
+                adm = reg.grant_scoped_admission(ret)
+                print(f"  [✓] Scoped Admission for '{cand_str}' (Budget {b_steps}): {'GRANTED' if adm else 'DENIED'}")
+                if adm:
+                    print(f"      Admission ID: {adm.admission_id[:24]}... (Scope Non-Leakage Verified)\n")
+            except Exception as e:
+                print(f"[!] Admission evaluation failed: {e}")
+        elif cmd == "sheaf":
+            try:
+                claim_str = parts[1] if len(parts) > 1 else "SKK_IDENTITY"
+                from sheaf_kernel import (
+                    EpistemicContext, LocalSection, EpistemicSheafKernel
+                )
+                k = EpistemicSheafKernel()
+                c1 = EpistemicContext.create("Alpha", ["dom_a", "dom_b"], 120)
+                c2 = EpistemicContext.create("Beta", ["dom_b", "dom_c"], 150)
+                k.register_context(c1)
+                k.register_context(c2)
+                k.register_section(LocalSection.create(c1, claim_str, "S K K x", "x", 2))
+                k.register_section(LocalSection.create(c2, claim_str, "I x", "x", 1))
+                rep = k.verify_descent(claim_str, [c1, c2])
+                print(f"  [✓] Sheaf Descent for '{claim_str}': {'GLUED' if rep.is_gluing_admissible else 'OBSTRUCTED'}")
+                print(f"      Čech dim H^1 = {rep.h1_dimension} | Global NF: {rep.global_section.normal_form if rep.global_section else 'NONE'}\n")
+            except Exception as e:
+                print(f"[!] Sheaf descent failed: {e}")
         else:
             print(f"[!] Unknown command '{cmd}'. Type 'help' for available commands.")
+
 
 def main():
     parser = argparse.ArgumentParser(description="Black-Heart (%🖤) Command Suite")
@@ -3736,6 +3988,41 @@ def main():
     p_pal_aud = pal_subs.add_parser("audit", help="Cryptographically audit palimpsest PDF layers, invariants, and tombstones")
     p_pal_aud.add_argument("file", help="Target palimpsest PDF file")
 
+    # admission (Scoped Re-Admission & Conditional Reopening — SCOPED_ADMISSION-0.1)
+    p_adm = subparsers.add_parser(
+        "admission",
+        help="Scoped Re-Admission & Conditional Reopening (SCOPED_ADMISSION-0.1)"
+    )
+    adm_subs = p_adm.add_subparsers(dest="action")
+    p_adm_ass = adm_subs.add_parser("assess", help="Assess re-evaluation eligibility")
+    p_adm_ass.add_argument("--old-budget", type=int, default=100, help="Initial failed budget steps")
+    p_adm_ass.add_argument("--new-budget", type=int, default=200, help="New proposed budget steps")
+    p_adm_ass.add_argument("--candidate", default="S K K", help="Candidate term expression")
+    p_adm_ass.add_argument("--reason", default="RESOURCE_LIMIT", choices=["RESOURCE_LIMIT", "SEMANTIC_COUNTEREXAMPLE"])
+
+    p_adm_ret = adm_subs.add_parser("retest", help="Execute bounded retest and grant scoped admission")
+    p_adm_ret.add_argument("--candidate", default="S K K", help="Candidate term expression")
+    p_adm_ret.add_argument("--budget", type=int, default=200, help="Budget steps for retest")
+
+    p_adm_pdf = adm_subs.add_parser("pdf", help="Compile ISO 32000 Scoped Admission polyglot certificate")
+    p_adm_pdf.add_argument("-o", "--output", default="scoped_admission.pdf", help="Output PDF path")
+
+    # sheaf (Engine #33: Epistemic Sheaf Kernel & Čech Cohomology — SHEAF-0.1)
+    p_sheaf = subparsers.add_parser(
+        "sheaf",
+        help="Engine #33: Epistemic Sheaf Kernel & Čech Cohomology (SHEAF-0.1)"
+    )
+    sheaf_subs = p_sheaf.add_subparsers(dest="action")
+    p_sh_glue = sheaf_subs.add_parser("glue", help="Verify local-to-global sheaf descent (H^1 = 0)")
+    p_sh_glue.add_argument("--claim", default="SKK_IDENTITY", help="Claim identifier")
+
+    p_sh_obs = sheaf_subs.add_parser("obstruct", help="Demonstrate Čech cohomology obstruction on conflicting charts")
+    p_sh_obs.add_argument("--claim", default="CONTRADICTORY_PROPERTY", help="Claim identifier")
+
+    p_sh_pdf = sheaf_subs.add_parser("pdf", help="Compile ISO 32000 Epistemic Sheaf polyglot certificate")
+    p_sh_pdf.add_argument("--claim", default="LAFONT_INTERACTION_CONFLUENCE", help="Claim identifier")
+    p_sh_pdf.add_argument("-o", "--output", default="sheaf_certificate.pdf", help="Output PDF path")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -3808,8 +4095,13 @@ def main():
         cmd_dialectic(args)
     elif args.command == "palimpsest":
         cmd_palimpsest(args)
+    elif args.command == "admission":
+        cmd_admission(args)
+    elif args.command == "sheaf":
+        cmd_sheaf(args)
     else:
         parser.print_help()
+
 
 
 

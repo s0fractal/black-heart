@@ -11,14 +11,20 @@ BLACK-HEART-CONDITIONAL-REOPENING-001 (Codex & s0fractal).
 from __future__ import annotations
 import unittest
 import copy
+import os
+import sys
+import tempfile
+import subprocess
 from typing import Dict, Any, Tuple
 
 import scoped_admission
 from scoped_admission import (
     RefusalReason, ReevalEligibility, RetestOutcome,
     RefusalRecord, ReevaluationRequest, RetestResult, ScopedAdmission,
-    ScopedAdmissionRegistry, sha256_hex, canonical_context_digest
+    ScopedAdmissionRegistry, sha256_hex, canonical_context_digest,
+    generate_scoped_admission_pdf
 )
+
 
 
 # ============================================================================
@@ -595,6 +601,78 @@ class TestNegativeMutations(unittest.TestCase):
         real_adm = self.registry.grant_scoped_admission(unverified_retest)
         self.assertIsNone(real_adm)
 
+    def test_control_13_pdf_polyglot_certificate_and_standalone_auditor(self):
+        """Control 13: ISO 32000 PDF polyglot generation and standalone execution with tamper defense."""
+        # 1. Produce a successful admission
+        refusal = RefusalRecord.create(
+            candidate_digest=self.candidate.digest,
+            evaluator_digest=self.evaluator,
+            requirement_digest=self.requirement,
+            inputs_digest=sha256_hex("input_x"),
+            evidence_bytes=b"CUTOFF_AT_100",
+            context={"budget_steps": 100},
+            outcome_type=RefusalReason.RESOURCE_LIMIT,
+            steps_executed=100
+        )
+        self.registry.register_refusal(refusal)
+
+        req = ReevaluationRequest.create(
+            refusal_id=refusal.record_id,
+            candidate_digest=self.candidate.digest,
+            evaluator_digest=self.evaluator,
+            requirement_digest=self.requirement,
+            new_context={"budget_steps": 200},
+            claimed_basis="Increased budget steps to 200"
+        )
+        retest = self.registry.execute_retest(
+            req,
+            self.candidate.code_bytes,
+            lambda code, ctx: self.candidate.evaluate(ctx)
+        )
+        adm = self.registry.grant_scoped_admission(retest, policy_id="TEST_SCOPED_POLICY_v1")
+        self.assertIsNotNone(adm)
+
+        with tempfile.TemporaryDirectory() as td:
+            pdf_path = os.path.join(td, "scoped_admission_cert.pdf")
+            generate_scoped_admission_pdf(adm, refusal, retest, pdf_path)
+            self.assertTrue(os.path.exists(pdf_path))
+            self.assertGreater(os.path.getsize(pdf_path), 500)
+
+
+
+            # Check that file contains %PDF-1.7
+            with open(pdf_path, "rb") as f:
+                content = f.read()
+                self.assertIn(b"%PDF-1.7", content)
+
+
+            # Execute standalone polyglot
+            proc = subprocess.run(
+                [sys.executable, pdf_path],
+                capture_output=True,
+                text=True
+            )
+            self.assertEqual(proc.returncode, 0, f"Polyglot execution failed: {proc.stderr}")
+            self.assertIn("SCOPED RE-ADMISSION CERTIFICATE", proc.stdout)
+            self.assertIn("Cryptographic Manifest Hash: VALID", proc.stdout)
+            self.assertIn("ALL INVARIANTS (SA1-SA6) SATISFIED", proc.stdout)
+
+            # Tamper defense: tamper with candidate_digest in embedded manifest
+            with open(pdf_path, "rb") as f:
+                data = f.read()
+            tampered = data.replace(b'"status":"ADMITTED"', b'"status":"FORGED_ADMISSION"')
+            with open(pdf_path, "wb") as f:
+                f.write(tampered)
+
+            proc_tampered = subprocess.run(
+                [sys.executable, pdf_path],
+                capture_output=True,
+                text=True
+            )
+            self.assertNotEqual(proc_tampered.returncode, 0)
+            self.assertIn("Cryptographic manifest tampering detected", proc_tampered.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
+
