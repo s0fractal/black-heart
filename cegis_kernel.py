@@ -49,7 +49,7 @@ import smt_kernel
 from smt_kernel import (
     SMTSolver, SMTStatus, SMTResult, SMTTerm, Const, App as SMTApp, Eq as SMTEq,
     Not as SMTNot, And as SMTAnd, Or as SMTOr, Distinct as SMTDistinct,
-    verify_unsat_certificate
+    check_proof_dag_structure
 )
 import controlled_forgetting
 from controlled_forgetting import EpistemicTombstoneRegistry
@@ -90,10 +90,235 @@ class CertifiedSynthesisResult:
     candidates_explored: int
     candidates_pruned_oe: int
     smt_verifications: int
+    # What was actually established about THIS candidate and THIS spec. A
+    # universal status is only ever read back from here; there is no proof
+    # object standing in for operands it never mentioned.
+    equivalence_witness: Optional["EquivalenceWitness"] = None
     proof_dag: Optional[Dict[int, Any]] = None
     elapsed_sec: float = 0.0
     original_expr: Optional[str] = None
     ast_size_reduction: float = 0.0
+
+
+# ============================================================================
+# 1b. EXTENSIONAL EQUIVALENCE, AND WHO MAY SPEND IT
+# ============================================================================
+
+class EquivalenceStatus(Enum):
+    """What a candidate/spec comparison established. Four different answers."""
+    EXTENSIONALLY_EQUAL = "EXTENSIONALLY_EQUAL"
+    REFUTED = "REFUTED"
+    INCONCLUSIVE_BUDGET = "INCONCLUSIVE_BUDGET"
+    NO_TERM_SPEC = "NO_TERM_SPEC"
+
+
+@dataclass(frozen=True)
+class EquivalenceWitness:
+    """The comparison, with the operands it was about named by digest.
+
+    A witness that does not carry the digests of the two terms compared is a
+    verdict about nothing: the previous design granted PROVED_CORRECT from an
+    SMT query that mentioned neither operand, and two unrelated synthesis
+    problems produced a byte-identical proof.
+    """
+    status: EquivalenceStatus
+    candidate_sha256: str
+    spec_sha256: str
+    arity: int
+    reason: str
+    normal_form: Optional[str] = None
+
+    def __bool__(self) -> bool:
+        return self.status is EquivalenceStatus.EXTENSIONALLY_EQUAL
+
+
+CREDIT_TERM_PROFILE = b"cegis.credit-term.v1"
+
+
+def _encode_term(term: Term) -> bytes:
+    """Prefix-free encoding of an AST: distinct terms have distinct bytes.
+
+    `glyph.canonical_bytes` writes a variable as `$name` and an application as
+    `(left right)`, which is unambiguous only while names contain neither a
+    space nor a `$`. They are not required to: `Var` is a public constructor
+    accepting any string, and
+
+        App(Var('a'), Var('b $c'))   and   App(Var('a $b'), Var('c'))
+
+    both render as `($a $b $c)`. Two different terms with one content address
+    is enough to move credit between them, so a credit operand is addressed by
+    this encoding instead: each node carries a tag, and each leaf carries the
+    byte length of its payload, so no node's encoding is a prefix of another's.
+
+    The repository-wide `term_hash` is deliberately left alone. This is a new
+    digest profile for one boundary, not a rewrite of existing addresses.
+    """
+    if isinstance(term, Comb):
+        payload = term.symbol.encode("utf-8")
+        return b"C" + str(len(payload)).encode("ascii") + b":" + payload
+    if isinstance(term, Var):
+        payload = term.name.encode("utf-8")
+        return b"V" + str(len(payload)).encode("ascii") + b":" + payload
+    if isinstance(term, App):
+        return b"A" + _encode_term(term.left) + _encode_term(term.right)
+    raise TypeError(f"not a term: {type(term).__name__}")
+
+
+def term_digest(term: Optional[Term]) -> str:
+    """Content digest of a term under the credit profile, or a constant for None."""
+    if term is None:
+        return "0" * 64
+    return hashlib.sha256(CREDIT_TERM_PROFILE + b"\x00" + _encode_term(term)).hexdigest()
+
+
+def _variable_names(term: Term, into: Set[str]) -> None:
+    if isinstance(term, Var):
+        into.add(term.name)
+    elif isinstance(term, App):
+        _variable_names(term.left, into)
+        _variable_names(term.right, into)
+
+
+def fresh_variables(count: int, *terms: Optional[Term]) -> List[Var]:
+    """Variables occurring in none of `terms`.
+
+    Freshness is not cosmetic here. Combinatory terms have no binders, so a
+    variable shared with the candidate is not captured — it is silently
+    identified, and a candidate that ignores its argument and returns the
+    constant `v0` would compare equal to the identity if `v0` were the probe.
+    """
+    used: Set[str] = set()
+    for t in terms:
+        if t is not None:
+            _variable_names(t, used)
+    out: List[Var] = []
+    i = 0
+    while len(out) < count:
+        name = f"_x{i}"
+        if name not in used:
+            out.append(Var(name))
+        i += 1
+    return out
+
+
+def check_extensional_equality(
+    candidate: Optional[Term],
+    spec_term: Optional[Term],
+    arity: int,
+    max_atp: int = 4000,
+) -> EquivalenceWitness:
+    """Decide whether two SKIY terms agree on every argument list of `arity`.
+
+    Both terms are applied to the same fresh variables and reduced. If both
+    reach a normal form and those forms are identical, the terms are
+    extensionally equal for that arity: reduction is deterministic here and the
+    variables stand for arbitrary arguments, so any substitution yields the
+    same result on both sides.
+
+    The conditions are part of the claim and are checked, not assumed:
+      - both operands are terms (a Python callable is NO_TERM_SPEC);
+      - the arity is the one the caller states;
+      - both reductions COMPLETE inside the budget — a suspended reduction is
+        INCONCLUSIVE_BUDGET and never equality;
+      - the probe variables occur in neither term.
+
+    It says nothing about arities other than the one given, and nothing about
+    any encoding of a specification into a term.
+    """
+    c_sha, s_sha = term_digest(candidate), term_digest(spec_term)
+    if candidate is None or spec_term is None:
+        return EquivalenceWitness(
+            EquivalenceStatus.NO_TERM_SPEC, c_sha, s_sha, arity,
+            "a universal claim needs both operands as terms")
+    if not isinstance(arity, int) or isinstance(arity, bool) or arity < 0:
+        return EquivalenceWitness(
+            EquivalenceStatus.NO_TERM_SPEC, c_sha, s_sha, arity,
+            f"arity must be a non-negative int, got {arity!r}")
+
+    probes = fresh_variables(arity, candidate, spec_term)
+    left: Term = candidate
+    right: Term = spec_term
+    for v in probes:
+        left, right = App(left, v), App(right, v)
+
+    try:
+        lres = evaluate(left, max_atp=max_atp)
+        rres = evaluate(right, max_atp=max_atp)
+    except Exception as exc:
+        return EquivalenceWitness(
+            EquivalenceStatus.INCONCLUSIVE_BUDGET, c_sha, s_sha, arity,
+            f"reduction raised {type(exc).__name__}")
+
+    if not (lres.is_settled() and rres.is_settled()):
+        return EquivalenceWitness(
+            EquivalenceStatus.INCONCLUSIVE_BUDGET, c_sha, s_sha, arity,
+            f"reduction did not complete within {max_atp} ATP; a suspended "
+            "reduction decides nothing")
+
+    if lres.term == rres.term:
+        return EquivalenceWitness(
+            EquivalenceStatus.EXTENSIONALLY_EQUAL, c_sha, s_sha, arity,
+            f"identical normal forms on {arity} fresh variables",
+            normal_form=str(lres.term))
+    return EquivalenceWitness(
+        EquivalenceStatus.REFUTED, c_sha, s_sha, arity,
+        f"normal forms differ: {lres.term} vs {rres.term}")
+
+
+@dataclass(frozen=True)
+class SynthesisCreditBinding:
+    """The candidate, the spec, the arity and the output a caller authorizes.
+
+    Supplied by the caller and never rebuilt from the result being graded, for
+    the reason S3a had to learn three times: a result compared against itself
+    binds nothing.
+    """
+    candidate_sha256: str
+    spec_sha256: str
+    arity: int
+    output_sha256: str
+
+
+@dataclass(frozen=True)
+class SynthesisCreditDecision:
+    granted: bool
+    reason: str
+
+
+def verify_synthesis_credit(
+    result: Optional[CertifiedSynthesisResult],
+    binding: Optional[SynthesisCreditBinding],
+    spec_term: Optional[Term] = None,
+    max_atp: int = 4000,
+) -> SynthesisCreditDecision:
+    """Re-derive the universal claim, for a consumer that trusts no field.
+
+    `result.status` is not read. A CertifiedSynthesisResult is a mutable public
+    object, so a consumer grading on its status grades whoever built it. The
+    comparison is run again here, on the terms the caller named.
+    """
+    if binding is None:
+        return SynthesisCreditDecision(False, "NO_CALLER_BINDING")
+    if result is None or result.program is None:
+        return SynthesisCreditDecision(False, "NO_SYNTHESIZED_PROGRAM")
+
+    program_sha = term_digest(result.program)
+    if program_sha != binding.output_sha256:
+        return SynthesisCreditDecision(
+            False, "OUTPUT_MISMATCH: the caller authorized "
+                   f"{binding.output_sha256[:16]}, the result carries {program_sha[:16]}")
+    if program_sha != binding.candidate_sha256:
+        return SynthesisCreditDecision(
+            False, "CANDIDATE_MISMATCH: the term graded is not the one bound")
+    if term_digest(spec_term) != binding.spec_sha256:
+        return SynthesisCreditDecision(
+            False, "SPEC_MISMATCH: the spec supplied here is not the one bound")
+
+    witness = check_extensional_equality(result.program, spec_term, binding.arity, max_atp)
+    if witness.status is not EquivalenceStatus.EXTENSIONALLY_EQUAL:
+        return SynthesisCreditDecision(False, f"{witness.status.value}: {witness.reason}")
+    return SynthesisCreditDecision(
+        True, f"re-derived extensional equality at arity {binding.arity}")
 
 
 # ============================================================================
@@ -317,7 +542,8 @@ class CEGISLoop:
         initial_examples: Optional[List[Example]] = None,
         primitives: Optional[List[Term]] = None,
         variables: Optional[List[str]] = None,
-        max_ast_size: int = 12
+        max_ast_size: int = 12,
+        spec_term: Optional[Term] = None
     ) -> CertifiedSynthesisResult:
         """
         Executes CEGIS loop until universally verified or resource limit reached.
@@ -360,7 +586,8 @@ class CEGISLoop:
 
             # 2. Verification Phase (SMT Oracle)
             smt_queries_count += 1
-            counterexample, proof_dag, verif_status = self._verify_candidate(candidate, specification_fn, input_arity)
+            counterexample, witness, verif_status = self._verify_candidate(
+                candidate, specification_fn, input_arity, spec_term)
 
             if counterexample is None:
                 # Certified result (PROVED_CORRECT, FINITE_DOMAIN_SATISFIED, or INCONCLUSIVE)
@@ -373,7 +600,7 @@ class CEGISLoop:
                     candidates_explored=synthesizer.explored_count,
                     candidates_pruned_oe=synthesizer.pruned_count,
                     smt_verifications=smt_queries_count,
-                    proof_dag=proof_dag,
+                    equivalence_witness=witness,
                     elapsed_sec=time.time() - t_start
                 )
 
@@ -396,8 +623,9 @@ class CEGISLoop:
         self,
         candidate: Term,
         spec_fn: Callable[[Tuple[str, ...]], str],
-        input_arity: int
-    ) -> Tuple[Optional[Example], Optional[Dict[int, Any]], SynthesisStatus]:
+        input_arity: int,
+        spec_term: Optional[Term] = None
+    ) -> Tuple[Optional[Example], Optional["EquivalenceWitness"], SynthesisStatus]:
         """
         SMT Verification Oracle:
         Checks candidate against the complete verification domain.
@@ -406,9 +634,11 @@ class CEGISLoop:
           - Validates against holdouts outside the verification domain.
             If divergence occurs on holdouts (e.g. finite domain check only),
             returns (None, None, FINITE_DOMAIN_SATISFIED).
-          - Formulates a sound SMT-LIB2 equational theorem.
-          - If SMT produces certified UNSAT refutation: returns (None, proof_dag, PROVED_CORRECT).
-          - If SMT returns UNKNOWN / TIMEOUT: returns (None, None, INCONCLUSIVE).
+          - With a spec TERM: decides extensional equality on fresh variables and
+            returns (None, witness, PROVED_CORRECT / FINITE_DOMAIN_SATISFIED /
+            INCONCLUSIVE) according to what that check established.
+          - With only a Python callable: returns FINITE_DOMAIN_SATISFIED, because
+            finitely many agreeing calls are not a theorem about the rest.
         """
         # Exhaustive search over verification domain combinations
         domain = self.verifier_domain
@@ -437,28 +667,18 @@ class CEGISLoop:
                 except Exception:
                     return None, None, SynthesisStatus.FINITE_DOMAIN_SATISFIED
 
-        # Formulate non-tautological SMT-LIB2 theorem to produce certified UNSAT proof
-        script = f"""
-        (set-logic QF_UF)
-        (declare-sort U 0)
-        (declare-const x U)
-        (declare-const cand_eval U)
-        (declare-const spec_eval U)
-        (declare-fun eval (U) U)
-        ; Equivalence claim
-        (assert (= cand_eval (eval x)))
-        (assert (= spec_eval (eval x)))
-        ; Refutation assumption
-        (assert (not (= cand_eval spec_eval)))
-        (check-sat)
-        """
-        res = self.smt.solve_smt2(script)
-        if res.status == SMTStatus.UNSAT and res.proof_dag and verify_unsat_certificate(res.proof_dag):
-            return None, res.proof_dag, SynthesisStatus.PROVED_CORRECT
-        elif res.status == SMTStatus.UNKNOWN:
-            return None, None, SynthesisStatus.INCONCLUSIVE
-        else:
+        # A universal claim needs a spec that is a TERM. Agreeing with a Python
+        # callable on finitely many inputs is agreement on those inputs, and no
+        # number of them is a theorem about the rest.
+        if spec_term is None:
             return None, None, SynthesisStatus.FINITE_DOMAIN_SATISFIED
+
+        witness = check_extensional_equality(candidate, spec_term, input_arity)
+        if witness.status is EquivalenceStatus.EXTENSIONALLY_EQUAL:
+            return None, witness, SynthesisStatus.PROVED_CORRECT
+        if witness.status is EquivalenceStatus.REFUTED:
+            return None, witness, SynthesisStatus.FINITE_DOMAIN_SATISFIED
+        return None, witness, SynthesisStatus.INCONCLUSIVE
 
     def _evaluate_term(self, term: Term, args: Tuple[str, ...]) -> Optional[str]:
         curr = term
@@ -480,9 +700,13 @@ def superoptimize_combinator(
     max_ast_size: int = 10,
     tombstone_registry: Optional[EpistemicTombstoneRegistry] = None
 ) -> CertifiedSynthesisResult:
-    """
-    Superoptimizes a combinator expression into a globally minimal AST
-    guaranteed extensionally equivalent via SMT-certified CEGIS.
+    """Search for a smaller term extensionally equal to `expression_str`.
+
+    This is the case where a universal claim is genuinely available: the
+    specification IS a term, the one being optimized, so the result can be
+    compared against it on fresh variables rather than sampled. PROVED_CORRECT
+    here means the smaller term and the original reduce to the same normal form
+    at the checked arity, and `equivalence_witness` names both digests.
     """
     orig_term = parse_term(expression_str)
     orig_size = tree_size(orig_term)
@@ -503,7 +727,8 @@ def superoptimize_combinator(
     result = cegis.synthesize(
         spec_fn,
         input_arity=1,
-        max_ast_size=max_ast_size
+        max_ast_size=max_ast_size,
+        spec_term=orig_term
     )
     result.original_expr = expression_str
     if result.status == SynthesisStatus.PROVED_CORRECT and result.program:
@@ -530,6 +755,41 @@ def _clean_latin1(text: str) -> str:
     return s.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
 
+def cegis_result_manifest(result: CertifiedSynthesisResult) -> Dict[str, Any]:
+    """The reported facts about a synthesis run, each naming its own question.
+
+    `equivalence_check` is what was established about THESE two terms, and
+    `equivalence_scope` travels with it so a reader of the fields alone cannot
+    take a synthesized program for a proven one. The digests say which terms
+    were compared. There is no `is_verified`: the key it replaced was filled by
+    a query that mentioned neither operand.
+    """
+    witness = result.equivalence_witness
+    return {
+        "status": result.status.value,
+        "program": _clean_latin1(result.program_str or ""),
+        "iterations": result.iterations,
+        "counterexamples_count": len(result.counterexamples),
+        "candidates_explored": result.candidates_explored,
+        "candidates_pruned_oe": result.candidates_pruned_oe,
+        "elapsed_sec": round(result.elapsed_sec, 4),
+        "ast_reduction": round(result.ast_size_reduction * 100, 1),
+        # Presence, not verdict. EquivalenceWitness.__bool__ is true only for
+        # EXTENSIONALLY_EQUAL, so a truth test here reported every refutation
+        # and every exhausted budget as though no check had run, and dropped
+        # the operand digests with them. A negative verdict is a result about
+        # named terms; only absence is NOT_RUN.
+        "equivalence_check": (witness.status.value if witness is not None else "NOT_RUN"),
+        "equivalence_scope": (
+            "extensional equality of candidate and spec TERMS applied to "
+            f"{witness.arity} fresh free variables, under a bounded reduction"
+            if witness is not None else "no equivalence check was run"),
+        "equivalence_arity": (witness.arity if witness is not None else None),
+        "candidate_sha256": (witness.candidate_sha256 if witness is not None else None),
+        "spec_sha256": (witness.spec_sha256 if witness is not None else None),
+    }
+
+
 def generate_cegis_pdf(
     result: CertifiedSynthesisResult,
     output_path: str,
@@ -539,17 +799,7 @@ def generate_cegis_pdf(
     Generates an ISO 32000 compliant polyglot PDF displaying CEGIS iteration telemetry,
     counterexample history, and verified AST diagram, with embedded Latin-1 audit runner.
     """
-    manifest_data = {
-        "status": result.status.value,
-        "program": _clean_latin1(result.program_str or ""),
-        "iterations": result.iterations,
-        "counterexamples_count": len(result.counterexamples),
-        "candidates_explored": result.candidates_explored,
-        "candidates_pruned_oe": result.candidates_pruned_oe,
-        "elapsed_sec": round(result.elapsed_sec, 4),
-        "ast_reduction": round(result.ast_size_reduction * 100, 1),
-        "is_verified": verify_unsat_certificate(result.proof_dag) if result.proof_dag else False
-    }
+    manifest_data = cegis_result_manifest(result)
     manifest_json = json.dumps(manifest_data)
     manifest_hash = hashlib.sha256(manifest_json.encode("utf-8")).hexdigest()
 
@@ -722,7 +972,11 @@ def audit():
     print(f"  [*] Synthesized AST:     \\033[1;32m{{MANIFEST_DATA['program']}}\\033[0m")
     print(f"  [*] AST Size Reduction:  {{MANIFEST_DATA['ast_reduction']}}%")
     print(f"  [*] Iterations Run:      {{MANIFEST_DATA['iterations']}}")
-    print(f"  [*] SMT Proof Verified:  {{MANIFEST_DATA['is_verified']}}")
+    print(f"  [*] Equivalence check:   {{MANIFEST_DATA['equivalence_check']}}")
+    print(f"      scope: {{MANIFEST_DATA['equivalence_scope']}}")
+    if MANIFEST_DATA['equivalence_check'] != "EXTENSIONALLY_EQUAL":
+        print("      No universal claim: this document records a synthesized")
+        print("      program and the inputs it was tried on, not a theorem.")
     print("\\033[1;32m[+] CEGIS SYNTHESIS AUDIT COMPLETE: ALL INVARIANTS SATISFIED\\033[0m\\n")
 
 if __name__ == "__main__":

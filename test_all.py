@@ -54,6 +54,7 @@ SUITES = [
     ("Sovereign SMT Kernel & First-Order DPLL(T) Verifier", "test_smt_kernel"),
     ("UNSAT Certificate: Structure vs Checked Refutation", "test_unsat_certificate"),
     ("Counterexample-Guided Inductive Synthesis (CEGIS)", "test_cegis_kernel"),
+    ("CEGIS Credit: Operand-Bound Equivalence", "test_cegis_credit"),
     ("Scoped Re-Admission & Conditional Reopening", "test_scoped_admission"),
     ("Dialectical Discovery & Automated Hypothesis Generation", "test_dialectic_kernel"),
     ("Review 12 Remediation & Probe Defenses (f2e05e6)", "test_remediation_f2e05e6"),
