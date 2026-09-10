@@ -19,6 +19,7 @@ import unittest
 import time
 
 SUITES = [
+    ("Optional trusted-local CLI cache", "test_verify_cached"),
     ("CLI data verification and bounded CEGIS parser", "test_cli_verify"),
     ("Glyph Combinatory Logic", "test_glyph"),
     ("Literate Polyglot Monad", "test_monad"),
