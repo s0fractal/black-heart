@@ -211,18 +211,23 @@ def audit_polyglot_claims(target_path: str) -> bool:
     for line in content.splitlines():
         if line.startswith(prefix):
             raw = line[len(prefix):].decode("utf-8", errors="replace").strip()
-            parts = [p.strip() for p in raw.split("|")]
-            if len(parts) >= 4:
-                claim_id = parts[0]
-                desc = parts[1]
-                expr = parts[2]
-                exp = parts[3]
-                atp = int(parts[4]) if len(parts) > 4 and parts[4].isdigit() else 10_000
-                claims.append((claim_id, desc, expr, exp, atp))
+            parts = raw.split("|", 4)
+            if len(parts) != 5:
+                return False
+            fields = {}
+            for part in parts:
+                name, sep, value = part.strip().partition("=")
+                if not sep or name in fields:
+                    return False
+                fields[name] = value
+            if set(fields) != {"id", "expr", "expected", "max_atp", "desc"} or not fields["max_atp"].isdigit():
+                return False
+            atp = int(fields["max_atp"])
+            if not 0 <= atp <= 100000:
+                return False
+            claims.append((fields["id"], fields["desc"], fields["expr"], fields["expected"], atp))
 
     if not claims:
-        if "%🖤 CODE_VAULT_MANIFEST:".encode("utf-8") in content:
-            return True
         return False
 
     from glyph import parse, evaluate
@@ -231,11 +236,12 @@ def audit_polyglot_claims(target_path: str) -> bool:
     for claim_id, desc, expr_str, exp_str, max_atp in claims:
         try:
             t = parse(expr_str)
-            norm, atp, digest = evaluate(t, max_atp=max_atp)
+            result = evaluate(t, max_atp=max_atp)
+            norm, atp = result.term, result.atp_spent
             total_atp += atp
             norm_str = str(norm)
             exp_t = parse(exp_str)
-            exp_norm, _, _ = evaluate(exp_t)
+            exp_norm = evaluate(exp_t).term
             exp_norm_str = str(exp_norm)
             if norm_str == exp_norm_str:
                 passed += 1
@@ -402,7 +408,7 @@ def main():
             total_atp += atp
             norm_str = str(norm)
             exp_t = parse(exp_str)
-            exp_norm, _, _ = evaluate(exp_t)
+            exp_norm = evaluate(exp_t).term
             exp_norm_str = str(exp_norm)
 
             if norm_str == exp_norm_str:

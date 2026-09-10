@@ -98,6 +98,14 @@ def cmd_keygen(args):
         print("\033[0;37mKeep your secret key secure and unshared.\033[0m\n")
 
 def cmd_verify(args):
+    try:
+        _cmd_verify(args)
+    except Exception as e:
+        print(f"REFUSED: {type(e).__name__}: {e}")
+        raise SystemExit(1)
+
+
+def _cmd_verify(args):
     """Audits and verifies any Black-Heart polyglot PDF purely as data without executing arbitrary code."""
     target = args.file
     if not os.path.exists(target):
@@ -105,7 +113,12 @@ def cmd_verify(args):
         sys.exit(1)
 
     with open(target, "rb") as f:
-        content = f.read()
+        raw = f.read(16 * 1024 * 1024 + 1)
+    if len(raw) > 16 * 1024 * 1024:
+        raise ValueError("ARTIFACT_SIZE")
+    # Recognize actual metadata lines, never literals inside embedded Python.
+    content = b"\n".join(line for line in raw.splitlines()
+        if line.startswith(("%🖤".encode(), b"# %")))
 
     print("\033[1;36m" + "=" * 65)
     print(f"  %🖤 BLACK-HEART AUDIT: {os.path.basename(target)}")
@@ -123,53 +136,28 @@ def cmd_verify(args):
         success = audit_oracle_polyglot(target)
     elif "%🖤 CONTINUUM_THUNK:".encode("utf-8") in content:
         print("[*] Detected Continuum Resumable Thunk Polyglot.")
-        from continuum import audit_self
-        try:
-            audit_self(target)
-            success = True
-        except Exception as e:
-            print(f"[!] Continuum verification failed: {e}")
-            success = False
+        from artifact_audit import continuum
+        success = continuum(target)
     elif "%🖤 ZK_PROOF_MANIFEST:".encode("utf-8") in content:
         print("[*] Detected Zero-Knowledge Proof-Carrying Contract.")
-        from zk_glyph import audit_zkp
-        try:
-            audit_zkp(target)
-            success = True
-        except Exception as e:
-            print(f"[!] ZK proof verification failed: {e}")
-            success = False
+        from artifact_audit import zk
+        success = zk(target)
     elif "%🖤 CONTRACT_MANIFEST:".encode("utf-8") in content:
         print("[*] Detected Proof-Carrying Contract Polyglot.")
         from monad import audit_contract_polyglot
         success = audit_contract_polyglot(target)
     elif "%🖤 LEDGER_MANIFEST:".encode("utf-8") in content:
         print("[*] Detected Multi-Block Living Polyglot Ledger.")
-        from living_ledger import LivingLedger
-        try:
-            ledger = LivingLedger.load_from_polyglot(target)
-            success = ledger.verify()
-        except Exception as e:
-            print(f"[!] Ledger verification failed: {e}")
-            success = False
-    elif "%🖤 METAMORPHIC_TRANSITION:".encode("utf-8") in content:
+        from artifact_audit import ledger
+        success = ledger(target)
+    elif b"# %METAMORPHOSIS" in content:
         print("[*] Detected Metamorphic Organism Polyglot.")
-        from metamorphosis import audit_metamorphic_transition
-        try:
-            audit_metamorphic_transition(target)
-            success = True
-        except Exception as e:
-            print(f"[!] Metamorphic verification failed: {e}")
-            success = False
-    elif "%🖤 COLONY_MANIFEST:".encode("utf-8") in content:
+        from artifact_audit import metamorphosis
+        success = metamorphosis(target)
+    elif b"# %COLONY_MANIFEST:" in content:
         print("[*] Detected Living Colony Ecosystem Polyglot.")
-        from colony import Colony
-        try:
-            colony = Colony.load_from_polyglot(target)
-            success = colony.verify()
-        except Exception as e:
-            print(f"[!] Colony verification failed: {e}")
-            success = False
+        from artifact_audit import colony
+        success = colony(target)
     elif "%🖤 AUTOPOIESIS_MANIFEST:".encode("utf-8") in content:
         print("[*] Detected Autopoietic Organism Polyglot.")
         from autopoiesis import audit_autopoietic_organism
@@ -212,7 +200,7 @@ def cmd_verify(args):
         sys.exit(1)
 
     if success:
-        print("\033[1;32m[✓ GREEN] Document verification passed successfully.\033[0m")
+        print("\033[1;32m[✓ GREEN] Local checks passed for the reported scope; external authority and freshness not evaluated.\033[0m")
     else:
         print("\033[1;31m[✗ RED] Document verification failed.\033[0m")
         sys.exit(1)

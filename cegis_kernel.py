@@ -101,14 +101,45 @@ class CertifiedSynthesisResult:
 # ============================================================================
 
 def parse_term(expr_str: str) -> Term:
-    """Parse glyph combinator string or Python repr AST into Term."""
+    """Parse glyph syntax or a bounded constructor tree; never evaluate Python."""
+    import ast
+    if not isinstance(expr_str, str) or len(expr_str) > 8192:
+        raise ValueError("TERM_SIZE")
     s = expr_str.strip()
-    if s.startswith("App(") or s.startswith("Comb(") or s.startswith("Var("):
-        try:
-            return eval(s, {"App": App, "Comb": Comb, "Var": Var, "K": K, "I": I, "S": S, "Y": Y})
-        except Exception:
-            pass
-    return parse(s)
+    if not s.startswith(("App(", "Comb(", "Var(")):
+        return parse(s)
+    try:
+        tree = ast.parse(s, mode="eval")
+    except (SyntaxError, RecursionError) as e:
+        raise ValueError("TERM_SYNTAX") from e
+    if sum(1 for _ in ast.walk(tree)) > 512:
+        raise ValueError("TERM_COMPLEXITY")
+    constants = {"K": K, "I": I, "S": S, "Y": Y}
+    constructors = {"App": (App, ("left", "right")), "Comb": (Comb, ("symbol",)), "Var": (Var, ("name",))}
+    def build(node, depth=0):
+        if depth > 64:
+            raise ValueError("TERM_DEPTH")
+        if isinstance(node, ast.Name) and node.id in constants:
+            return constants[node.id]
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name) or node.func.id not in constructors:
+            raise ValueError("TERM_CONSTRUCTOR")
+        ctor, fields = constructors[node.func.id]
+        if len(node.args) > len(fields):
+            raise ValueError("TERM_ARGUMENTS")
+        values = dict(zip(fields, node.args))
+        for kw in node.keywords:
+            if kw.arg not in fields or kw.arg in values:
+                raise ValueError("TERM_ARGUMENTS")
+            values[kw.arg] = kw.value
+        if set(values) != set(fields):
+            raise ValueError("TERM_ARGUMENTS")
+        if ctor is App:
+            return App(build(values["left"], depth+1), build(values["right"], depth+1))
+        value = values[fields[0]]
+        if not isinstance(value, ast.Constant) or type(value.value) is not str or not 1 <= len(value.value) <= 128:
+            raise ValueError("TERM_STRING")
+        return ctor(value.value)
+    return build(tree.body)
 
 
 class ObservationalEquivalence:
