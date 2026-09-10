@@ -306,6 +306,21 @@ class TestRemediationF2E05E6(unittest.TestCase):
         self.assertIsNone(res.proof_dag)
         self.assertIsNone(res.equivalence_witness)
 
+        # The docstring says no solver is consulted for a universal claim.
+        # A solver that raises on any call makes that statement executable
+        # rather than merely asserted, on both the callable and the term path.
+        class ForbiddenSolver:
+            def solve_smt2(self, *a, **k):
+                raise AssertionError("a solver was consulted for a synthesis verdict")
+
+        for label, kwargs in (("callable spec", {}), ("term spec", {"spec_term": I})):
+            with self.subTest(path=label):
+                strict = c.CEGISLoop(verifier_domain=["a", "b"])
+                strict.smt = ForbiddenSolver()
+                out = strict.synthesize(lambda x: x[0], input_arity=1,
+                                        primitives=[I], max_ast_size=1, **kwargs)
+                self.assertNotEqual(out.status, c.SynthesisStatus.RESOURCE_EXHAUSTED)
+
     # ------------------------------------------------------------------------
     # R11: Host-Enforced Execution Deadline
     # ------------------------------------------------------------------------

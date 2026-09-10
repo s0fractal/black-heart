@@ -132,11 +132,43 @@ class EquivalenceWitness:
         return self.status is EquivalenceStatus.EXTENSIONALLY_EQUAL
 
 
+CREDIT_TERM_PROFILE = b"cegis.credit-term.v1"
+
+
+def _encode_term(term: Term) -> bytes:
+    """Prefix-free encoding of an AST: distinct terms have distinct bytes.
+
+    `glyph.canonical_bytes` writes a variable as `$name` and an application as
+    `(left right)`, which is unambiguous only while names contain neither a
+    space nor a `$`. They are not required to: `Var` is a public constructor
+    accepting any string, and
+
+        App(Var('a'), Var('b $c'))   and   App(Var('a $b'), Var('c'))
+
+    both render as `($a $b $c)`. Two different terms with one content address
+    is enough to move credit between them, so a credit operand is addressed by
+    this encoding instead: each node carries a tag, and each leaf carries the
+    byte length of its payload, so no node's encoding is a prefix of another's.
+
+    The repository-wide `term_hash` is deliberately left alone. This is a new
+    digest profile for one boundary, not a rewrite of existing addresses.
+    """
+    if isinstance(term, Comb):
+        payload = term.symbol.encode("utf-8")
+        return b"C" + str(len(payload)).encode("ascii") + b":" + payload
+    if isinstance(term, Var):
+        payload = term.name.encode("utf-8")
+        return b"V" + str(len(payload)).encode("ascii") + b":" + payload
+    if isinstance(term, App):
+        return b"A" + _encode_term(term.left) + _encode_term(term.right)
+    raise TypeError(f"not a term: {type(term).__name__}")
+
+
 def term_digest(term: Optional[Term]) -> str:
-    """Content digest of a term, or a constant for its absence."""
+    """Content digest of a term under the credit profile, or a constant for None."""
     if term is None:
         return "0" * 64
-    return term_hash(term)
+    return hashlib.sha256(CREDIT_TERM_PROFILE + b"\x00" + _encode_term(term)).hexdigest()
 
 
 def _variable_names(term: Term, into: Set[str]) -> None:
@@ -732,6 +764,7 @@ def cegis_result_manifest(result: CertifiedSynthesisResult) -> Dict[str, Any]:
     were compared. There is no `is_verified`: the key it replaced was filled by
     a query that mentioned neither operand.
     """
+    witness = result.equivalence_witness
     return {
         "status": result.status.value,
         "program": _clean_latin1(result.program_str or ""),
@@ -741,14 +774,19 @@ def cegis_result_manifest(result: CertifiedSynthesisResult) -> Dict[str, Any]:
         "candidates_pruned_oe": result.candidates_pruned_oe,
         "elapsed_sec": round(result.elapsed_sec, 4),
         "ast_reduction": round(result.ast_size_reduction * 100, 1),
-        "equivalence_check": (result.equivalence_witness.status.value
-                              if result.equivalence_witness else "NOT_RUN"),
-        "equivalence_scope": ("extensional equality of candidate and spec TERMS on "
-                              "fresh free variables, under a bounded reduction"),
-        "candidate_sha256": (result.equivalence_witness.candidate_sha256
-                             if result.equivalence_witness else None),
-        "spec_sha256": (result.equivalence_witness.spec_sha256
-                        if result.equivalence_witness else None),
+        # Presence, not verdict. EquivalenceWitness.__bool__ is true only for
+        # EXTENSIONALLY_EQUAL, so a truth test here reported every refutation
+        # and every exhausted budget as though no check had run, and dropped
+        # the operand digests with them. A negative verdict is a result about
+        # named terms; only absence is NOT_RUN.
+        "equivalence_check": (witness.status.value if witness is not None else "NOT_RUN"),
+        "equivalence_scope": (
+            "extensional equality of candidate and spec TERMS applied to "
+            f"{witness.arity} fresh free variables, under a bounded reduction"
+            if witness is not None else "no equivalence check was run"),
+        "equivalence_arity": (witness.arity if witness is not None else None),
+        "candidate_sha256": (witness.candidate_sha256 if witness is not None else None),
+        "spec_sha256": (witness.spec_sha256 if witness is not None else None),
     }
 
 

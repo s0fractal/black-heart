@@ -54,7 +54,7 @@ from cegis_kernel import (
     check_extensional_equality, fresh_variables, term_digest,
     SynthesisCreditBinding, verify_synthesis_credit,
 )
-from glyph import K, I, S, Y, App, Var
+from glyph import K, I, S, Y, App, Var, Comb
 
 if os.path.dirname(os.path.abspath(ck.__file__)) != _HERE:
     raise ImportError(f"cegis_kernel resolved to {ck.__file__}, outside {_HERE}")
@@ -213,6 +213,110 @@ class CreditBindingTest(unittest.TestCase):
         import dataclasses
         res = dataclasses.replace(self.result, program=SKK, program_str=str(SKK))
         self.assertTrue(verify_synthesis_credit(res, binding, spec_term=I).granted)
+
+
+class TermAddressTest(unittest.TestCase):
+    """Distinct terms must not share a credit address (C1)."""
+
+    # Both render as b'($a $b $c)' under glyph.canonical_bytes.
+    A = App(Var("a"), Var("b $c"))
+    B = App(Var("a $b"), Var("c"))
+
+    def test_E1_the_legacy_encoding_really_is_ambiguous(self):
+        """Recorded, because the repair is a new profile rather than a rewrite."""
+        from glyph import canonical_bytes
+        self.assertNotEqual(self.A, self.B)
+        self.assertEqual(canonical_bytes(self.A), canonical_bytes(self.B))
+
+    def test_E2_the_credit_address_separates_them(self):
+        self.assertNotEqual(term_digest(self.A), term_digest(self.B))
+
+    def test_E3_a_joint_substitution_is_refused(self):
+        """Replace candidate, spec and output together, binding unchanged."""
+        import dataclasses
+        res = CEGISLoop(verifier_domain=["a"]).synthesize(lambda inp: inp[0], input_arity=1)
+        honest = dataclasses.replace(res, program=self.A, program_str=str(self.A))
+        binding = SynthesisCreditBinding(term_digest(self.A), term_digest(self.A), 0,
+                                         term_digest(self.A))
+        self.assertTrue(verify_synthesis_credit(honest, binding, spec_term=self.A).granted)
+
+        swapped = dataclasses.replace(res, program=self.B, program_str=str(self.B))
+        d = verify_synthesis_credit(swapped, binding, spec_term=self.B)
+        self.assertFalse(d.granted, "two different terms shared one credit address")
+
+    def test_E4_neighbouring_shapes_have_distinct_addresses(self):
+        """A tag-and-length encoding, so no node's bytes prefix another's."""
+        seen = {}
+        for label, t in (
+            ("var a", Var("a")),
+            ("var ab", Var("ab")),
+            ("comb K", K),
+            ("var named like K", Var(str(K))),
+            ("a applied to b", App(Var("a"), Var("b"))),
+            ("comb with a var's payload", Comb("ab")),
+            ("nested left", App(App(Var("a"), Var("b")), Var("c"))),
+            ("nested right", App(Var("a"), App(Var("b"), Var("c")))),
+            ("empty name", Var("")),
+            ("colon in name", Var("a:1")),
+            ("digits that could read as a length", Var("2:x")),
+            # Without the length prefixes these two encode identically
+            # (A + V + "aV" + V + "b" vs A + V + "a" + V + "Vb"), so this pair
+            # is what the prefixes are for.
+            ("tag inside the left name", App(Var("aV"), Var("b"))),
+            ("tag inside the right name", App(Var("a"), Var("Vb"))),
+        ):
+            d = term_digest(t)
+            self.assertNotIn(d, seen, f"{label} collides with {seen.get(d)}")
+            seen[d] = label
+
+    def test_E5_the_absent_term_has_its_own_address(self):
+        self.assertEqual(term_digest(None), "0" * 64)
+        self.assertNotEqual(term_digest(Var("")), term_digest(None))
+
+
+class ManifestReportsEveryVerdictTest(unittest.TestCase):
+    """A negative verdict is a result about named terms, not an absence (C2)."""
+
+    def _manifest_for(self, candidate, spec, arity, max_atp=4000):
+        import dataclasses
+        res = CEGISLoop(verifier_domain=["a"]).synthesize(lambda inp: inp[0], input_arity=1)
+        w = check_extensional_equality(candidate, spec, arity, max_atp)
+        return ck.cegis_result_manifest(
+            dataclasses.replace(res, program=candidate, program_str=str(candidate),
+                                equivalence_witness=w)), w
+
+    def test_F1_each_verdict_is_reported_as_itself(self):
+        cases = {
+            "EXTENSIONALLY_EQUAL": (SKK, I, 1, 4000),
+            "REFUTED": (K, I, 1, 4000),
+            "INCONCLUSIVE_BUDGET": (App(Y, I), App(Y, I), 1, 25),
+        }
+        seen = set()
+        for expected, (c, sp, arity, atp) in cases.items():
+            with self.subTest(verdict=expected):
+                m, w = self._manifest_for(c, sp, arity, atp)
+                self.assertEqual(m["equivalence_check"], expected)
+                self.assertNotEqual(m["equivalence_check"], "NOT_RUN")
+                # The operands survive a negative verdict.
+                self.assertEqual(m["candidate_sha256"], term_digest(c))
+                self.assertEqual(m["spec_sha256"], term_digest(sp))
+                self.assertEqual(m["equivalence_arity"], arity)
+                seen.add(m["equivalence_check"])
+        self.assertEqual(len(seen), 3, "the three verdicts must be distinguishable")
+
+    def test_F2_absence_is_the_only_not_run(self):
+        res = CEGISLoop(verifier_domain=["a"]).synthesize(lambda inp: inp[0], input_arity=1)
+        self.assertIsNone(res.equivalence_witness)
+        m = ck.cegis_result_manifest(res)
+        self.assertEqual(m["equivalence_check"], "NOT_RUN")
+        self.assertIsNone(m["candidate_sha256"])
+        self.assertIsNone(m["spec_sha256"])
+        self.assertIsNone(m["equivalence_arity"])
+        self.assertIn("no equivalence check", m["equivalence_scope"])
+
+    def test_F3_the_scope_states_the_quantified_question(self):
+        m, _ = self._manifest_for(SKK, I, 2)
+        self.assertIn("2 fresh free variables", m["equivalence_scope"])
 
 
 class LoopReportsWhatItEstablishedTest(unittest.TestCase):
