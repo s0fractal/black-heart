@@ -154,6 +154,34 @@ class FederatedBallot:
         b.effective_votes = d.get("effective_votes", b.effective_votes)
         return b
 
+    @classmethod
+    def cast(
+        cls,
+        chamber_id: str,
+        voter_pk_hex: str,
+        proposal_id: str,
+        direction: Any,
+        pledged_atp: int,
+        secret_key_hex: Optional[str] = None
+    ) -> FederatedBallot:
+        if isinstance(direction, bool):
+            dir_enum = VoteDirection.AYE if direction else VoteDirection.NAY
+        elif isinstance(direction, str):
+            dir_enum = VoteDirection(direction.upper())
+        else:
+            dir_enum = direction
+
+        ballot = cls(
+            voter_pk_hex=voter_pk_hex,
+            chamber_id=chamber_id,
+            proposal_id=proposal_id,
+            pledged_atp=pledged_atp,
+            direction=dir_enum
+        )
+        if secret_key_hex:
+            ballot.sign(secret_key_hex)
+        return ballot
+
 
 # ============================================================================
 # 2. GINI INEQUALITY METRIC
@@ -201,14 +229,16 @@ class FederatedChamber:
             raise ValueError("Ballot signature verification failed!")
         self.ballots[ballot.voter_pk_hex] = ballot
 
-    def local_tally(self) -> Tuple[int, int]:
+    def local_tally(self, proposal_id: Optional[str] = None) -> Tuple[int, int]:
         """Returns (effective_yeas, effective_nays)."""
-        yeas = sum(b.effective_votes for b in self.ballots.values() if b.direction == VoteDirection.AYE)
-        nays = sum(abs(b.effective_votes) for b in self.ballots.values() if b.direction == VoteDirection.NAY)
+        b_list = [b for b in self.ballots.values() if proposal_id is None or b.proposal_id == proposal_id]
+        yeas = sum(b.effective_votes for b in b_list if b.direction == VoteDirection.AYE)
+        nays = sum(abs(b.effective_votes) for b in b_list if b.direction == VoteDirection.NAY)
         return yeas, nays
 
-    def local_gini(self) -> float:
-        return calculate_gini([b.pledged_atp for b in self.ballots.values()])
+    def local_gini(self, proposal_id: Optional[str] = None) -> float:
+        b_list = [b for b in self.ballots.values() if proposal_id is None or b.proposal_id == proposal_id]
+        return calculate_gini([b.pledged_atp for b in b_list])
 
 
 @dataclass
@@ -218,13 +248,13 @@ class FederatedProposal:
     Binds a claim name, sponsor stake, target normal form, and chamber implementations.
     """
     proposal_id: str
-    title: str
-    proposal_type: ProposalType
-    claim_name: str
-    sponsor_pk_hex: str
-    stake_atp: int
-    chamber_terms: Dict[str, str]  # chamber_id -> expression string
-    target_nf: str
+    title: str = "Legislative Motion"
+    proposal_type: ProposalType = ProposalType.THEOREM_CONGRUENCE
+    claim_name: str = "claim"
+    sponsor_pk_hex: str = ""
+    stake_atp: int = 100
+    chamber_terms: Dict[str, str] = field(default_factory=dict)
+    target_nf: str = "I"
     sponsor_signature_hex: str = ""
 
     def canonical_bytes(self) -> bytes:
@@ -278,6 +308,25 @@ class FederatedSettlementReceipt:
     parent_cid: str
     slashed_stake: int = 0
     signatures: List[str] = field(default_factory=list)
+    cech_report: Optional[SheafDescentReport] = None
+    total_staked_atp: int = 0
+    chamber_tallies: Dict[str, Tuple[int, int]] = field(default_factory=dict)
+
+    @property
+    def is_ratified(self) -> bool:
+        return self.status == RatificationStatus.RATIFIED_GLOBAL
+
+    @property
+    def total_votes(self) -> int:
+        return self.total_yeas + self.total_nays
+
+    @property
+    def net_quadratic_votes(self) -> int:
+        return self.total_yeas - self.total_nays
+
+    @property
+    def total_atp(self) -> int:
+        return self.total_staked_atp
 
     def canonical_bytes(self) -> bytes:
         data = {
@@ -314,7 +363,9 @@ class FederatedSettlementReceipt:
             "cid": self.cid,
             "parent_cid": self.parent_cid,
             "slashed_stake": self.slashed_stake,
-            "signatures": self.signatures
+            "signatures": self.signatures,
+            "total_staked_atp": self.total_staked_atp,
+            "chamber_tallies": self.chamber_tallies
         }
 
     @classmethod
@@ -334,7 +385,9 @@ class FederatedSettlementReceipt:
             cid=d["cid"],
             parent_cid=d["parent_cid"],
             slashed_stake=d.get("slashed_stake", 0),
-            signatures=d.get("signatures", [])
+            signatures=d.get("signatures", []),
+            total_staked_atp=d.get("total_staked_atp", 0),
+            chamber_tallies=d.get("chamber_tallies", {})
         )
 
 
@@ -431,66 +484,74 @@ class FederatedAgoraParliament:
         self.session_counter += 1
         prop = self.proposals[proposal_id]
 
-        # 1. Tally quadratic votes
+        # 1. Tally quadratic votes for this proposal
         total_yeas = 0
         total_nays = 0
-        for ch in self.chambers.values():
-            yeas, nays = ch.local_tally()
+        total_staked_atp = 0
+        chamber_tallies: Dict[str, Tuple[int, int]] = {}
+        for ch_id, ch in self.chambers.items():
+            yeas, nays = ch.local_tally(proposal_id)
             total_yeas += yeas
             total_nays += nays
+            chamber_tallies[ch_id] = (yeas, nays)
+            total_staked_atp += sum(b.pledged_atp for b in ch.ballots.values() if b.proposal_id == proposal_id)
 
         total_votes = total_yeas + total_nays
         fed_gini = self.compute_federation_gini()
+        status: Optional[RatificationStatus] = None
+        rejection_reason = ""
+        slashed_stake = 0
+        descent_report = None
+        global_section_id = ""
 
-        # Check political vote
-        passed_political = False
-        if total_votes > 0:
-            passed_political = (total_yeas / total_votes) >= supermajority_threshold
+        # Check political vote (F08 / A1, A2)
+        if total_votes == 0:
+            passed_political = False
+            status = RatificationStatus.REJECTED_POLITICAL_VOTE
+            rejection_reason = "No ballots cast: quorum not met"
+        elif total_yeas == 0 or (total_yeas / total_votes) < supermajority_threshold:
+            passed_political = False
+            status = RatificationStatus.REJECTED_POLITICAL_VOTE
+            rejection_reason = f"Failed quadratic supermajority threshold: {total_yeas}/{total_votes} ({total_yeas/max(1, total_votes):.2%})"
+        else:
+            passed_political = True
 
         # Check plutocracy ceiling
         passed_gini = (fed_gini < gini_ceiling)
 
-        # Check theorem soundness if applicable
-        slashed_stake = 0
-        status = RatificationStatus.PENDING if hasattr(RatificationStatus, "PENDING") else None
-        rejection_reason = ""
-        global_section_id = ""
-
-        # Fail-closed theorem check
-        for ch_id, term_expr in prop.chamber_terms.items():
-            ch = self.chambers.get(ch_id)
-            if not ch:
-                continue
-            try:
-                t = parse(term_expr)
-                eval_res = evaluate(t, max_atp=ch.context.budget_ceiling)
-                exp_t = parse(prop.target_nf)
-                exp_eval = evaluate(exp_t, max_atp=ch.context.budget_ceiling)
-                if eval_res.normal_form != exp_eval.normal_form and str(eval_res.normal_form) != prop.target_nf:
-                    if prop.proposal_type == ProposalType.THEOREM_CONGRUENCE:
-                        # Contradiction detected! Slash stake
+        # Fail-closed theorem check (F10 / A4)
+        if prop.proposal_type == ProposalType.THEOREM_CONGRUENCE:
+            for ch_id, term_expr in prop.chamber_terms.items():
+                ch = self.chambers.get(ch_id)
+                if not ch:
+                    continue
+                try:
+                    t = parse(term_expr)
+                    eval_res = evaluate(t, max_atp=ch.context.budget_ceiling)
+                    exp_t = parse(prop.target_nf)
+                    exp_eval = evaluate(exp_t, max_atp=ch.context.budget_ceiling)
+                    if eval_res.normal_form != exp_eval.normal_form and str(eval_res.normal_form) != prop.target_nf:
                         slashed_stake = prop.stake_atp
                         status = RatificationStatus.SLASHED_AUDIT_FAILED
                         rejection_reason = f"Theorem reduction divergence in {ch.name}: expected '{exp_eval.normal_form}', got '{eval_res.normal_form}'"
                         break
-            except Exception as e:
-                if prop.proposal_type == ProposalType.THEOREM_CONGRUENCE:
+                except Exception as e:
                     slashed_stake = prop.stake_atp
                     status = RatificationStatus.SLASHED_AUDIT_FAILED
                     rejection_reason = f"Theorem evaluation crashed in {ch.name}: {e}"
                     break
 
         if status == RatificationStatus.SLASHED_AUDIT_FAILED:
-            # Slashed!
+            # Slashed! Halt immediately fail-closed (F10 / A4)
             pass
         elif not passed_political:
-            status = RatificationStatus.REJECTED_POLITICAL_VOTE
-            rejection_reason = f"Failed quadratic supermajority threshold: {total_yeas}/{total_votes} ({total_yeas/max(1, total_votes):.2%})"
+            # status and rejection_reason already set above (F08 / A1, A2)
+            pass
         elif not passed_gini:
             status = RatificationStatus.REJECTED_PLUTOCRACY_CEILING
             rejection_reason = f"Federation Gini index ({fed_gini:.3f}) exceeded plutocracy ceiling ({gini_ceiling:.3f})"
         else:
-            # 4. Čech Cohomology Gate
+            # 4. Čech Cohomology Gate (F09 / A3)
             local_sections: List[LocalSection] = []
             cover_contexts: List[EpistemicContext] = []
 
@@ -525,7 +586,7 @@ class FederatedAgoraParliament:
                 status = RatificationStatus.RATIFIED_GLOBAL
                 global_section_id = descent_report.global_section.section_id if descent_report.global_section else ""
 
-        h1_dim = getattr(descent_report, "h1_dimension", 0) if 'descent_report' in locals() else 0
+        h1_dim = getattr(descent_report, "h1_dimension", 0) if descent_report else 0
         parent_cid = self.cid_chain[-1] if self.cid_chain else ""
 
         # Compute CID
@@ -555,7 +616,10 @@ class FederatedAgoraParliament:
             global_section_id=global_section_id,
             cid=receipt_cid,
             parent_cid=parent_cid,
-            slashed_stake=slashed_stake
+            slashed_stake=slashed_stake,
+            cech_report=descent_report,
+            total_staked_atp=total_staked_atp,
+            chamber_tallies=chamber_tallies
         )
 
         # Multi-sign receipt if parliament keys provided
@@ -567,6 +631,21 @@ class FederatedAgoraParliament:
         self.receipt_chain.append(receipt)
         self.cid_chain.append(receipt_cid)
         return receipt
+
+    def settle_proposal(
+        self,
+        proposal_id: str,
+        supermajority_threshold: float = 0.667,
+        gini_ceiling: float = 0.65,
+        parliament_keys: Optional[List[str]] = None
+    ) -> FederatedSettlementReceipt:
+        """Alias for resolve_session."""
+        return self.resolve_session(
+            proposal_id=proposal_id,
+            supermajority_threshold=supermajority_threshold,
+            gini_ceiling=gini_ceiling,
+            parliament_keys=parliament_keys
+        )
 
 
 # ============================================================================

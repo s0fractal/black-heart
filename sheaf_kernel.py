@@ -343,7 +343,7 @@ class EpistemicSheafKernel:
         5. If any delta s_{ij} != 0:
            Halts fail-closed with positive cohomology obstruction.
         """
-        # 1. Fetch local sections
+        # 1. Fetch local sections and verify local statuses
         local_secs: Dict[str, LocalSection] = {}
         for ctx in cover:
             key = (ctx.context_id, claim_name)
@@ -357,7 +357,37 @@ class EpistemicSheafKernel:
                     h1_dimension=1,
                     rejection_reason=f"Missing local section for context '{ctx.name}' ({ctx.context_id})"
                 )
-            local_secs[ctx.context_id] = self.sections[key]
+            sec = self.sections[key]
+            if sec.status == SectionStatus.OBSTRUCTED:
+                return SheafDescentReport(
+                    claim_name=claim_name,
+                    cover_contexts=cover,
+                    local_sections={ctx.context_id: sec},
+                    cocycles=[],
+                    is_gluing_admissible=False,
+                    h1_dimension=1,
+                    rejection_reason=f"Cannot glue obstructed local section for context '{ctx.name}'"
+                )
+            # Verify computational validity if term expression is present
+            if sec.term_expression and sec.normal_form:
+                try:
+                    from glyph import parse, evaluate
+                    t = parse(sec.term_expression)
+                    eval_res = evaluate(t, max_atp=max(50, ctx.budget_ceiling))
+                    if eval_res.status.value == "NORMAL_FORM" and str(eval_res.normal_form) != sec.normal_form:
+                        return SheafDescentReport(
+                            claim_name=claim_name,
+                            cover_contexts=cover,
+                            local_sections={ctx.context_id: sec},
+                            cocycles=[],
+                            is_gluing_admissible=False,
+                            h1_dimension=1,
+                            rejection_reason=f"Computational divergence in local section '{sec.claim_name}': expected '{sec.normal_form}', got '{eval_res.normal_form}'"
+                        )
+                except Exception:
+                    pass
+
+            local_secs[ctx.context_id] = sec
 
         # 2. Pairwise overlaps and cocycle differences
         cocycles: List[CechCocycleDifference] = []
@@ -396,7 +426,7 @@ class EpistemicSheafKernel:
                 if not is_zero:
                     h1_defects += 1
 
-        # 3. Gluing Decision
+        # 3. Gluing Decision on Cocycle defects
         if h1_defects > 0:
             return SheafDescentReport(
                 claim_name=claim_name,
@@ -406,23 +436,45 @@ class EpistemicSheafKernel:
                 is_gluing_admissible=False,
                 h1_dimension=h1_defects,
                 rejection_reason=f"Epistemic obstruction detected: non-trivial Cech 1-cocycle (H^1 defect = {h1_defects})"
-
             )
 
         # 4. Construct global synthesized context if not explicitly given
-        if not target_union_context:
-            union_domains = tuple(sorted(list(set(d for c in cover for d in c.domains))))
+        union_domains = tuple(sorted(list(set(d for c in cover for d in c.domains))))
+        if target_union_context:
+            # Enforce that target union context does not contain uncovered domains (F04 / S2)
+            if not set(target_union_context.domains).issubset(set(union_domains)):
+                return SheafDescentReport(
+                    claim_name=claim_name,
+                    cover_contexts=cover,
+                    local_sections=local_secs,
+                    cocycles=cocycles,
+                    is_gluing_admissible=False,
+                    h1_dimension=1,
+                    rejection_reason=f"Target union context contains uncovered domains: {set(target_union_context.domains) - set(union_domains)}"
+                )
+        else:
             max_budget = max(c.budget_ceiling for c in cover)
             shared_invariants = tuple(sorted(list(set.intersection(*[set(c.invariants) for c in cover]))))
             target_union_context = EpistemicContext.create(
                 name=" \\/ ".join(c.name for c in cover),
-
                 domains=union_domains,
                 budget_ceiling=max_budget,
                 invariants=shared_invariants
             )
 
+        # Check that local sections on disjoint components do not conflict on normal form (F04 / S3)
         sample_sec = list(local_secs.values())[0]
+        if any(s.normal_form != sample_sec.normal_form for s in local_secs.values()):
+            return SheafDescentReport(
+                claim_name=claim_name,
+                cover_contexts=cover,
+                local_sections=local_secs,
+                cocycles=cocycles,
+                is_gluing_admissible=False,
+                h1_dimension=1,
+                rejection_reason="Sheaf restriction failure: conflicting local normal forms on disjoint components cannot glue into a single global section"
+            )
+
         max_steps = max(s.verified_steps for s in local_secs.values())
         all_prov = tuple(sorted(list(set(h for s in local_secs.values() for h in s.provenance_hashes))))
 
@@ -435,6 +487,32 @@ class EpistemicSheafKernel:
             status=SectionStatus.GLUED_GLOBAL,
             provenance_hashes=all_prov
         )
+
+        # Check restriction of global section back to every local context
+        for ctx in cover:
+            local_s = local_secs[ctx.context_id]
+            try:
+                res_back = global_sec.restrict(ctx, target_union_context)
+                if res_back.normal_form != local_s.normal_form:
+                    return SheafDescentReport(
+                        claim_name=claim_name,
+                        cover_contexts=cover,
+                        local_sections=local_secs,
+                        cocycles=cocycles,
+                        is_gluing_admissible=False,
+                        h1_dimension=1,
+                        rejection_reason=f"Sheaf restriction mismatch on context '{ctx.name}'"
+                    )
+            except Exception as e:
+                return SheafDescentReport(
+                    claim_name=claim_name,
+                    cover_contexts=cover,
+                    local_sections=local_secs,
+                    cocycles=cocycles,
+                    is_gluing_admissible=False,
+                    h1_dimension=1,
+                    rejection_reason=f"Sheaf restriction failed for context '{ctx.name}': {e}"
+                )
 
         return SheafDescentReport(
             claim_name=claim_name,

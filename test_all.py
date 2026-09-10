@@ -56,6 +56,7 @@ SUITES = [
     ("Epistemic Sheaf Kernel & Čech Cohomology", "test_sheaf_kernel"),
     ("Sovereign Continuity Quine & Forgetting Membrane", "test_sovereign_continuity"),
     ("Federated Sheaf Agora & Cohomological Constitutionalism", "test_sheaf_agora"),
+    ("Findings F01–F12 Comprehensive Remediation", "test_sovereign_remediation"),
 ]
 
 

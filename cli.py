@@ -2871,6 +2871,15 @@ def cmd_palimpsest(args):
             tensor_dict = m["tensor"]
             skel_old_dict = m["skeleton_old"]
             skel_new_dict = m["skeleton_new"]
+            from palimpsest_kernel import ReasoningSkeleton
+            skel_new = ReasoningSkeleton.from_dict(skel_new_dict)
+            expected_new_hash = ReasoningSkeleton.create(skel_new.generation, list(skel_new.axioms)).tree_hash
+            skel_old = ReasoningSkeleton.from_dict(skel_old_dict)
+            expected_old_hash = ReasoningSkeleton.create(skel_old.generation, list(skel_old.axioms)).tree_hash
+
+            if skel_new.tree_hash != expected_new_hash or skel_old.tree_hash != expected_old_hash:
+                print("\033[1;31m[!] INTEGRITY VIOLATION: Palimpsest skeleton tree_hash mismatch (tampered data)!\033[0m\n")
+                sys.exit(1)
 
             print("\033[1;36m" + "=" * 65)
             print("  %# BLACK-HEART EPISTEMIC PALIMPSEST CRYPTOGRAPHIC AUDIT")

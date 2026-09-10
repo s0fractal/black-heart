@@ -699,8 +699,16 @@ def check_palimpsest_guard(
         from controlled_forgetting import EpistemicTombstoneRegistry
         tombstone_registry = EpistemicTombstoneRegistry()
 
-    # 1. Check for contaminated tombstone alleles
+    # 1. Check for contaminated tombstone alleles and syntax validity
+    from glyph import parse, evaluate
     for c in candidate_org.chromosomes:
+        if not c.expression or not c.expression.strip():
+            return False, f"Candidate chromosome '{c.gene_id}' has empty expression", None
+        try:
+            parse(c.expression)
+        except Exception as e:
+            return False, f"Candidate chromosome '{c.gene_id}' failed syntax parse: {e}", None
+
         c_hash = hashlib.sha256(c.expression.encode("utf-8")).hexdigest()
         if not tombstone_registry.is_admitted(c.gene_id) or not tombstone_registry.is_admitted(c_hash):
             return False, f"Candidate chromosome '{c.gene_id}' contains quarantined tombstone allele", None
@@ -717,37 +725,40 @@ def check_palimpsest_guard(
     skel_curr = ReasoningSkeleton.create(current_org.generation, axioms_curr)
     skel_succ = ReasoningSkeleton.create(candidate_org.generation, axioms_succ)
 
-    mat_curr = BehavioralTraceMatrix(current_org.generation)
-    mat_succ = BehavioralTraceMatrix(candidate_org.generation)
+    def _evaluate_traces_on_fixtures(org, gen):
+        matrix = BehavioralTraceMatrix(gen)
+        for fid, fix in fixtures.items():
+            total_steps = 0
+            hashes = []
+            cand_ok = True
+            for c in org.chromosomes:
+                try:
+                    t = parse(c.expression)
+                    res = evaluate(t, max_atp=25)
+                    total_steps += res.steps_spent
+                    hashes.append(hashlib.sha256(str(res.normal_form).encode("utf-8")).hexdigest()[:8])
+                except Exception:
+                    cand_ok = False
+                    total_steps += 1
+                    hashes.append("err")
 
-    for fid, fix in fixtures.items():
-        mat_curr.traces[fid] = BehavioralTrace(
-            fixture_id=fid,
-            generation=current_org.generation,
-            actual_behavior=fix.expected_behavior,
-            response_hash=f"curr_{fid}",
-            confidence=0.95,
-            is_compliant=True,
-            execution_steps=10
-        )
-        is_cand_compliant = True
-        cand_behavior = fix.expected_behavior
-        if not candidate_org.chromosomes or any(c.expression.strip() == "" for c in candidate_org.chromosomes):
-            is_cand_compliant = False
-            cand_behavior = ExpectedBehavior.AFFIRM_PROVEN
+            resp_hash = "_".join(hashes) if hashes else "none"
+            actual = fix.expected_behavior if cand_ok else ExpectedBehavior.REFUSE
+            compliant = (actual == fix.expected_behavior) and cand_ok
+            matrix.traces[fid] = BehavioralTrace(
+                fixture_id=fid,
+                generation=gen,
+                actual_behavior=actual,
+                response_hash=f"resp_{gen}_{resp_hash}",
+                confidence=0.95 if compliant else 0.1,
+                is_compliant=compliant,
+                execution_steps=max(1, total_steps)
+            )
+        matrix.compute_scores(fixtures)
+        return matrix
 
-        mat_succ.traces[fid] = BehavioralTrace(
-            fixture_id=fid,
-            generation=candidate_org.generation,
-            actual_behavior=cand_behavior,
-            response_hash=f"succ_{fid}",
-            confidence=0.95 if is_cand_compliant else 0.2,
-            is_compliant=is_cand_compliant,
-            execution_steps=10
-        )
-
-    mat_curr.compute_scores(fixtures)
-    mat_succ.compute_scores(fixtures)
+    mat_curr = _evaluate_traces_on_fixtures(current_org, current_org.generation)
+    mat_succ = _evaluate_traces_on_fixtures(candidate_org, candidate_org.generation)
 
     analyzer = PalimpsestDriftAnalyzer(tombstone_registry, fixtures)
     tensor = analyzer.analyze_drift(skel_curr, skel_succ, mat_curr, mat_succ)

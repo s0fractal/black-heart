@@ -12,7 +12,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
 endobj
 4 0 obj
-<< /Length 2406 >>
+<< /Length 2405 >>
 stream
 0.03 0.04 0.07 rg
 0 0 612 792 re f
@@ -24,7 +24,7 @@ BT
 /F1 13 Tf
 0.90 0.60 1.00 rg
 45 745 Td
-(Agora Simplicial Parliament :: AGORA-0.2) Tj
+(Federated Agora Parliament :: AGORA-0.2) Tj
 /F1 8 Tf
 0.75 0.80 0.90 rg
 0 -16 Td
@@ -47,9 +47,9 @@ BT
 0 -16 Td
 (Chamber Identifier   | Local Context Domains                | Budget   | Local Gini ) Tj
 0 -14 Td
-(alpha                  | axioms, logic                        | 120 ATP  |      0.140 ) Tj
+(alpha                  | axioms, logic                        | 120 ATP  |      0.000 ) Tj
 0 -13 Td
-(beta                   | axioms, computation                  | 150 ATP  |      0.219 ) Tj
+(beta                   | axioms, computation                  | 150 ATP  |      0.000 ) Tj
 0 -13 Td
 (gamma                  | civics, mycelium                     | 180 ATP  |      0.000 ) Tj
 0 -13 Td
@@ -122,14 +122,14 @@ xref
 0000000109 00000 n 
 0000000166 00000 n 
 0000000292 00000 n 
-0000002750 00000 n 
+0000002749 00000 n 
 trailer
 << /Size 6 /Root 1 0 R >>
 startxref
-2820
+2819
 %%EOF
 '''
-# %BLACK_HEART_SHEAF_AGORA_MANIFEST: eyJjaGFtYmVycyI6IFt7ImJ1ZGdldCI6IDEyMCwgImRvbWFpbnMiOiBbImF4aW9tcyIsICJsb2dpYyJdLCAiZ2luaSI6IDAuMTQsICJpZCI6ICJhbHBoYSIsICJuYW1lIjogIkNoYW1iZXIgQWxwaGEgKFB1cmUgTG9naWMpIn0sIHsiYnVkZ2V0IjogMTUwLCAiZG9tYWlucyI6IFsiYXhpb21zIiwgImNvbXB1dGF0aW9uIl0sICJnaW5pIjogMC4yMTkxMDExMjM1OTU1MDU2MywgImlkIjogImJldGEiLCAibmFtZSI6ICJDaGFtYmVyIEJldGEgKENvbnN0cnVjdGl2ZSBDb21wdXRhdGlvbikifSwgeyJidWRnZXQiOiAxODAsICJkb21haW5zIjogWyJjaXZpY3MiLCAibXljZWxpdW0iXSwgImdpbmkiOiAwLjAsICJpZCI6ICJnYW1tYSIsICJuYW1lIjogIkNoYW1iZXIgR2FtbWEgKEF1dG9ub21vdXMgQ2l2aWNzKSJ9XSwgImNpZCI6ICJiYWZrcmVpZzNxNmJybTJ1aXpmNTVqbGpjNG9kanlwN2R1azRieXo0Z3c3cGZpZGV2NHl5N2R3dmRrZSIsICJjbGFpbV9uYW1lIjogIkNvbXB1dGF0aW9uYWwgSWRlbnRpdHkiLCAiZmVkZXJhdGlvbl9naW5pIjogMC4xNDU0NTQ1NDU0NTQ1NDU0NSwgImgxX2RpbWVuc2lvbiI6IDAsICJwYXJlbnRfY2lkIjogIiIsICJwYXJsaWFtZW50X25hbWUiOiAiQWdvcmEgU2ltcGxpY2lhbCBQYXJsaWFtZW50IiwgInByb3Bvc2FsX2lkIjogIlBST1AtQ09OU1RJVFVUSU9OLTAxIiwgInJlY2VpcHRzX2NvdW50IjogMiwgInJlamVjdGlvbl9yZWFzb24iOiAiIiwgInNlc3Npb25faWQiOiAxLCAic3RhdHVzIjogIlJBVElGSUVEX0dMT0JBTCIsICJ0b3RhbF9uYXlzIjogMCwgInRvdGFsX3llYXMiOiAxOH0=
+# %BLACK_HEART_SHEAF_AGORA_MANIFEST: eyJjaGFtYmVycyI6IFt7ImJ1ZGdldCI6IDEyMCwgImRvbWFpbnMiOiBbImF4aW9tcyIsICJsb2dpYyJdLCAiZ2luaSI6IDAuMCwgImlkIjogImFscGhhIiwgIm5hbWUiOiAiQ2hhbWJlciBBbHBoYSJ9LCB7ImJ1ZGdldCI6IDE1MCwgImRvbWFpbnMiOiBbImF4aW9tcyIsICJjb21wdXRhdGlvbiJdLCAiZ2luaSI6IDAuMCwgImlkIjogImJldGEiLCAibmFtZSI6ICJDaGFtYmVyIEJldGEifSwgeyJidWRnZXQiOiAxODAsICJkb21haW5zIjogWyJjaXZpY3MiLCAibXljZWxpdW0iXSwgImdpbmkiOiAwLjAsICJpZCI6ICJnYW1tYSIsICJuYW1lIjogIkNoYW1iZXIgR2FtbWEifV0sICJjaWQiOiAiYmFma3JlaWczcTZicm0ydWl6ZjU1amxqYzRvZGp5cDdkdWs0Ynl6NGd3N3BmaWRldjR5eTdkd3Zka2UiLCAiY2xhaW1fbmFtZSI6ICJDb21wdXRhdGlvbmFsIElkZW50aXR5IiwgImZlZGVyYXRpb25fZ2luaSI6IDAuMTQ1NDU0NTQ1NDU0NTQ1NDUsICJoMV9kaW1lbnNpb24iOiAwLCAicGFyZW50X2NpZCI6ICIiLCAicGFybGlhbWVudF9uYW1lIjogIkZlZGVyYXRlZCBBZ29yYSBQYXJsaWFtZW50IiwgInByb3Bvc2FsX2lkIjogIlBST1AtQ09OU1RJVFVUSU9OLTAxIiwgInJlY2VpcHRzX2NvdW50IjogMSwgInJlamVjdGlvbl9yZWFzb24iOiAiIiwgInNlc3Npb25faWQiOiAxLCAic3RhdHVzIjogIlJBVElGSUVEX0dMT0JBTCIsICJ0b3RhbF9uYXlzIjogMCwgInRvdGFsX3llYXMiOiAxOH0=
 import os, sys, json, base64
 
 def _audit():

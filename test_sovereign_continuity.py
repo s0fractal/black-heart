@@ -31,7 +31,8 @@ from sovereign_continuity import (
     SovereignReceipt,
     ForgettingMembrane,
     MyceliumSynapse,
-    generate_sovereign_polyglot
+    generate_sovereign_polyglot,
+    ReAdoptionRecord
 )
 from controlled_forgetting import AdmissionStatus, EpistemicResurrectionError
 import cid
@@ -159,7 +160,17 @@ class TestSovereignContinuity(unittest.TestCase):
             gen_admitted=2,
             maintenance_cost=10
         )
-        org.membrane.readopt_warrant("warrant-to-prune", resurrected_w)
+        stela = org.membrane.tombstones["warrant-to-prune"]
+        rec = ReAdoptionRecord(
+            record_id="readopt-rec-1",
+            target_stela_id="warrant-to-prune",
+            target_stela_hash=stela.tombstone_id,
+            new_warrant_digest=resurrected_w.compute_cid(),
+            author_pk_hex=org.author_pk_hex,
+            justification_proof="Verified fresh proof of equivalence under SKIY calculus."
+        )
+        rec.sign(org.secret_key_hex)
+        org.membrane.readopt_warrant("warrant-to-prune", resurrected_w, rec)
 
         # Guard should now pass without raising
         org.membrane.execute_warrant_guard("warrant-to-prune")

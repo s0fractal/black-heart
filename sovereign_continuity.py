@@ -156,6 +156,9 @@ class SovereignWarrant:
             "status": self.status.value
         }
 
+    def compute_cid(self) -> str:
+        return compute_cidv1_raw(canonical_jcs(self.to_dict()))
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> SovereignWarrant:
         return cls(
@@ -304,6 +307,8 @@ class SovereignReceipt:
     def verify(self) -> bool:
         if not self.author_pk_hex or not self.signature_hex:
             return False
+        if self.active_cost > self.metabolic_budget:
+            return False
         try:
             pk_bytes = bytes.fromhex(self.author_pk_hex)
             sig_bytes = bytes.fromhex(self.signature_hex)
@@ -342,6 +347,73 @@ class SovereignReceipt:
             chromosomes_count=data["chromosomes_count"],
             tombstones_count=data["tombstones_count"],
             author_pk_hex=data["author_pk_hex"],
+            signature_hex=data.get("signature_hex", "")
+        )
+
+
+
+@dataclass(frozen=True)
+class ReAdoptionRecord:
+    """
+    Cryptographic authorization for readopting a retired tombstoned warrant (Invariant SC4).
+    Binds the original tombstone stela digest, the replacement candidate, fresh evidence,
+    and the sovereign author's signature.
+    """
+    record_id: str
+    target_stela_id: str
+    target_stela_hash: str
+    new_warrant_digest: str
+    author_pk_hex: str
+    justification_proof: str
+    signature_hex: str = ""
+
+    def canonical_bytes(self) -> bytes:
+        data = {
+            "record_id": self.record_id,
+            "target_stela_id": self.target_stela_id,
+            "target_stela_hash": self.target_stela_hash,
+            "new_warrant_digest": self.new_warrant_digest,
+            "author_pk_hex": self.author_pk_hex,
+            "justification_proof": self.justification_proof
+        }
+        return json.dumps(data, sort_keys=True, separators=(',', ':')).encode("utf-8")
+
+    def sign(self, secret_key_hex: str) -> None:
+        sk_bytes = bytes.fromhex(secret_key_hex)
+        sig = sign_bytes(sk_bytes, b"readoption-record-v1:" + hashlib.sha256(self.canonical_bytes()).digest())
+        object.__setattr__(self, "signature_hex", sig.hex())
+
+    def verify(self) -> bool:
+        if not self.author_pk_hex or not self.signature_hex:
+            return False
+        try:
+            pk_bytes = bytes.fromhex(self.author_pk_hex)
+            sig_bytes = bytes.fromhex(self.signature_hex)
+            msg = b"readoption-record-v1:" + hashlib.sha256(self.canonical_bytes()).digest()
+            return verify_bytes(pk_bytes, msg, sig_bytes)
+        except Exception:
+            return False
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "record_id": self.record_id,
+            "target_stela_id": self.target_stela_id,
+            "target_stela_hash": self.target_stela_hash,
+            "new_warrant_digest": self.new_warrant_digest,
+            "author_pk_hex": self.author_pk_hex,
+            "justification_proof": self.justification_proof,
+            "signature_hex": self.signature_hex
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> ReAdoptionRecord:
+        return cls(
+            record_id=data["record_id"],
+            target_stela_id=data["target_stela_id"],
+            target_stela_hash=data["target_stela_hash"],
+            new_warrant_digest=data["new_warrant_digest"],
+            author_pk_hex=data["author_pk_hex"],
+            justification_proof=data["justification_proof"],
             signature_hex=data.get("signature_hex", "")
         )
 
@@ -436,11 +508,29 @@ class ForgettingMembrane:
                 f"without a verified ReAdoptionRecord."
             )
 
-    def readopt_warrant(self, stela_id: str, new_warrant: SovereignWarrant) -> None:
-        """Explicit verified resurrection."""
-        if stela_id in self.tombstones:
-            self.readoptions.add(stela_id)
-            self.admit_warrant(new_warrant)
+    def readopt_warrant(
+        self,
+        stela_id: str,
+        new_warrant: SovereignWarrant,
+        readoption_record: Optional[ReAdoptionRecord] = None
+    ) -> None:
+        """
+        Explicit verified resurrection requiring a valid ReAdoptionRecord (Invariant SC4).
+        """
+        if readoption_record is None or not isinstance(readoption_record, ReAdoptionRecord):
+            raise ValueError("Invariant SC4 violation: Readoption requires a verified ReAdoptionRecord!")
+        if not readoption_record.verify():
+            raise ValueError("ReAdoptionRecord signature verification failed!")
+        if stela_id not in self.tombstones:
+            raise ValueError(f"No tombstone stela found for warrant '{stela_id}'")
+        stela = self.tombstones[stela_id]
+        if readoption_record.target_stela_id != stela_id or readoption_record.target_stela_hash != stela.tombstone_id:
+            raise ValueError("ReAdoptionRecord target stela mismatch!")
+        if readoption_record.new_warrant_digest != new_warrant.compute_cid():
+            raise ValueError("ReAdoptionRecord new warrant digest mismatch!")
+
+        self.readoptions.add(stela_id)
+        self.admit_warrant(new_warrant)
 
 
 # ============================================================================
@@ -750,6 +840,13 @@ class SovereignOrganism:
             secret_key_hex=self.secret_key_hex,
             base_cost=base_chrom_cost
         )
+        # Enforce Invariant SC3: Metabolic capacity bound
+        active_cost = self.current_active_cost()
+        if active_cost > self.membrane.capacity:
+            raise ValueError(
+                f"Invariant SC3 violation: Active cost ({active_cost} ATP) exceeds metabolic capacity "
+                f"({self.membrane.capacity} ATP)."
+            )
 
         # Advance Generation
         self.generation += 1
@@ -833,7 +930,49 @@ class SovereignOrganism:
         payload = bundle.get("payload", bundle)
         migration_sig = bundle.get("migration_signature_hex", "")
 
+        author_pk = payload.get("author_pk_hex", "")
         genesis_pk = payload["genesis_pk_hex"]
+
+        # 1. Require verified migration signature (F06 / C1)
+        if not migration_sig or not author_pk:
+            raise ValueError("Migration bundle requires a verified migration signature and author_pk_hex for continuation!")
+
+        seed_bytes = canonical_jcs(payload)
+        msg = b"sovereign-migration-v1:" + hashlib.sha256(seed_bytes).digest()
+        if not verify_bytes(bytes.fromhex(author_pk), msg, bytes.fromhex(migration_sig)):
+            raise ValueError("Migration bundle signature verification failed!")
+
+        # 2. Enforce unbroken genesis identity link (F06 / C2)
+        if author_pk != genesis_pk:
+            raise ValueError(f"Identity unlinked: author '{author_pk}' does not match genesis identity '{genesis_pk}'")
+
+        # 3. Restore and verify receipts and enforce lineage continuity (F06 / C3)
+        receipt_dicts = payload.get("history_receipts") or payload.get("receipts") or []
+        if not receipt_dicts:
+            raise ValueError("Migration bundle has empty receipt lineage!")
+
+        restored_receipts = []
+        for i, rd in enumerate(receipt_dicts):
+            receipt = SovereignReceipt.from_dict(rd)
+            if not receipt.verify():
+                raise ValueError(f"Ontogenetic receipt verification failed at Gen #{receipt.generation}")
+            if receipt.author_pk_hex != genesis_pk:
+                raise ValueError(f"Lineage signer mismatch: receipt Gen #{receipt.generation} signed by '{receipt.author_pk_hex}', not genesis '{genesis_pk}'")
+            if receipt.generation != i:
+                raise ValueError(f"Lineage continuity break: expected generation #{i}, got #{receipt.generation}")
+            if i == 0:
+                if receipt.parent_cid != "GENESIS_ROOT" and receipt.parent_cid != "":
+                    raise ValueError(f"Genesis receipt parent_cid must be empty or GENESIS_ROOT, got '{receipt.parent_cid}'")
+            else:
+                if receipt.parent_cid != restored_receipts[i - 1].cid:
+                    raise ValueError(f"Lineage parent_cid mismatch at Gen #{i}: expected '{restored_receipts[i - 1].cid}', got '{receipt.parent_cid}'")
+            restored_receipts.append(receipt)
+
+        claimed_cids = payload.get("cid_chain", [])
+        expected_cids = [r.cid for r in restored_receipts]
+        if claimed_cids and claimed_cids != expected_cids:
+            raise ValueError("CID chain divergence from receipt history!")
+
         organism = cls(
             organism_id=payload["organism_id"],
             genesis_pk_hex=genesis_pk,
@@ -842,14 +981,8 @@ class SovereignOrganism:
             metabolic_capacity=payload.get("metabolic_capacity", 300)
         )
         organism.atp_cumulative_saved = payload.get("atp_cumulative_saved", 0)
-        organism.cid_chain = payload.get("cid_chain", [])
-
-        # Re-verify migration signature if present
-        if migration_sig and payload.get("author_pk_hex"):
-            seed_bytes = canonical_jcs(payload)
-            msg = b"sovereign-migration-v1:" + hashlib.sha256(seed_bytes).digest()
-            if not verify_bytes(bytes.fromhex(payload["author_pk_hex"]), msg, bytes.fromhex(migration_sig)):
-                raise ValueError("Migration bundle signature verification failed!")
+        organism.cid_chain = expected_cids
+        organism.history_receipts = restored_receipts
 
         # Restore chromosomes
         for cd in payload.get("chromosomes", []):
@@ -868,12 +1001,9 @@ class SovereignOrganism:
                 raise ValueError(f"Tombstone verification failed for {t.tombstone_id}")
             organism.membrane.tombstones[t.target_id] = t
 
-        # Restore and verify all receipts
-        for rd in payload.get("history_receipts", []):
-            receipt = SovereignReceipt.from_dict(rd)
-            if not receipt.verify():
-                raise ValueError(f"Ontogenetic receipt verification failed at Gen #{receipt.generation}")
-            organism.history_receipts.append(receipt)
+        # Enforce capacity bound (F12 / C5)
+        if organism.current_active_cost() > organism.membrane.capacity:
+            raise ValueError(f"Invariant SC3 violation: active cost ({organism.current_active_cost()}) exceeds metabolic capacity ({organism.membrane.capacity})")
 
         # Verify Merkle root matches latest state
         current_root = organism.compute_merkle_root()
@@ -915,17 +1045,28 @@ def generate_sovereign_polyglot(
     manifest_data = {
         "organism_id": organism.organism_id,
         "genesis_pk_hex": organism.genesis_pk_hex,
+        "author_pk_hex": organism.author_pk_hex,
         "generation": organism.generation,
         "tip_cid": organism.cid_chain[-1] if organism.cid_chain else "",
+        "cid_chain": organism.cid_chain,
         "atp_saved": organism.atp_cumulative_saved,
         "metabolic_capacity": organism.membrane.capacity,
         "active_cost": organism.current_active_cost(),
         "chromosomes": [c.to_dict() for c in organism.chromosomes.values()],
         "active_warrants": [w.to_dict() for w in organism.membrane.active_warrants.values()],
         "tombstones": [t.to_dict() for t in organism.membrane.tombstones.values()],
+        "history_receipts": [r.to_dict() for r in organism.history_receipts],
         "receipts": [r.to_dict() for r in organism.history_receipts]
     }
-    manifest_b64 = base64.b64encode(canonical_jcs(manifest_data)).decode("ascii")
+    mig_sig = ""
+    if organism.secret_key_hex:
+        seed_bytes = canonical_jcs(manifest_data)
+        mig_sig = sign_bytes(bytes.fromhex(organism.secret_key_hex), b"sovereign-migration-v1:" + hashlib.sha256(seed_bytes).digest()).hex()
+    manifest_bundle = {
+        "payload": manifest_data,
+        "migration_signature_hex": mig_sig
+    }
+    manifest_b64 = base64.b64encode(canonical_jcs(manifest_bundle)).decode("ascii")
 
     # Vector Drawing PDF Streams
     stream_lines: List[str] = [
@@ -1079,7 +1220,23 @@ def _audit():
         sys.exit(1)
     end = content.find(b"\\n", idx)
     raw_b64 = content[idx + len(tag):end].strip()
-    manifest = json.loads(base64.b64decode(raw_b64).decode("utf-8"))
+    bundle = json.loads(base64.b64decode(raw_b64).decode("utf-8"))
+    manifest = bundle.get("payload", bundle)
+
+    active_cost = manifest.get("active_cost", 0)
+    metabolic_capacity = manifest.get("metabolic_capacity", 0)
+    receipts = manifest.get("history_receipts") or manifest.get("receipts", [])
+    gen_pk = manifest.get("genesis_pk_hex", "")
+
+    if not gen_pk or len(gen_pk) != 64:
+        print("[FAIL] Invariant SC1: Invalid genesis public key.")
+        sys.exit(1)
+    if not receipts:
+        print("[FAIL] Invariant SC1: Empty lineage receipts.")
+        sys.exit(1)
+    if active_cost > metabolic_capacity:
+        print(f"[FAIL] Invariant SC3: Metabolic capacity bound violated ({{active_cost}} > {{metabolic_capacity}}).")
+        sys.exit(1)
 
     print("================================================================================")
     print(f"  %B SOVEREIGN CONTINUITY QUINE AUDITOR -- GENESIS #{{manifest.get('generation')}}")
@@ -1092,7 +1249,7 @@ def _audit():
     print(f"  Cumulative Saved:   {{manifest.get('atp_saved')}} ATP")
     print(f"  Active Chromosomes: {{len(manifest.get('chromosomes', []))}}")
     print(f"  Tombstone Stelae:   {{len(manifest.get('tombstones', []))}}")
-    print(f"  Receipt Lineage:    {{len(manifest.get('receipts', []))}} generations")
+    print(f"  Receipt Lineage:    {{len(receipts)}} generations")
     print("--------------------------------------------------------------------------------")
     print("[PASS] Substrate-independent cryptographic lineage verified.")
     print("[PASS] Invariant SC1: Unbroken Genesis identity.")
@@ -1106,9 +1263,14 @@ def _migrate():
     tag = b"# %BLACK_HEART_SOVEREIGN_MANIFEST: "
     idx = content.find(tag)
     end = content.find(b"\\n", idx)
-    manifest = json.loads(base64.b64decode(content[idx + len(tag):end].strip()).decode("utf-8"))
-    bundle = {{"payload": manifest, "exported_by": "sovereign_polyglot"}}
-    print(json.dumps(bundle, indent=2))
+    bundle = json.loads(base64.b64decode(content[idx + len(tag):end].strip()).decode("utf-8"))
+    payload = bundle.get("payload", bundle)
+    out_bundle = {{
+        "payload": payload,
+        "migration_signature_hex": bundle.get("migration_signature_hex", ""),
+        "exported_by": "sovereign_polyglot"
+    }}
+    print(json.dumps(out_bundle, indent=2))
 
 if __name__ == "__main__":
     if "--audit" in sys.argv:
