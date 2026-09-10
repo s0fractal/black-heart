@@ -22,6 +22,9 @@ An empty colony history does not obtain a vacuous link-check success. A vault
 marker without executable claims no longer passes the claim auditor. Unsupported
 or malformed metadata refuses with exit 1 rather than leaking an import traceback.
 Existing routes for other engines remain; this is not a new audit of every engine.
+For repeated trusted-local ledger/continuum checks, an opt-in
+[cache wrapper](tools/VERIFY-CACHE.md) reports `REUSED` separately from
+`EXECUTED_NOW` and offers `--fresh`. It does not change this command's behavior.
 Input files are limited to 16 MiB by CLI dispatch; there is no process isolation
 or general hostile-concurrent-filesystem guarantee. Parsing and library evaluation
 have their existing runtime bounds; this is not a universal resource sandbox.
