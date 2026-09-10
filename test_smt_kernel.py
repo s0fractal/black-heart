@@ -272,7 +272,13 @@ class TestSMTKernel(unittest.TestCase):
             cmd = [sys.executable, pdf_path]
             proc = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=10)
             self.assertIn("SOVEREIGN SMT DPLL(T) THEOREM VERIFIER", proc.stdout)
-            self.assertIn("SMT PROOF AUDIT COMPLETE: ALL INVARIANTS SATISFIED", proc.stdout)
+            self.assertIn("SMT MANIFEST AUDIT COMPLETE", proc.stdout)
+            # The document states which question was answered. The runner reads
+            # back a manifest; it does not re-derive the proof, so it must not
+            # report the refutation as checked when it was not.
+            self.assertIn("Proof DAG structure:", proc.stdout)
+            self.assertIn("Refutation check:", proc.stdout)
+            self.assertNotIn("ALL INVARIANTS SATISFIED", proc.stdout)
 
             # Test append_smt_hud physicality: after.startswith(before)
             appended_path = os.path.join(tmpdir, "smt_appended.pdf")

@@ -41,9 +41,10 @@ import json
 import time
 import math
 import hashlib
+import warnings
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, Tuple, Set, Union, Callable
+from typing import List, Dict, Any, Optional, Tuple, Set, Union, Callable, Iterable
 
 import controlled_forgetting
 from controlled_forgetting import EpistemicTombstoneRegistry
@@ -1276,16 +1277,177 @@ class SMTSolver:
 # 7. CERTIFIED REFUTATION VERIFIER (INDEPENDENT PROOF CHECKER)
 # ============================================================================
 
-def verify_unsat_certificate(proof_dag: Dict[int, ResolutionProofNode]) -> bool:
+class RefutationStatus(str, Enum):
+    """What a refutation check actually established.
+
+    These are four different answers and none of them substitutes for another.
+    In particular UNSUPPORTED and UNKNOWN say the checker did not reach a
+    verdict; neither means the theorem is false, and neither may be reported
+    as a checked refutation.
     """
-    Independent verifier for UNSAT resolution refutation DAGs.
-    Enforces:
-      1. Presence of at least one empty clause node (len(clause) == 0).
-      2. Strict referential integrity: all antecedents must exist in proof_dag.
-      3. Non-empty antecedents for all derived/learned nodes.
-      4. Strict acyclicity (DAG invariant verified via DFS / topological cycle check).
-      5. Sound root grounding: all derivation paths from the empty clause must
-         terminate at valid axiom nodes (rule in ("input", "theory_lemma")).
+    VERIFIED_REFUTATION = "VERIFIED_REFUTATION"   # every step checked against the formula
+    INVALID = "INVALID"                           # a step or an axiom does not hold
+    UNSUPPORTED = "UNSUPPORTED"                   # a proof class this checker cannot check
+    UNKNOWN = "UNKNOWN"                           # bound exhausted before a verdict
+
+
+@dataclass
+class RefutationReport:
+    status: RefutationStatus
+    reason: str = ""
+    checked_steps: int = 0
+
+    def __bool__(self) -> bool:
+        # Deliberate: only a verified refutation is truthy, so a bare `if report`
+        # cannot silently promote UNSUPPORTED or UNKNOWN into a proof.
+        return self.status == RefutationStatus.VERIFIED_REFUTATION
+
+
+def _clause_key(clause: Iterable[int]) -> frozenset:
+    return frozenset(clause)
+
+
+def check_resolution_refutation(
+    formula_clauses: Iterable[Iterable[int]],
+    proof_dag: Dict[int, ResolutionProofNode],
+    max_steps: int = 100_000,
+) -> RefutationReport:
+    """Check a propositional resolution refutation against the formula it claims to refute.
+
+    A certificate is about a formula or it is about nothing, so the clause set
+    is supplied by the caller and never read out of the proof. `rule="input"`
+    is a claim that a node is an axiom; here that claim is checked against
+    `formula_clauses`, because a label cannot make an arbitrary clause an
+    axiom of someone else's formula.
+
+    Every derived node is verified as a binary resolution step: exactly two
+    antecedents, a pivot variable occurring positively in one parent and
+    negatively in the other, and a resolvent equal — as a set of literals — to
+    the union of the parents minus that variable. Nothing is taken on the
+    strength of a rule name.
+
+    The result is a typed report, not a bool. A proof class this checker does
+    not implement returns UNSUPPORTED and an exhausted traversal bound returns
+    UNKNOWN; both are distinct from INVALID, because "not checked" is not
+    "false".
+    """
+    if not isinstance(proof_dag, dict) or not proof_dag:
+        return RefutationReport(RefutationStatus.INVALID, "empty or malformed proof")
+
+    axioms = {_clause_key(c) for c in formula_clauses}
+
+    empty_nodes = [n for n in proof_dag.values()
+                   if isinstance(n, ResolutionProofNode) and len(n.clause) == 0]
+    if not empty_nodes:
+        return RefutationReport(RefutationStatus.INVALID,
+                                "no empty clause: the proof derives no contradiction")
+
+    # Check the sub-proof that actually reaches an empty clause, so unrelated
+    # junk elsewhere in the DAG neither rescues nor condemns the derivation.
+    target = empty_nodes[0]
+    checked: Dict[int, bool] = {}
+    in_progress: set = set()
+    steps = 0
+
+    def check(nid: int) -> RefutationReport:
+        nonlocal steps
+        if nid in checked:
+            return RefutationReport(RefutationStatus.VERIFIED_REFUTATION)
+        if nid in in_progress:
+            return RefutationReport(RefutationStatus.INVALID,
+                                    f"cycle: node {nid} is its own ancestor")
+        node = proof_dag.get(nid)
+        if not isinstance(node, ResolutionProofNode):
+            return RefutationReport(RefutationStatus.INVALID, f"unknown antecedent {nid}")
+
+        in_progress.add(nid)
+        try:
+            if node.rule == "input":
+                if _clause_key(node.clause) not in axioms:
+                    return RefutationReport(
+                        RefutationStatus.INVALID,
+                        f"node {nid} is labelled input but its clause "
+                        f"{sorted(node.clause)} is not in the formula")
+                checked[nid] = True
+                return RefutationReport(RefutationStatus.VERIFIED_REFUTATION)
+
+            if node.rule != "learned":
+                return RefutationReport(
+                    RefutationStatus.UNSUPPORTED,
+                    f"node {nid} uses rule {node.rule!r}, which this checker does not "
+                    "check; a rule name is not a proof")
+
+            # Counted when the step is entered, so the bound limits the work
+            # done rather than being read after it is already spent.
+            if steps >= max_steps:
+                return RefutationReport(
+                    RefutationStatus.UNKNOWN,
+                    f"traversal bound of {max_steps} resolution steps reached before "
+                    "the derivation was checked")
+            steps += 1
+
+            if len(node.antecedents) != 2:
+                return RefutationReport(
+                    RefutationStatus.INVALID,
+                    f"node {nid} is a resolution step with {len(node.antecedents)} "
+                    "antecedents; a resolution step has exactly two antecedents")
+            if len(node.pivot_vars) != 1:
+                return RefutationReport(
+                    RefutationStatus.INVALID,
+                    f"node {nid} declares {len(node.pivot_vars)} pivot variables; "
+                    "a resolution step resolves on exactly one")
+
+            left_id, right_id = node.antecedents
+            for parent in (left_id, right_id):
+                sub = check(parent)
+                if sub.status != RefutationStatus.VERIFIED_REFUTATION:
+                    return sub
+
+            pivot = node.pivot_vars[0]
+            left = _clause_key(proof_dag[left_id].clause)
+            right = _clause_key(proof_dag[right_id].clause)
+            if pivot in left and -pivot in right:
+                pos, neg = left, right
+            elif -pivot in left and pivot in right:
+                pos, neg = right, left
+            else:
+                return RefutationReport(
+                    RefutationStatus.INVALID,
+                    f"node {nid} resolves on pivot variable {pivot}, which does not "
+                    "occur with opposite signs in its two parents")
+
+            expected = (pos - {pivot}) | (neg - {-pivot})
+            if expected != _clause_key(node.clause):
+                return RefutationReport(
+                    RefutationStatus.INVALID,
+                    f"node {nid} states resolvent {sorted(node.clause)}, but resolving "
+                    f"its parents on {pivot} gives {sorted(expected)}")
+
+            checked[nid] = True
+            return RefutationReport(RefutationStatus.VERIFIED_REFUTATION)
+        finally:
+            in_progress.discard(nid)
+
+    report = check(target.clause_id)
+    if report.status != RefutationStatus.VERIFIED_REFUTATION:
+        return report
+    return RefutationReport(RefutationStatus.VERIFIED_REFUTATION,
+                            f"empty clause derived from the formula in {steps} "
+                            "checked resolution steps", checked_steps=steps)
+
+
+def check_proof_dag_structure(proof_dag: Dict[int, ResolutionProofNode]) -> bool:
+    """
+    Structural well-formedness of a proof DAG. NOT a refutation check.
+
+    Answers one question: is this object shaped like a proof? It confirms that
+    an empty clause node exists, that antecedents resolve to nodes that exist,
+    that derived nodes have antecedents, that there is no cycle, and that some
+    path from the empty clause reaches a node labelled as an axiom.
+
+    It reads no clause and checks no inference, so it cannot tell a refutation
+    from a certificate for a satisfiable formula, and passing it establishes
+    nothing about the formula. Use `check_resolution_refutation` for that.
     """
     if not proof_dag or not isinstance(proof_dag, dict):
         return False
@@ -1353,6 +1515,28 @@ def verify_unsat_certificate(proof_dag: Dict[int, ResolutionProofNode]) -> bool:
             return True
 
     return False
+
+
+def verify_unsat_certificate(proof_dag: Dict[int, ResolutionProofNode]) -> bool:
+    """Deprecated: this name claimed a refutation it never checked.
+
+    Kept so existing callers keep running, and kept returning exactly what it
+    always returned — the structural verdict of `check_proof_dag_structure`.
+    It does not verify an UNSAT certificate: it accepts a certificate for a
+    satisfiable formula, and it accepts a one-parent step with no pivot.
+
+    For a checked refutation use `check_resolution_refutation`, which takes the
+    formula being refuted.
+    """
+    warnings.warn(
+        "verify_unsat_certificate() checks proof-DAG structure only and does not "
+        "verify a refutation; use check_proof_dag_structure() for that question, "
+        "or check_resolution_refutation(formula_clauses, proof_dag) for a checked "
+        "refutation.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return check_proof_dag_structure(proof_dag)
 
 
 # ============================================================================
@@ -1425,17 +1609,37 @@ def _clean_latin1(text: str) -> str:
     return s.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
 
-def generate_smt_pdf(result: SMTResult, output_path: str, title: str = "SMT Theorem Verification"):
-    """Generates an ISO 32000 compliant polyglot PDF with dark obsidian vector HUD."""
-    manifest_data = {
+def smt_result_manifest(result: SMTResult) -> Dict[str, Any]:
+    """The reported facts about a solver run, each naming the question it answers.
+
+    `proof_structure_ok` is shape. `refutation_check` is the outcome of checking
+    the derivation against the input clauses the proof itself declares, which is
+    the strongest binding available from a result object alone: a caller holding
+    the original formula should call `check_resolution_refutation` with it.
+    There is no `is_verified`, because the old key answered neither question.
+    """
+    manifest: Dict[str, Any] = {
         "status": result.status.value,
         "decisions": result.decisions,
         "propagations": result.propagations,
         "conflicts": result.conflicts,
         "elapsed_sec": round(result.elapsed_sec, 4),
         "formula": result.formula_str[:250],
-        "is_verified": verify_unsat_certificate(result.proof_dag) if result.proof_dag else False,
     }
+    if result.proof_dag:
+        declared_inputs = [n.clause for n in result.proof_dag.values() if n.rule == "input"]
+        manifest["proof_structure_ok"] = check_proof_dag_structure(result.proof_dag)
+        manifest["refutation_check"] = check_resolution_refutation(
+            declared_inputs, result.proof_dag).status.value
+    else:
+        manifest["proof_structure_ok"] = False
+        manifest["refutation_check"] = RefutationStatus.INVALID.value
+    return manifest
+
+
+def generate_smt_pdf(result: SMTResult, output_path: str, title: str = "SMT Theorem Verification"):
+    """Generates an ISO 32000 compliant polyglot PDF with dark obsidian vector HUD."""
+    manifest_data = smt_result_manifest(result)
     manifest_json = json.dumps(manifest_data)
     manifest_hash = hashlib.sha256(manifest_json.encode("utf-8")).hexdigest()
 
@@ -1520,7 +1724,7 @@ def generate_smt_pdf(result: SMTResult, output_path: str, title: str = "SMT Theo
         "/F1 10 Tf",
         "0.96 0.75 0.20 rg",
         "45 420 Td",
-        "(CERTIFIED RESOLUTION REFUTATION PROOF DAG) Tj",
+        "(RESOLUTION PROOF DAG - SEE refutation_check IN MANIFEST) Tj",
         "/F1 8 Tf",
         "0.75 0.80 0.85 rg",
         "0 -16 Td",
@@ -1623,8 +1827,12 @@ def audit():
     print(f"  [*] SMT Solver Verdict: \\033[1;35m{{status}}\\033[0m")
     print(f"  [*] CDCL Telemetry: {{MANIFEST_DATA['decisions']}} decisions, {{MANIFEST_DATA['propagations']}} propagations, {{MANIFEST_DATA['conflicts']}} conflicts")
     print(f"  [*] Formula: {{MANIFEST_DATA['formula']}}")
-    print(f"  [*] Proof Verified: {{MANIFEST_DATA['is_verified']}}")
-    print("\\033[1;32m[+] SMT PROOF AUDIT COMPLETE: ALL INVARIANTS SATISFIED\\033[0m\\n")
+    print(f"  [*] Proof DAG structure: {{MANIFEST_DATA['proof_structure_ok']}} (shape only)")
+    print(f"  [*] Refutation check: {{MANIFEST_DATA['refutation_check']}}")
+    if MANIFEST_DATA['refutation_check'] != "VERIFIED_REFUTATION":
+        print("      Every resolution step was NOT re-derived; this document carries a")
+        print("      proof object, not a checked refutation.")
+    print("\\033[1;32m[+] SMT MANIFEST AUDIT COMPLETE: hash and recorded fields read back\\033[0m\\n")
 
 if __name__ == "__main__":
     audit()

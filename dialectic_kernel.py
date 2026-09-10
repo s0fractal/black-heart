@@ -44,7 +44,10 @@ from glyph import Term, Comb, Var, App, K, I, S, parse, evaluate, tree_size
 import warrant_kernel
 from warrant_kernel import EvidenceGrade, EdgeClaim, AxiomaticWitness, EmpiricalWitness, Polarity
 import smt_kernel
-from smt_kernel import SMTSolver, SMTStatus, verify_unsat_certificate
+from smt_kernel import (
+    SMTSolver, SMTStatus,
+    check_resolution_refutation, RefutationStatus,
+)
 import scoped_admission
 from scoped_admission import (
     RefusalRecord, RefusalReason, ReevaluationRequest, ReevalEligibility,
@@ -127,7 +130,11 @@ class DialecticalDiscoveryReport:
     request: Optional[ReevaluationRequest] = None
     retest_result: Optional[RetestResult] = None
     scoped_admission: Optional[ScopedAdmission] = None
+    # True only when a refutation was checked step by step. It is not a
+    # statement that the proof's axioms are the formula anyone asked about:
+    # see smt_refutation_check and the note where this field is filled.
     smt_verified: bool = False
+    smt_refutation_check: str = RefutationStatus.INVALID.value
     proof_dag: Optional[Dict[int, Any]] = None
     elapsed_sec: float = 0.0
 
@@ -343,7 +350,20 @@ class DialecticalOrchestrator:
         )
 
         proof_dag = getattr(retest, "proof_dag", None)
-        smt_verified = (proof_dag is not None and verify_unsat_certificate(proof_dag))
+        # Every resolution step is checked. The clause set is the one the proof
+        # declares as its own inputs, which is the strongest binding available
+        # from a result object here: it catches a step that does not resolve,
+        # and it does NOT establish that those inputs are the formula under
+        # discussion. A caller holding that formula should re-check with it.
+        if proof_dag is None:
+            refutation = RefutationStatus.INVALID.value
+            smt_verified = False
+        else:
+            declared_inputs = [n.clause for n in proof_dag.values()
+                               if getattr(n, "rule", None) == "input"]
+            report_check = check_resolution_refutation(declared_inputs, proof_dag)
+            refutation = report_check.status.value
+            smt_verified = (report_check.status == RefutationStatus.VERIFIED_REFUTATION)
 
         return DialecticalDiscoveryReport(
             triad=triad,
@@ -351,6 +371,7 @@ class DialecticalOrchestrator:
             retest_result=retest,
             scoped_admission=adm,
             smt_verified=smt_verified,
+            smt_refutation_check=refutation,
             proof_dag=proof_dag,
             elapsed_sec=time.time() - t_start
         )
@@ -363,8 +384,13 @@ def elevate_triad_to_warrant(
     parent_hash: str = "0" * 64
 ) -> EdgeClaim:
     """
-    Elevates an SMT-certified Dialectical Synthesis into a sovereign Grade A (Axiomatic)
-    Warrant EdgeClaim, or Grade E (Empirical) if SMT refutation proof DAG is absent.
+    Elevates a Dialectical Synthesis whose refutation was CHECKED into a Grade A
+    (Axiomatic) Warrant EdgeClaim, and otherwise into Grade E (Empirical).
+
+    Grade A here requires `smt_verified`, i.e. every resolution step of the
+    proof was re-derived. A well-formed proof object is not enough: shape was
+    what this gate used to accept, and shape cannot tell a refutation from a
+    certificate for a satisfiable formula.
     """
     triad = report.triad
     if report.proof_dag is not None and report.smt_verified:
