@@ -335,6 +335,41 @@ class TestAutopoiesisEngine(unittest.TestCase):
                 target = data[off:off+10]
                 self.assertIn(b"0 obj", target, f"N3: Offset {off} points to {target}, expected object header")
 
+    def test_11_palimpsest_autonomic_guard_rejects_tombstoned_or_eroded_mutation(self):
+        """Invariant PAL4: Candidate mutation with tombstoned allele or erosion is rejected."""
+        from autopoiesis import check_palimpsest_guard
+        from controlled_forgetting import EpistemicTombstoneRegistry, RetirementMode
+        import hashlib
+
+        org0, _ = init_autopoietic_organism(self.pdf_path)
+
+        # 1. Normal transition passes check_palimpsest_guard
+        is_safe, msg, tensor = check_palimpsest_guard(org0, org0)
+        self.assertTrue(is_safe)
+
+        # 2. Candidate with tombstoned chromosome allele is rejected
+        reg = EpistemicTombstoneRegistry()
+        sk, pk = generate_keypair()
+        target_gene = org0.chromosomes[0].gene_id
+        reg.retire(
+            target_id=target_gene,
+            target_digest=hashlib.sha256(org0.chromosomes[0].expression.encode()).hexdigest(),
+            mode=RetirementMode.REFUTED,
+            loss_declaration="Refuted unsound allele",
+            author_sk_hex=sk,
+            author_pk_hex=pk
+        )
+
+        is_safe_bad, msg_bad, _ = check_palimpsest_guard(org0, org0, reg)
+        self.assertFalse(is_safe_bad)
+        self.assertIn("quarantined tombstone allele", msg_bad)
+
+        # 3. Attempting evolve with tombstoned allele raises ValueError
+        with self.assertRaises(ValueError) as ctx:
+            evolve_autopoietic_organism(self.pdf_path, tombstone_registry=reg)
+        self.assertIn("Palimpsest Autonomic Guard rejected", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()
+

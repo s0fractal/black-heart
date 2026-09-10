@@ -825,11 +825,15 @@ def generate_palimpsest_pdf(
     manifest_bytes = (
         PALIMPSEST_MANIFEST_PREFIX + json.dumps(manifest_data) + "\n"
     ).encode("latin-1")
+    manifest_hash = sha256_hex(canonical_jcs(manifest_data))
 
     trailer_code = (
         "'''\n"
-        "import sys, json\n"
+        "import sys, json, hashlib\n"
         f"PREFIX = {repr(PALIMPSEST_MANIFEST_PREFIX)}\n"
+        f"MANIFEST_HASH = {repr(manifest_hash)}\n"
+        "def canonical_jcs(obj):\n"
+        "    return json.dumps(obj, sort_keys=True, separators=(',', ':'), ensure_ascii=True).encode('utf-8')\n"
         "def main():\n"
         "    with open(__file__, 'rb') as f:\n"
         "        data = f.read()\n"
@@ -840,6 +844,10 @@ def generate_palimpsest_pdf(
         "    line = data[pos:].split(b'\\n')[0]\n"
         "    payload = line[len(PREFIX.encode('latin-1')):].decode('latin-1')\n"
         "    m = json.loads(payload)\n"
+        "    computed_hash = hashlib.sha256(canonical_jcs(m)).hexdigest()\n"
+        "    if computed_hash != MANIFEST_HASH:\n"
+        "        print('[!] INTEGRITY FAILURE: Cryptographic manifest tampering detected.')\n"
+        "        sys.exit(1)\n"
         "    t = m['tensor']\n"
         "    if '--layers' in sys.argv:\n"
         "        print('=== UNDER-SCRIPT LAYER (GEN ' + str(t['gen_old']) + ') ===')\n"

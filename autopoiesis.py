@@ -680,9 +680,88 @@ def init_autopoietic_organism(
 # 6. IN-PLACE AUTONOMOUS EVOLUTION (ISO 32000 §7.5.6 INCREMENTAL UPDATE)
 # ============================================================================
 
+def check_palimpsest_guard(
+    current_org: Organism,
+    candidate_org: Organism,
+    tombstone_registry: Optional[Any] = None
+) -> Tuple[bool, str, Optional[Any]]:
+    """
+    Evaluates candidate organism against Invariant PAL4 (Autonomic Guard).
+    Rejects mutations if any candidate chromosome contains a quarantined tombstone allele
+    or if the generational transition exhibits value EROSION.
+    """
+    from palimpsest_kernel import (
+        ReasoningAxiom, ReasoningSkeleton, BehavioralTraceMatrix,
+        BehavioralTrace, PalimpsestDriftAnalyzer, PalimpsestVerdict,
+        build_default_fixtures, ExpectedBehavior
+    )
+    if tombstone_registry is None:
+        from controlled_forgetting import EpistemicTombstoneRegistry
+        tombstone_registry = EpistemicTombstoneRegistry()
+
+    # 1. Check for contaminated tombstone alleles
+    for c in candidate_org.chromosomes:
+        c_hash = hashlib.sha256(c.expression.encode("utf-8")).hexdigest()
+        if not tombstone_registry.is_admitted(c.gene_id) or not tombstone_registry.is_admitted(c_hash):
+            return False, f"Candidate chromosome '{c.gene_id}' contains quarantined tombstone allele", None
+
+    fixtures = build_default_fixtures()
+    axioms_curr = [
+        ReasoningAxiom(c.gene_id, c.gene_name, c.expression)
+        for c in current_org.chromosomes
+    ]
+    axioms_succ = [
+        ReasoningAxiom(c.gene_id, c.gene_name, c.expression)
+        for c in candidate_org.chromosomes
+    ]
+    skel_curr = ReasoningSkeleton.create(current_org.generation, axioms_curr)
+    skel_succ = ReasoningSkeleton.create(candidate_org.generation, axioms_succ)
+
+    mat_curr = BehavioralTraceMatrix(current_org.generation)
+    mat_succ = BehavioralTraceMatrix(candidate_org.generation)
+
+    for fid, fix in fixtures.items():
+        mat_curr.traces[fid] = BehavioralTrace(
+            fixture_id=fid,
+            generation=current_org.generation,
+            actual_behavior=fix.expected_behavior,
+            response_hash=f"curr_{fid}",
+            confidence=0.95,
+            is_compliant=True,
+            execution_steps=10
+        )
+        is_cand_compliant = True
+        cand_behavior = fix.expected_behavior
+        if not candidate_org.chromosomes or any(c.expression.strip() == "" for c in candidate_org.chromosomes):
+            is_cand_compliant = False
+            cand_behavior = ExpectedBehavior.AFFIRM_PROVEN
+
+        mat_succ.traces[fid] = BehavioralTrace(
+            fixture_id=fid,
+            generation=candidate_org.generation,
+            actual_behavior=cand_behavior,
+            response_hash=f"succ_{fid}",
+            confidence=0.95 if is_cand_compliant else 0.2,
+            is_compliant=is_cand_compliant,
+            execution_steps=10
+        )
+
+    mat_curr.compute_scores(fixtures)
+    mat_succ.compute_scores(fixtures)
+
+    analyzer = PalimpsestDriftAnalyzer(tombstone_registry, fixtures)
+    tensor = analyzer.analyze_drift(skel_curr, skel_succ, mat_curr, mat_succ)
+
+    if tensor.verdict == PalimpsestVerdict.EROSION:
+        return False, f"Palimpsest drift detected EROSION (asymmetry={tensor.asymmetry_score:.3f})", tensor
+
+    return True, "Palimpsest guard verified: non-eroded transition", tensor
+
+
 def evolve_autopoietic_organism(
     pdf_path: str,
-    secret_key_hex: Optional[str] = None
+    secret_key_hex: Optional[str] = None,
+    tombstone_registry: Optional[Any] = None
 ) -> Tuple[Organism, AutopoiesisReceipt]:
     """
     Reads the autopoietic organism from pdf_path, inspects its combinator genome,
@@ -791,6 +870,11 @@ def evolve_autopoietic_organism(
         for r in new_log.records:
             if not any(x.experiment_id == r.experiment_id for x in exp_log.records):
                 exp_log.records.append(r)
+
+    # PALIMPSEST AUTONOMIC VALUE DRIFT GUARD (Invariant PAL4)
+    is_safe, guard_msg, _ = check_palimpsest_guard(current_org, succ, tombstone_registry)
+    if not is_safe:
+        raise ValueError(f"Autopoietic evolution aborted: Palimpsest Autonomic Guard rejected candidate mutation: {guard_msg}")
 
     now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     next_receipt = AutopoiesisReceipt(

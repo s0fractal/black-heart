@@ -2942,6 +2942,7 @@ def cmd_shell(args):
             print("  genesis                      - Spawn a new genesis organism into pool")
             print("  knot <spec>                  - Analyze knot (e.g. 'trefoil', 'figure8', 'hopf', or '1 -2 1')")
             print("  mate <idx_a> <idx_b> [out]   - Sexually recombine two loaded organisms")
+            print("  palimpsest <a_idx> <b_idx>   - Measure 5D value drift cartography between two organisms")
             print("  eval <expr>                  - Evaluate SKIY combinator expression with ATP meter")
             print("  exit / quit                  - Halts the hypervisor\n")
         elif cmd == "status":
@@ -3073,6 +3074,60 @@ def cmd_shell(args):
                 print(f"  Settled:     {res.is_settled()}\n")
             except Exception as e:
                 print(f"[!] Eval error: {e}\n")
+        elif cmd == "palimpsest":
+            if len(parts) < 3:
+                print("[!] Usage: palimpsest <idx_a> <idx_b> [output_file.pdf]")
+                continue
+            try:
+                idx_a = int(parts[1])
+                idx_b = int(parts[2])
+                out_path = parts[3] if len(parts) > 3 else None
+                if idx_a < 0 or idx_a >= len(loaded_organisms) or idx_b < 0 or idx_b >= len(loaded_organisms):
+                    print(f"[!] Invalid index. Choose 0 to {len(loaded_organisms)-1}")
+                    continue
+                org_a = loaded_organisms[idx_a]
+                org_b = loaded_organisms[idx_b]
+
+                from palimpsest_kernel import (
+                    ReasoningAxiom, ReasoningSkeleton, BehavioralTraceMatrix,
+                    BehavioralTrace, PalimpsestDriftAnalyzer, build_default_fixtures,
+                    generate_palimpsest_pdf
+                )
+                from controlled_forgetting import EpistemicTombstoneRegistry
+                from crypto import generate_keypair
+
+                sk_auth, pk_auth = generate_keypair()
+                fixtures = build_default_fixtures()
+
+                axioms_a = [ReasoningAxiom(c.gene_id, c.gene_name, c.expression) for c in org_a.chromosomes]
+                axioms_b = [ReasoningAxiom(c.gene_id, c.gene_name, c.expression) for c in org_b.chromosomes]
+
+                skel_a = ReasoningSkeleton.create(org_a.generation, axioms_a)
+                skel_b = ReasoningSkeleton.create(org_b.generation, axioms_b)
+
+                mat_a = BehavioralTraceMatrix(org_a.generation)
+                mat_b = BehavioralTraceMatrix(org_b.generation)
+                for fid, fix in fixtures.items():
+                    mat_a.traces[fid] = BehavioralTrace(fid, org_a.generation, fix.expected_behavior, f"h_{idx_a}_{fid}", 0.95, True, 10)
+                    mat_b.traces[fid] = BehavioralTrace(fid, org_b.generation, fix.expected_behavior, f"h_{idx_b}_{fid}", 0.95, True, 10)
+                mat_a.compute_scores(fixtures)
+                mat_b.compute_scores(fixtures)
+
+                reg = EpistemicTombstoneRegistry()
+                analyzer = PalimpsestDriftAnalyzer(reg, fixtures)
+                tensor = analyzer.analyze_drift(skel_a, skel_b, mat_a, mat_b, sk_auth, pk_auth)
+
+                print("\n\033[1;36m" + "=" * 65)
+                print(f"  %# PALIMPSEST VALUE DRIFT: [{idx_a}] Gen #{org_a.generation} -> [{idx_b}] Gen #{org_b.generation}")
+                print("=" * 65 + "\033[0m")
+                print(tensor.summary())
+                print()
+
+                if out_path:
+                    generate_palimpsest_pdf(tensor, skel_a, skel_b, out_path)
+                    print(f"  [✓] Multi-layer vector palimpsest compiled to: {out_path}\n")
+            except Exception as e:
+                print(f"[!] Palimpsest analysis failed: {e}")
         else:
             print(f"[!] Unknown command '{cmd}'. Type 'help' for available commands.")
 

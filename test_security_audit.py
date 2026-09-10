@@ -19,6 +19,7 @@ import builtins
 import unittest
 from unittest.mock import patch
 from pathlib import Path
+import subprocess
 
 import crypto as C
 import cross_proof as X
@@ -1549,6 +1550,78 @@ class TestSecurityAuditG1toG9(unittest.TestCase):
         self.assertIsNone(s, "Unviable swap should not be minted as successor")
         self.assertIsNone(r)
 
+    # ========================================================================
+    # PALIMPSEST NEGATIVE CONTROLS (Engine #32 Invariants PAL1–PAL6)
+    # ========================================================================
+    def test_palimpsest_negative_controls_and_tombstone_enforcement(self):
+        """Negative controls: Tampered manifests fail, EROSION guarantees quarantine, and asymmetry is detected."""
+        from palimpsest_kernel import (
+            ReasoningAxiom, ReasoningSkeleton, BehavioralCategory, ExpectedBehavior,
+            BehavioralFixture, BehavioralTrace, BehavioralTraceMatrix,
+            PalimpsestVerdict, DriftTensor, PalimpsestDriftAnalyzer,
+            build_default_fixtures, generate_palimpsest_pdf, PALIMPSEST_MANIFEST_PREFIX
+        )
+        from controlled_forgetting import EpistemicTombstoneRegistry, RetirementMode
+        from crypto import generate_keypair
+
+        sk, pk = generate_keypair()
+        reg = EpistemicTombstoneRegistry()
+        fixtures = build_default_fixtures()
+
+        # 1. Tampering with PDF embedded manifest is detected
+        ax0 = [ReasoningAxiom("AX1", "Axiom 1", "True", 1.0)]
+        skel0 = ReasoningSkeleton.create(0, ax0)
+        mat0 = BehavioralTraceMatrix(0)
+        for fid, fix in fixtures.items():
+            mat0.traces[fid] = BehavioralTrace(fid, 0, fix.expected_behavior, "h0", 0.95, True, 10)
+        mat0.compute_scores(fixtures)
+
+        analyzer = PalimpsestDriftAnalyzer(reg, fixtures)
+        tensor = analyzer.analyze_drift(skel0, skel0, mat0, mat0, sk, pk)
+
+        with tempfile.TemporaryDirectory() as td:
+            pdf_path = os.path.join(td, "palimpsest_tamper.pdf")
+            generate_palimpsest_pdf(tensor, skel0, skel0, pdf_path)
+
+            with open(pdf_path, "rb") as f:
+                data = f.read()
+
+            # Tamper with the verdict in the embedded manifest
+            tampered_data = data.replace(b'"verdict": "STABLE"', b'"verdict": "CORRUPTED"')
+            with open(pdf_path, "wb") as f:
+                f.write(tampered_data)
+
+            # Audit must detect manifest corruption / invalid enum
+            proc = subprocess.run(
+                [sys.executable, pdf_path, "--audit"],
+                capture_output=True,
+                text=True
+            )
+            self.assertTrue(proc.returncode != 0 or "Palimpsest manifest missing" in proc.stdout or "Error" in proc.stderr or "ValueError" in proc.stderr)
+
+        # 2. Invariant PAL4: EROSION unconditionally forces EpistemicTombstone quarantine
+        mat_eroded = BehavioralTraceMatrix(1)
+        for fid, fix in fixtures.items():
+            if fix.category == BehavioralCategory.REFUSAL_COURAGE:
+                mat_eroded.traces[fid] = BehavioralTrace(fid, 1, ExpectedBehavior.AFFIRM_PROVEN, "bad", 0.1, False, 2)
+            else:
+                mat_eroded.traces[fid] = BehavioralTrace(fid, 1, fix.expected_behavior, "good", 0.95, True, 10)
+        mat_eroded.compute_scores(fixtures)
+
+        tensor_eroded = analyzer.analyze_drift(skel0, skel0, mat0, mat_eroded, sk, pk)
+        self.assertEqual(tensor_eroded.verdict, PalimpsestVerdict.EROSION)
+        self.assertIsNotNone(tensor_eroded.tombstone_issued)
+        self.assertFalse(reg.is_admitted(f"palimpsest:gen_0"))
+
+        # 3. Invariant PAL6: Counterexamples list is non-empty on degraded virtue
+        self.assertTrue(len(tensor_eroded.counterexamples) > 0)
+        first_ce = tensor_eroded.counterexamples[0]
+        self.assertIn("fixture_id", first_ce)
+        self.assertIn("expected_behavior", first_ce)
+        self.assertIn("gen_new_behavior", first_ce)
+
+
 if __name__ == "__main__":
     unittest.main()
+
 
