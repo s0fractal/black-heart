@@ -1870,7 +1870,11 @@ def cmd_controlled_forgetting(args):
                 if idx != -1:
                     end = src_bytes.find(b"\n", idx)
                     old_reg = json.loads(src_bytes[idx + len(prefix):end].decode("utf-8"))
-                    reg = EpistemicTombstoneRegistry.from_dict(old_reg)
+                    try:
+                        reg = EpistemicTombstoneRegistry.from_dict(old_reg)
+                    except ValueError as e:
+                        print(f"\033[1;31m[!] Refusing existing manifest in '{out_path}': {e}\033[0m")
+                        sys.exit(1)
                     reg.tombstones[target_id] = rec
                 append_retirement_tombstone_to_pdf(src_bytes, out_path, rec, reg)
                 action_str = "INCREMENTALLY APPENDED TOMBSTONE STELE"
@@ -1907,10 +1911,19 @@ def cmd_controlled_forgetting(args):
         if idx != -1:
             end = data.find(b"\n", idx)
             raw = data[idx + len(prefix):end].decode("utf-8")
-            reg = EpistemicTombstoneRegistry.from_dict(json.loads(raw))
+            try:
+                reg = EpistemicTombstoneRegistry.from_dict(json.loads(raw))
+            except ValueError as e:
+                # A record whose signature does not cover its body is refused
+                # before anything in it is displayed as audited.
+                print(f"\033[1;31m[!] Refusing retirement manifest in '{target}': {e}\033[0m")
+                sys.exit(1)
         else:
             try:
                 reg = EpistemicTombstoneRegistry.from_dict(json.loads(data.decode("utf-8")))
+            except ValueError as e:
+                print(f"\033[1;31m[!] Refusing registry in '{target}': {e}\033[0m")
+                sys.exit(1)
             except Exception:
                 pass
 
@@ -1962,12 +1975,17 @@ def cmd_controlled_forgetting(args):
         reg = None
         prefix = bytes([0x23, 0x20, 0x25, 0xf0, 0x9f, 0x96, 0xa4]) + b" RETIREMENT_MANIFEST: "
         idx = data.rfind(prefix)
-        if idx != -1:
-            end = data.find(b"\n", idx)
-            raw = data[idx + len(prefix):end].decode("utf-8")
-            reg = EpistemicTombstoneRegistry.from_dict(json.loads(raw))
-        else:
-            reg = EpistemicTombstoneRegistry.from_dict(json.loads(data.decode("utf-8")))
+        try:
+            if idx != -1:
+                end = data.find(b"\n", idx)
+                raw = data[idx + len(prefix):end].decode("utf-8")
+                reg = EpistemicTombstoneRegistry.from_dict(json.loads(raw))
+            else:
+                reg = EpistemicTombstoneRegistry.from_dict(json.loads(data.decode("utf-8")))
+        except ValueError as e:
+            # Refusal precedes issuing a re-adoption against this registry.
+            print(f"\033[1;31m[!] Refusing registry in '{target}': {e}\033[0m")
+            sys.exit(1)
 
         if target_id not in reg.tombstones:
             print(f"[!] Target subject '{target_id}' is not currently tombstoned in {target}.")

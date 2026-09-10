@@ -331,6 +331,9 @@ class HypothesisElevationCycle:
 @dataclass
 class InoculationReport:
     absorbed_tombstones_count: int
+    # Records refused at the gate. The name is historical: refusal covers a
+    # signature that does not cover the body, a record filed under a subject it
+    # does not name, and a re-adoption that names no retirement held here.
     rejected_signatures_count: int
     pruned_search_space_volume: float
     total_active_tombstones: int
@@ -353,8 +356,10 @@ class HorizontalInoculation:
         added_volume = 0.0
 
         for tid, tomb in donor_registry.tombstones.items():
-            # Verify Ed25519 signature in domain 'retirement-sig-v1:'
-            if not tomb.verify_signature():
+            # The signature must cover the body being absorbed, and the body
+            # must name the subject it is filed under. Refusal precedes any
+            # write into the recipient and any coverage arithmetic.
+            if tomb.target_id != tid or not tomb.verify_signature():
                 rejected += 1
                 continue
 
@@ -364,10 +369,19 @@ class HorizontalInoculation:
                 absorbed += 1
                 added_volume += tomb.negative_space_coverage
 
-        # Also ingest valid re-adoptions
+        # Re-adoptions re-open the active surface, so they are held to the same
+        # binding plus the link to the retirement the recipient actually holds.
+        # A re-adoption naming some other retirement of the same subject, or
+        # naming none the recipient knows, is refused rather than stored.
         for rid, ro in donor_registry.readoptions.items():
-            if ro.verify_signature():
-                recipient.tombstone_registry.readoptions[rid] = ro
+            if ro.target_id != rid or not ro.verify_signature():
+                rejected += 1
+                continue
+            local_tomb = recipient.tombstone_registry.tombstones.get(rid)
+            if local_tomb is None or ro.retirement_record_id != local_tomb.record_id:
+                rejected += 1
+                continue
+            recipient.tombstone_registry.readoptions[rid] = ro
 
         recipient.inoculated_tombstones_count += absorbed
 
