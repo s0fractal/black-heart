@@ -278,7 +278,21 @@ class TestRemediationF2E05E6(unittest.TestCase):
     # R10: SMT Unknown Never Promoted to Correct
     # ------------------------------------------------------------------------
     def test_r10_cegis_unknown_solver_not_promoted_to_proved_correct(self):
-        """R10: SMT solver returning UNKNOWN yields INCONCLUSIVE, never PROVED_CORRECT."""
+        """R10: a solver that cannot decide must never yield PROVED_CORRECT.
+
+        AMENDED 2026-09-11 (S3b), and the amendment is the point. R10 guarded a
+        path where an SMT answer was turned into a universal claim about a
+        candidate. That query was a fixed script mentioning neither the
+        candidate nor the spec, so it was removed rather than repaired: the
+        universal claim now comes from comparing the two terms directly.
+
+        The original assertion is kept and still holds. The path it guarded is
+        gone, so the guarantee is now structural: no solver verdict of any kind
+        can produce PROVED_CORRECT, because no solver is consulted for it. The
+        second assertion, which pinned the exact INCONCLUSIVE value produced by
+        that removed path, is replaced by the honest verdict for a spec that can
+        only be sampled.
+        """
         class MockUnknownSolver:
             def solve_smt2(self, *a, **k):
                 return sm.SMTResult(status=sm.SMTStatus.UNKNOWN)
@@ -288,8 +302,9 @@ class TestRemediationF2E05E6(unittest.TestCase):
         res = loop.synthesize(lambda x: x[0], input_arity=1, primitives=[I], max_ast_size=1)
 
         self.assertNotEqual(res.status, c.SynthesisStatus.PROVED_CORRECT)
-        self.assertEqual(res.status, c.SynthesisStatus.INCONCLUSIVE)
+        self.assertEqual(res.status, c.SynthesisStatus.FINITE_DOMAIN_SATISFIED)
         self.assertIsNone(res.proof_dag)
+        self.assertIsNone(res.equivalence_witness)
 
     # ------------------------------------------------------------------------
     # R11: Host-Enforced Execution Deadline

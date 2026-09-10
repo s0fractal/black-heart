@@ -66,12 +66,18 @@ class TestCEGISKernel(unittest.TestCase):
         cegis = CEGISLoop(verifier_domain=["a", "b", "c"])
         result = cegis.synthesize(lambda inp: inp[0], input_arity=1)
 
-        self.assertEqual(result.status, SynthesisStatus.PROVED_CORRECT)
+        # A Python callable can only be sampled, so the honest verdict is
+        # agreement on what was tried. The universal claim needs a spec TERM.
+        self.assertEqual(result.status, SynthesisStatus.FINITE_DOMAIN_SATISFIED)
         self.assertIsNotNone(result.program)
         self.assertEqual(result.program_str, str(I))
-        self.assertIsNotNone(result.proof_dag)
-        self.assertTrue(check_proof_dag_structure(result.proof_dag))  # shape only; not a checked refutation
         self.assertGreater(result.smt_verifications, 0)
+
+        from glyph import I as IDENT
+        proved = CEGISLoop(verifier_domain=["a", "b", "c"]).synthesize(
+            lambda inp: inp[0], input_arity=1, spec_term=IDENT)
+        self.assertEqual(proved.status, SynthesisStatus.PROVED_CORRECT)
+        self.assertIsNotNone(proved.equivalence_witness)
 
     def test_04_cegis_loop_identity_skk(self):
         """Synthesize identity S K K from scratch when I is omitted from primitives."""
@@ -83,11 +89,10 @@ class TestCEGISKernel(unittest.TestCase):
             max_ast_size=6
         )
 
-        self.assertEqual(result.status, SynthesisStatus.PROVED_CORRECT)
+        self.assertEqual(result.status, SynthesisStatus.FINITE_DOMAIN_SATISFIED)
         self.assertIsNotNone(result.program)
         # S K K is App(App(S, K), K)
         self.assertEqual(result.program, App(App(S, K), K))
-        self.assertTrue(check_proof_dag_structure(result.proof_dag))  # shape only; not a checked refutation
         self.assertGreater(result.candidates_pruned_oe, 0)
 
     def test_05_cegis_loop_constant_selectors(self):
@@ -96,12 +101,12 @@ class TestCEGISKernel(unittest.TestCase):
 
         # 1. First argument projection: (x, y) -> x
         res_k = cegis.synthesize(lambda inp: inp[0], input_arity=2, primitives=[K, I, S], max_ast_size=5)
-        self.assertEqual(res_k.status, SynthesisStatus.PROVED_CORRECT)
+        self.assertEqual(res_k.status, SynthesisStatus.FINITE_DOMAIN_SATISFIED)
         self.assertEqual(res_k.program, K)
 
         # 2. Second argument projection: (x, y) -> y
         res_ki = cegis.synthesize(lambda inp: inp[1], input_arity=2, primitives=[K, I, S], max_ast_size=5)
-        self.assertEqual(res_ki.status, SynthesisStatus.PROVED_CORRECT)
+        self.assertEqual(res_ki.status, SynthesisStatus.FINITE_DOMAIN_SATISFIED)
         self.assertEqual(res_ki.program, App(K, I))
 
     def test_06_cegis_multi_iteration_refinement(self):
@@ -118,7 +123,8 @@ class TestCEGISKernel(unittest.TestCase):
             max_ast_size=5
         )
 
-        self.assertEqual(result.status, SynthesisStatus.PROVED_CORRECT)
+        # Callable spec: agreement on the inputs tried, not a theorem.
+        self.assertEqual(result.status, SynthesisStatus.FINITE_DOMAIN_SATISFIED)
         # SMT Verifier must have found counterexample (b) -> a in iteration 1
         self.assertGreaterEqual(result.iterations, 2)
         self.assertEqual(len(result.counterexamples), 2)
@@ -131,10 +137,14 @@ class TestCEGISKernel(unittest.TestCase):
         carries any formal credit is a separate question.
         """
         res_opt = superoptimize_combinator("S K K")
+        # The spec here IS a term (the expression being optimized), so a
+        # universal claim is available and is checked against it.
         self.assertEqual(res_opt.status, SynthesisStatus.PROVED_CORRECT)
+        self.assertIsNotNone(res_opt.equivalence_witness)
         self.assertEqual(res_opt.program, I)
         self.assertAlmostEqual(res_opt.ast_size_reduction, 0.8, places=2)
-        self.assertTrue(check_proof_dag_structure(res_opt.proof_dag))  # shape only
+        # The claim now lives in the witness, which names both terms compared.
+        self.assertEqual(res_opt.equivalence_witness.status.value, "EXTENSIONALLY_EQUAL")
 
         # Also test Python constructor string format
         res_opt2 = superoptimize_combinator("App(App(Comb('🌿'), Comb('🖤')), Comb('🖤'))")
@@ -160,7 +170,7 @@ class TestCEGISKernel(unittest.TestCase):
         cegis = CEGISLoop(verifier_domain=["a", "b"], tombstone_registry=registry)
         # Even with I in primitives, synthesizer must skip I and find S K K
         res = cegis.synthesize(lambda inp: inp[0], input_arity=1, primitives=[K, I, S], max_ast_size=6)
-        self.assertEqual(res.status, SynthesisStatus.PROVED_CORRECT)
+        self.assertEqual(res.status, SynthesisStatus.FINITE_DOMAIN_SATISFIED)
         self.assertNotIn(str(I), res.program_str)
         self.assertEqual(res.program, App(App(S, K), K))
 
@@ -205,7 +215,11 @@ class TestCEGISKernel(unittest.TestCase):
             self.assertEqual(proc.returncode, 0)
             self.assertIn("ALL INVARIANTS SATISFIED", proc.stdout)
             self.assertIn("SHA-256:", proc.stdout)
-            self.assertIn("SMT Proof Verified:  True", proc.stdout)
+            # The document states which question was answered, and about which
+            # terms; "verified" alone said nothing about either operand.
+            self.assertIn("Equivalence check:   EXTENSIONALLY_EQUAL", proc.stdout)
+            self.assertIn("fresh free variables", proc.stdout)
+            self.assertNotIn("SMT Proof Verified", proc.stdout)
 
             # 2. Append-only physicality
             with open(pdf1, "rb") as f:
