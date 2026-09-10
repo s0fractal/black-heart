@@ -236,6 +236,37 @@ class RetirementRecord:
         body_bytes = canonical_jcs(self.body_dict())
         return hashlib.sha256(body_bytes).hexdigest()
 
+    def validate_body_domain(self) -> None:
+        """Raise unless the numbers this record spends are inside their declared
+        domains, checked against the values carried right now.
+
+        Separate from `verify_signature` on purpose: a signature can correctly
+        authenticate a body that is out of domain, and construction-time
+        validation says nothing about an object that was mutated afterwards or
+        signed by a peer that never used this constructor.
+        """
+        _require_ratio(self.negative_space_coverage, "negative_space_coverage")
+        _require_non_negative_int(self.atp_gas_recovered, "atp_gas_recovered")
+
+    def has_valid_body_domain(self) -> bool:
+        try:
+            self.validate_body_domain()
+        except (ValueError, TypeError):
+            return False
+        return True
+
+    def is_admissible_for(self, subject_id: str) -> bool:
+        """The complete local check before this record may decide anything about
+        `subject_id`: it names that subject, its numbers are in domain, and its
+        signature covers this body.
+
+        The subject test is the slot binding. A genuinely signed retirement of A
+        filed under B is authentic and in domain and still says nothing about B.
+        """
+        return (self.target_id == subject_id
+                and self.has_valid_body_domain()
+                and self.verify_signature())
+
     def signature_message(self) -> bytes:
         """Domain-separated signing message over the id of the CURRENT body.
 
@@ -343,6 +374,19 @@ class ReAdoptionRecord:
         body_bytes = canonical_jcs(self.body_dict())
         return hashlib.sha256(body_bytes).hexdigest()
 
+    def is_admissible_for(self, subject_id: str, retirement: RetirementRecord) -> bool:
+        """The complete local check before this record may re-admit `subject_id`.
+
+        It must name that subject, cite the record id of the retirement being
+        cleared, and verify against its own body. The retirement it cites has
+        to be admissible for the same subject in its own right, so a re-adoption
+        cannot borrow authority from a record filed under the wrong slot.
+        """
+        return (self.target_id == subject_id
+                and retirement.is_admissible_for(subject_id)
+                and self.retirement_record_id == retirement.record_id
+                and self.verify_signature())
+
     def signature_message(self) -> bytes:
         """Domain-separated message over the id of the CURRENT body (see
         RetirementRecord.signature_message for why it is recomputed)."""
@@ -418,24 +462,22 @@ class EpistemicTombstoneRegistry:
         enough: a re-adoption issued against some other retirement of the same
         subject does not clear this one.
 
-        Fail-closed: if the registered retirement itself no longer verifies,
-        the subject stays retired rather than falling out of the gate.
+        Fail-closed: if the registered retirement is not itself admissible for
+        this subject — wrong subject for the slot, out-of-domain numbers, or a
+        signature that does not cover its body — the subject stays retired
+        rather than falling out of the gate. Loader validation does not stand in
+        for this: the registry is a mutable public structure and consumers write
+        into it directly.
         """
         tomb = self.tombstones.get(target_id)
         if tomb is None:
             return True
+        if not tomb.is_admissible_for(target_id):
+            return False
         readoption = self.readoptions.get(target_id)
         if readoption is None:
             return False
-        if readoption.target_id != target_id:
-            return False
-        if not _is_record_id(tomb.record_id):
-            return False
-        if readoption.retirement_record_id != tomb.record_id:
-            return False
-        if not tomb.verify_signature():
-            return False
-        return readoption.verify_signature()
+        return readoption.is_admissible_for(target_id, tomb)
 
     def get_admission_status(self, target_id: str) -> AdmissionStatus:
         if target_id not in self.tombstones:
@@ -517,12 +559,14 @@ class EpistemicTombstoneRegistry:
             raise ValueError(f"Cannot re-adopt '{target_id}': not currently tombstoned.")
 
         ret_rec = self.tombstones[target_id]
-        # A successor record must not be issued against a retirement that no
-        # longer verifies: the id it would cite is not a signed id.
-        if not ret_rec.verify_signature():
+        # A successor must not be issued against a retirement that is not
+        # admissible for this subject. Refusal happens here, before the record
+        # is built, signed or stored, so an inconsistent slot leaves no trace.
+        if not ret_rec.is_admissible_for(target_id):
             raise ValueError(
-                f"Cannot re-adopt '{target_id}': the registered retirement record does "
-                "not verify against its own body."
+                f"Cannot re-adopt '{target_id}': the registered retirement record is not "
+                f"admissible for it (it names '{ret_rec.target_id}', its declared numbers "
+                "must be in domain, and its signature must cover its own body)."
             )
         rec = ReAdoptionRecord(
             record_id="",

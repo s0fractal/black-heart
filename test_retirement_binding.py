@@ -69,6 +69,7 @@ from controlled_forgetting import (
     RetirementRecord,
     ReAdoptionRecord,
     RetirementMode,
+    AdmissionStatus,
     EpistemicTombstoneRegistry,
     EpistemicResurrectionError,
 )
@@ -422,6 +423,159 @@ class RetirementBindingTest(unittest.TestCase):
         self.assertTrue(back.is_admitted("GENE-X"))
         self.assertEqual(json.dumps(reg.to_dict(), sort_keys=True),
                          json.dumps(back.to_dict(), sort_keys=True))
+
+
+def _sign_body_as_is(rec, sk: str):
+    """Sign whatever body the object currently carries, without the constructor.
+
+    A peer produces signatures with a key and a serializer, not with our
+    dataclass, so a body that our constructor would refuse can still arrive
+    correctly signed. Section I depends on that being possible.
+    """
+    rec.record_id = rec.compute_record_id()
+    rec.signature_hex = crypto.sign_hex(sk, rec.signature_message())
+    return rec
+
+
+class SubjectSlotBindingTest(unittest.TestCase):
+    """R1: a retirement is about the subject it names, not the slot it sits in."""
+
+    def setUp(self):
+        self.sk, self.pk = crypto.generate_keypair()
+
+    def test_H1_retirement_about_another_subject_does_not_admit(self):
+        tomb = _retirement(self.sk, self.pk, target_id="SUBJECT-A")
+        reg = EpistemicTombstoneRegistry()
+        reg.tombstones["SUBJECT-B"] = tomb          # authentic record, wrong slot
+        # Built independently of readopt(), so the producer-side check cannot
+        # stand in for the missing one at the admission gate.
+        stray = _readoption(self.sk, self.pk, tomb, target_id="SUBJECT-B")
+        self.assertTrue(tomb.verify_signature())
+        self.assertTrue(stray.verify_signature())
+        reg.readoptions["SUBJECT-B"] = stray
+        self.assertFalse(reg.is_admitted("SUBJECT-B"))
+        self.assertEqual(reg.get_admission_status("SUBJECT-B"), AdmissionStatus.RETIRED)
+        with self.assertRaises(EpistemicResurrectionError):
+            reg.assert_viable_for_admission("SUBJECT-B")
+
+    def test_H2_readopt_refuses_to_issue_against_a_foreign_subject(self):
+        reg = EpistemicTombstoneRegistry()
+        reg.tombstones["SUBJECT-B"] = _retirement(self.sk, self.pk, target_id="SUBJECT-A")
+        with self.assertRaises(ValueError):
+            reg.readopt("SUBJECT-B", "Fresh witness.", "claim-1", self.sk, self.pk)
+        self.assertEqual(reg.readoptions, {})       # refusal leaves no successor behind
+
+    def test_H3_inoculation_refuses_a_retirement_in_a_foreign_slot(self):
+        donor = EpistemicTombstoneRegistry()
+        donor.tombstones["SUBJECT-B"] = _retirement(self.sk, self.pk, target_id="SUBJECT-A")
+        org = _organism()
+        before = json.dumps(org.tombstone_registry.to_dict(), sort_keys=True)
+        report = HorizontalInoculation.inoculate(org, donor)
+        self.assertEqual(report.absorbed_tombstones_count, 0)
+        self.assertEqual(report.rejected_signatures_count, 1)
+        self.assertEqual(before, json.dumps(org.tombstone_registry.to_dict(), sort_keys=True))
+
+    def test_H4_honest_same_subject_admission_still_works(self):
+        reg = EpistemicTombstoneRegistry()
+        reg.retire("SUBJECT-A", "d" * 64, RetirementMode.ARCHIVED, "Retired.", self.sk, self.pk)
+        reg.readopt("SUBJECT-A", "Fresh witness.", "claim-1", self.sk, self.pk)
+        self.assertTrue(reg.is_admitted("SUBJECT-A"))
+        self.assertEqual(reg.get_admission_status("SUBJECT-A"), AdmissionStatus.READOPTED)
+
+
+class SignedDomainTest(unittest.TestCase):
+    """R2: a signature authenticates a body; it does not make the body sane.
+
+    Every record below is signed correctly by the key it names. The only thing
+    wrong with it is a number outside the domain that field declares, and that
+    number is consumed by arithmetic, so the check has to sit at the consumer
+    rather than only at construction.
+    """
+
+    def setUp(self):
+        self.sk, self.pk = crypto.generate_keypair()
+
+    def _signed_with(self, **fields):
+        rec = _retirement(self.sk, self.pk)
+        for k, v in fields.items():
+            setattr(rec, k, v)
+        return _sign_body_as_is(rec, self.sk)
+
+    def test_I1_signed_out_of_domain_records_are_not_absorbed(self):
+        cases = {
+            "coverage above one": {"negative_space_coverage": 2.0},
+            "coverage below zero": {"negative_space_coverage": -0.5},
+            "coverage not finite": {"negative_space_coverage": float("inf")},
+            "coverage is nan": {"negative_space_coverage": float("nan")},
+            "coverage is a string": {"negative_space_coverage": "0.4"},
+            "gas is negative": {"atp_gas_recovered": -10},
+            "gas is a bool": {"atp_gas_recovered": True},
+            "gas is a float": {"atp_gas_recovered": 12.5},
+        }
+        for label, fields in cases.items():
+            with self.subTest(case=label):
+                rec = self._signed_with(**fields)
+                self.assertTrue(rec.verify_signature(), "the record really is signed")
+                self.assertFalse(rec.has_valid_body_domain())
+                donor = EpistemicTombstoneRegistry()
+                donor.tombstones[rec.target_id] = rec
+                org = _organism()
+                before = json.dumps(org.tombstone_registry.to_dict(), sort_keys=True)
+                report = HorizontalInoculation.inoculate(org, donor)
+                self.assertEqual(report.absorbed_tombstones_count, 0)
+                self.assertEqual(report.rejected_signatures_count, 1)
+                self.assertEqual(report.pruned_search_space_volume, 0.0)
+                self.assertEqual(before, json.dumps(org.tombstone_registry.to_dict(), sort_keys=True))
+
+    def test_I2_honest_coverage_is_still_absorbed_and_credited(self):
+        donor = EpistemicTombstoneRegistry()
+        donor.tombstones["GENE-X"] = _retirement(self.sk, self.pk, negative_space_coverage=0.4)
+        org = _organism()
+        report = HorizontalInoculation.inoculate(org, donor)
+        self.assertEqual(report.absorbed_tombstones_count, 1)
+        self.assertEqual(report.rejected_signatures_count, 0)
+        self.assertEqual(report.pruned_search_space_volume, 0.4)
+
+    def test_I3_out_of_domain_record_does_not_admit_or_clear(self):
+        rec = self._signed_with(negative_space_coverage=2.0)
+        reg = EpistemicTombstoneRegistry()
+        reg.tombstones[rec.target_id] = rec
+        self.assertFalse(reg.is_admitted(rec.target_id))     # stays retired, fail-closed
+        with self.assertRaises(ValueError):
+            reg.readopt(rec.target_id, "Fresh witness.", "claim-1", self.sk, self.pk)
+        self.assertEqual(reg.readoptions, {})
+
+    def test_I4_swarm_broadcast_refuses_an_out_of_domain_record(self):
+        import epistemic_swarm as sw
+        rec = self._signed_with(negative_space_coverage=2.0)
+        membrane = sw.SwarmMembrane(grid_width=6, grid_height=6)
+        for i in range(2):
+            org = _organism(f"ORG-{i}")
+            st = sw.SwarmOrganismState(organism_id=org.organism_id, x=i, y=0, heading=(1, 0), is_alive=True)
+            membrane.add_organism(org, st, *crypto.generate_keypair()[::-1])
+        before = {oid: json.dumps(o.tombstone_registry.to_dict(), sort_keys=True)
+                  for oid, o in membrane.organisms.items()}
+        with self.assertRaises(ValueError):
+            sw.SwarmInoculationCascade.broadcast_tombstone(membrane, "ORG-0", rec)
+        after = {oid: json.dumps(o.tombstone_registry.to_dict(), sort_keys=True)
+                 for oid, o in membrane.organisms.items()}
+        self.assertEqual(before, after)
+
+    def test_I5_transport_refuses_the_same_domains(self):
+        """Deserialization refuses too, so neither route is the only guard."""
+        for field, bad in (("negative_space_coverage", 2.0),
+                           ("negative_space_coverage", "0.4"),
+                           ("atp_gas_recovered", -10),
+                           ("atp_gas_recovered", True),
+                           ("atp_gas_recovered", 12.5)):
+            with self.subTest(field=field, value=bad):
+                rec = self._signed_with(**{field: bad})
+                d = copy.deepcopy(rec.to_dict())
+                with self.assertRaises((ValueError, TypeError)):
+                    RetirementRecord.from_dict(d)
+                with self.assertRaises(ValueError):
+                    EpistemicTombstoneRegistry.from_dict(
+                        {"tombstones": {rec.target_id: d}, "readoptions": {}})
 
 
 if __name__ == "__main__":

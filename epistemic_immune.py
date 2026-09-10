@@ -356,10 +356,12 @@ class HorizontalInoculation:
         added_volume = 0.0
 
         for tid, tomb in donor_registry.tombstones.items():
-            # The signature must cover the body being absorbed, and the body
-            # must name the subject it is filed under. Refusal precedes any
-            # write into the recipient and any coverage arithmetic.
-            if tomb.target_id != tid or not tomb.verify_signature():
+            # One complete check before absorption: the body names the subject
+            # it is filed under, the numbers it declares are inside their
+            # domains, and the signature covers that body. A correctly signed
+            # record can still carry a coverage figure that is not a ratio, so
+            # refusal precedes both the write and the coverage arithmetic.
+            if not tomb.is_admissible_for(tid):
                 rejected += 1
                 continue
 
@@ -374,11 +376,11 @@ class HorizontalInoculation:
         # A re-adoption naming some other retirement of the same subject, or
         # naming none the recipient knows, is refused rather than stored.
         for rid, ro in donor_registry.readoptions.items():
-            if ro.target_id != rid or not ro.verify_signature():
-                rejected += 1
-                continue
+            # The incoming re-adoption alone is not enough: the retirement it
+            # would clear is the recipient's own, so that record is put through
+            # the same complete check before this one can cite it.
             local_tomb = recipient.tombstone_registry.tombstones.get(rid)
-            if local_tomb is None or ro.retirement_record_id != local_tomb.record_id:
+            if local_tomb is None or not ro.is_admissible_for(rid, local_tomb):
                 rejected += 1
                 continue
             recipient.tombstone_registry.readoptions[rid] = ro

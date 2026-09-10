@@ -287,9 +287,14 @@ class SwarmInoculationCascade:
         if origin_id not in swarm.organisms or origin_id not in swarm.organism_states:
             raise ValueError(f"Origin organism {origin_id} does not exist in swarm.")
 
-        # Ensure tombstone signature is valid
-        if not tombstone.verify_signature():
-            raise ValueError("Cannot broadcast tombstone with invalid signature.")
+        # One complete check before the cascade writes into any peer: the body
+        # names the subject it will be filed under, its declared numbers are in
+        # domain, and the signature covers that body.
+        if not tombstone.is_admissible_for(tombstone.target_id):
+            raise ValueError(
+                "Cannot broadcast tombstone: it is not admissible for its own subject "
+                "(subject binding, declared numeric domains, or signature over its body)."
+            )
 
         origin_state = swarm.organism_states[origin_id]
         origin_org = swarm.organisms[origin_id]
