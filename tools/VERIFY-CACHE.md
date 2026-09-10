@@ -29,6 +29,13 @@ Malformed-cache refusals preserve the existing file. `--fresh` does not silently
 discard corrupt cache bytes: remove the disposable cache explicitly or select a
 new path. A timeout is returned but never cached.
 
+Passing and failing CLI outcomes can both be reused across process restarts.
+A stored refusal applies to its captured bytes and profile, not permanently to
+the filename. Repairing a document produces a different key and a fresh check;
+the old refusal may remain as a separate cache entry. Deleting the cache causes
+fresh execution, not loss of an authoritative decision history: this cache is
+disposable and is not a historical ledger or retirement protocol.
+
 ## What is bound
 
 Each entry binds captured PDF bytes and a conservative profile of root Python
@@ -68,6 +75,8 @@ python3 -B -m unittest test_verify_cached test_cli_verify -v
 
 Tests cover actual CLI reuse/fresh execution, changed ledger refusal, duplicate
 basenames, captured operands, source-profile invalidation, cache corruption,
-timeouts, failed replacement and a lock held by another process. The test module
+timeouts, failed replacement and a lock held by another process. They also
+exercise nine fresh CLI processes through reuse, rejection, repair, cache
+loss, corrupt-cache refusal and recovery using a new cache path. The test module
 is included in `test_all.py`. This is a small experimental repository tool, not a
 general cache for every Black-heart engine or a change to Warrant semantics.

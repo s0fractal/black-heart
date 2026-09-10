@@ -158,6 +158,47 @@ class CacheTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)['items'][0]['origin'], 'EXECUTED_NOW')
 
+    def test_fresh_process_restart_repair_and_cache_loss(self):
+        path = self.root / 'subject.pdf'
+        original = self.ledger.read_bytes()
+        path.write_bytes(original)
+        def invoke(code, origin=None, cache=None):
+            p = subprocess.run([sys.executable, '-B', str(C.ROOT/'tools/verify_cached.py'),
+                                '--cache', str(cache or self.cache), str(path)],
+                               capture_output=True, text=True, timeout=30)
+            self.assertEqual(p.returncode, code, p.stderr + p.stdout)
+            report = json.loads(p.stdout)
+            if origin:
+                self.assertEqual(report['items'][0]['origin'], origin)
+            else:
+                self.assertEqual(report['status'], 'REFUSED')
+                self.assertNotIn('items', report)
+            return report
+        invoke(0, 'EXECUTED_NOW')
+        invoke(0, 'REUSED')
+        prefix = '%🖤 LEDGER_MANIFEST: '.encode()
+        rows = original.splitlines(keepends=True)
+        for i, row in enumerate(rows):
+            if row.startswith(prefix):
+                obj = json.loads(row[len(prefix):])
+                obj['chain_tip'] = '0' * 64
+                rows[i] = prefix + json.dumps(obj).encode() + b'\n'
+        path.write_bytes(b''.join(rows))
+        rejected = invoke(1, 'EXECUTED_NOW')
+        self.assertIn('LEDGER_TIP', rejected['items'][0]['result']['stdout'])
+        invoke(1, 'REUSED')
+        path.write_bytes(original + b'\n% repair control\n')
+        invoke(0, 'EXECUTED_NOW')
+        invoke(0, 'REUSED')
+        entries = C.read_cache(self.cache)['entries']
+        self.assertEqual(sorted(e['result']['exit_code'] for e in entries.values()), [0, 0, 1])
+        self.cache.unlink()
+        invoke(0, 'EXECUTED_NOW')
+        self.cache.write_bytes(b'{broken')
+        invoke(2)
+        self.assertEqual(self.cache.read_bytes(), b'{broken')
+        invoke(0, 'EXECUTED_NOW', self.root/'replacement.json')
+
 
 if __name__ == '__main__':
     unittest.main()
