@@ -101,7 +101,10 @@ def _require_ratio(value: Any, field_name: str) -> float:
         raise ValueError(
             f"{field_name} must be a real number in [0.0, 1.0]; got {type(value).__name__}."
         )
-    v = float(value)
+    try:
+        v = float(value)
+    except OverflowError as exc:
+        raise ValueError(f"{field_name} must lie in [0.0, 1.0].") from exc
     if not math.isfinite(v):
         raise ValueError(f"{field_name} must be finite; got {value!r}.")
     if not (0.0 <= v <= 1.0):

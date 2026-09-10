@@ -504,6 +504,7 @@ class SignedDomainTest(unittest.TestCase):
     def test_I1_signed_out_of_domain_records_are_not_absorbed(self):
         cases = {
             "coverage above one": {"negative_space_coverage": 2.0},
+            "coverage integer overflow": {"negative_space_coverage": 10**400},
             "coverage below zero": {"negative_space_coverage": -0.5},
             "coverage not finite": {"negative_space_coverage": float("inf")},
             "coverage is nan": {"negative_space_coverage": float("nan")},
@@ -564,6 +565,7 @@ class SignedDomainTest(unittest.TestCase):
     def test_I5_transport_refuses_the_same_domains(self):
         """Deserialization refuses too, so neither route is the only guard."""
         for field, bad in (("negative_space_coverage", 2.0),
+                           ("negative_space_coverage", 10**400),
                            ("negative_space_coverage", "0.4"),
                            ("atp_gas_recovered", -10),
                            ("atp_gas_recovered", True),
