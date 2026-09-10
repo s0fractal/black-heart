@@ -396,21 +396,43 @@ class SporeStore:
 
 # --- Church Encoding Helpers ---
 
+# Church successor in pure SKI: succ = S (S (K S) K).
+#
+#   succ n f x
+#     = S (S (K S) K) n f x
+#     = ((S (K S) K) f) ((n) f) x        [S a b c -> (a c) (b c)]
+#     = (((K S) f) ((K) f)) (n f) x      [S (K S) K f -> ((K S) f) (K f)]
+#     = (S (K f)) (n f) x
+#     = ((K f) x) ((n f) x)              [S a b c again]
+#     = f (n f x)
+#
+# The previous definition applied this term to I before use, i.e. it built
+# `S (S (K S) K) I`, which is not the successor and collapses every numeral to
+# x. The reducer was never at fault; only this construction was.
+CHURCH_SUCC = App(S, App(App(S, App(K, S)), K))
+
+
 def church_numeral(n: int) -> Term:
-    """Construct Church numeral n in SKI."""
-    # 0 = K I
-    if n == 0:
-        return App(K, I)
-    # 1 = I
-    # In SKI: succ = S (S (K S) K)
-    # But for cleaner expansion, Church n = \f.\x. f^n(x)
-    # In pure SKI:
-    # 0 = K I
-    # n+1 = S (S (K S) K) n
-    succ = App(App(S, App(App(S, App(K, S)), K)), I)  # standard successor
+    """Construct Church numeral n: the term that applies f exactly n times to x.
+
+    `church_numeral(n) f x` reduces to `f (f (... (f x)))` with n applications,
+    so `church_numeral(0) f x` is `x` and `church_numeral(3) f x` is
+    `f (f (f x))`.
+
+    The index is a non-negative int and nothing else. `bool` is refused rather
+    than read as 0 or 1, since `church_numeral(True)` reads like a request no
+    caller means to make; a negative index has no numeral and is refused rather
+    than silently yielding zero, which is what an empty `range` used to do.
+    """
+    if isinstance(n, bool) or not isinstance(n, int):
+        raise TypeError(
+            f"church_numeral() index must be a non-negative int, not {type(n).__name__}."
+        )
+    if n < 0:
+        raise ValueError(f"church_numeral() has no numeral for a negative index: {n}.")
     res = CHURCH_0
     for _ in range(n):
-        res = App(succ, res)
+        res = App(CHURCH_SUCC, res)
     return res
 
 def is_church_boolean(term: Term) -> Optional[bool]:
