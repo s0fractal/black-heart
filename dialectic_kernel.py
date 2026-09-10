@@ -48,6 +48,7 @@ from smt_kernel import (
     SMTSolver, SMTStatus,
     check_resolution_refutation, RefutationStatus,
     RefutationReceipt, issue_refutation_receipt, verify_refutation_receipt,
+    formula_digest,
 )
 import scoped_admission
 from scoped_admission import (
@@ -122,19 +123,105 @@ class DialecticalTriad:
     settled_theorem: str
 
 
-def triad_subject_digest(triad: "DialecticalTriad") -> str:
-    """The operands a refutation must be about if it is to grade this triad.
+CREDIT_SUBJECT_PROFILE = "dialectic.credit-subject.v2"
 
-    Anything that changes the question changes this digest, so a receipt issued
-    for one synthesis cannot be spent on another.
+
+def triad_subject_digest(triad: "DialecticalTriad") -> str:
+    """Every operand the claimed credit is allowed to rest on, serialized.
+
+    v1 hashed the candidate digest, the refusal id and the settled-theorem
+    prose, and left out the guard and the context delta — the two things a
+    Grade A warrant actually spends, since the witness quotes the delta and the
+    admission rests on the guard. Both could be swapped underneath an unchanged
+    digest. A readable summary is not a substitute for structured operands.
+
+    Anything a downstream claim consumes belongs here. If a field is left out,
+    the resulting claim may not derive credit from it.
     """
-    payload = "|".join([
-        "dialectic.subject.v1",
-        triad.thesis_candidate_digest,
-        triad.antithesis_refusal_id,
-        triad.settled_theorem,
-    ])
+    guard = triad.precondition
+    delta = triad.synthesis_delta
+    payload = json.dumps({
+        "profile": CREDIT_SUBJECT_PROFILE,
+        "thesis_candidate_digest": triad.thesis_candidate_digest,
+        "antithesis_refusal_id": triad.antithesis_refusal_id,
+        "refusal_reason": getattr(triad.refusal_reason, "value", str(triad.refusal_reason)),
+        "status": getattr(triad.status, "value", str(triad.status)),
+        "settled_theorem": triad.settled_theorem,
+        "precondition": None if guard is None else {
+            "guard_id": guard.guard_id,
+            "admissible_domain": list(guard.admissible_domain),
+            "excluded_domain": list(guard.excluded_domain),
+            "smt_formula": guard.smt_formula,
+        },
+        "synthesis_delta": None if delta is None else {
+            "old_budget_steps": delta.old_budget_steps,
+            "recommended_budget_steps": delta.recommended_budget_steps,
+            "delta_steps": delta.delta_steps,
+            "growth_ratio": repr(delta.growth_ratio),
+            "confidence": repr(delta.confidence),
+        },
+    }, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return sha256_hex(payload.encode("utf-8"))
+
+
+@dataclass(frozen=True)
+class FormalCreditBinding:
+    """What the caller entitled to spend this credit says it is about.
+
+    This must reach the consumer through its own channel — a trusted caller, a
+    configuration, an operator decision — and must NEVER be rebuilt from the
+    report being graded. Everything inside a report is constructible by whoever
+    hands it over, so a report compared against itself binds nothing.
+
+    The trust boundary, stated: this type does not authenticate anybody. It
+    records that some caller with the authority to make this call asserted that
+    `formula_sha256` is the encoding of `subject_digest`. Whether that caller
+    was entitled is decided outside this module, by whoever chose to pass it.
+    """
+    subject_digest: str
+    formula_sha256: str
+    scope: str = "caller-asserted CNF encoding of the settled theorem"
+
+
+@dataclass(frozen=True)
+class FormalCreditDecision:
+    granted: bool
+    reason: str
+
+
+def evaluate_formal_credit(
+    report: "DialecticalDiscoveryReport",
+    binding: Optional[FormalCreditBinding],
+) -> FormalCreditDecision:
+    """Decide whether this report may carry formal credit, trusting only `binding`.
+
+    Order matters: the caller's expectation is compared against the operands
+    being graded FIRST, so a receipt that was retargeted to match those operands
+    still has to match a formula the caller named, and the mathematics is
+    re-derived last.
+    """
+    if binding is None:
+        return FormalCreditDecision(False, "NO_CALLER_BINDING")
+    if not isinstance(binding, FormalCreditBinding):
+        return FormalCreditDecision(False, "BINDING_WRONG_TYPE")
+
+    subject = triad_subject_digest(report.triad)
+    if binding.subject_digest != subject:
+        return FormalCreditDecision(
+            False, "BINDING_IS_FOR_ANOTHER_SUBJECT: the operands being graded are "
+                   f"{subject[:16]}, the caller bound {binding.subject_digest[:16]}")
+
+    receipt = report.refutation_receipt
+    if receipt is None:
+        return FormalCreditDecision(False, "NO_REFUTATION_RECEIPT")
+    if formula_digest(receipt.formula) != binding.formula_sha256:
+        return FormalCreditDecision(
+            False, "RECEIPT_CARRIES_A_FORMULA THE CALLER DID NOT BIND")
+
+    checked = verify_refutation_receipt(receipt, subject, report.proof_dag)
+    if checked.status != RefutationStatus.VERIFIED_REFUTATION:
+        return FormalCreditDecision(False, f"REFUTATION_{checked.status.value}: {checked.reason}")
+    return FormalCreditDecision(True, "checked refutation of the formula bound by the caller")
 
 
 @dataclass
@@ -406,29 +493,35 @@ def elevate_triad_to_warrant(
     report: DialecticalDiscoveryReport,
     author_sk_hex: str,
     author_pk_hex: str,
-    parent_hash: str = "0" * 64
+    parent_hash: str = "0" * 64,
+    credit_binding: Optional[FormalCreditBinding] = None
 ) -> EdgeClaim:
     """
     Elevates a Dialectical Synthesis whose refutation was CHECKED into a Grade A
     (Axiomatic) Warrant EdgeClaim, and otherwise into Grade E (Empirical).
 
-    Grade A requires a refutation receipt that RE-VERIFIES here, against the
-    proof in hand and against this triad's own operands. The report's
-    `smt_verified` flag is not consulted: a report is a mutable public object,
-    so grading on that field grants an axiomatic warrant to whoever sets a
-    boolean. Re-checking at the producer cannot protect this boundary either,
-    because the object can be built without ever passing through it.
+    Grade A requires `credit_binding`, supplied by the caller and NOT taken from
+    the report. Without it the claim is Grade E, always. Everything a report
+    carries — the flag, the receipt, the receipt's subject label — is
+    constructible by whoever hands the report over, so comparing a report
+    against itself establishes nothing; the retargeting is a one-line
+    `dataclasses.replace` away.
 
-    What a Grade A here does and does not say: every resolution step was
-    re-derived, against a formula the requester named and bound to these
-    operands. That the formula encodes the settled theorem remains the
-    requester's assertion, recorded in the receipt's subject digest rather than
-    proven; a caller who wants more must check the encoding itself.
+    Given a binding, three things must hold: the caller's subject digest equals
+    the digest of the operands actually being graded, the receipt carries the
+    formula the caller named, and the refutation re-derives here.
+
+    What a Grade A says: someone entitled to make this call asserted that a
+    named CNF encodes this synthesis, and every resolution step of a refutation
+    of that CNF was re-derived against these exact operands.
+
+    What it does not say: that the assertion is correct. Whether the CNF encodes
+    the theorem, and whether that caller was entitled, are decided outside this
+    module by whoever passes the binding.
     """
     triad = report.triad
-    credit = verify_refutation_receipt(
-        report.refutation_receipt, triad_subject_digest(triad), report.proof_dag)
-    if credit.status == RefutationStatus.VERIFIED_REFUTATION:
+    credit = evaluate_formal_credit(report, credit_binding)
+    if credit.granted:
         witness = AxiomaticWitness(
             derivation_steps=[
                 f"Antithesis: {triad.antithesis_refusal_id}",

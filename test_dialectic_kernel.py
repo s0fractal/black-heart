@@ -292,7 +292,7 @@ class TestDialecticKernel(unittest.TestCase):
         shows the same report without that binding stays EMPIRICAL.
         """
         import smt_kernel as sm
-        from dialectic_kernel import triad_subject_digest
+        from dialectic_kernel import triad_subject_digest, FormalCreditBinding
         synth = PreconditionSynthesizer()
         cand_fn = lambda x: str(int(x) ** 2) if int(x) <= 3 else "0"
         spec_fn = lambda x: str(int(x) ** 2)
@@ -328,18 +328,30 @@ class TestDialecticKernel(unittest.TestCase):
             elapsed_sec=0.01
         )
 
-        warrant = elevate_triad_to_warrant(report, self.sk_author, self.pk_author)
+        # The binding is what a caller entitled to spend this credit asserts. It
+        # is computed here, by that caller, and never read out of the report.
+        binding = FormalCreditBinding(
+            subject_digest=triad_subject_digest(triad),
+            formula_sha256=sm.formula_digest(formula))
+
+        warrant = elevate_triad_to_warrant(report, self.sk_author, self.pk_author,
+                                           credit_binding=binding)
         self.assertEqual(warrant.grade, EvidenceGrade.AXIOMATIC)
         self.assertEqual(warrant.polarity, Polarity.AFFIRM)
         self.assertEqual(warrant.author_pk_hex, self.pk_author)
         self.assertTrue(warrant.verify_signature())
 
-        # Negative control on the same fixture: drop the binding, keep the flag.
+        # Negative controls on the same fixture, one per way of asking for
+        # credit the caller never granted.
+        self.assertEqual(
+            elevate_triad_to_warrant(report, self.sk_author, self.pk_author).grade,
+            EvidenceGrade.EMPIRICAL, "no caller binding")
         unbound = DialecticalDiscoveryReport(
             triad=triad, smt_verified=True, proof_dag=proof_dag, elapsed_sec=0.01)
         self.assertEqual(
-            elevate_triad_to_warrant(unbound, self.sk_author, self.pk_author).grade,
-            EvidenceGrade.EMPIRICAL)
+            elevate_triad_to_warrant(unbound, self.sk_author, self.pk_author,
+                                     credit_binding=binding).grade,
+            EvidenceGrade.EMPIRICAL, "flag set, no receipt")
 
     def test_09_iso32000_polyglot_pdf_and_audit(self):
         """Test ISO 32000 vector polyglot generation and standalone Python auditor execution."""

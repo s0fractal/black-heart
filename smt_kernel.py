@@ -1456,17 +1456,21 @@ def check_resolution_refutation(
 
 @dataclass(frozen=True)
 class RefutationReceipt:
-    """A checked refutation, bound to the subject it was checked for.
+    """A replay envelope for a checked refutation. NOT an attestation.
 
-    Issued only by `issue_refutation_receipt`, and worth exactly as much as the
-    re-check a consumer performs with it: it carries the formula, so a consumer
-    never has to take the issuer's word for either the clauses or the verdict.
+    It carries the formula, so a consumer re-runs the check instead of taking
+    anyone's word for the verdict. That is all it is good for.
 
-    `subject_digest` is supplied by whoever asked for the check. It records
-    WHICH question this refutation was requested for, so credit cannot be moved
-    onto a different candidate later. It does not establish that the formula
-    encodes that question — that step is the caller's assertion, and this type
-    exists so the assertion is at least attributable and re-checkable.
+    What it is not: unforgeable, or evidence of who selected this formula for
+    this subject. `frozen=True` blocks assignment to one instance; it does not
+    stop anyone constructing another, and `dataclasses.replace` will happily
+    retarget `subject_digest` to any value. The constructor is public and there
+    is no issuer authority behind these fields.
+
+    So `subject_digest` is a LABEL travelling with the envelope, not a claim a
+    consumer may act on. A consumer that grants formal credit must compare it
+    against a binding obtained independently of the object being graded — see
+    `dialectic_kernel.FormalCreditBinding` — or grant no credit at all.
     """
     subject_digest: str
     formula: Tuple[FrozenSet[int], ...]
@@ -1475,6 +1479,14 @@ class RefutationReceipt:
 
     def formula_clauses(self) -> List[List[int]]:
         return [sorted(c) for c in self.formula]
+
+
+def formula_digest(formula_clauses: Iterable[Iterable[int]]) -> str:
+    """Canonical digest of a clause SET: order and duplicates do not change it."""
+    canon = sorted({tuple(sorted(set(c))) for c in formula_clauses})
+    payload = json.dumps(["smt.formula.v1", [list(c) for c in canon]],
+                         sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def proof_dag_digest(proof_dag: Dict[int, ResolutionProofNode]) -> str:
@@ -1493,10 +1505,11 @@ def issue_refutation_receipt(
     proof_dag: Dict[int, ResolutionProofNode],
     max_steps: int = 100_000,
 ) -> Optional[RefutationReceipt]:
-    """Check the refutation and, only if it verifies, bind it to `subject_digest`.
+    """Check the refutation and, only if it verifies, wrap it with `subject_digest`.
 
-    Returns None for every other outcome, so there is no receipt object that
-    stands for an unchecked, unsupported or invalid proof.
+    Returns None for every other outcome, so this function never produces an
+    envelope for an unchecked, unsupported or invalid proof. It does not make
+    the resulting object authoritative: see RefutationReceipt.
     """
     formula = tuple(frozenset(c) for c in formula_clauses)
     report = check_resolution_refutation(formula, proof_dag, max_steps=max_steps)
@@ -1516,11 +1529,14 @@ def verify_refutation_receipt(
     proof_dag: Optional[Dict[int, ResolutionProofNode]],
     max_steps: int = 100_000,
 ) -> RefutationReport:
-    """Re-derive everything a receipt asserts, for a consumer that trusts nothing.
+    """Re-derive the mathematics a receipt carries, for a consumer that trusts nothing.
 
-    The receipt is re-checked against the proof actually in hand and against the
-    subject actually being graded. A consumer that calls this cannot be moved by
-    a flag someone set on a report object.
+    Establishes: this proof, as filed, is a checked refutation of the clause set
+    inside the receipt, and the envelope was labelled for `subject_digest`.
+
+    Does NOT establish: that anyone entitled to say so selected that clause set
+    for that subject. The label is caller-constructible, so a consumer granting
+    formal credit needs an independent binding as well.
     """
     if receipt is None:
         return RefutationReport(RefutationStatus.INVALID, "no refutation receipt")

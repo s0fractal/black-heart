@@ -381,11 +381,12 @@ class ReceiptTest(unittest.TestCase):
 
 
 class FormalCreditGateTest(unittest.TestCase):
-    """The admission this package exists to close.
+    """The admission this package exists to close, in its third form.
 
-    A dialectical synthesis was elevated to Grade A (AXIOMATIC) on proof shape,
-    then on a mutable flag. Both are decided by whoever builds the report
-    object, so neither establishes anything about the theorem.
+    Grade A rested first on proof shape, then on a mutable flag, then on a
+    receipt whose subject label the same caller could set. Each time the thing
+    being compared came out of the object being graded. The binding now arrives
+    separately and stays fixed while everything in the report is attacked.
     """
 
     def setUp(self):
@@ -394,11 +395,12 @@ class FormalCreditGateTest(unittest.TestCase):
         self.real = dag(inp(1, [1]), inp(2, [-1]), res(3, [], [1, 2], 1))
         self.invalid = dag(inp(1, [1]),
                            Node(clause_id=2, clause=[], rule="learned", antecedents=[1]))
+        self.formula = [[1], [-1]]
 
-    def _triad(self):
+    def _triad(self, **over):
         import dialectic_kernel as dk
         from scoped_admission import RefusalReason
-        return dk.DialecticalTriad(
+        base = dict(
             thesis_candidate_digest="ab" * 32,
             antithesis_refusal_id="cd" * 32,
             refusal_reason=RefusalReason.RESOURCE_LIMIT,
@@ -407,54 +409,142 @@ class FormalCreditGateTest(unittest.TestCase):
             status=dk.DialecticalStatus.SYNTHESIS_ACHIEVED,
             settled_theorem="Settled under envelope budget_steps=140",
         )
+        base.update(over)
+        return dk.DialecticalTriad(**base)
 
     def _report(self, proof, smt_verified=False, receipt=None, triad=None):
+        """Parameter order kept as it was: earlier reviewer probes call this
+        positionally, and those runs are regression evidence worth preserving."""
         import dialectic_kernel as dk
         return dk.DialecticalDiscoveryReport(
-            triad=triad or self._triad(), smt_verified=smt_verified,
+            triad=triad if triad is not None else self._triad(),
+            smt_verified=smt_verified,
             refutation_receipt=receipt, proof_dag=proof, elapsed_sec=0.01)
 
-    def test_H1_a_set_flag_earns_nothing(self):
-        """The consumer re-checks; it does not read the field."""
+    def _binding(self, triad):
+        """What a trusted caller asserts, computed by that caller, not by a report."""
         import dialectic_kernel as dk
-        from warrant_kernel import EvidenceGrade
-        report = self._report(self.invalid, smt_verified=True)
-        claim = dk.elevate_triad_to_warrant(report, self.sk, self.pk)
-        self.assertEqual(claim.grade, EvidenceGrade.EMPIRICAL)
+        return dk.FormalCreditBinding(
+            subject_digest=dk.triad_subject_digest(triad),
+            formula_sha256=sm.formula_digest(self.formula))
 
-    def test_H2_grade_A_requires_a_receipt_that_reverifies_here(self):
-        """The positive control exercises the binding, not a boolean."""
+    def _grade(self, triad, receipt, binding, proof=None, smt_verified=False):
         import dialectic_kernel as dk
+        report = self._report(proof if proof is not None else self.real,
+                              smt_verified=smt_verified, receipt=receipt, triad=triad)
+        return dk.elevate_triad_to_warrant(report, self.sk, self.pk,
+                                           credit_binding=binding).grade
+
+    def _receipt_for(self, triad, formula=None, proof=None):
+        import dialectic_kernel as dk
+        return sm.issue_refutation_receipt(
+            dk.triad_subject_digest(triad), formula or self.formula, proof or self.real)
+
+    # ------------------------------------------------------------------ J ---
+
+    def test_J1_no_caller_binding_means_no_formal_credit(self):
         from warrant_kernel import EvidenceGrade
         triad = self._triad()
-        subject = dk.triad_subject_digest(triad)
-        receipt = sm.issue_refutation_receipt(subject, [[1], [-1]], self.real)
-        self.assertIsNotNone(receipt)
-        claim = dk.elevate_triad_to_warrant(
-            self._report(self.real, receipt=receipt, triad=triad), self.sk, self.pk)
-        self.assertEqual(claim.grade, EvidenceGrade.AXIOMATIC)
+        self.assertEqual(
+            self._grade(triad, self._receipt_for(triad), binding=None, smt_verified=True),
+            EvidenceGrade.EMPIRICAL)
 
-    def test_H3_a_receipt_for_another_synthesis_is_not_spendable_here(self):
-        import dialectic_kernel as dk
+    def test_J2_a_bound_caller_assertion_earns_grade_A(self):
+        """Positive control: the caller supplies the binding it is entitled to make."""
         from warrant_kernel import EvidenceGrade
+        triad = self._triad()
+        self.assertEqual(
+            self._grade(triad, self._receipt_for(triad), self._binding(triad)),
+            EvidenceGrade.AXIOMATIC)
+
+    def test_J3_a_retargeted_receipt_cannot_move_credit(self):
+        """dataclasses.replace on the label is not an assertion by anyone."""
         import dataclasses
-        other = dataclasses.replace(self._triad(),
-                                    settled_theorem="A different settled theorem.")
-        receipt = sm.issue_refutation_receipt(
-            dk.triad_subject_digest(other), [[1], [-1]], self.real)
-        claim = dk.elevate_triad_to_warrant(
-            self._report(self.real, smt_verified=True, receipt=receipt), self.sk, self.pk)
-        self.assertEqual(claim.grade, EvidenceGrade.EMPIRICAL)
-
-    def test_H4_a_receipt_does_not_travel_to_another_proof(self):
         import dialectic_kernel as dk
         from warrant_kernel import EvidenceGrade
+        a = self._triad()
+        b = self._triad(thesis_candidate_digest="ef" * 32,
+                        settled_theorem="A different theorem")
+        receipt_a = self._receipt_for(a)
+        transplanted = dataclasses.replace(
+            receipt_a, subject_digest=dk.triad_subject_digest(b))
+        # The caller's binding stays fixed on A throughout.
+        self.assertEqual(self._grade(b, transplanted, self._binding(a)),
+                         EvidenceGrade.EMPIRICAL)
+        # And even a caller binding for B does not help without a formula for B:
+        # here it does, because the caller asserted this same CNF for B, which is
+        # exactly the assertion the boundary now makes visible and attributable.
+        self.assertEqual(self._grade(b, transplanted, self._binding(b)),
+                         EvidenceGrade.AXIOMATIC)
+
+    def test_J4_receipt_formula_and_proof_may_all_change_the_binding_still_holds(self):
+        """The review's negative control: attack the report, keep the binding."""
+        from warrant_kernel import EvidenceGrade
         triad = self._triad()
-        receipt = sm.issue_refutation_receipt(
-            dk.triad_subject_digest(triad), [[1], [-1]], self.real)
-        claim = dk.elevate_triad_to_warrant(
-            self._report(self.invalid, receipt=receipt, triad=triad), self.sk, self.pk)
-        self.assertEqual(claim.grade, EvidenceGrade.EMPIRICAL)
+        binding = self._binding(triad)
+        other_formula = [[2], [-2]]
+        other_proof = dag(inp(1, [2]), inp(2, [-2]), res(3, [], [1, 2], 2))
+        other_receipt = self._receipt_for(triad, formula=other_formula, proof=other_proof)
+        self.assertIsNotNone(other_receipt)      # it is a genuine refutation
+        self.assertEqual(
+            self._grade(triad, other_receipt, binding, proof=other_proof),
+            EvidenceGrade.EMPIRICAL,
+            "another contradiction must not count merely because it verifies")
+
+    def test_J5_changing_the_guard_or_the_delta_invalidates_old_credit(self):
+        import dataclasses
+        import dialectic_kernel as dk
+        from warrant_kernel import EvidenceGrade
+        a = self._triad()
+        binding, receipt = self._binding(a), self._receipt_for(a)
+        self.assertEqual(self._grade(a, receipt, binding), EvidenceGrade.AXIOMATIC)
+        for label, changed in (
+            ("guard", dataclasses.replace(a, precondition=dk.PreconditionGuard(
+                "new-guard", ("other",), ("old",), "false"))),
+            ("delta", dataclasses.replace(a, synthesis_delta=dk.ContextDelta(
+                80, 10000, 9920, 125.0, 0.01))),
+            ("status", dataclasses.replace(
+                a, status=dk.DialecticalStatus.RESOURCE_BOUNDED)),
+            ("refusal", dataclasses.replace(a, antithesis_refusal_id="99" * 32)),
+        ):
+            with self.subTest(operand=label):
+                self.assertEqual(self._grade(changed, receipt, binding),
+                                 EvidenceGrade.EMPIRICAL)
+
+    def test_J6_unchanged_operands_still_work(self):
+        """A digest that changes for everything would be no better than one that never does."""
+        import dataclasses
+        import dialectic_kernel as dk
+        from warrant_kernel import EvidenceGrade
+        a = self._triad()
+        identical = dataclasses.replace(a)
+        self.assertEqual(dk.triad_subject_digest(identical), dk.triad_subject_digest(a))
+        self.assertEqual(self._grade(identical, self._receipt_for(a), self._binding(a)),
+                         EvidenceGrade.AXIOMATIC)
+
+    def test_J7_a_set_flag_and_an_invalid_proof_earn_nothing(self):
+        from warrant_kernel import EvidenceGrade
+        triad = self._triad()
+        forged = sm.RefutationReceipt(
+            subject_digest=self._binding(triad).subject_digest,
+            formula=(frozenset([1]), frozenset([-1])),
+            proof_digest=sm.proof_dag_digest(self.invalid),
+            checked_steps=99)
+        self.assertEqual(
+            self._grade(triad, forged, self._binding(triad), proof=self.invalid,
+                        smt_verified=True),
+            EvidenceGrade.EMPIRICAL)
+
+    def test_J8_the_binding_is_never_derived_from_the_report(self):
+        """A structural guard: the decision function takes the binding as an argument."""
+        import dialectic_kernel as dk
+        import inspect
+        sig = inspect.signature(dk.evaluate_formal_credit)
+        self.assertEqual(list(sig.parameters), ["report", "binding"])
+        decision = dk.evaluate_formal_credit(
+            self._report(self.real, receipt=self._receipt_for(self._triad())), None)
+        self.assertFalse(decision.granted)
+        self.assertEqual(decision.reason, "NO_CALLER_BINDING")
 
 
 class ProducerBindingTest(unittest.TestCase):
