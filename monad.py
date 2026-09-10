@@ -696,9 +696,9 @@ def audit_contract_polyglot(target_path: str) -> bool:
             ch.update(raw)
 
             t = parse(c_node["expression"])
-            norm, _, _ = evaluate(t, max_atp=c_node["atp_budget"])
+            norm = evaluate(t, max_atp=c_node["atp_budget"]).term
             exp_t = parse(c_node["expected_normal_form"])
-            exp_norm, _, _ = evaluate(exp_t)
+            exp_norm = evaluate(exp_t).term
             if str(norm) != str(exp_norm):
                 return False
 
