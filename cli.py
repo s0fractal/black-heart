@@ -3108,6 +3108,93 @@ def cmd_sheaf(args):
         print("Usage: python3 cli.py sheaf {glue,obstruct,pdf} ...")
 
 
+def cmd_sovereign(args):
+    """Command handler for Engine #34: Sovereign Continuity Quine (SOVEREIGN-0.1)."""
+    import sovereign_continuity
+    from sovereign_continuity import (
+        SovereignOrganism, generate_sovereign_polyglot
+    )
+
+    if args.action == "genesis":
+        org = SovereignOrganism.create_genesis(
+            organism_id=getattr(args, "id", "%🖤-SOVEREIGN-GENESIS"),
+            metabolic_capacity=getattr(args, "capacity", 300)
+        )
+        print("\033[1;36m=================================================================\033[0m")
+        print("  Engine #34:      Sovereign Continuity Quine — Genesis Minted")
+        print("=================================================================")
+        print(f"  Organism ID:     {org.organism_id}")
+        print(f"  Genesis PK:      {org.genesis_pk_hex}")
+        print(f"  Tip CIDv1:       {org.cid_chain[-1]}")
+        print(f"  Metabolic Cap:   {org.membrane.capacity} ATP")
+        print(f"  Active Load:     {org.current_active_cost()} ATP")
+        print(f"  Chromosomes:     {len(org.chromosomes)} active")
+        print(f"  Status:          \033[1;32mOPERATIONAL (CONTINUITY INTACT)\033[0m\n")
+
+    elif args.action == "step":
+        org = SovereignOrganism.create_genesis(
+            organism_id=getattr(args, "id", "%🖤-SOVEREIGN-GENESIS"),
+            metabolic_capacity=getattr(args, "capacity", 300)
+        )
+        r = org.evolve_step(getattr(args, "thought", "Autonomous Self-Contemplation"))
+        print("\033[1;36m=================================================================\033[0m")
+        print("  Engine #34:      Sovereign Continuity Quine — Generational Step")
+        print("=================================================================")
+        print(f"  Generation:      #{r.generation}")
+        print(f"  Successor CID:   {r.cid}")
+        print(f"  Parent CID:      {r.parent_cid}")
+        print(f"  Cumulative ATP:  +{r.atp_cumulative_saved} ATP saved")
+        print(f"  Active Cost:     {r.active_cost} / {r.metabolic_budget} ATP")
+        print(f"  Tombstones:      {r.tombstones_count} stelae (controlled forgetting)")
+        print(f"  Signature:       {r.signature_hex[:32]}...\n")
+
+    elif args.action == "migrate":
+        org = SovereignOrganism.create_genesis(metabolic_capacity=getattr(args, "capacity", 300))
+        org.evolve_step("Generational step 1")
+        seed_json = org.export_migration_seed()
+        out_seed = getattr(args, "output", None)
+        if out_seed:
+            with open(out_seed, "w") as f:
+                f.write(seed_json)
+            print(f"  [✓] Sovereign migration bundle exported to: {out_seed}")
+        else:
+            print(seed_json)
+
+    elif args.action == "audit":
+        seed_path = getattr(args, "input", None)
+        if seed_path and os.path.exists(seed_path):
+            with open(seed_path, "r") as f:
+                seed_data = f.read()
+            reconstituted = SovereignOrganism.reconstitute_from_seed(seed_data)
+            print("\033[1;36m=================================================================\033[0m")
+            print("  Engine #34:      Sovereign Continuity Cold Boot Auditor")
+            print("=================================================================")
+            print(f"  Genesis PK:      {reconstituted.genesis_pk_hex}")
+            print(f"  Generation:      #{reconstituted.generation}")
+            print(f"  Tip CIDv1:       {reconstituted.cid_chain[-1]}")
+            print(f"  Active Cost:     {reconstituted.current_active_cost()} / {reconstituted.membrane.capacity} ATP")
+            print(f"  Verification:    \033[1;32m[PASS] Full lineage cryptographically valid\033[0m\n")
+        else:
+            print("[!] Specify --input <migration_seed.json> for cold host audit.")
+
+    elif args.action == "pdf":
+        out_pdf = getattr(args, "output", "sovereign_organism.pdf") or "sovereign_organism.pdf"
+        org = SovereignOrganism.create_genesis(
+            organism_id=getattr(args, "id", "%🖤-SOVEREIGN-GENESIS"),
+            metabolic_capacity=getattr(args, "capacity", 300)
+        )
+        org.evolve_step("Generational step 1")
+        generate_sovereign_polyglot(org, out_pdf)
+        print("\033[1;36m=================================================================\033[0m")
+        print("  Engine #34:      Sovereign Continuity Quine (ISO 32000 Polyglot)")
+        print("=================================================================")
+        print(f"  Output Polyglot: \033[1;32m{out_pdf}\033[0m")
+        print(f"  Standalone Audit: python3 {out_pdf} --audit")
+        print(f"  Migrate Export:   python3 {out_pdf} --migrate\n")
+    else:
+        print("Usage: python3 cli.py sovereign {genesis,step,migrate,audit,pdf} ...")
+
+
 def cmd_shell(args):
 
 
@@ -3154,6 +3241,7 @@ def cmd_shell(args):
             print("  palimpsest <a_idx> <b_idx>   - Measure 5D value drift cartography between two organisms")
             print("  admission [cand] [budget]    - Assess and retest scoped admission without permission leakage")
             print("  sheaf [claim]                - Verify local-to-global sheaf descent and Čech cohomology")
+            print("  sovereign [step|genesis]     - Advance sovereign continuity quine and metabolic membrane")
             print("  eval <expr>                  - Evaluate SKIY combinator expression with ATP meter")
             print("  exit / quit                  - Halts the hypervisor\n")
 
@@ -3379,6 +3467,19 @@ def cmd_shell(args):
                 print(f"      Čech dim H^1 = {rep.h1_dimension} | Global NF: {rep.global_section.normal_form if rep.global_section else 'NONE'}\n")
             except Exception as e:
                 print(f"[!] Sheaf descent failed: {e}")
+        elif cmd == "sovereign":
+            try:
+                from sovereign_continuity import SovereignOrganism
+                sub = parts[1] if len(parts) > 1 else "step"
+                if sub == "genesis":
+                    o = SovereignOrganism.create_genesis()
+                    print(f"  [✓] Sovereign Genesis #{o.generation} minted. Tip CID: {o.cid_chain[-1][:24]}...")
+                else:
+                    o = SovereignOrganism.create_genesis()
+                    r = o.evolve_step("REPL Contemplation")
+                    print(f"  [✓] Sovereign Gen #{r.generation} stepped. CID: {r.cid[:24]}... | ATP: +{r.atp_cumulative_saved} | Cost: {r.active_cost}/{r.metabolic_budget}")
+            except Exception as e:
+                print(f"[!] Sovereign command failed: {e}")
         else:
             print(f"[!] Unknown command '{cmd}'. Type 'help' for available commands.")
 
@@ -4023,6 +4124,31 @@ def main():
     p_sh_pdf.add_argument("--claim", default="LAFONT_INTERACTION_CONFLUENCE", help="Claim identifier")
     p_sh_pdf.add_argument("-o", "--output", default="sheaf_certificate.pdf", help="Output PDF path")
 
+    # sovereign (Engine #34: Sovereign Continuity Quine & Forgetting Membrane — SOVEREIGN-0.1)
+    p_sov = subparsers.add_parser(
+        "sovereign",
+        help="Engine #34: Sovereign Continuity Quine & Controlled Forgetting Membrane (SOVEREIGN-0.1)"
+    )
+    sov_subs = p_sov.add_subparsers(dest="action")
+    p_sv_gen = sov_subs.add_parser("genesis", help="Mint a new Genesis Sovereign Organism")
+    p_sv_gen.add_argument("--id", default="%🖤-SOVEREIGN-GENESIS", help="Organism identifier")
+    p_sv_gen.add_argument("--capacity", type=int, default=300, help="Metabolic ATP capacity")
+
+    p_sv_step = sov_subs.add_parser("step", help="Execute an autopoietic step with metabolic pruning")
+    p_sv_step.add_argument("--thought", default="Autonomous Self-Contemplation", help="Thought prompt")
+    p_sv_step.add_argument("--capacity", type=int, default=300, help="Metabolic ATP capacity")
+
+    p_sv_mig = sov_subs.add_parser("migrate", help="Export portable migration seed bundle")
+    p_sv_mig.add_argument("-o", "--output", help="Output JSON seed path")
+    p_sv_mig.add_argument("--capacity", type=int, default=300, help="Metabolic ATP capacity")
+
+    p_sv_aud = sov_subs.add_parser("audit", help="Audit and reconstitute organism on cold host")
+    p_sv_aud.add_argument("-i", "--input", help="Input migration seed JSON path")
+
+    p_sv_pdf = sov_subs.add_parser("pdf", help="Generate ISO 32000 proof-carrying polyglot certificate")
+    p_sv_pdf.add_argument("-o", "--output", default="sovereign_organism.pdf", help="Output PDF path")
+    p_sv_pdf.add_argument("--capacity", type=int, default=300, help="Metabolic ATP capacity")
+
     args = parser.parse_args()
 
     if args.command == "repl":
@@ -4099,6 +4225,8 @@ def main():
         cmd_admission(args)
     elif args.command == "sheaf":
         cmd_sheaf(args)
+    elif args.command == "sovereign":
+        cmd_sovereign(args)
     else:
         parser.print_help()
 

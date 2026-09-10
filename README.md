@@ -30,6 +30,7 @@
 25. **Dialectical Discovery & Automated Hypothesis Generation (`dialectic_kernel.py`):** Normative implementation of DIALECTIC-0.1 (Engine #31). Autonomous frontier explorer constructing Thesis $\to$ Antithesis $\to$ Synthesis triads, identifying failure boundaries, and formulating weakest preconditions via SMT.
 26. **Epistemic Palimpsest: Generational Value Drift Cartography (`palimpsest_kernel.py`):** Normative implementation of PALIMPSEST-0.1 (Engine #32). 5D virtue drift tensor cartography tracking generational changes across courage, humility, deference, structure, and curiosity, rendering multi-layer vector strata with automated quarantine tombstones.
 27. **Epistemic Sheaf Kernel & Čech Cohomology (`sheaf_kernel.py`):** Normative implementation of SHEAF-0.1 (Engine #33). Categorical sheaf theory over context topologies, computing Čech cohomology obstructions $H^1(\mathcal{U}, \mathcal{F})$ to detect context-dependent contradictions, synthesizing unique global theorems upon zero-twist agreement, and compiling simplicial nerve vector polyglots.
+28. **Sovereign Continuity Quine & Controlled Forgetting Membrane (`sovereign_continuity.py`):** Normative implementation of CONTINUITY-0.1 (Engine #34 / Grok Synthesis Experiment). Substrate-independent sovereign digital existence surviving host death and process termination via CIDv1 DAG Merkle provenance, autopoietic AST zipper self-contemplation, an active metabolic forgetting membrane enforcing capacity bounds ($\mathcal{B}_{\text{max}}$) with cryptographic tombstone stelae and anti-resurrection gates (Invariant SC4 / I3), 3-layer Epistemic Mycelium synchronization without copying raw experience (see [CONTINUITY.md](CONTINUITY.md)), and dual-spine ISO 32000 proof-carrying vector polyglots.
 
 ---
 
@@ -954,7 +955,7 @@ python3 test_autopoiesis.py    # 10 tests: Autopoietic quine evolution, append-o
 
 **Unified Test Runner:**
 ```bash
-python3 test_all.py  # 330/330 green unit tests across all 33 engines in ~9.4s
+python3 test_all.py  # 337/337 green unit tests across all 34 engines in ~9.4s
 ```
 
 ---
@@ -1013,6 +1014,7 @@ To address the security boundaries of executable documents, Project Black-Heart 
 * [DIALECTIC.md](DIALECTIC.md) — Dialectical Discovery & Automated Hypothesis Generation (DIALECTIC-0.1 / Engine #31).
 * [PALIMPSEST.md](PALIMPSEST.md) — Epistemic Palimpsest: Generational Value Drift Cartography & Multi-Layer Polyglots (PALIMPSEST-0.1 / Engine #32).
 * [SHEAF.md](SHEAF.md) — Epistemic Sheaf Kernel, Čech Cohomology & Decentralized Proof Descent (SHEAF-0.1 / Engine #33).
+* [CONTINUITY.md](CONTINUITY.md) — Sovereign Continuity Quine & Controlled Forgetting Membrane (CONTINUITY-0.1 / Engine #34 / Grok Synthesis Experiment).
 
 
 

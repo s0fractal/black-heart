@@ -54,6 +54,7 @@ SUITES = [
     ("Review 12 Remediation & Probe Defenses (f2e05e6)", "test_remediation_f2e05e6"),
     ("Epistemic Palimpsest — Value Drift Cartography", "test_palimpsest_kernel"),
     ("Epistemic Sheaf Kernel & Čech Cohomology", "test_sheaf_kernel"),
+    ("Sovereign Continuity Quine & Forgetting Membrane", "test_sovereign_continuity"),
 ]
 
 

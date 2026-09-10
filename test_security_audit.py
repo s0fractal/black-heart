@@ -1715,6 +1715,58 @@ class TestSecurityAuditG1toG9(unittest.TestCase):
             self.assertNotEqual(proc_sheaf.returncode, 0)
             self.assertIn("Cryptographic manifest tampering detected", proc_sheaf.stdout)
 
+        # 3. Sovereign Continuity Negative Controls (Engine #34: SOVEREIGN-0.1)
+        from sovereign_continuity import (
+            SovereignOrganism,
+            SovereignWarrant,
+            TombstoneStela,
+            generate_sovereign_polyglot
+        )
+        from controlled_forgetting import EpistemicResurrectionError
+
+        # Invariant SC1/SC6: Tampered migration bundle must be rejected fail-closed
+        org = SovereignOrganism.create_genesis(metabolic_capacity=200)
+        seed_json = org.export_migration_seed()
+        seed_obj = json.loads(seed_json)
+
+        # Adversarially modify the state without valid signature
+        tampered_seed_obj = copy.deepcopy(seed_obj)
+        tampered_seed_obj["payload"]["atp_cumulative_saved"] = 999999
+        tampered_seed_json = json.dumps(tampered_seed_obj)
+
+        with self.assertRaises(ValueError):
+            SovereignOrganism.reconstitute_from_seed(tampered_seed_json)
+
+        # Invariant SC4: EpistemicResurrectionError on tombstoned claims
+        w = SovereignWarrant(
+            warrant_id="w-bad-tomb",
+            rule_name="I x -> x",
+            pre_term="I I",
+            post_term="I",
+            atp_saved=5,
+            hits=1,
+            gen_admitted=0,
+            maintenance_cost=100
+        )
+        org.membrane.admit_warrant(w)
+        org.membrane.prune_metabolism(1, org.author_pk_hex, org.secret_key_hex, base_cost=200)
+        self.assertIn("w-bad-tomb", org.membrane.tombstones)
+
+        with self.assertRaises(EpistemicResurrectionError):
+            org.membrane.execute_warrant_guard("w-bad-tomb")
+
+        # Invariant SC5: Foreign divergence rejection and antibody installation
+        adversarial_warrant = {
+            "rule_name": "S(K x)(K y) -> K(x y)",
+            "pre_term": "S (K I) (K I)",
+            "post_term": "I",
+            "atp_saved": 500
+        }
+        passed, reason = org.synapse.audition_foreign_warrant(adversarial_warrant)
+        self.assertFalse(passed, "Adversarial false warrant must be rejected")
+        self.assertIn("REJECTED", reason)
+        self.assertEqual(len(org.synapse.divergence_antibodies), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
