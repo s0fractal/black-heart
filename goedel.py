@@ -533,9 +533,13 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 # self-located and nothing on sys.path can precede and shadow it: this is what
 # makes the test suite hermetic (S9). Before S9 this block inserted os.getcwd(),
 # a parent, and a hard-coded checkout AT POSITION 0, any of which could shadow
-# the checkout under test.
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
+# the checkout under test. Unconditionally MOVED to position 0 -- not merely
+# inserted "if absent" -- so a current_dir already present elsewhere on
+# sys.path (from an earlier, differently-ordered import) is brought to the
+# front rather than left wherever it was (review R1, additional correction).
+if current_dir in sys.path:
+    sys.path.remove(current_dir)
+sys.path.insert(0, current_dir)
 # The polyglot document that embeds this source still has to find the engine
 # when executed from elsewhere (e.g. a temp dir). Fallbacks are APPENDED -- never
 # ahead of current_dir -- so they can satisfy that standalone self-import without

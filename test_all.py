@@ -25,8 +25,18 @@ import time
 # TEST module OR one of its dependencies -- could resolve out of another clone.
 # This file once reported a green aggregate for a worktree while running another
 # checkout's test_mycelium.py against its sources. S9 removed those injections
-# (each module now adds only its own directory) AND checks the whole closure
-# below, not just the selected suite modules.
+# (each module now moves only its own directory to the front) AND checks the
+# whole closure below, not just the selected suite modules.
+#
+# The origin check runs at two checkpoints per suite: once before it runs
+# (catching residue from a prior suite) and once immediately after (S9-R1: a
+# test can import a foreign module only WHILE it runs, and without a post-run
+# checkpoint the LAST suite had no check after it at all -- a real foreign
+# import there passed silently). This is a checkpoint guarantee, not a trace
+# of every import event: a module imported and then removed again by the same
+# suite before its run() returns escapes both checkpoints, and an import made
+# inside a subprocess a test spawns is invisible to this process's sys.modules
+# and is not covered by this guard at all.
 _HERE = os.path.dirname(os.path.abspath(__file__))
 # Keep this checkout first, and drop any other directory that also holds this
 # checkout's modules (a second clone on PYTHONPATH/cwd) so nothing shadows it.
@@ -148,16 +158,29 @@ def run_all_tests() -> bool:
     all_success = True
     start_global = time.time()
 
+    origin_violation = None
     for name, module_name in SUITES:
         print(f"\033[1;33m[*] Testing: {name} ({module_name}.py)...\033[0m")
         if sys.path[0] != _HERE:
             sys.path.insert(0, _HERE)
         suite = loader.loadTestsFromName(module_name)
-        _assert_local(module_name)
+        _assert_local(module_name)  # checkpoint 1: catches residue from a prior suite
         runner = unittest.TextTestRunner(verbosity=1)
         res = runner.run(suite)
         total_ran += res.testsRun
         failures = len(res.failures) + len(res.errors)
+
+        # Checkpoint 2: immediately after this suite's run(), not deferred to
+        # the next iteration's checkpoint 1 -- there is no next iteration for
+        # the last suite. Foreign provenance here overrides a green unittest
+        # result: the run would describe neither checkout.
+        try:
+            _assert_local(module_name)
+        except ImportError as e:
+            origin_violation = e
+            print(f"  \033[1;31m[✗] ORIGIN VIOLATION after {module_name}: {e}\033[0m\n")
+            break
+
         if failures > 0:
             all_success = False
             print(f"  \033[1;31m[✗] {failures} failure(s) in {module_name}\033[0m\n")
@@ -165,9 +188,14 @@ def run_all_tests() -> bool:
             total_passed += res.testsRun
             print(f"  \033[1;32m[✓] All {res.testsRun} tests passed.\033[0m\n")
 
+    if origin_violation is not None:
+        all_success = False
+
     total_time = time.time() - start_global
     print("\033[1;36m" + "=" * 70)
-    if all_success:
+    if origin_violation is not None:
+        print(f"  \033[1;31m[✗] ORIGIN VIOLATION: run stopped, result describes neither checkout\033[0m")
+    elif all_success:
         print(f"  \033[1;32m[✓] {total_passed}/{total_ran} tests passed in {total_time:.2f}s\033[0m")
     else:
         print(f"  \033[1;31m[✗] TEST FAILURES DETECTED: {total_passed}/{total_ran} passed in {total_time:.2f}s\033[0m")

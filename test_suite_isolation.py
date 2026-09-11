@@ -11,19 +11,44 @@ dependencies -- could resolve out of another clone. `test_all` guarded only the
 names of the selected suite modules, not their dependency closure, and one test
 (the sheaf demo) wrote a tracked example on every run.
 
+Review r1 on PR #24 (`~/Projects/.triad/reviews/black-heart-pr24-r1/`) found two
+further gaps, fixed here:
+  R1 — `test_all`'s origin check ran only before a suite's tests executed, so a
+       module imported DURING a test's run (not at discovery time) escaped it,
+       and the LAST suite had no check after it at all. `test_all.py` now also
+       checks immediately after each suite's `run()` (A4/A5 below exercise this
+       against the real runner, not a mock of it).
+  R2 — this file's own all-engine import inventory (what is now A2) ran in the
+       SAME process as the rest of the suite, preloading ~40 engines and so
+       masking any later search-path defect by module caching. It now runs in
+       a child process and leaves the parent's sys.modules untouched.
+Also fixed: C2 compared `git status` TEXT (misses a file that was already
+dirty and is mutated further without its status letter changing) and silently
+dropped the child's return code; it now compares tracked-file content digests
+and reports the child's return code. The sys.path fix itself was strengthened
+to MOVE current_dir to the front rather than only insert it "if absent" (a
+module already present elsewhere on sys.path was previously left there).
+
 Sections:
-  A  every engine resolves to this checkout, and the closure guard has teeth
+  A  every engine resolves to this checkout (in a child process), the closure
+     guard has teeth, and it holds against a runtime import in the last suite
   B  a distinguishable second checkout on cwd does not get injected
-  C  running the sheaf demo does not modify the tracked example
+  C  running the sheaf demo does not modify the tracked example, and a full
+     run changes no tracked byte
 """
 from __future__ import annotations
 
+import contextlib
+import hashlib
+import io
+import json
 import os
 import subprocess
 import sys
 import tempfile
 import textwrap
 import unittest
+from unittest.mock import patch
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path[:1]:
@@ -32,6 +57,31 @@ if _HERE not in sys.path[:1]:
 import test_all  # noqa: E402
 
 _POISONERS = ["anyon_glyph", "continuum", "goedel", "morpho_net", "zk_glyph"]
+
+
+def _tracked_digest(repo_dir: str) -> str:
+    """One digest over every tracked file's path and current bytes.
+
+    Stronger than comparing `git status` TEXT (review R1's additional
+    correction): a file already dirty before a run keeps the same status
+    letter if the run mutates it further, so a status-text comparison misses
+    that. This hashes actual content, so any byte-level change is caught
+    regardless of the file's status before the run.
+    """
+    r = subprocess.run(["git", "-C", repo_dir, "ls-files", "-z"],
+                       capture_output=True, timeout=60)
+    paths = sorted(p for p in r.stdout.split(b"\0") if p)
+    h = hashlib.sha256()
+    for p in paths:
+        h.update(p)
+        h.update(b"\0")
+        try:
+            with open(os.path.join(repo_dir, p.decode()), "rb") as fh:
+                h.update(fh.read())
+        except FileNotFoundError:
+            h.update(b"<deleted>")
+        h.update(b"\0")
+    return h.hexdigest()
 
 
 class OriginTest(unittest.TestCase):
@@ -66,20 +116,116 @@ class OriginTest(unittest.TestCase):
                              f"a foreign checkout precedes this one on sys.path: {first}")
 
     def test_A2_every_engine_imports_from_this_checkout(self):
-        import importlib, glob
-        for f in sorted(glob.glob(os.path.join(_HERE, "*.py"))):
-            name = os.path.splitext(os.path.basename(f))[0]
-            if name.startswith("test_") or name in ("conftest",):
-                continue
+        """Runs the all-engine import inventory in a CHILD process (review R1's
+        R2 finding: doing this in-process preloaded ~40 engines into the very
+        process that then runs the rest of test_all's suites, so a later
+        search-path defect would be masked by the cached modules -- import is a
+        no-op once a name is in sys.modules, regardless of what search order
+        would otherwise have found). The parent's sys.modules is asserted
+        unchanged by this test itself."""
+        import glob
+        before = set(sys.modules)
+        names = [os.path.splitext(os.path.basename(f))[0]
+                 for f in sorted(glob.glob(os.path.join(_HERE, "*.py")))
+                 if not os.path.basename(f).startswith("test_") and os.path.basename(f) != "conftest.py"]
+        probe = textwrap.dedent(f"""
+            import sys, os, json, importlib
+            sys.path.insert(0, {_HERE!r})
+            results = {{}}
+            for m in {names!r}:
+                try:
+                    mod = importlib.import_module(m)
+                except Exception as e:
+                    results[m] = {{"status": "error", "detail": f"{{type(e).__name__}}: {{e}}"}}
+                    continue
+                path = getattr(mod, "__file__", None)
+                if path is None:
+                    results[m] = {{"status": "no_file"}}
+                    continue
+                origin = os.path.dirname(os.path.abspath(path))
+                results[m] = {{"status": "ok" if origin == {_HERE!r} else "foreign", "origin": origin}}
+            print(json.dumps(results))
+        """)
+        with tempfile.TemporaryDirectory() as neutral:
+            env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+            r = subprocess.run([sys.executable, "-B", "-c", probe], cwd=neutral, env=env,
+                               capture_output=True, text=True, timeout=180)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            results = json.loads(r.stdout.strip().splitlines()[-1])
+
+        foreign = {m: v for m, v in results.items() if v["status"] == "foreign"}
+        errors = {m: v for m, v in results.items() if v["status"] == "error"}
+        self.assertEqual(foreign, {}, f"engine(s) imported from outside this checkout: {foreign}")
+        # A skipped/failed import narrows coverage; report it rather than
+        # letting it pass silently (review R1's explicit request), without
+        # failing the test over it -- some modules are not standalone-importable
+        # (e.g. missing optional runtime deps) and that is not a path defect.
+        if errors:
+            names_only = ", ".join(sorted(errors))
+            print(f"\n  [i] {len(errors)} engine module(s) not importable standalone "
+                 f"(not counted as origin failures): {names_only}", file=sys.stderr)
+
+        # This inventory ran entirely in the child process: the parent's own
+        # sys.modules must be exactly as it was before this test.
+        self.assertEqual(set(sys.modules) - before, set(),
+                         "the all-engine inventory leaked imports into the parent process")
+
+    def test_A4_a_runtime_import_in_the_last_suite_fails_the_run(self):
+        """Negative (review R1). Uses the REAL test_all.run_all_tests() and the
+        REAL origin guard; only the discovered suite is substituted, exactly as
+        the reviewer's probe does, so this is not a check against a mock of our
+        own making. The one patched suite's OWN test performs a genuine runtime
+        import of a foreign glyph.py -- discovery time is clean; the import
+        happens only while the test runs, and this is deliberately the ONLY
+        (hence last) suite, reproducing 'the last suite has no check after it'.
+        """
+        import importlib.util
+
+        with tempfile.TemporaryDirectory() as td:
+            foreign_path = os.path.join(td, "glyph.py")
+            with open(foreign_path, "w") as f:
+                f.write("SECOND_CHECKOUT = True\n")
+
+            class LateImport(unittest.TestCase):
+                def runTest(self):
+                    spec = importlib.util.spec_from_file_location("glyph", foreign_path)
+                    mod = importlib.util.module_from_spec(spec)
+                    sys.modules["glyph"] = mod
+                    spec.loader.exec_module(mod)
+                    self.assertTrue(mod.SECOND_CHECKOUT)
+
+            real_glyph = sys.modules.get("glyph")
             try:
-                mod = importlib.import_module(name)
-            except Exception:
-                continue
-            path = getattr(mod, "__file__", None)
-            if path:
-                self.assertEqual(os.path.dirname(os.path.abspath(path)), _HERE,
-                                 f"{name} imported from outside this checkout: {path}")
-        self.assertEqual(test_all._foreign_repo_modules(), [])
+                with patch.object(test_all, "SUITES", [("late import", "test_suite_isolation")]), \
+                     patch.object(unittest.TestLoader, "loadTestsFromName",
+                                  return_value=unittest.TestSuite([LateImport()])), \
+                     contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                    success = test_all.run_all_tests()
+            finally:
+                if real_glyph is not None:
+                    sys.modules["glyph"] = real_glyph
+                else:
+                    sys.modules.pop("glyph", None)
+            self.assertFalse(success,
+                             "a foreign module imported during the last suite's own test "
+                             "run was not caught: run_all_tests() reported success")
+            self.assertEqual(test_all._foreign_repo_modules(), [],
+                             "the foreign module was not cleaned up after the run")
+
+    def test_A5_an_ordinary_local_import_still_reports_success(self):
+        """Positive (review R1): the post-run checkpoint added for A4 must not
+        make an ordinary suite that imports only local repo modules fail."""
+        class LocalImport(unittest.TestCase):
+            def runTest(self):
+                import glyph  # already resident from this checkout
+                self.assertEqual(os.path.dirname(os.path.abspath(glyph.__file__)), _HERE)
+
+        with patch.object(test_all, "SUITES", [("local import", "test_suite_isolation")]), \
+             patch.object(unittest.TestLoader, "loadTestsFromName",
+                          return_value=unittest.TestSuite([LocalImport()])), \
+             contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            success = test_all.run_all_tests()
+        self.assertTrue(success, "an ordinary local import was wrongly reported as foreign")
 
     def test_A3_the_closure_guard_fires_on_a_foreign_dependency(self):
         import types
@@ -170,25 +316,33 @@ class NoTrackedWriteTest(unittest.TestCase):
                 after = fh.read()
         self.assertEqual(before, after, "running the demo rewrote the tracked example")
 
-    def test_C2_a_full_run_leaves_the_git_working_tree_clean(self):
-        """A plain `python3 test_all.py` run modifies no tracked file. Guarded
-        against recursion: the spawned run sets BLACKHEART_SUITE_CHILD, and when
-        that is set this test skips instead of spawning again."""
+    def test_C2_a_full_run_leaves_tracked_file_bytes_unchanged(self):
+        """A plain `python3 test_all.py` run changes no tracked byte. Compares
+        content digests (review R1's additional correction), not `git status`
+        text: a file already dirty before the run keeps the same status letter
+        even if the run mutates it further, so a status-text comparison would
+        miss that. Checked regardless of the child's own pass/fail -- a failing
+        child run must not rewrite tracked bytes either -- and the child's
+        return code is reported, not silently discarded, so a crash or timeout
+        is visible in the failure message rather than read as "nothing to
+        compare". Guarded against recursion: the spawned run sets
+        BLACKHEART_SUITE_CHILD, and when that is set this test skips -- the
+        check is performed once, by the outer/parent invocation that spawned it,
+        not by the child itself."""
         if os.environ.get("BLACKHEART_SUITE_CHILD"):
-            self.skipTest("inside a spawned suite run (recursion guard)")
+            self.skipTest("recursion guard: this process is the spawned child; "
+                          "the outer invocation that launched it performs this check")
         if not os.path.exists(os.path.join(_HERE, ".git")):
             self.skipTest("not a git checkout")
 
-        def dirty():
-            r = subprocess.run(["git", "-C", _HERE, "status", "--porcelain", "--untracked-files=no"],
-                               capture_output=True, text=True, timeout=60)
-            return r.stdout.strip()
-
-        before = dirty()
+        before = _tracked_digest(_HERE)
         env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1", BLACKHEART_SUITE_CHILD="1")
-        subprocess.run([sys.executable, "-B", os.path.join(_HERE, "test_all.py")],
-                       cwd=_HERE, env=env, capture_output=True, text=True, timeout=1800)
-        self.assertEqual(dirty(), before, "a full suite run modified tracked files")
+        r = subprocess.run([sys.executable, "-B", os.path.join(_HERE, "test_all.py")],
+                           cwd=_HERE, env=env, capture_output=True, text=True, timeout=1800)
+        after = _tracked_digest(_HERE)
+        self.assertEqual(before, after,
+                         f"a full suite run modified tracked file bytes "
+                         f"(child returncode={r.returncode})")
 
 
 if __name__ == "__main__":
