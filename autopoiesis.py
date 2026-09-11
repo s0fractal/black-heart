@@ -683,12 +683,32 @@ def init_autopoietic_organism(
 def check_palimpsest_guard(
     current_org: Organism,
     candidate_org: Organism,
-    tombstone_registry: Optional[Any] = None
+    tombstone_registry: Optional[Any] = None,
+    refutation_policy: Optional[Any] = None
 ) -> Tuple[bool, str, Optional[Any]]:
     """
     Evaluates candidate organism against Invariant PAL4 (Autonomic Guard).
     Rejects mutations if any candidate chromosome contains a quarantined tombstone allele
     or if the generational transition exhibits value EROSION.
+
+    Two tombstone questions are asked, in this order:
+
+      1. The label gate, unchanged: a tombstone filed under a chromosome's gene
+         id, or under the sha256 of its expression, refuses the candidate. It
+         answers by string identity, so a gene-id tombstone refuses every
+         candidate for that gene, the unchanged reference included.
+      2. The scoped question, for each chromosome the candidate REPLACES: the
+         reference is the current organism's chromosome with the same gene id,
+         the candidate is the new expression, and
+         `ResurrectionDefense.refuted_for` says what the registry holds about
+         that exact pair. `refutation_policy` (default: proceed only when
+         nothing is measured) decides what is enough to go on.
+
+    The reference is trusted because of where `current_org` comes from: on the
+    live path, `evolve_autopoietic_organism` audits the document before reading
+    it. A direct caller supplies `current_org` itself and owns that choice.
+    Whether a signed record's assertion is TRUE is not decided here; only that
+    the record is authentic for its slot and addresses this pair.
     """
     from palimpsest_kernel import (
         ReasoningAxiom, ReasoningSkeleton, BehavioralTraceMatrix,
@@ -712,6 +732,24 @@ def check_palimpsest_guard(
         c_hash = hashlib.sha256(c.expression.encode("utf-8")).hexdigest()
         if not tombstone_registry.is_admitted(c.gene_id) or not tombstone_registry.is_admitted(c_hash):
             return False, f"Candidate chromosome '{c.gene_id}' contains quarantined tombstone allele", None
+
+    # 1b. Scoped refutation of each replacement, against an explicit reference.
+    from epistemic_immune import ResurrectionDefense, RefutationAdmissionPolicy
+    policy = refutation_policy if refutation_policy is not None else RefutationAdmissionPolicy()
+    if not isinstance(policy, RefutationAdmissionPolicy):
+        return False, "Refutation policy is not a RefutationAdmissionPolicy", None
+    current_by_gene = {c.gene_id: c.expression for c in current_org.chromosomes}
+    for c in candidate_org.chromosomes:
+        reference = current_by_gene.get(c.gene_id)
+        if reference is None or reference == c.expression:
+            continue        # nothing replaced: no pair to ask about
+        report = ResurrectionDefense.refuted_for(tombstone_registry, c.expression, reference)
+        if not policy.permits(report):
+            return False, (
+                f"Candidate chromosome '{c.gene_id}' replacement refused under refutation "
+                f"scope {report.scope.value}: {report.detail} Proceeding requires one of: "
+                f"{sorted(s.value for s in policy.proceed_on)}."
+            ), None
 
     fixtures = build_default_fixtures()
     axioms_curr = [
@@ -772,7 +810,8 @@ def check_palimpsest_guard(
 def evolve_autopoietic_organism(
     pdf_path: str,
     secret_key_hex: Optional[str] = None,
-    tombstone_registry: Optional[Any] = None
+    tombstone_registry: Optional[Any] = None,
+    refutation_policy: Optional[Any] = None
 ) -> Tuple[Organism, AutopoiesisReceipt]:
     """
     Reads the autopoietic organism from pdf_path, inspects its combinator genome,
@@ -883,7 +922,8 @@ def evolve_autopoietic_organism(
                 exp_log.records.append(r)
 
     # PALIMPSEST AUTONOMIC VALUE DRIFT GUARD (Invariant PAL4)
-    is_safe, guard_msg, _ = check_palimpsest_guard(current_org, succ, tombstone_registry)
+    is_safe, guard_msg, _ = check_palimpsest_guard(current_org, succ, tombstone_registry,
+                                                   refutation_policy)
     if not is_safe:
         raise ValueError(f"Autopoietic evolution aborted: Palimpsest Autonomic Guard rejected candidate mutation: {guard_msg}")
 

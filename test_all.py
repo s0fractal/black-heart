@@ -70,6 +70,7 @@ SUITES = [
     ("Autonomous Form Metamorphosis", "test_metamorphosis"),
     ("Epistemic Mycelium & Warrant Mesh", "test_mycelium"),
     ("Rule Identity: What a Tombstone Addresses", "test_rule_identity"),
+    ("Refutation Consumer: Autopoiesis Guard", "test_refutation_consumer"),
     ("Living Colony Ecosystem", "test_colony"),
     ("Morphogenetic Proof-Nets & Ontogeny", "test_morpho_net"),
     ("Gödelian Incompleteness & Event Horizon", "test_goedel"),
