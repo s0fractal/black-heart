@@ -143,6 +143,7 @@ class DerivationStatus(str, Enum):
     NOT_FOUND_WITHIN_BUDGET = "NOT_FOUND_WITHIN_BUDGET"  # equivalent in the e-graph; no derivation found, none invented
     NOT_EQUIVALENT = "NOT_EQUIVALENT"                    # different e-classes
     UNCHECKED = "UNCHECKED"                              # built by hand; nothing was replayed
+    INVALID = "INVALID"                                  # steps attached that do not replay
 
 
 @dataclass
@@ -398,6 +399,40 @@ def find_derivation(
     return steps
 
 
+def replay_explanation(egraph: "EGraph", proof: EquivalenceProofTree) -> Tuple[DerivationStatus, str]:
+    """What `proof` may be credited with in `egraph`, decided from its content.
+
+    Its `derivation_status` and `is_equivalent` fields are ignored: they are
+    public mutable data. Any consumer that credits an explanation calls this.
+
+    - CHECKED: the endpoints parse and the attached steps replay under
+      `egraph.theory` (zero steps only for identical terms).
+    - INVALID: steps are attached and do not replay, or an endpoint does not parse.
+    - Otherwise the e-graph itself is asked, adding nothing:
+      NOT_FOUND_WITHIN_BUDGET if both terms are already in one class, and
+      NOT_EQUIVALENT if they are not.
+
+    A replay shows derivability under the e-graph's rules. It does not show
+    that those rules are right.
+    """
+    try:
+        a, b = parse(proof.term_a), parse(proof.term_b)
+    except Exception as e:
+        return DerivationStatus.INVALID, f"an endpoint does not parse: {e}"
+    try:
+        reason = check_derivation(a, b, list(proof.proof_steps), egraph.theory)
+    except Exception as e:
+        return DerivationStatus.INVALID, f"the attached steps are malformed: {type(e).__name__}"
+    if reason is None:
+        return DerivationStatus.CHECKED, ""
+    if proof.proof_steps:
+        return DerivationStatus.INVALID, reason
+    ca, cb = egraph.lookup(a), egraph.lookup(b)
+    if ca is not None and ca == cb:
+        return DerivationStatus.NOT_FOUND_WITHIN_BUDGET, "equivalent in the e-graph; no derivation attached"
+    return DerivationStatus.NOT_EQUIVALENT, "the e-graph does not put these terms in one class"
+
+
 # ============================================================================
 # 4. EPISTEMIC E-CLASS & E-GRAPH
 # ============================================================================
@@ -457,6 +492,22 @@ class EGraph:
             enode = ENode("@", (left_id, right_id))
             return self._add_enode(enode)
         raise TypeError(f"Unknown term type: {type(term)}")
+
+    def lookup(self, term: Term) -> Optional[int]:
+        """The canonical class of `term` if this e-graph already holds it; never adds."""
+        if isinstance(term, Comb):
+            node = ENode(term.symbol, ())
+        elif isinstance(term, Var):
+            node = ENode(f"${term.name}", ())
+        elif isinstance(term, App):
+            left, right = self.lookup(term.left), self.lookup(term.right)
+            if left is None or right is None:
+                return None
+            node = ENode("@", (left, right))
+        else:
+            return None
+        cid = self.hashcons.get(node.canonical(self.uf))
+        return None if cid is None else self.uf.find(cid)
 
     def _add_enode(self, enode: ENode) -> int:
         can_node = enode.canonical(self.uf)
@@ -925,7 +976,11 @@ def generate_egraph_pdf(
         )
         return s.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
-    if sample_proof and sample_proof.derivation_status == DerivationStatus.CHECKED:
+    # What the attached explanation is credited with is decided here, by
+    # replaying it against this e-graph, never read from its own status fields:
+    # those are public mutable data (review E1 on PR #21).
+    replayed, replay_reason = replay_explanation(egraph, sample_proof) if sample_proof else (None, "")
+    if replayed == DerivationStatus.CHECKED:
         clean_a = _clean_latin1(sample_proof.term_a)
         clean_b = _clean_latin1(sample_proof.term_b)
         stream_lines.extend([
@@ -942,12 +997,17 @@ def generate_egraph_pdf(
                 "0 -13 Td",
                 f"(  [{step.step_num}] {f_expr} -> {t_expr}  | {just}) Tj",
             ])
-    elif sample_proof and sample_proof.is_equivalent:
+    elif replayed == DerivationStatus.NOT_FOUND_WITHIN_BUDGET:
         stream_lines.extend([
             "0 -18 Td",
             f"(Claim: {_clean_latin1(sample_proof.term_a)} === {_clean_latin1(sample_proof.term_b)}) Tj",
             "0 -14 Td",
             "(Equivalent in the e-graph; no checked derivation within budget.) Tj",
+        ])
+    elif replayed is not None:
+        stream_lines.extend([
+            "0 -20 Td",
+            f"(Attached explanation NOT credited: {_clean_latin1(replay_reason[:70])}) Tj",
         ])
     else:
         stream_lines.extend([

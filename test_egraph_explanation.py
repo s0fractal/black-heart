@@ -42,8 +42,9 @@ for _name, _mod in list(sys.modules.items()):
         del sys.modules[_name]
 
 import egraph_kernel as eg
-from egraph_kernel import (DerivationStatus, EGraph, EquivalenceProofStep, RewriteRule,
-                           STANDARD_COMBINATOR_RULES, check_derivation, generate_egraph_pdf)
+from egraph_kernel import (DerivationStatus, EGraph, EquivalenceProofStep, EquivalenceProofTree,
+                           RewriteRule, STANDARD_COMBINATOR_RULES, check_derivation,
+                           generate_egraph_pdf, replay_explanation)
 from glyph import App, I, K, S, Var, evaluate, parse
 
 if os.path.dirname(os.path.abspath(eg.__file__)) != _HERE:
@@ -247,6 +248,67 @@ class ConsumerTest(unittest.TestCase):
         self.assertNotIn(b"Structural Identity", a)
         self.assertIn(b"no checked derivation", b)
         self.assertNotIn(b"Derivation Path", b)
+
+
+class ExportReplayTest(unittest.TestCase):
+    """Section D: review E1 on PR #21. The exporter replays the explanation it
+    is given; it does not read the explanation's status."""
+
+    def pdf(self, g, proof):
+        with tempfile.TemporaryDirectory() as d:
+            return generate_egraph_pdf(g, os.path.join(d, "p.pdf"), sample_proof=proof)
+
+    def test_D1_a_mutated_endpoint_and_last_step_is_not_credited(self):
+        """The reviewer's probe: a genuine CHECKED proof of I x = x, retargeted to y."""
+        g = saturated("I x", "x")
+        proof = g.explain_equivalence(parse("I x"), parse("x"))
+        self.assertEqual(proof.derivation_status, DerivationStatus.CHECKED)
+        proof.term_b = "y"
+        proof.proof_steps[-1].to_expr = "y"
+        blob = self.pdf(g, proof)
+        self.assertNotIn(b"Derivation: CHECKED", blob)
+        self.assertNotIn(b"=== y", blob)
+        self.assertIn(b"NOT credited", blob)
+        self.assertEqual(replay_explanation(g, proof)[0], DerivationStatus.INVALID)
+
+    def test_D2_a_mutated_middle_step_is_not_credited(self):
+        g = saturated("S K K x", "x")
+        proof = g.explain_equivalence(parse("S K K x"), parse("x"))
+        proof.proof_steps[0].justification = "RULE-K"
+        self.assertNotIn(b"Derivation: CHECKED", self.pdf(g, proof))
+        self.assertEqual(replay_explanation(g, proof)[0], DerivationStatus.INVALID)
+
+    def test_D3_a_hand_built_CHECKED_object_is_not_credited(self):
+        g = saturated("K", "S")
+        forged = EquivalenceProofTree(term_a="🖤", term_b="🌿", is_equivalent=True,
+                                      proof_steps=[step(1, "🖤", "🌿", FAKE)],
+                                      derivation_status=DerivationStatus.CHECKED)
+        blob = self.pdf(g, forged)
+        self.assertNotIn(b"Derivation: CHECKED", blob)
+        self.assertIn(b"NOT credited", blob)
+
+    def test_D4_a_forged_equivalence_without_steps_is_not_credited(self):
+        g = saturated("K", "S")
+        forged = EquivalenceProofTree(term_a="🖤", term_b="🌿", is_equivalent=True, proof_steps=[],
+                                      derivation_status=DerivationStatus.NOT_FOUND_WITHIN_BUDGET)
+        blob = self.pdf(g, forged)
+        self.assertNotIn(b"Equivalent in the e-graph", blob)
+        self.assertIn(b"NOT credited", blob)
+        self.assertEqual(replay_explanation(g, forged)[0], DerivationStatus.NOT_EQUIVALENT)
+
+    def test_D5_genuine_explanations_are_still_credited(self):
+        for a, b in (("S K K x", "x"), ("K x (S S)", "I x"), ("S K K x", "S K K x")):
+            with self.subTest(a=a, b=b):
+                g = saturated(a, b)
+                proof = g.explain_equivalence(parse(a), parse(b))
+                self.assertEqual(replay_explanation(g, proof)[0], DerivationStatus.CHECKED)
+                self.assertIn(b"Derivation: CHECKED", self.pdf(g, proof))
+
+    def test_D6_replaying_adds_nothing_to_the_egraph(self):
+        g = saturated("K", "S")
+        before = (len(g.hashcons), len(g.classes))
+        replay_explanation(g, EquivalenceProofTree(term_a="K I", term_b="S", is_equivalent=True))
+        self.assertEqual((len(g.hashcons), len(g.classes)), before)
 
 
 if __name__ == "__main__":
