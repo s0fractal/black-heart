@@ -2224,7 +2224,7 @@ def cmd_swarm(args):
         generate_swarm_membrane_pdf, append_swarm_membrane_hud
     )
     import epistemic_immune
-    from epistemic_immune import EpistemicOrganism, CounterexampleMetabolism
+    from epistemic_immune import EpistemicOrganism, CounterexampleMetabolism, observe_divergence
     from organism import Chromosome
     import crypto
 
@@ -2353,17 +2353,44 @@ def cmd_swarm(args):
         org = swarm.organisms[orig]
         sk = swarm.organism_keys[orig][1]
         pk = swarm.organism_keys[orig][0]
-        claim, tomb, bounty = CounterexampleMetabolism.metabolize_counterexample(
+        # The refutation is measured before it is claimed. `--target-term` names
+        # the retirement subject; the two terms below are what actually runs.
+        parent_term = args.parent_term
+        candidate_term = args.candidate_term
+        input_fixture = args.input_expr
+        obs = observe_divergence(parent_term, candidate_term, input_fixture)
+        if not obs.diverges():
+            print("\033[1;31m=================================================================\033[0m")
+            print("  %\U0001f5a4 INOCULATION REFUSED: no divergence to metabolize")
+            print("\033[1;31m=================================================================\033[0m")
+            print(f"  Parent:     {parent_term} ({input_fixture})")
+            print(f"  Candidate:  {candidate_term} ({input_fixture})")
+            print(f"  Observed:   {obs.status.value} {obs.detail}")
+            print("  Swarm state was not modified.\n")
+            sys.exit(1)
+
+        outcome = CounterexampleMetabolism.metabolize_counterexample(
             organism=org,
-            gene_id="MUTATION_TEST",
+            gene_id=args.gene_id,
             rule_name=target_term,
-            input_fixture="x",
-            expected_norm="x",
-            actual_norm="divergence",
-            atp_cost=15,
+            parent_term=parent_term,
+            candidate_term=candidate_term,
+            input_fixture=input_fixture,
+            expected_norm=obs.parent_output,
+            actual_norm=obs.candidate_output,
+            atp_cost=obs.atp_required,
             secret_key_hex=sk,
             public_key_hex=pk
         )
+        if not outcome.granted():
+            print("\033[1;31m=================================================================\033[0m")
+            print(f"  %\U0001f5a4 INOCULATION REFUSED: claim audit returned {outcome.verdict.status.value.upper()}")
+            print("\033[1;31m=================================================================\033[0m")
+            print(f"  Reason:     {outcome.verdict.reason}")
+            print("  No claim recorded, no tombstone minted, no ATP credited.")
+            print("  Swarm state was not modified.\n")
+            sys.exit(1)
+        tomb = outcome.retirement
         cascade = SwarmInoculationCascade.broadcast_tombstone(swarm, orig, tomb, max_hops=args.hops or 3)
         out_path = args.output or args.state
         save_swarm(swarm, out_path)
@@ -2372,6 +2399,9 @@ def cmd_swarm(args):
         print("\033[1;32m=================================================================\033[0m")
         print(f"  Origin:           {orig}")
         print(f"  Target Refuted:   {target_term}")
+        print(f"  Replayed:         {parent_term} ({input_fixture}) -> {obs.parent_output}")
+        print(f"                    {candidate_term} ({input_fixture}) -> {obs.candidate_output}")
+        print(f"  Audited Claim:    {outcome.claim.claim_id[:16]}... (+{outcome.gas_bounty} ATP)")
         print(f"  Inoculated Peers: {len(cascade.organisms_inoculated)} organisms")
         print(f"  Hops Depth:       {cascade.hops_reached} / {args.hops or 3}")
         print(f"  Reproduction R0:  {cascade.reproduction_number_r0}")
@@ -4193,7 +4223,15 @@ def main():
     p_sw_inoc = sw_subs.add_parser("inoculate", help="Inject refutation and broadcast epidemic cascade")
     p_sw_inoc.add_argument("state", help="Swarm state file")
     p_sw_inoc.add_argument("--origin", required=True, help="Originating organism ID")
-    p_sw_inoc.add_argument("--target-term", default="K I (S K)", help="Refuted candidate expression")
+    p_sw_inoc.add_argument("--target-term", default="K I (S K)",
+                           help="Retirement subject label (provenance, not executed)")
+    p_sw_inoc.add_argument("--parent-term", default="\U0001f5a4",
+                           help="Executable parent term (omega) applied to the input")
+    p_sw_inoc.add_argument("--candidate-term", default="\U0001f5a4 \U0001f90d",
+                           help="Executable candidate term (tau) applied to the input")
+    p_sw_inoc.add_argument("--input-expr", default="\U0001f90d (\U0001f5a4 \U0001f90d)",
+                           help="Counterexample input, applied as a single argument")
+    p_sw_inoc.add_argument("--gene-id", default="MUTATION_TEST", help="Gene id recorded as provenance")
     p_sw_inoc.add_argument("--hops", type=int, default=3, help="Max hop depth for gossip propagation")
     p_sw_inoc.add_argument("-o", "--output", help="Output state path")
 

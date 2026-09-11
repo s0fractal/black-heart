@@ -51,6 +51,7 @@ SUITES = [
     ("Controlled Forgetting & Epistemic Retirement", "test_controlled_forgetting"),
     ("Retirement / Re-adoption Body Binding", "test_retirement_binding"),
     ("Autonomic Epistemic Immune System", "test_epistemic_immune"),
+    ("Counterexample Producer: Audit Before Effects", "test_counterexample_producer"),
     ("Epistemic Swarm Membrane & Quine Symbiosis", "test_epistemic_swarm"),
     ("Epistemic E-Graph Kernel & Equality Saturation", "test_egraph_kernel"),
     ("Sovereign SMT Kernel & First-Order DPLL(T) Verifier", "test_smt_kernel"),

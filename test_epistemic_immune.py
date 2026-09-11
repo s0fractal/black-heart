@@ -27,7 +27,8 @@ import glyph
 from organism import Chromosome
 import warrant_kernel
 from warrant_kernel import (
-    EvidenceGrade, Polarity, EdgeClaim, EmpiricalWitness, AxiomaticWitness
+    EvidenceGrade, Polarity, EdgeClaim, EmpiricalWitness, AxiomaticWitness,
+    WarrantVerifier, TrustConfig, VerificationStatus
 )
 import controlled_forgetting
 from controlled_forgetting import (
@@ -38,7 +39,7 @@ import epistemic_immune
 from epistemic_immune import (
     ImmuneHealthStatus, EpistemicOrganism, ResurrectionDefense,
     CounterexampleMetabolism, HypothesisElevationCycle,
-    HorizontalInoculation, StarvationAutophagy,
+    HorizontalInoculation, StarvationAutophagy, observe_divergence,
     generate_immune_organism_pdf, append_immune_hud_to_pdf
 )
 
@@ -106,27 +107,41 @@ class TestEpistemicImmune(unittest.TestCase):
         """Failed candidate mutation generates Grade C claim and credits gas bounty based on mu(C)."""
         initial_atp = self.organism.atp_reserve
         rule_name = "x y -> y x"
+        # `rule_name` is the retirement subject, not code. The refutation runs
+        # between two terms the caller names, measured rather than asserted:
+        #   K   (I (K I)) -> K (K I)   in 1 ATP
+        #   K I (I (K I)) -> I         in 1 ATP
+        parent_term = "🖤"
+        candidate_term = "🖤 🤍"
         input_fix = "🤍 (🖤 🤍)"
-        exp_norm = "🤍"
-        act_norm = "🖤 🤍"
-        atp_cost = 4
+        obs = observe_divergence(parent_term, candidate_term, input_fix)
+        self.assertTrue(obs.diverges(), obs.detail)
 
-        claim, tomb, bounty = CounterexampleMetabolism.metabolize_counterexample(
+        outcome = CounterexampleMetabolism.metabolize_counterexample(
             organism=self.organism,
             gene_id="GENE-EXP-REWRITE-01",
             rule_name=rule_name,
+            parent_term=parent_term,
+            candidate_term=candidate_term,
             input_fixture=input_fix,
-            expected_norm=exp_norm,
-            actual_norm=act_norm,
-            atp_cost=atp_cost,
+            expected_norm=obs.parent_output,
+            actual_norm=obs.candidate_output,
+            atp_cost=obs.atp_required,
             secret_key_hex=self.sk_author,
             public_key_hex=self.pk_author
         )
+        self.assertTrue(outcome.granted(), outcome.verdict.reason)
+        claim, tomb, bounty = outcome.claim, outcome.retirement, outcome.gas_bounty
 
         # Claim verification
         self.assertEqual(claim.grade, EvidenceGrade.COUNTEREXAMPLE)
         self.assertEqual(claim.polarity, Polarity.REFUTE)
         self.assertTrue(claim.verify_signature())
+
+        # The credited claim passes an audit performed by someone else
+        self.assertEqual(
+            WarrantVerifier(TrustConfig()).audit_claim(claim).status,
+            VerificationStatus.PASS)
 
         # Tombstone verification
         self.assertEqual(tomb.mode, RetirementMode.REFUTED)
