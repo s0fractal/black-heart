@@ -1110,7 +1110,23 @@ class SMTSolver:
         self.theory_qhead: int = 0
 
     def solve_smt2(self, script: str, max_conflicts: int = 50000, max_decisions: int = 50000) -> SMTResult:
-        """Parse SMT-LIB 2 script and execute DPLL(T) decision procedure."""
+        """Parse an SMT-LIB 2 script and decide it. Each call is ONE query.
+
+        The parser and the Tseitin transformer are rebuilt here, so a script is
+        decided on its own assertions and nothing else. They used to persist:
+        `parse_script` appended to a running list and the transformer kept its
+        clauses and variable map, so a second, independent and satisfiable
+        script returned UNSAT after any earlier UNSAT, and a verdict was a
+        function of what had been asked before.
+
+        This class is not an incremental context. Nothing in the repository
+        used it as one - checked across cli.py, dialectic_kernel and
+        cegis_kernel - and there is no push/pop here that would make that
+        meaningful. The object stays usable as a handle to the most recent
+        query, which is what the model and proof readers expect.
+        """
+        self.parser = SMTLIBParser()
+        self.theory_qhead = 0
         assertions = self.parser.parse_script(script)
         return self.solve_assertions(assertions, max_conflicts=max_conflicts, max_decisions=max_decisions)
 
@@ -1121,6 +1137,9 @@ class SMTSolver:
         max_decisions: int = 50000
     ) -> SMTResult:
         t_start = time.time()
+        # One query, one encoding: see solve_smt2 on why this is rebuilt.
+        self.transformer = TseitinTransformer()
+        self.theory_qhead = 0
         if not assertions:
             return SMTResult(status=SMTStatus.SAT, model={}, elapsed_sec=0.0)
 
@@ -1704,7 +1723,8 @@ def smt_refute_tombstone(
     candidate_formula_smt2: str,
     tombstone_registry: EpistemicTombstoneRegistry,
     retired_statements: Optional[Dict[str, str]] = None,
-    solver: Optional["SMTSolver"] = None,
+    solver_factory: Optional[Callable[[], Any]] = None,
+    solver: Any = None,
 ) -> EpistemicRefutationReport:
     """Does the candidate's theory ENTAIL a statement that was retired?
 
@@ -1720,6 +1740,10 @@ def smt_refute_tombstone(
     was quarantined, an unrelated candidate was quarantined, and an EMPTY
     candidate formula was quarantined: saying nothing was a violation.
 
+    Every statement is decided in a fresh solver from `solver_factory`, because
+    one context carried across questions answers the later ones with the
+    earlier ones.
+
     `retired_statements` maps a tombstone id to an SMT-LIB2 boolean term in the
     candidate's own vocabulary, and it comes FROM THE CALLER. A RetirementRecord
     carries a subject and a loss declaration, not a formula, so there is nothing
@@ -1730,8 +1754,23 @@ def smt_refute_tombstone(
     No outcome here means the organism is sound. Not entailing the retired
     statements that could be checked is exactly that and nothing more.
     """
-    solver = solver or SMTSolver()
+    # A factory, not a solver. Each retired statement is a separate question,
+    # and an object carried between them can answer the later ones with the
+    # earlier ones: on the base commit, once any check came back UNSAT, every
+    # check after it inherited that contradiction and reported ENTAILED, so the
+    # verdict depended on registry order. The injection path is a factory for
+    # the same reason - handing in one reusable solver put the defect back.
+    if solver is not None:
+        # Refused rather than wrapped. Quietly turning one shared solver into a
+        # safe call would hide from the caller that their object could not have
+        # answered these questions independently.
+        raise TypeError(
+            "smt_refute_tombstone() no longer takes a solver instance: one context "
+            "shared across statements answers the later ones with the earlier ones. "
+            "Pass solver_factory=<callable returning a fresh solver> instead.")
+    make_solver = solver_factory or SMTSolver
     statements = dict(retired_statements or {})
+    issued: List[int] = []
     checks: List[TombstoneCheck] = []
     quarantined: List[str] = []
 
@@ -1753,6 +1792,17 @@ def smt_refute_tombstone(
             "(check-sat)\n"
         )
         try:
+            solver = make_solver()
+            if id(solver) in issued:
+                # The contract is stated, so it is checked: a factory that
+                # returns the same object twice is not supplying independent
+                # contexts, and its answers would not be independent either.
+                checks.append(TombstoneCheck(
+                    tid, TombstoneCheckStatus.UNKNOWN,
+                    "the supplied solver_factory returned an object it had already "
+                    "returned; a shared context cannot answer independent questions"))
+                continue
+            issued.append(id(solver))
             res = solver.solve_smt2(script)
         except Exception as exc:
             checks.append(TombstoneCheck(

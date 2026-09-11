@@ -80,11 +80,13 @@ EMPTY = ""
 class UndecidedSolver:
     """A solver that never decides, for the fourth control."""
 
-    def __init__(self):
+    def __init__(self, ledger=None):
         self.calls = 0
+        self.ledger = ledger if ledger is not None else []
 
     def solve_smt2(self, *a, **k):
         self.calls += 1
+        self.ledger.append(self)
         return SMTResult(status=SMTStatus.UNKNOWN)
 
 
@@ -102,10 +104,11 @@ class QuarantineTest(unittest.TestCase):
                         "Refuted by a counterexample.", self.sk, self.pk)
         self.statements = {"RETIRED-RULE": RETIRED}
 
-    def report(self, formula, statements=None, solver=None):
+    def report(self, formula, statements=None, solver_factory=None):
         return smt_refute_tombstone(
             formula, self.reg,
-            self.statements if statements is None else statements, solver)
+            self.statements if statements is None else statements,
+            solver_factory=solver_factory)
 
     # ---------------------------------------------------------------- A ---
 
@@ -128,7 +131,7 @@ class QuarantineTest(unittest.TestCase):
 
     def test_A4_an_undecided_solver_is_inconclusive_not_safe_and_not_guilty(self):
         solver = UndecidedSolver()
-        r = self.report(ENTAILING, solver=solver)
+        r = self.report(ENTAILING, solver_factory=lambda: solver)
         self.assertEqual(r.verdict, QuarantineVerdict.INCONCLUSIVE)
         self.assertEqual(r.quarantined_tombstones, [])
         self.assertEqual(r.checked_count, 0)
@@ -150,9 +153,69 @@ class QuarantineTest(unittest.TestCase):
         class Raising:
             def solve_smt2(self, *a, **k):
                 raise RuntimeError("boom")
-        r = self.report(ENTAILING, solver=Raising())
+        r = self.report(ENTAILING, solver_factory=Raising)
         self.assertEqual(r.verdict, QuarantineVerdict.INCONCLUSIVE)
         self.assertIs(r.checks[0].status, TombstoneCheckStatus.UNKNOWN)
+
+    def test_A8_one_answer_does_not_decide_the_next(self):
+        """Independent questions, in both registry orders (Q1).
+
+        A solver carried across statements answers the later ones with the
+        earlier ones: once any check was UNSAT, every check after it inherited
+        that contradiction. On the base commit `[P, Q]` gave ENTAILED/ENTAILED
+        and `[Q, P]` gave NOT_ENTAILED/ENTAILED for the same candidate.
+        """
+        self.reg.retire("SECOND-RULE", "e" * 64, RetirementMode.REFUTED,
+                        "Refuted.", self.sk, self.pk)
+        candidate = "(declare-const p Bool)\n(declare-const q Bool)\n(assert p)"
+        statements = {"RETIRED-RULE": "p", "SECOND-RULE": "q"}
+        expected = {"RETIRED-RULE": TombstoneCheckStatus.ENTAILED,
+                    "SECOND-RULE": TombstoneCheckStatus.NOT_ENTAILED}
+        for order in (("RETIRED-RULE", "SECOND-RULE"), ("SECOND-RULE", "RETIRED-RULE")):
+            with self.subTest(order=order):
+                reg = EpistemicTombstoneRegistry()
+                reg.tombstones = {k: self.reg.tombstones[k] for k in order}
+                r = smt_refute_tombstone(candidate, reg, statements)
+                self.assertEqual({c.tombstone_id: c.status for c in r.checks}, expected)
+
+    def test_A9_asking_twice_gives_the_same_answer(self):
+        """Two calls in a row, default factory: the second is not the first plus."""
+        candidate = "(declare-const p Bool)\n(declare-const q Bool)\n(assert p)"
+        only_p = EpistemicTombstoneRegistry()
+        only_p.tombstones = {"RETIRED-RULE": self.reg.tombstones["RETIRED-RULE"]}
+        first = smt_refute_tombstone(candidate, only_p, {"RETIRED-RULE": "p"})
+        second = smt_refute_tombstone(candidate, only_p, {"RETIRED-RULE": "q"})
+        self.assertEqual(first.verdict, QuarantineVerdict.ENTAILS_RETIRED_STATEMENT)
+        self.assertEqual(second.verdict, QuarantineVerdict.NO_ENTAILMENT_FOUND)
+
+    def test_A10_a_factory_that_reuses_one_context_is_refused(self):
+        """The contract is stated, so it is checked."""
+        self.reg.retire("SECOND-RULE", "e" * 64, RetirementMode.REFUTED,
+                        "Refuted.", self.sk, self.pk)
+        shared = UndecidedSolver()
+        r = smt_refute_tombstone(
+            ENTAILING, self.reg,
+            {"RETIRED-RULE": RETIRED, "SECOND-RULE": RETIRED},
+            solver_factory=lambda: shared)
+        reasons = [c.reason for c in r.checks]
+        self.assertTrue(any("already returned" in x for x in reasons), reasons)
+        self.assertEqual(r.verdict, QuarantineVerdict.INCONCLUSIVE)
+
+    def test_A11_the_instance_keyword_is_refused_by_name(self):
+        with self.assertRaises(TypeError) as caught:
+            smt_refute_tombstone(ENTAILING, self.reg, self.statements,
+                                 solver=UndecidedSolver())
+        self.assertIn("solver_factory", str(caught.exception))
+
+    def test_A12_the_solver_itself_decides_one_script_per_call(self):
+        """The root cause, pinned where it lives."""
+        solver = sm.SMTSolver()
+        self.assertEqual(solver.solve_smt2(
+            "(set-logic QF_UF)\n(declare-const p Bool)\n(assert p)\n"
+            "(assert (not p))\n(check-sat)").status, SMTStatus.UNSAT)
+        self.assertEqual(solver.solve_smt2(
+            "(set-logic QF_UF)\n(declare-const q Bool)\n(assert q)\n"
+            "(check-sat)").status, SMTStatus.SAT)
 
     # ---------------------------------------------------------------- B ---
 
@@ -165,7 +228,7 @@ class QuarantineTest(unittest.TestCase):
 
     def test_B2_an_empty_registry_certifies_nothing(self):
         r = smt_refute_tombstone(ENTAILING, EpistemicTombstoneRegistry(), {},
-                                 solver=ForbiddenSolver())
+                                 solver_factory=ForbiddenSolver)
         self.assertEqual(r.verdict, QuarantineVerdict.NOTHING_CHECKED)
         self.assertEqual(r.checks, [])
 
