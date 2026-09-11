@@ -104,6 +104,156 @@ from agora import (
 
 MORPHO_AUTOPOIESIS_MANIFEST_PREFIX = "# %\U0001F5A4 MORPHO_AUTOPOIESIS_MANIFEST: "
 
+# The rule name an epoch's receipt carries when no proposal (including the
+# exploratory operand swaps) was accepted this epoch. Its pre_term/post_term
+# must be identical and its atp_saved must be zero; both `evolve` and `audit`
+# require this, so a receipt cannot claim this name for an epoch that actually
+# changed something, or claim a nonzero credit for one that did not.
+NO_MUTATION_FOUND_RULE = "NO_MUTATION_FOUND"
+
+
+def _expected_credit(atp_saved: int) -> int:
+    """The ATP an epoch may credit, as a pure function of its OWN atp_saved.
+
+    Zero measured saving credits zero. A positive saving credits at least 5,
+    twice the saving otherwise -- the formula `evolve_morpho_autopoietic_organism`
+    always used for a genuine improvement. Called by both the producer (to
+    apply the credit) and the auditor (to check it was not skipped, inflated,
+    or applied twice), so the two can never disagree about what a given
+    atp_saved was worth.
+    """
+    if atp_saved <= 0:
+        return 0
+    return max(5, atp_saved * 2)
+
+
+def _genome_hash_of(triples) -> str:
+    """The genome digest, from (gene_id, expression, expected_normal_form).
+
+    Shared by `MorphoAutopoieticOrganism.compute_genome_hash` (the producer)
+    and by the auditor's backward replay, so the two can never disagree about
+    what a given genome hashes to.
+    """
+    tokens = [f"{gid}:{expr}:{nf}" for gid, expr, nf in sorted(triples, key=lambda t: t[0])]
+    return hashlib.sha256(";".join(tokens).encode("utf-8")).hexdigest()
+
+
+def _organism_hash_of(
+    organism_id: str,
+    generation: int,
+    parent_hash: str,
+    genome_hash: str,
+    public_key_hex: str,
+    feed_rate_f: float,
+    kill_rate_k: float,
+    archetype_key: str,
+    weisfeiler_lehman_digest: str,
+) -> str:
+    """The organism digest. Shared for the same reason as `_genome_hash_of`:
+    the auditor reconstructs this from a RECEIPT's own signed fields plus a
+    replayed genome, and must use the identical formula the producer used."""
+    data = (
+        f"MORPHO_ORGANISM:{organism_id}:{generation}:{parent_hash}:"
+        f"{genome_hash}:{public_key_hex}:{feed_rate_f:.6f}:{kill_rate_k:.6f}:"
+        f"{archetype_key}:{weisfeiler_lehman_digest}"
+    )
+    return hashlib.sha256(data.encode("utf-8")).hexdigest()
+
+
+def _canonical_expression(expression: str) -> str:
+    """`str(parse(x))` -- the spelling every stored chromosome expression uses.
+
+    `parse` accepts ASCII combinator names but `str` renders glyphs, so the
+    round trip is lossy in the ASCII direction ("S (K alpha) I" becomes
+    "\U0001F33F (\U0001F5A4 alpha) \U0001F91F"). The producer stores only
+    `str(...)` output, so canonical spelling is a whole-chain invariant -- and
+    the auditor's backward replay depends on it: without it a genesis-era
+    genome could not be reconstructed exactly, only up to spelling.
+    """
+    return str(parse(expression))
+
+
+def _transition_is_local(pre_t, post_t, site) -> bool:
+    """True when `site` is EXACTLY where pre and post differ.
+
+    Substituting post's subterm at `site` into pre must reproduce post. That
+    alone is too weak to pin a location: every ANCESTOR of the real site
+    satisfies it too, because a larger subtree containing the change also
+    reproduces post -- and the root satisfies it unconditionally, which would
+    make the check vacuous for a receipt claiming `site == ()`. So `site` must
+    also be the DEEPEST such address: neither child extension may still
+    localize the change.
+    """
+    def localizes(addr) -> bool:
+        try:
+            return str(replace_subterm_at(pre_t, addr, get_subterm_at(post_t, addr))) == str(post_t)
+        except Exception:
+            return False
+
+    site = tuple(site)
+    if not localizes(site):
+        return False
+    return not any(localizes(site + (d,)) for d in ("L", "R"))
+
+
+# The state profile is a VERIFICATION CONTRACT, not merely the shape of the
+# manifest's JSON. `transition-bound.v1` is the first profile whose auditor
+# binds every measured pair to the genome transition it claims to describe
+# (review R1), and that binding needs each historical genome reconstructable
+# exactly -- which in turn needs canonical expression spelling all the way back
+# to genesis. Documents written before this profile stored a hand-written ASCII
+# genesis, and no later epoch can retroactively canonicalize that already-signed
+# state. They are therefore OUTSIDE this auditor's accepted domain: refused by
+# name, with their bytes and signatures left untouched. See
+# docs/MORPHO-STATE-PROFILE.md.
+MORPHO_STATE_PROFILE = "morpho-autopoiesis.transition-bound.v1"
+SUPPORTED_STATE_PROFILES = (MORPHO_STATE_PROFILE,)
+
+_UNSUPPORTED_HISTORY_GUIDANCE = (
+    "This document predates the {profile!r} state profile (it declares {found!r}). "
+    "Its history is outside this auditor's accepted domain and is REFUSED, not "
+    "repaired: its bytes and signatures are left exactly as they are. There is no "
+    "in-place migration -- normalizing and re-signing the chain would destroy the "
+    "attested history it exists to carry. To keep using this document, verify and "
+    "continue it with the pinned pre-S6a code; to use the current profile, start a "
+    "new chain, which explicitly does NOT preserve the old attested history. "
+    "See docs/MORPHO-STATE-PROFILE.md."
+)
+
+
+def _unsupported_profile_reason(manifest: Dict[str, Any]) -> Optional[str]:
+    """The named refusal for state this auditor does not accept, or None.
+
+    This is a ROUTING signal, never a trust signal. Declaring the current
+    profile on an old document does not make it pass -- the transition replay
+    still refuses it -- and removing it from a current document only earns this
+    refusal. It can never grant acceptance, only choose which named refusal you
+    get instead of an opaque hash mismatch.
+    """
+    found = manifest.get("state_profile", "")
+    if found in SUPPORTED_STATE_PROFILES:
+        return None
+    return _UNSUPPORTED_HISTORY_GUIDANCE.format(profile=MORPHO_STATE_PROFILE, found=found)
+
+
+def unsupported_history_reason(pdf_path: str) -> Optional[str]:
+    """Why this document's history is not accepted, or None if it is in domain.
+
+    Returns None for anything unreadable too: a malformed document is the
+    ordinary audit's business to refuse, not this contract's.
+    """
+    try:
+        with open(pdf_path, "rb") as f:
+            data = f.read()
+        prefix = MORPHO_AUTOPOIESIS_MANIFEST_PREFIX.encode("utf-8")
+        idx = data.rfind(prefix)
+        if idx == -1:
+            return None
+        manifest = json.loads(data[idx + len(prefix):].split(b"\n", 1)[0].decode("utf-8"))
+    except Exception:
+        return None
+    return _unsupported_profile_reason(manifest)
+
 # ============================================================================
 # 1. MORPHOGENETIC AUTOPOIESIS RECEIPT
 # ============================================================================
@@ -143,6 +293,16 @@ class MorphoAutopoiesisReceipt:
     # Agora federation (Grok 5)
     tabled_proposal_id: str = ""
     agora_atp_staked: int = 0
+    # The organism's ATP reserve immediately after this receipt's own credit is
+    # applied. Signed, so it binds the mutable, otherwise-unauthenticated
+    # `MorphoAutopoieticOrganism.atp_reserve` field to this receipt chain: an
+    # audit can require org.atp_reserve == receipt_chain[-1].resulting_atp_reserve,
+    # and require each step's credit to follow from that step's own atp_saved
+    # by the same formula the producer uses. Before this field existed, nothing
+    # bound atp_reserve to anything -- it could be edited in the manifest to any
+    # value with no receipt at all, and audit_morpho_autopoietic_organism still
+    # reported the document sound.
+    resulting_atp_reserve: int = 0
     # Cryptographic attestation
     public_key_hex: str = ""
     signature_hex: str = ""
@@ -158,7 +318,7 @@ class MorphoAutopoiesisReceipt:
             f"{self.feed_rate_f:.6f}:{self.kill_rate_k:.6f}:{self.pde_steps}:"
             f"{self.initial_nodes}:{self.reduced_steps}:{self.net_atp_burned}:"
             f"{self.weisfeiler_lehman_digest}:{self.tabled_proposal_id}:{self.agora_atp_staked}:"
-            f"{self.public_key_hex}"
+            f"{self.resulting_atp_reserve}:{self.public_key_hex}"
         )
         return payload.encode("utf-8")
 
@@ -226,6 +386,7 @@ class MorphoAutopoiesisReceipt:
             "weisfeiler_lehman_digest": self.weisfeiler_lehman_digest,
             "tabled_proposal_id": self.tabled_proposal_id,
             "agora_atp_staked": self.agora_atp_staked,
+            "resulting_atp_reserve": self.resulting_atp_reserve,
             "public_key_hex": self.public_key_hex,
             "signature_hex": self.signature_hex,
             "receipt_hash": self.receipt_hash,
@@ -257,6 +418,7 @@ class MorphoAutopoiesisReceipt:
             weisfeiler_lehman_digest=str(d["weisfeiler_lehman_digest"]),
             tabled_proposal_id=str(d.get("tabled_proposal_id", "")),
             agora_atp_staked=int(d.get("agora_atp_staked", 0)),
+            resulting_atp_reserve=int(d.get("resulting_atp_reserve", 0)),
             public_key_hex=str(d["public_key_hex"]),
             signature_hex=str(d.get("signature_hex", "")),
             receipt_hash=str(d.get("receipt_hash", "")),
@@ -288,12 +450,14 @@ class MorphoAutopoieticOrganism:
     receipt_chain: List[MorphoAutopoiesisReceipt] = field(default_factory=list)
     experiment_log: ExperimentLog = field(default_factory=ExperimentLog)
     atp_reserve: int = 1000
+    # Declares which verification contract this state was written under. Legacy
+    # documents carry "" (the key did not exist) and are refused by name.
+    state_profile: str = MORPHO_STATE_PROFILE
 
     def compute_genome_hash(self) -> str:
-        tokens = []
-        for c in sorted(self.chromosomes, key=lambda x: x.gene_id):
-            tokens.append(f"{c.gene_id}:{c.expression}:{c.expected_normal_form}")
-        return hashlib.sha256(";".join(tokens).encode("utf-8")).hexdigest()
+        return _genome_hash_of(
+            (c.gene_id, c.expression, str(c.expected_normal_form)) for c in self.chromosomes
+        )
 
     def compute_kinetic_drift(self) -> Tuple[float, float, str]:
         """
@@ -324,13 +488,17 @@ class MorphoAutopoieticOrganism:
         return f, k, archetype
 
     def compute_hash(self) -> str:
-        gh = self.compute_genome_hash()
-        data = (
-            f"MORPHO_ORGANISM:{self.organism_id}:{self.generation}:{self.parent_hash}:"
-            f"{gh}:{self.public_key_hex}:{self.feed_rate_f:.6f}:{self.kill_rate_k:.6f}:"
-            f"{self.archetype_key}:{self.weisfeiler_lehman_digest}"
+        return _organism_hash_of(
+            self.organism_id,
+            self.generation,
+            self.parent_hash,
+            self.compute_genome_hash(),
+            self.public_key_hex,
+            self.feed_rate_f,
+            self.kill_rate_k,
+            self.archetype_key,
+            self.weisfeiler_lehman_digest,
         )
-        return hashlib.sha256(data.encode("utf-8")).hexdigest()
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -354,6 +522,7 @@ class MorphoAutopoieticOrganism:
             "kill_rate_k": self.kill_rate_k,
             "weisfeiler_lehman_digest": self.weisfeiler_lehman_digest,
             "atp_reserve": self.atp_reserve,
+            "state_profile": self.state_profile,
             "receipt_chain": [r.to_dict() for r in self.receipt_chain],
             "experiment_log": self.experiment_log.to_list(),
         }
@@ -402,6 +571,10 @@ class MorphoAutopoieticOrganism:
             receipt_chain=receipts,
             experiment_log=elog,
             atp_reserve=int(d.get("atp_reserve", 1000)),
+            # Absent on documents written before the profile existed. Defaults
+            # to "" rather than to the current profile, so legacy state is never
+            # silently promoted into this auditor's accepted domain.
+            state_profile=str(d.get("state_profile", "")),
         )
 
 
@@ -422,33 +595,42 @@ def create_morpho_autopoietic_seed(
     else:
         sk_hex, pk_hex = generate_keypair()
 
-    # Initial Chromosomes with reducible redexes
+    # Initial Chromosomes with reducible redexes.
+    #
+    # The expressions are written here in readable ASCII but STORED canonically,
+    # through `_canonical_expression`. Every later epoch stores
+    # `str(prop.candidate_term)`, which is already canonical, so this makes
+    # "a stored chromosome expression equals str(parse(itself))" hold for the
+    # whole chain. The auditor's backward replay reconstructs each historical
+    # genome exactly from the receipts' pre/post terms, and those terms are
+    # canonical; a genesis genome kept in ASCII spelling could only be
+    # reconstructed up to spelling, so its organism_hash would never match.
     chroms = [
         Chromosome(
             gene_id="GENE-CORE-SIG",
             gene_name="Core Signal",
-            expression="S (K alpha) I",
+            expression=_canonical_expression("S (K alpha) I"),
             expected_normal_form="alpha",
             max_atp=10_000,
         ),
         Chromosome(
             gene_id="GENE-COMM-ID",
             gene_name="Commutative ID",
-            expression="S (K alpha) (K beta)",
+            expression=_canonical_expression("S (K alpha) (K beta)"),
             expected_normal_form="K (alpha beta)",
             max_atp=10_000,
         ),
         Chromosome(
             gene_id="GENE-REDEX-SKK",
             gene_name="Redex SKK",
-            expression="K alpha beta",
+            expression=_canonical_expression("K alpha beta"),
             expected_normal_form="alpha",
             max_atp=10_000,
         ),
         Chromosome(
             gene_id="GENE-CHURCH-F",
             gene_name="Church False",
-            expression="I gamma",
+            expression=_canonical_expression("I gamma"),
             expected_normal_form="gamma",
             max_atp=10_000,
         ),
@@ -747,6 +929,7 @@ def init_morpho_autopoietic_organism(
         reduced_steps=0,
         net_atp_burned=0,
         weisfeiler_lehman_digest=org.weisfeiler_lehman_digest,
+        resulting_atp_reserve=org.atp_reserve,
         public_key_hex=org.public_key_hex,
     )
     genesis_receipt.sign(sk_hex)
@@ -834,6 +1017,12 @@ def evolve_morpho_autopoietic_organism(
     Lafont proof-net compilation & WL reduction, and strictly appends an
     ISO 32000 §7.5.6 revision page directly to the file.
     """
+    # Refuse unsupported history by name, so an owner of a legacy document is
+    # told what happened and what their options are, rather than being told
+    # their honest document is "tampered". Nothing is written either way.
+    _legacy = unsupported_history_reason(pdf_path)
+    if _legacy is not None:
+        raise ValueError(f"Cannot evolve {pdf_path}: {_legacy}")
     if not audit_morpho_autopoietic_organism(pdf_path):
         raise ValueError(f"Cannot evolve tampered or invalid organism: {pdf_path}")
 
@@ -912,12 +1101,19 @@ def evolve_morpho_autopoietic_organism(
             mutated_chroms.append(chrom)
 
     if not mutation_found:
+        # Genuinely nothing improved this epoch: every proposal (including the
+        # exploratory operand swaps) was rejected. Before this fix, this branch
+        # still minted a signed "METABOLIC_DRIFT" receipt claiming pre_term ==
+        # post_term (literally no change) with atp_saved=1, so once a genome
+        # reached a locally stable form, every later `evolve` call fabricated
+        # free ATP forever. Record the epoch honestly instead: zero economy,
+        # under a rule name that does not claim a transition happened.
         applied_gene_id = org.chromosomes[0].gene_id
-        applied_rule_name = "METABOLIC_DRIFT"
+        applied_rule_name = NO_MUTATION_FOUND_RULE
         applied_site = []
         pre_term_str = org.chromosomes[0].expression
         post_term_str = org.chromosomes[0].expression
-        atp_saved = 1
+        atp_saved = 0
         size_saved = 0
         experiment_id = derive_experiment_id(applied_gene_id, tuple(applied_site), applied_rule_name, pre_term_str, post_term_str)
 
@@ -925,7 +1121,9 @@ def evolve_morpho_autopoietic_organism(
     org.chromosomes = mutated_chroms
     org.generation += 1
     org.parent_hash = org.organism_hash
-    org.atp_reserve += max(5, atp_saved * 2)
+    # Credit follows from atp_saved by the same formula the audit re-derives
+    # (`_expected_credit`); zero measured saving now means zero credit.
+    org.atp_reserve += _expected_credit(atp_saved)
 
     # 3. Kinetic Drift & Reaction-Diffusion Morphogenesis (Grok 3)
     f, k, arch = org.compute_kinetic_drift()
@@ -969,6 +1167,7 @@ def evolve_morpho_autopoietic_organism(
         reduced_steps=steps_red,
         net_atp_burned=steps_red,
         weisfeiler_lehman_digest=wl_digest,
+        resulting_atp_reserve=org.atp_reserve,
         public_key_hex=org.public_key_hex,
     )
     next_receipt.sign(sk_hex)
@@ -1170,6 +1369,25 @@ def audit_morpho_autopoietic_organism(pdf_path: str) -> bool:
       - Recomputes kinetic drift (F, k) and validates Turing archetype consistency.
       - Recomputes current organism hash from active genome, ensuring
         tamper-resistance between receipts and memory state.
+      - Re-derives each receipt's economy: a claimed transition is re-evaluated
+        under the same FrozenEvaluator profile that produced it, atp_saved must
+        equal what that gives, and a NO_MUTATION_FOUND epoch must claim zero.
+        Each step's ATP credit must follow from its own atp_saved by the one
+        formula the producer uses, and the organism's live atp_reserve must
+        equal the last receipt's committed resulting_atp_reserve. Before this,
+        atp_reserve was a bare int in the manifest bound to nothing: editing it
+        directly, with no receipt at all, still audited sound, and an epoch
+        where nothing was accepted still minted a signed 1-ATP "METABOLIC_DRIFT"
+        receipt claiming pre_term == post_term, forever, on every later call.
+      - Binds each claimed pair to the transition it says it describes, by
+        replaying the genome backwards through the chain and requiring every
+        receipt's already-signed organism_hash to reconstruct from the genome
+        its own epoch actually held (review R1). Re-deriving the economy of the
+        receipt's OWN pair is not enough on its own: a genuine, already-paid
+        pair lifted from an earlier epoch into a later unchanged one still
+        re-evaluates as a real saving, still balances arithmetically, and is
+        still validly signed by the document's own key. Measured at 19ae2a6,
+        that artifact audited sound and kept +30 unearned ATP.
     """
     if not os.path.exists(pdf_path):
         return False
@@ -1189,10 +1407,16 @@ def audit_morpho_autopoietic_organism(pdf_path: str) -> bool:
     except Exception:
         return False
 
+    # State written under an older verification contract is refused by name,
+    # before any of the checks below can fail it with an opaque hash mismatch.
+    if _unsupported_profile_reason(manifest) is not None:
+        return False
+
     if not org.receipt_chain:
         return False
 
     expected_parent = "0" * 64
+    expected_reserve = None
     for i, rec in enumerate(org.receipt_chain):
         if not rec.verify_integrity():
             return False
@@ -1203,6 +1427,111 @@ def audit_morpho_autopoietic_organism(pdf_path: str) -> bool:
         if rec.parent_hash != expected_parent:
             return False
         expected_parent = rec.organism_hash
+
+        if i == 0:
+            # Genesis commits to its own starting balance; there is no prior
+            # receipt to derive it from.
+            if rec.rule_name != "GENESIS_SEED":
+                return False
+            expected_reserve = rec.resulting_atp_reserve
+            continue
+
+        if rec.rule_name == "GENESIS_SEED":
+            return False  # only generation 0 may claim genesis
+
+        site = tuple(rec.site_address)
+        if rec.rule_name == NO_MUTATION_FOUND_RULE:
+            if rec.pre_term != rec.post_term or rec.atp_saved != 0 or rec.size_saved != 0:
+                return False
+            if site != ():
+                return False  # nothing moved, so no site may be claimed
+        else:
+            try:
+                pre_t, post_t = parse(rec.pre_term), parse(rec.post_term)
+            except Exception:
+                return False
+            eval_res = FrozenEvaluator().evaluate_transformation(pre_t, post_t)
+            if eval_res.verdict != MutationVerdict.ACCEPTED_MORE_EFFICIENT:
+                return False
+            if rec.atp_saved != max(1, -eval_res.atp_delta):
+                return False
+            if rec.size_saved != max(0, -eval_res.size_delta):
+                return False
+            # The recorded location must be where the pair actually differs.
+            if not _transition_is_local(pre_t, post_t, site):
+                return False
+
+        # The experiment id is a pure function of the five fields above, by the
+        # same derivation the producer uses for both branches. It ties them
+        # together so they cannot be re-mixed independently of one another.
+        if rec.experiment_id != derive_experiment_id(
+                rec.gene_id, site, rec.rule_name, rec.pre_term, rec.post_term):
+            return False
+
+        expected_reserve += _expected_credit(rec.atp_saved)
+        if rec.resulting_atp_reserve != expected_reserve:
+            return False
+
+    if org.atp_reserve != org.receipt_chain[-1].resulting_atp_reserve:
+        return False
+
+    # --- Transition binding (review R1) ------------------------------------
+    # Everything above re-derives each receipt's economy from the receipt's OWN
+    # declared pair. That is not enough. A pair can be a perfectly genuine,
+    # already-paid improvement lifted out of an EARLIER epoch and transplanted
+    # into a later epoch where the genome did not move at all: the pair still
+    # re-evaluates as a real saving, the arithmetic is still self-consistent,
+    # and the signature is still valid because the document's own key made it.
+    # Measured at 19ae2a6 by the reviewer's probe, exactly that artifact audited
+    # sound and carried +30 unearned ATP through the next evolve.
+    #
+    # So bind each pair to the transition it claims to describe. Replay the
+    # genome BACKWARDS through the chain -- undoing each epoch's declared
+    # rewrite -- and require every receipt's already-signed organism_hash to
+    # reconstruct from the genome that receipt's own epoch actually held. A
+    # recycled pair changes a gene the chain says did not change, so the parent
+    # genome it implies no longer hashes to the parent's committed hash.
+    #
+    # This needs no new receipt field: it re-reads fields that were already
+    # signed. It does NOT follow that there is no migration (review R2): the
+    # binding requires each historical genome to be reconstructable exactly,
+    # which requires canonical spelling back to genesis, which documents written
+    # by the previous generator do not have. Their accepted domain changed. That
+    # break is declared by the state profile above and in
+    # docs/MORPHO-STATE-PROFILE.md -- it is not absent, it is named.
+    try:
+        for c in org.chromosomes:
+            if c.expression != _canonical_expression(c.expression):
+                return False  # the replay reconstructs canonical spelling only
+    except Exception:
+        return False
+
+    genome = {c.gene_id: [c.expression, str(c.expected_normal_form)] for c in org.chromosomes}
+    if len(genome) != len(org.chromosomes):
+        return False  # duplicate gene ids would make the replay ambiguous
+
+    for i in range(len(org.receipt_chain) - 1, -1, -1):
+        rec = org.receipt_chain[i]
+        replayed = _organism_hash_of(
+            org.organism_id,
+            rec.generation,
+            rec.parent_hash,
+            _genome_hash_of((gid, expr, nf) for gid, (expr, nf) in genome.items()),
+            rec.public_key_hex,
+            rec.feed_rate_f,
+            rec.kill_rate_k,
+            rec.archetype,
+            rec.weisfeiler_lehman_digest,
+        )
+        if replayed != rec.organism_hash:
+            return False
+        if i == 0:
+            break
+        # Undo this epoch's declared transition to obtain the parent genome.
+        gene = genome.get(rec.gene_id)
+        if gene is None or gene[0] != rec.post_term:
+            return False
+        gene[0] = rec.pre_term
 
     # Verify kinetic drift consistency
     f_exp, k_exp, arch_exp = org.compute_kinetic_drift()
