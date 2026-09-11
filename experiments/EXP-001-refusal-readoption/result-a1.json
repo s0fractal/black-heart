@@ -3,9 +3,9 @@
   "attribution_held": true,
   "attribution_mismatches": [],
   "experiment": "EXP-001",
-  "genesis_document_sha256": "f318156695537ef96423bdf71e88262d2c8885d6ee6ef5075f190fbce0b2c937",
+  "genesis_document_sha256": "5899e476792584f9e02b9d10b81dbd35cf8bbd2b76dbb66412bc21972b83ea56",
   "holds": true,
-  "issuer_public_key": "501b8a77ea5241c12e6a010feaac02b27560e9ee944d6624e45ed56b958ed913",
+  "issuer_public_key": "c797cc8efb4868fc6e5abaee8b9c5c559f8a725e3adbeddda512c619a2e56df3",
   "main_document_unchanged_through_s3": true,
   "mismatches": [],
   "pair": {
@@ -53,28 +53,30 @@
   "registries": {
     "R_other": {
       "readoption_record_id": null,
-      "retirement_record_id": "d4fc9c94f25ced0c362265569fe1c49c0464e08da8c8dc9ce982782bc09768a0",
-      "sha256": "e5c50450b43bc4b93e996272bd41dcf7084a400607e4306f253a384d4f79abb6"
+      "retirement_record_id": "285c339485656606b0836f40a3071c5ae766f9368287b6fe82001beab711b4b1",
+      "sha256": "0c5f09875806d758469e31f3927376449436b1a31bedef3ad35e7ecc516d292f"
     },
     "R_same": {
       "readoption_record_id": null,
-      "retirement_record_id": "b51fafb1d15a48526d7e44be5b520c04698e3611c9d60c7742812eed10fed8d1",
-      "sha256": "499ab8e02d6beff956c497b4368fa538837984821c537da2c98660893662838f"
+      "retirement_record_id": "2c582bdc47d6390bbd2140536c76fa47987cd68d188762c18a5b501da48d1d40",
+      "sha256": "10bb1c5dc2dddaa196dcbd37f5b351efb96905420d0d502c6e9a1ae0fe1c26e3"
     },
     "R_same_readopted": {
-      "readoption_record_id": "7575a00f242f4d653fd31fcc39442ae6d4d6023a14e752eb85b3778876ace5ab",
-      "retirement_record_id": "b51fafb1d15a48526d7e44be5b520c04698e3611c9d60c7742812eed10fed8d1",
-      "sha256": "8aee6a126dee47cb8e197b865ff116c1c50ef7856a7e4a2384bfc9761f55440a"
+      "readoption_record_id": "76e85269d2afbac7476aa6760e2867558e24385608a1519879174ba8ac641c72",
+      "retirement_record_id": "2c582bdc47d6390bbd2140536c76fa47987cd68d188762c18a5b501da48d1d40",
+      "sha256": "d46a4d1599140914c0bf05e768f6512a6b81504d0d7baba8d8f63a23b9bac402"
     }
   },
-  "repo_commit": "2023b6c7913f5529976ac4dd88dd54a2ebac5817",
-  "repo_dirty": true,
-  "started_utc": "2026-09-11T04:25:18Z",
+  "repo_commit": "3c99c3ee134b6696b73a3ec893ff27e85f6a83d4",
+  "repo_dirty": false,
+  "repo_dirty_paths": [],
+  "repo_state_read": "before the run wrote anything",
+  "started_utc": "2026-09-11T04:29:49Z",
   "steps": [
     {
       "document": "changes",
-      "document_sha256_after": "141845f6f2564ab423fca85f7475da2ba80a354322ac336e7a84a9259c7f023d",
-      "document_sha256_before": "f318156695537ef96423bdf71e88262d2c8885d6ee6ef5075f190fbce0b2c937",
+      "document_sha256_after": "5882717d2fa35406dfb95da6fa3a11c173491a2a3a4e016e0ada40512009ffbc",
+      "document_sha256_before": "5899e476792584f9e02b9d10b81dbd35cf8bbd2b76dbb66412bc21972b83ea56",
       "exit": 0,
       "flags": [],
       "generation_after": 1,
@@ -90,8 +92,8 @@
     },
     {
       "document": "unchanged",
-      "document_sha256_after": "f318156695537ef96423bdf71e88262d2c8885d6ee6ef5075f190fbce0b2c937",
-      "document_sha256_before": "f318156695537ef96423bdf71e88262d2c8885d6ee6ef5075f190fbce0b2c937",
+      "document_sha256_after": "5899e476792584f9e02b9d10b81dbd35cf8bbd2b76dbb66412bc21972b83ea56",
+      "document_sha256_before": "5899e476792584f9e02b9d10b81dbd35cf8bbd2b76dbb66412bc21972b83ea56",
       "exit": 1,
       "flags": [
         "--tombstones"
@@ -100,7 +102,7 @@
       "key_unchanged": true,
       "refusal_says_not_modified": true,
       "registry": "R_same",
-      "registry_sha256": "499ab8e02d6beff956c497b4368fa538837984821c537da2c98660893662838f",
+      "registry_sha256": "10bb1c5dc2dddaa196dcbd37f5b351efb96905420d0d502c6e9a1ae0fe1c26e3",
       "scope": "REFUTED_FOR_REFERENCE",
       "start_from": "genesis document",
       "step": "S2",
@@ -109,8 +111,8 @@
     },
     {
       "document": "unchanged",
-      "document_sha256_after": "f318156695537ef96423bdf71e88262d2c8885d6ee6ef5075f190fbce0b2c937",
-      "document_sha256_before": "f318156695537ef96423bdf71e88262d2c8885d6ee6ef5075f190fbce0b2c937",
+      "document_sha256_after": "5899e476792584f9e02b9d10b81dbd35cf8bbd2b76dbb66412bc21972b83ea56",
+      "document_sha256_before": "5899e476792584f9e02b9d10b81dbd35cf8bbd2b76dbb66412bc21972b83ea56",
       "exit": 1,
       "flags": [
         "--tombstones"
@@ -119,7 +121,7 @@
       "key_unchanged": true,
       "refusal_says_not_modified": true,
       "registry": "R_other",
-      "registry_sha256": "e5c50450b43bc4b93e996272bd41dcf7084a400607e4306f253a384d4f79abb6",
+      "registry_sha256": "0c5f09875806d758469e31f3927376449436b1a31bedef3ad35e7ecc516d292f",
       "scope": "REFUTED_FOR_ANOTHER_REFERENCE",
       "start_from": "genesis document",
       "step": "S3",
@@ -128,8 +130,8 @@
     },
     {
       "document": "changes",
-      "document_sha256_after": "141845f6f2564ab423fca85f7475da2ba80a354322ac336e7a84a9259c7f023d",
-      "document_sha256_before": "f318156695537ef96423bdf71e88262d2c8885d6ee6ef5075f190fbce0b2c937",
+      "document_sha256_after": "e3b6306d00301ab46b39331a210bd25125dbaca3aafedfc04385fd9a878f14a8",
+      "document_sha256_before": "5899e476792584f9e02b9d10b81dbd35cf8bbd2b76dbb66412bc21972b83ea56",
       "exit": 0,
       "flags": [
         "--tombstones",
@@ -140,7 +142,7 @@
       "key_unchanged": true,
       "refusal_says_not_modified": false,
       "registry": "R_other",
-      "registry_sha256": "e5c50450b43bc4b93e996272bd41dcf7084a400607e4306f253a384d4f79abb6",
+      "registry_sha256": "0c5f09875806d758469e31f3927376449436b1a31bedef3ad35e7ecc516d292f",
       "scope": null,
       "start_from": "main after S3",
       "step": "S4",
@@ -149,8 +151,8 @@
     },
     {
       "document": "changes",
-      "document_sha256_after": "141845f6f2564ab423fca85f7475da2ba80a354322ac336e7a84a9259c7f023d",
-      "document_sha256_before": "f318156695537ef96423bdf71e88262d2c8885d6ee6ef5075f190fbce0b2c937",
+      "document_sha256_after": "e3b6306d00301ab46b39331a210bd25125dbaca3aafedfc04385fd9a878f14a8",
+      "document_sha256_before": "5899e476792584f9e02b9d10b81dbd35cf8bbd2b76dbb66412bc21972b83ea56",
       "exit": 0,
       "flags": [
         "--tombstones"
@@ -159,7 +161,7 @@
       "key_unchanged": true,
       "refusal_says_not_modified": false,
       "registry": "R_same_readopted",
-      "registry_sha256": "8aee6a126dee47cb8e197b865ff116c1c50ef7856a7e4a2384bfc9761f55440a",
+      "registry_sha256": "d46a4d1599140914c0bf05e768f6512a6b81504d0d7baba8d8f63a23b9bac402",
       "scope": null,
       "start_from": "main after S4",
       "step": "S5",
@@ -168,8 +170,8 @@
     },
     {
       "document": "unchanged",
-      "document_sha256_after": "f318156695537ef96423bdf71e88262d2c8885d6ee6ef5075f190fbce0b2c937",
-      "document_sha256_before": "f318156695537ef96423bdf71e88262d2c8885d6ee6ef5075f190fbce0b2c937",
+      "document_sha256_after": "5899e476792584f9e02b9d10b81dbd35cf8bbd2b76dbb66412bc21972b83ea56",
+      "document_sha256_before": "5899e476792584f9e02b9d10b81dbd35cf8bbd2b76dbb66412bc21972b83ea56",
       "exit": 1,
       "flags": [
         "--tombstones"
@@ -178,7 +180,7 @@
       "key_unchanged": true,
       "refusal_says_not_modified": true,
       "registry": "R_same",
-      "registry_sha256": "499ab8e02d6beff956c497b4368fa538837984821c537da2c98660893662838f",
+      "registry_sha256": "10bb1c5dc2dddaa196dcbd37f5b351efb96905420d0d502c6e9a1ae0fe1c26e3",
       "scope": "REFUTED_FOR_REFERENCE",
       "start_from": "main immediately before S5",
       "step": "S6",
