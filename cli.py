@@ -1556,7 +1556,29 @@ def cmd_autopoiesis(args):
         if not os.path.exists(args.file):
             print(f"[!] Target file '{args.file}' not found.")
             sys.exit(1)
-        succ, rec = evolve_autopoietic_organism(args.file, secret_key_hex=args.secret_key)
+        from controlled_forgetting import EpistemicTombstoneRegistry
+        from epistemic_immune import RefutationAdmissionPolicy, RefutationScope
+        registry = None
+        if args.tombstones:
+            try:
+                with open(args.tombstones, "r", encoding="utf-8") as fh:
+                    registry = EpistemicTombstoneRegistry.from_document(json.load(fh))
+            except (OSError, ValueError, KeyError, TypeError) as e:
+                print(f"\033[1;31m[!] Evolution refused: tombstone registry "
+                      f"'{args.tombstones}' could not be loaded: {e}\033[0m")
+                print("    The organism was not modified.")
+                sys.exit(1)
+        scopes = {RefutationScope.NO_MEASURED_REFUTATION}
+        scopes |= {RefutationScope(name) for name in (args.also_proceed_on or [])}
+        policy = RefutationAdmissionPolicy(proceed_on=frozenset(scopes))
+        try:
+            succ, rec = evolve_autopoietic_organism(
+                args.file, secret_key_hex=args.secret_key,
+                tombstone_registry=registry, refutation_policy=policy)
+        except ValueError as e:
+            print(f"\033[1;31m[!] Evolution refused: {e}\033[0m")
+            print("    The organism was not modified.")
+            sys.exit(1)
         print("\033[1;32m===================================================\033[0m")
         print(f"  [✓] AUTOPOIETIC EVOLUTION: Generation #{succ.generation} Appended In-Place!")
         print("\033[1;32m===================================================\033[0m")
@@ -4124,6 +4146,15 @@ def main():
     p_auto_evolve = auto_subs.add_parser("evolve", help="Advance organism by 1 generation in-place (ISO 32000 append)")
     p_auto_evolve.add_argument("file", help="Target autopoietic organism PDF")
     p_auto_evolve.add_argument("--secret-key", default=None, help="Author Ed25519 secret key hex (optional)")
+    p_auto_evolve.add_argument("--tombstones", default=None,
+                               help="JSON tombstone registry consulted before the in-place append")
+    p_auto_evolve.add_argument("--also-proceed-on", action="append", default=None,
+                               choices=["REFUTED_FOR_ANOTHER_REFERENCE"],
+                               help="Proceed through a refutation measured against another reference "
+                                    "too. By default a replacement proceeds only when nothing measured "
+                                    "addresses it. There is no file-path override for untrusted "
+                                    "evidence: a registry file holding an unverifiable record is "
+                                    "refused whole, before any policy is consulted")
 
     p_auto_audit = auto_subs.add_parser("audit", help="Audit all generational receipts and replay AST transitions")
     p_auto_audit.add_argument("file", help="Target autopoietic organism PDF")

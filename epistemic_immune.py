@@ -55,7 +55,7 @@ import math
 import hashlib
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, Tuple, Set, Union, Callable
+from typing import List, Dict, Any, Optional, Tuple, Set, Union, Callable, FrozenSet
 
 import crypto
 import glyph
@@ -187,6 +187,41 @@ class RefutationScopeReport:
         not permission either: it says the registry holds a record this query
         could not authenticate, so it cannot rule the pair in or out."""
         return self.scope == RefutationScope.REFUTED_FOR_REFERENCE
+
+
+@dataclass(frozen=True)
+class RefutationAdmissionPolicy:
+    """
+    What a caller requires before a replacement may proceed.
+
+    `refuted_for` answers with a scope. This names which scopes are enough to go
+    ahead. "Not proven prohibited" is not "permitted": the default proceeds only
+    when nothing measured addresses the pair. A refutation measured against
+    another reference, and evidence that could not be authenticated, are
+    uncertainty. A caller that wants to proceed through either must name it here,
+    and the refusal it gets otherwise names the scope it stopped on. A
+    refutation measured against the very reference being replaced can never be
+    a reason to proceed, and cannot be configured as one.
+    """
+    proceed_on: FrozenSet[RefutationScope] = frozenset(
+        {RefutationScope.NO_MEASURED_REFUTATION})
+
+    def __post_init__(self):
+        scopes = frozenset(self.proceed_on)
+        for scope in scopes:
+            if not isinstance(scope, RefutationScope):
+                raise TypeError(f"proceed_on holds {scope!r}, which is not a RefutationScope")
+        if RefutationScope.REFUTED_FOR_REFERENCE in scopes:
+            raise ValueError(
+                "A refutation measured against the reference being replaced cannot "
+                "be a reason to proceed.")
+        object.__setattr__(self, "proceed_on", scopes)
+
+    def permits(self, report: RefutationScopeReport) -> bool:
+        """True when this report's scope is one the caller named, and it is not
+        a same-reference refutation. The second test is repeated here rather
+        than trusted to construction: a frozen object can still be mutated."""
+        return report.scope in self.proceed_on and not report.prohibits()
 
 
 class ResurrectionDefense:
