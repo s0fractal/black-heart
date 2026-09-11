@@ -2659,7 +2659,7 @@ def cmd_egraph(args):
         print(f"  %🖤 ISO 32000 POLYGLOT E-GRAPH COMPILED")
         print("\033[1;32m=================================================================\033[0m")
         print(f"  Output PDF:    {out_path}")
-        print(f"  Verification:  Run 'python3 {out_path}' for self-executing audit\n")
+        print(f"  Verification:  Run 'python3 -I {out_path}' for the manifest self-consistency report\n")
     else:
         print("Usage: python3 cli.py egraph {saturate,explain,extract,pdf} ...")
 
@@ -3296,7 +3296,7 @@ def cmd_sheaf(args):
         print("  Engine #33:      Epistemic Sheaf Kernel (ISO 32000 Polyglot)")
         print("=================================================================")
         print(f"  Output PDF:      \033[1;32m{out_pdf}\033[0m")
-        print(f"  Standalone Audit: python3 {out_pdf} --audit\n")
+        print(f"  Standalone Audit: python3 -I {out_pdf}\n")
     else:
         print("Usage: python3 cli.py sheaf {glue,obstruct,pdf} ...")
 

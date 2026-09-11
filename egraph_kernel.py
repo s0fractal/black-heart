@@ -1054,7 +1054,7 @@ def generate_egraph_pdf(
         "/F1 8 Tf",
         "0.40 0.45 0.55 rg",
         "30 25 Td",
-        "(ISO 32000 Polyglot: Run 'python3 <file>.pdf' for trustless E-Graph proof verification) Tj",
+        "(ISO 32000 Polyglot: Run 'python3 -I <file>.pdf' for the manifest self-consistency report) Tj",
         "ET",
         "Q"
     ])
@@ -1090,47 +1090,9 @@ def generate_egraph_pdf(
         f"trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF\n"
     ).encode("latin-1")
 
-    manifest_json = json.dumps(egraph.to_dict(), sort_keys=True)
-    manifest_line = (
-        b"# %" + bytes([0xf0, 0x9f, 0x96, 0xa4])
-        + b" EGRAPH_MANIFEST: " + manifest_json.encode("utf-8") + b"\n"
-    )
+    manifest_line = _egraph_manifest_bytes(egraph)
 
-    py_runner = f"""
-# coding: latin-1
-import sys, json, os
-
-cwd = os.getcwd()
-if cwd not in sys.path:
-    sys.path.insert(0, cwd)
-
-def audit_egraph_polyglot():
-    print("\\033[1;36m" + "=" * 70)
-    print("  %# EPISTEMIC E-GRAPH KERNEL AUDITOR (EGRAPH-0.1)")
-    print("=" * 70 + "\\033[0m")
-    with open(__file__, 'rb') as f:
-        data = f.read()
-    prefix = bytes([0x23, 0x20, 0x25, 0xf0, 0x9f, 0x96, 0xa4]) + b" EGRAPH_MANIFEST: "
-    idx = data.rfind(prefix)
-    if idx == -1:
-        print("\\033[1;31m[-] No E-Graph manifest found in document.\\033[0m")
-        sys.exit(1)
-    end = data.find(b"\\n", idx)
-    manifest = json.loads(data[idx + len(prefix):end].decode('utf-8'))
-    import egraph_kernel
-    egraph = egraph_kernel.EGraph.from_dict(manifest)
-
-    print(f"[*] Total E-Classes: {{manifest['total_classes']}}")
-    print(f"[*] Total Canonical E-Nodes: {{manifest['total_nodes']}}")
-    print(f"[*] Justification Edges: {{manifest['proof_edges_count']}}")
-
-    print("\\033[1;36m" + "=" * 70 + "\\033[0m")
-    print("\\033[1;32m[+] E-Graph structural topology and congruence closure sound.\\033[0m")
-    sys.exit(0)
-
-if __name__ == "__main__":
-    audit_egraph_polyglot()
-"""
+    py_runner = _EGRAPH_RUNNER
 
     header_text = (
         f"#!{sys.executable}\n"
@@ -1145,6 +1107,79 @@ if __name__ == "__main__":
     with open(output_path, "wb") as f:
         f.write(polyglot)
     return polyglot
+
+
+_EGRAPH_MANIFEST_PREFIX_BYTES = b"# %" + bytes([0xf0, 0x9f, 0x96, 0xa4]) + b" EGRAPH_MANIFEST: "
+_EGRAPH_HASH_PREFIX_BYTES = b"# %" + bytes([0xf0, 0x9f, 0x96, 0xa4]) + b" EGRAPH_MANIFEST_SHA256: "
+
+
+def _egraph_manifest_bytes(egraph: "EGraph") -> bytes:
+    """The manifest line plus a self-consistency hash line over its JSON.
+
+    The runner recomputes the SHA-256 over the manifest JSON and compares, so an
+    in-place edit of the counts (before S7 it claimed soundness for any counts)
+    is caught. Both lines are appended by `generate_egraph_pdf` and
+    `append_egraph_hud`, and the runner reads the LAST of each, so an appended
+    HUD carries its own verifiable manifest.
+    """
+    manifest_json = json.dumps(egraph.to_dict(), sort_keys=True)
+    manifest_hash = hashlib.sha256(manifest_json.encode("utf-8")).hexdigest()
+    return (_EGRAPH_MANIFEST_PREFIX_BYTES + manifest_json.encode("utf-8") + b"\n"
+            + _EGRAPH_HASH_PREFIX_BYTES + manifest_hash.encode("ascii") + b"\n")
+
+
+# A manifest reporter, not a prover. It verifies the embedded manifest against
+# its own SHA-256 and reports the recorded counts. It re-derives nothing and
+# claims no soundness. Supported launch profile: `python3 -I <file>.pdf`.
+# Python prepends the script's directory to sys.path, so a neighbouring
+# hashlib.py/json.py would run before any check; `sys` is a built-in module, so
+# the isolation gate runs before any shadowable import, and under -I the script
+# directory is not on the path. The first S7 pass only dropped the cwd insert
+# and `import egraph_kernel`, which closed one name, not this mechanism (R1).
+_EGRAPH_RUNNER = r"""
+# coding: latin-1
+import sys
+if not sys.flags.isolated:
+    print("\033[1;31m[!] Refusing to run without import isolation: a file named "
+          "hashlib.py or json.py next to this document would run first.\033[0m")
+    print("    Re-run under the supported profile:  python3 -I " + sys.argv[0])
+    sys.exit(3)
+import json, hashlib
+
+def audit_egraph_polyglot():
+    print("\033[1;36m" + "=" * 70)
+    print("  %# EPISTEMIC E-GRAPH KERNEL -- MANIFEST REPORTER (EGRAPH-0.1)")
+    print("=" * 70 + "\033[0m")
+    with open(__file__, 'rb') as f:
+        data = f.read()
+    m_prefix = bytes([0x23, 0x20, 0x25, 0xf0, 0x9f, 0x96, 0xa4]) + b" EGRAPH_MANIFEST: "
+    h_prefix = bytes([0x23, 0x20, 0x25, 0xf0, 0x9f, 0x96, 0xa4]) + b" EGRAPH_MANIFEST_SHA256: "
+    m_idx = data.rfind(m_prefix)
+    h_idx = data.rfind(h_prefix)
+    if m_idx == -1 or h_idx == -1:
+        print("\033[1;31m[-] No self-verifying E-Graph manifest found in document.\033[0m")
+        sys.exit(1)
+    manifest_bytes = data[m_idx + len(m_prefix):data.find(b"\n", m_idx)]
+    recorded_hash = data[h_idx + len(h_prefix):data.find(b"\n", h_idx)].decode("ascii").strip()
+    if hashlib.sha256(manifest_bytes).hexdigest() != recorded_hash:
+        print("\033[1;31m[!] FAILED: manifest self-consistency check failed "
+              "(contents do not match the embedded SHA-256).\033[0m")
+        sys.exit(1)
+    manifest = json.loads(manifest_bytes.decode("utf-8"))
+    print("\033[1;32m[*] Manifest self-consistency: OK (contents match embedded SHA-256).\033[0m")
+    print(f"[*] Total E-Classes:         {manifest['total_classes']}")
+    print(f"[*] Total Canonical E-Nodes: {manifest['total_nodes']}")
+    print(f"[*] Justification Edges:     {manifest['proof_edges_count']}")
+    print("[i] Scope: this runner verified the integrity of a compiler-produced")
+    print("    manifest only. It did NOT re-derive congruence or any equivalence,")
+    print("    and asserts no soundness. To check an equivalence, load the e-graph")
+    print("    in a trusted checkout and call explain_equivalence.")
+    print("\033[1;36m" + "=" * 70 + "\033[0m")
+    sys.exit(0)
+
+if __name__ == "__main__":
+    audit_egraph_polyglot()
+"""
 
 
 def append_egraph_hud(
@@ -1207,11 +1242,7 @@ def append_egraph_hud(
         f"startxref\n{start_xref + len(new_body)}\n%%EOF\n"
     ).encode("latin-1")
 
-    manifest_json = json.dumps(egraph.to_dict(), sort_keys=True)
-    manifest_line = (
-        b"# %" + bytes([0xf0, 0x9f, 0x96, 0xa4])
-        + b" EGRAPH_MANIFEST: " + manifest_json.encode("utf-8") + b"\n"
-    )
+    manifest_line = _egraph_manifest_bytes(egraph)
 
     incremental_update = source_pdf_bytes + new_body + xref_table + trailer_dict + manifest_line
     with open(output_path, "wb") as f:
