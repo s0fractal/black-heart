@@ -158,7 +158,10 @@ class TestEpistemicSheafKernel(unittest.TestCase):
     def test_05_missing_section_fails_closed(self):
         """Invariant SH5: Missing local chart in covering halts descent fail-closed."""
         claim = "ORPHAN_CLAIM"
-        sec_a = LocalSection.create(self.ctx_a, claim, "S K K", "I", 2)
+        # Was ("S K K", "I"): S K K is already in normal form and does not
+        # reduce to I, so that section was false and only passed because the
+        # local check never ran. The case is about the missing chart.
+        sec_a = LocalSection.create(self.ctx_a, claim, "S K K x", "x", 2)
         self.kernel.register_section(sec_a)
 
         # Cover includes ctx_b which lacks a section for ORPHAN_CLAIM
