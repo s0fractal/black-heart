@@ -113,8 +113,13 @@ class SecondCheckoutTest(unittest.TestCase):
                 sys.path.insert(0, {_HERE!r})          # this checkout, as the suite arranges
                 for m in {_POISONERS!r}:
                     __import__(m)
-                # The cwd (a second checkout) must not have been injected at all.
-                assert {d2!r} not in [os.path.abspath(p) for p in sys.path if p], "the cwd/second checkout was injected"
+                # A fallback may append the cwd (a second checkout) AFTER this
+                # checkout, but it must never precede it: the first sys.path dir
+                # holding a repo module must be this checkout, and glyph must
+                # resolve here, unmarked -- no substitution.
+                first = next((p for p in sys.path
+                              if p and os.path.isfile(os.path.join(p, "glyph.py"))), None)
+                assert os.path.abspath(first) == {_HERE!r}, first
                 import glyph
                 assert os.path.dirname(os.path.abspath(glyph.__file__)) == {_HERE!r}, glyph.__file__
                 assert not getattr(glyph, "MARK_SECOND_CHECKOUT", False), "glyph came from the second checkout"

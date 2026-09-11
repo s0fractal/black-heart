@@ -444,14 +444,15 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 # The polyglot document that embeds this source still has to find the engine
-# when executed from elsewhere (e.g. a temp dir). A last-resort checkout path is
-# APPENDED -- never ahead of current_dir -- so it can satisfy that standalone
-# self-import without ever preceding, or substituting for, the checkout under
-# test. A suite run resolves everything from current_dir first; test_all's
-# closure guard fails the run if any dependency is nonetheless served from here.
-_LAST_RESORT_CHECKOUT = "/Users/s0fractal/Projects/black-heart"
-if os.path.isdir(_LAST_RESORT_CHECKOUT) and _LAST_RESORT_CHECKOUT not in sys.path:
-    sys.path.append(_LAST_RESORT_CHECKOUT)
+# when executed from elsewhere (e.g. a temp dir). Fallbacks are APPENDED -- never
+# ahead of current_dir -- so they can satisfy that standalone self-import without
+# ever preceding, or substituting for, the checkout under test: the working
+# directory (which is the repo when a user or CI runs from it) and, last, a
+# known checkout path. A suite run resolves everything from current_dir first;
+# test_all's closure guard fails the run if a dependency is served from here.
+for _fallback in (os.getcwd(), "/Users/s0fractal/Projects/black-heart"):
+    if os.path.isdir(_fallback) and _fallback not in sys.path:
+        sys.path.append(_fallback)
 
 ZK_PREFIX = "%" + "🖤" + " ZK_PROOF_MANIFEST: "
 
