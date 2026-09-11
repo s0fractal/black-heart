@@ -2347,17 +2347,54 @@ def cmd_swarm(args):
         print(f"  Merged Def:   {len(child_org.tombstone_registry.tombstones)} tombstones\n")
 
     elif args.action == "inoculate":
+        # Operands and subject come from the caller or the run is refused. A
+        # default would let this adapter invent the evidence and retire a label
+        # nobody asked about, which is exactly what the producer now refuses.
+        operand_flags = {
+            "--target-term": args.target_term, "--parent-term": args.parent_term,
+            "--candidate-term": args.candidate_term, "--input-expr": args.input_expr,
+        }
+        supplied = {k: v for k, v in operand_flags.items() if v is not None}
+        if args.demo:
+            if supplied:
+                print("\033[1;31m=================================================================\033[0m")
+                print("  %\U0001f5a4 INOCULATION REFUSED: --demo takes no operands")
+                print("\033[1;31m=================================================================\033[0m")
+                print(f"  Also supplied: {', '.join(sorted(supplied))}")
+                print("  Run the demonstration alone, or supply every operand yourself.")
+                print("  Swarm state was not read or modified.\n")
+                sys.exit(2)
+            # The demonstration refutes the candidate term itself. It never names
+            # a separate subject, because it has no evidence about one.
+            parent_term = "\U0001f5a4"
+            candidate_term = "\U0001f5a4 \U0001f90d"
+            input_fixture = "\U0001f90d (\U0001f5a4 \U0001f90d)"
+            target_term = candidate_term
+        else:
+            missing = [k for k, v in operand_flags.items() if v is None]
+            if missing:
+                print("\033[1;31m=================================================================\033[0m")
+                print("  %\U0001f5a4 INOCULATION REFUSED: no evidence was supplied")
+                print("\033[1;31m=================================================================\033[0m")
+                print(f"  Missing: {', '.join(missing)}")
+                print("  A counterexample is the caller's to state. This command will not")
+                print("  invent operands, and a divergence between two other terms does not")
+                print("  refute the subject you name.")
+                print("  Use --demo for the built-in demonstration.")
+                print("  Swarm state was not read or modified.\n")
+                sys.exit(2)
+            target_term = args.target_term
+            parent_term = args.parent_term
+            candidate_term = args.candidate_term
+            input_fixture = args.input_expr
+
         swarm = load_swarm(args.state)
         orig = args.origin
-        target_term = args.target_term or "K I (S K)"
         org = swarm.organisms[orig]
         sk = swarm.organism_keys[orig][1]
         pk = swarm.organism_keys[orig][0]
-        # The refutation is measured before it is claimed. `--target-term` names
-        # the retirement subject; the two terms below are what actually runs.
-        parent_term = args.parent_term
-        candidate_term = args.candidate_term
-        input_fixture = args.input_expr
+        # Whether `--target-term` denotes `--candidate-term` stays the caller's
+        # assertion; it is recorded, never verified.
         obs = observe_divergence(parent_term, candidate_term, input_fixture)
         if not obs.diverges():
             print("\033[1;31m=================================================================\033[0m")
@@ -2402,6 +2439,8 @@ def cmd_swarm(args):
         print(f"  Replayed:         {parent_term} ({input_fixture}) -> {obs.parent_output}")
         print(f"                    {candidate_term} ({input_fixture}) -> {obs.candidate_output}")
         print(f"  Audited Claim:    {outcome.claim.claim_id[:16]}... (+{outcome.gas_bounty} ATP)")
+        print(f"  Subject Link:     '{target_term}' denotes '{candidate_term}' — "
+              f"asserted by the caller, not verified")
         print(f"  Inoculated Peers: {len(cascade.organisms_inoculated)} organisms")
         print(f"  Hops Depth:       {cascade.hops_reached} / {args.hops or 3}")
         print(f"  Reproduction R0:  {cascade.reproduction_number_r0}")
@@ -4223,15 +4262,20 @@ def main():
     p_sw_inoc = sw_subs.add_parser("inoculate", help="Inject refutation and broadcast epidemic cascade")
     p_sw_inoc.add_argument("state", help="Swarm state file")
     p_sw_inoc.add_argument("--origin", required=True, help="Originating organism ID")
-    p_sw_inoc.add_argument("--target-term", default="K I (S K)",
-                           help="Retirement subject label (provenance, not executed)")
-    p_sw_inoc.add_argument("--parent-term", default="\U0001f5a4",
-                           help="Executable parent term (omega) applied to the input")
-    p_sw_inoc.add_argument("--candidate-term", default="\U0001f5a4 \U0001f90d",
-                           help="Executable candidate term (tau) applied to the input")
-    p_sw_inoc.add_argument("--input-expr", default="\U0001f90d (\U0001f5a4 \U0001f90d)",
-                           help="Counterexample input, applied as a single argument")
+    # No defaults here on purpose. A default operand would mean this adapter
+    # supplying the evidence, which is the thing the producer refuses to do.
+    p_sw_inoc.add_argument("--target-term",
+                           help="Retirement subject label (provenance, not executed). Required")
+    p_sw_inoc.add_argument("--parent-term",
+                           help="Executable parent term (omega) applied to the input. Required")
+    p_sw_inoc.add_argument("--candidate-term",
+                           help="Executable candidate term (tau) applied to the input. Required")
+    p_sw_inoc.add_argument("--input-expr",
+                           help="Counterexample input, applied as a single argument. Required")
     p_sw_inoc.add_argument("--gene-id", default="MUTATION_TEST", help="Gene id recorded as provenance")
+    p_sw_inoc.add_argument("--demo", action="store_true",
+                           help="Run the built-in K vs K I demonstration, which retires the "
+                                "candidate term itself. Cannot be combined with the operand flags")
     p_sw_inoc.add_argument("--hops", type=int, default=3, help="Max hop depth for gossip propagation")
     p_sw_inoc.add_argument("-o", "--output", help="Output state path")
 

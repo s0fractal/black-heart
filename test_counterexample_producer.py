@@ -30,15 +30,21 @@ What the sections pin:
   C  identifiers are provenance: they cannot be smuggled in as endpoints, and
      neither old call shape can bind against the new signature
   D  an observation grants nothing, and no success flag travels
+  E  the command-line adapter, driven as a process: it will not invent operands,
+     and every refusal leaves the state file byte-identical
 
 The predicate, in full: effects follow a PASS verdict on that same claim, issued
-inside the call that applies them. Nothing here says the label denotes the term
-beside it, or that the bounty is a sensible price.
+inside the call that applies them, over operands the caller stated. Nothing here
+says the label denotes the term beside it, or that the bounty is a sensible
+price.
 """
 from __future__ import annotations
 
+import json
 import os
+import subprocess
 import sys
+import tempfile
 import unittest
 
 # Same import guard, and same reason, as test_counterexample_evidence.py.
@@ -283,6 +289,143 @@ class ProducerTest(unittest.TestCase):
         self.assertEqual(self.state(), before)
         replay = WarrantVerifier(TrustConfig()).audit_claim(out.claim)
         self.assertEqual(replay.status, VerificationStatus.FAIL, replay.reason)
+
+
+class InoculateCliTest(unittest.TestCase):
+    """
+    The command-line adapter, driven as a process through the real parser.
+
+    The library was repaired first and the adapter kept demonstration defaults,
+    so `swarm inoculate --origin X --target-term "I x -> x"` retired that label
+    on a K versus K I divergence the caller never supplied: exit 0, a claim that
+    independently audits PASS, a REFUTED tombstone and +70 ATP. A true
+    counterexample about another pair does not refute the named subject. Fixed
+    by requiring the subject and all three operands, with the demonstration on
+    its own `--demo` flag.
+    """
+
+    CLI = os.path.join(_HERE, "cli.py")
+
+    @classmethod
+    def setUpClass(cls):
+        cls._dir = tempfile.TemporaryDirectory()
+        cls.pristine = os.path.join(cls._dir.name, "pristine.json")
+        proc = cls.cli("swarm", "init", "--population", "1", "-o", cls.pristine)
+        assert proc.returncode == 0, proc.stderr
+        with open(cls.pristine, "rb") as fh:
+            cls.pristine_bytes = fh.read()
+        cls.origin = next(iter(json.loads(cls.pristine_bytes.decode())["organisms"]))
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._dir.cleanup()
+
+    @classmethod
+    def cli(cls, *args):
+        return subprocess.run([sys.executable, "-B", cls.CLI, *args], cwd=_HERE,
+                              capture_output=True, text=True, timeout=120)
+
+    def setUp(self):
+        self.work = tempfile.TemporaryDirectory()
+        self.addCleanup(self.work.cleanup)
+        self.state = os.path.join(self.work.name, "swarm.json")
+        with open(self.state, "wb") as fh:
+            fh.write(self.pristine_bytes)
+        self.out = os.path.join(self.work.name, "out.json")
+
+    def inoculate(self, *args, output=True):
+        argv = ["swarm", "inoculate", self.state, "--origin", self.origin, *args]
+        if output:
+            argv += ["-o", self.out]
+        return self.cli(*argv)
+
+    def organism(self, path):
+        with open(path) as fh:
+            return json.load(fh)["organisms"][self.origin]
+
+    def assertUntouched(self, proc):
+        """A refusal writes nothing: not the input state, not the output file."""
+        self.assertNotEqual(proc.returncode, 0, proc.stdout)
+        with open(self.state, "rb") as fh:
+            self.assertEqual(fh.read(), self.pristine_bytes,
+                             "state file changed on a refusal")
+        self.assertFalse(os.path.exists(self.out),
+                         "an output file was created on a refusal")
+
+    # -- positive ---------------------------------------------------------
+
+    def test_E1_explicit_operands_earn_the_stated_effects(self):
+        proc = self.inoculate("--target-term", "K I (S K)", "--parent-term", PARENT,
+                              "--candidate-term", CANDIDATE, "--input-expr", INPUT)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        before, after = self.organism(self.state), self.organism(self.out)
+        self.assertEqual(len(before["claims"]), 0)
+        self.assertEqual(len(after["claims"]), 1)
+        self.assertIn("K I (S K)", after["tombstones"]["tombstones"])
+        self.assertGreater(after["atp_reserve"], before["atp_reserve"])
+
+        from warrant_kernel import EdgeClaim
+        claim = EdgeClaim.from_dict(after["claims"][0])
+        self.assertEqual((claim.omega, claim.tau), (PARENT, CANDIDATE))
+        verdict = WarrantVerifier(TrustConfig()).audit_claim(claim)
+        self.assertEqual(verdict.status, VerificationStatus.PASS, verdict.reason)
+
+    def test_E2_the_demonstration_retires_the_term_it_refuted(self):
+        """The demo has evidence about one pair, so it names no other subject."""
+        proc = self.inoculate("--demo")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        after = self.organism(self.out)
+        self.assertEqual(list(after["tombstones"]["tombstones"]), [CANDIDATE])
+
+    # -- refusals ---------------------------------------------------------
+
+    def test_E3_omitted_operands_refuse_before_any_effect(self):
+        complete = {"--target-term": "I x -> x", "--parent-term": PARENT,
+                    "--candidate-term": CANDIDATE, "--input-expr": INPUT}
+        for dropped in list(complete):
+            with self.subTest(missing=dropped):
+                argv = [a for k, v in complete.items() if k != dropped for a in (k, v)]
+                proc = self.inoculate(*argv)
+                self.assertUntouched(proc)
+                self.assertIn(dropped, proc.stdout)
+                self.assertIn("REFUSED", proc.stdout)
+
+    def test_E4_no_operands_at_all_is_the_reviewer_reproducer(self):
+        """`--origin X --target-term 'I x -> x'` used to retire that label."""
+        proc = self.inoculate("--target-term", "I x -> x")
+        self.assertUntouched(proc)
+        self.assertNotIn(CANDIDATE, proc.stdout)
+
+    def test_E5_the_demo_flag_takes_no_operands(self):
+        for extra in (("--parent-term", PARENT), ("--target-term", "I x -> x"),
+                      ("--candidate-term", CANDIDATE), ("--input-expr", INPUT)):
+            with self.subTest(extra=extra[0]):
+                proc = self.inoculate("--demo", *extra)
+                self.assertUntouched(proc)
+                self.assertIn("--demo takes no operands", proc.stdout)
+
+    def test_E6_coinciding_outputs_refuse_and_preserve_state(self):
+        proc = self.inoculate("--target-term", "K I (S K)", "--parent-term", PARENT,
+                              "--candidate-term", PARENT, "--input-expr", INPUT)
+        self.assertUntouched(proc)
+        self.assertIn("COINCIDES", proc.stdout)
+
+    def test_E7_malformed_input_refuses_and_preserves_state(self):
+        for bad in ("((", ")", "\U0001f5a4 ("):
+            with self.subTest(input_expr=bad):
+                proc = self.inoculate("--target-term", "K I (S K)", "--parent-term", PARENT,
+                                      "--candidate-term", CANDIDATE, "--input-expr", bad)
+                self.assertUntouched(proc)
+                self.assertIn("UNPARSEABLE", proc.stdout)
+
+    def test_E8_a_non_divergence_refuses_even_in_place(self):
+        """Without -o the state path is its own output; it must survive too."""
+        proc = self.inoculate("--target-term", "K I (S K)", "--parent-term", PARENT,
+                              "--candidate-term", PARENT, "--input-expr", INPUT,
+                              output=False)
+        self.assertNotEqual(proc.returncode, 0, proc.stdout)
+        with open(self.state, "rb") as fh:
+            self.assertEqual(fh.read(), self.pristine_bytes)
 
 
 if __name__ == "__main__":
