@@ -509,9 +509,27 @@ import hashlib
 import time
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
-for candidate in [os.getcwd(), current_dir, os.path.dirname(current_dir), "/Users/s0fractal/Projects/black-heart"]:
-    if os.path.isdir(candidate) and candidate not in sys.path:
-        sys.path.insert(0, candidate)
+# Put this module's OWN directory first, so every in-process import is
+# self-located and nothing on sys.path can precede and shadow it: this is what
+# makes the test suite hermetic (S9). Before S9 this block inserted os.getcwd(),
+# a parent, and a hard-coded checkout AT POSITION 0, any of which could shadow
+# the checkout under test. Unconditionally MOVED to position 0 -- not merely
+# inserted "if absent" -- so a current_dir already present elsewhere on
+# sys.path (from an earlier, differently-ordered import) is brought to the
+# front rather than left wherever it was (review R1, additional correction).
+if current_dir in sys.path:
+    sys.path.remove(current_dir)
+sys.path.insert(0, current_dir)
+# The polyglot document that embeds this source still has to find the engine
+# when executed from elsewhere (e.g. a temp dir). Fallbacks are APPENDED -- never
+# ahead of current_dir -- so they can satisfy that standalone self-import without
+# ever preceding, or substituting for, the checkout under test: the working
+# directory (which is the repo when a user or CI runs from it) and, last, a
+# known checkout path. A suite run resolves everything from current_dir first;
+# test_all's closure guard fails the run if a dependency is served from here.
+for _fallback in (os.getcwd(), "/Users/s0fractal/Projects/black-heart"):
+    if os.path.isdir(_fallback) and _fallback not in sys.path:
+        sys.path.append(_fallback)
 
 PREFIX = "%" + "🖤" + " ONTOGENY_RECEIPT_CHAIN: "
 

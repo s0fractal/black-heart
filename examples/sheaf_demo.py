@@ -62,8 +62,10 @@ def run_demo():
         print(f"    Normal Form:       {report.global_section.normal_form}")
         print(f"    Status:            {report.global_section.status.value}\n")
 
-    out_pdf = "examples/sheaf_certificate.pdf"
-    os.makedirs("examples", exist_ok=True)
+    # Default writes the tracked example; a caller (e.g. a test) can redirect
+    # the output so a run never modifies a tracked file (S9).
+    out_pdf = os.environ.get("BLACKHEART_SHEAF_DEMO_OUT", "examples/sheaf_certificate.pdf")
+    os.makedirs(os.path.dirname(out_pdf) or ".", exist_ok=True)
     generate_sheaf_pdf(report, out_pdf)
     print(f"[✓] Polyglot Sheaf Certificate compiled to: {out_pdf}")
     print(f"    Run standalone audit: python3 {out_pdf}\n")
