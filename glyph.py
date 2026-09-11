@@ -238,12 +238,14 @@ def is_term_address(value: Any) -> bool:
 def in_legacy_address_domain(term: Term) -> bool:
     """A SUFFICIENT condition for `term_hash` to be unambiguous. Not a recognizer.
 
-    True means the legacy digest of this term is not shared with any other term.
-    False means only that this check does not establish it: the term may still
-    be perfectly unambiguous. `Var("$")` is the known false negative — `parse`
-    produces it from the text `$`, and no colliding partner for it is known —
-    and it is excluded because admitting `$` anywhere would admit the names that
-    do collide.
+    True establishes uniqueness only among terms inside this restricted domain.
+    It does not establish uniqueness against unrestricted ASTs: Var("a") is
+    accepted here but shares legacy bytes with the excluded Comb("$a"). Both
+    sides of a legacy lookup must therefore come from an independently enforced
+    domain; checking only the incoming term cannot validate an unrestricted cache.
+    False means this sufficient condition gives no guarantee. `parse("$")`
+    produces the excluded Var("$"), which collides with the also-excluded
+    Comb("$$"). This does not show ambiguity within parser-produced terms.
 
     An earlier version of this helper was narrower still and rejected
     `parse("ї")` and `parse("!")`, which are ordinary parser outputs: it tested

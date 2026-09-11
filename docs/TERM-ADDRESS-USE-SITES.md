@@ -84,10 +84,17 @@ not assumed. Signed artifacts are untouched.
 | `metamorphosis.fixtures_fingerprint` | **kept legacy**. It is embedded in signed mycelium warrants through `autopoiesis`, and persistent signed operands stay unchanged |
 | `warrant_kernel.GroundedWitness.expected_hash` | **kept legacy**, by decision: inside signed claims, input is parsed text |
 
-`in_legacy_address_domain` is a **sufficient condition, not a recognizer**, and
-now says so. It excludes exactly the four characters for which a colliding pair
-was found — `$`, space, `(`, `)` — and admits everything else, including
-Unicode letters, punctuation and the glyph aliases. Its one known false
-negative among parser outputs is `parse("$")`, which yields `Var("$")`; no
-colliding partner for it is known, and it is excluded only because admitting
-`$` anywhere would admit the names that do collide.
+`in_legacy_address_domain` specifies a **sufficient restricted domain**, not
+uniqueness against arbitrary ASTs. It excludes `$`, space, `(` and `)` from
+leaves and admits Unicode and punctuation outside that set. The parenthesis
+exclusion is conservative; its independent necessity was not demonstrated.
+
+A term passing this predicate can still collide with a term outside the domain:
+`Var("a")` and the excluded `Comb("$a")` share legacy bytes. A legacy consumer
+must establish the domain of both stored and queried operands; validating only
+the new query does not make an unrestricted historical store unambiguous.
+
+`parse("$")` gives `Var("$")`, which this sufficient check excludes. Its
+unrestricted-AST collision partner is `Comb("$$")`, also excluded. This is not a
+collision between parser-produced terms, and does not justify rejecting all
+parser outputs containing a standalone `$`.
