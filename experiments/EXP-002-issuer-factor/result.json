@@ -1,0 +1,248 @@
+{
+  "all_predictions_held": true,
+  "attribution_held": true,
+  "attribution_mismatches": [],
+  "experiment": "EXP-002",
+  "genesis_document_sha256": "b8e8d19a0e2e0cf78712f0800823ac0d99ce22a8283f8acd3fd770e094756b0f",
+  "holds": true,
+  "keys": {
+    "F": "18f07fb304880d3403b8cdd51024ef5a1e5ce3d4056113296e138f8df4fdba8f",
+    "T": "45e6e396cef7641310b31eac21d65db2df65774187c4565ca255c31cafc7eb3d"
+  },
+  "mismatches": [],
+  "pair": {
+    "candidate": "🖤 (🌿 🤍 🤍)",
+    "gene_id": "GENE-OPT-04",
+    "input": "x",
+    "reference": "🌿 (🖤 (🌿 🤍)) (🖤 🤍)"
+  },
+  "policy": {
+    "readoption_issuers": [
+      "45e6e396cef7641310b31eac21d65db2df65774187c4565ca255c31cafc7eb3d"
+    ],
+    "retirement_issuers": [
+      "45e6e396cef7641310b31eac21d65db2df65774187c4565ca255c31cafc7eb3d"
+    ],
+    "sha256": "27c63eb78d46f4e7d7bb72eb200a8cee0f3a77663f283fe0742ea55919925df8"
+  },
+  "predictions": {
+    "S1": {
+      "document": "changes",
+      "exit": 0,
+      "scope": null
+    },
+    "S2": {
+      "document": "unchanged",
+      "exit": 1,
+      "scope": "REFUTED_FOR_REFERENCE"
+    },
+    "S3": {
+      "document": "unchanged",
+      "exit": 1,
+      "scope": "UNAUTHORIZED_ISSUER"
+    },
+    "S4": {
+      "document": "changes",
+      "exit": 0,
+      "scope": null
+    },
+    "S5": {
+      "document": "unchanged",
+      "exit": 1,
+      "scope": "REFUTED_FOR_REFERENCE"
+    },
+    "S6": {
+      "document": "unchanged",
+      "exit": 1,
+      "scope": "REFUTED_FOR_REFERENCE"
+    },
+    "S7": {
+      "document": "changes",
+      "exit": 0,
+      "generation": 1,
+      "scope": null
+    },
+    "S8": {
+      "document": "unchanged",
+      "exit": 1,
+      "scope": "REFUTED_FOR_REFERENCE"
+    }
+  },
+  "python": "3.14.7",
+  "registries": {
+    "R_F": {
+      "readoption_author": null,
+      "readoption_record_id": null,
+      "retirement_author": "18f07fb304880d3403b8cdd51024ef5a1e5ce3d4056113296e138f8df4fdba8f",
+      "retirement_record_id": "28443ade3d963a37ddb668886090ed9ce3c230759f4ec16c08131cc0cd91e472",
+      "sha256": "13c58862c7707e73d545de3ca298b7e6da90ecc44eab7e55567c5dbce8001649"
+    },
+    "R_T": {
+      "readoption_author": null,
+      "readoption_record_id": null,
+      "retirement_author": "45e6e396cef7641310b31eac21d65db2df65774187c4565ca255c31cafc7eb3d",
+      "retirement_record_id": "a2a3d6c75c5b4cb14610ce56697cb6bfc0ba0eeea304c4c39ef15fec9ee74d9e",
+      "sha256": "ad08d62b7f6dbdc75a98267a1aed3f0a90efa98b860ecec2449da177fb232da4"
+    },
+    "R_T+F": {
+      "readoption_author": "18f07fb304880d3403b8cdd51024ef5a1e5ce3d4056113296e138f8df4fdba8f",
+      "readoption_record_id": "147d234ab8d5a41ddc157e320cf4c4773ce7952371091841fecd4640cca5d9bd",
+      "retirement_author": "45e6e396cef7641310b31eac21d65db2df65774187c4565ca255c31cafc7eb3d",
+      "retirement_record_id": "a2a3d6c75c5b4cb14610ce56697cb6bfc0ba0eeea304c4c39ef15fec9ee74d9e",
+      "sha256": "f02f57e70917817062721f00bbbf4a1b1f5b8e6c9d8b376c796f4e0d449bd079"
+    },
+    "R_T+T": {
+      "readoption_author": "45e6e396cef7641310b31eac21d65db2df65774187c4565ca255c31cafc7eb3d",
+      "readoption_record_id": "d693c9ee54201ba242b59de86517753d6afa7ca44185705697831f4708314b0d",
+      "retirement_author": "45e6e396cef7641310b31eac21d65db2df65774187c4565ca255c31cafc7eb3d",
+      "retirement_record_id": "a2a3d6c75c5b4cb14610ce56697cb6bfc0ba0eeea304c4c39ef15fec9ee74d9e",
+      "sha256": "6178433d26f207dc2afcbaaad46f9d648be5ec618ef2a0f1fde5b276bdc0d8b7"
+    }
+  },
+  "repo_commit": "8a3b0b0762f925d2b4a4076459a069c8eff0788f",
+  "repo_dirty": false,
+  "repo_dirty_paths": [],
+  "repo_state_read": "before the run wrote anything",
+  "started_utc": "2026-09-11T05:23:54Z",
+  "steps": [
+    {
+      "document": "changes",
+      "document_sha256_after": "2ec78152c7341843dc293c8abb9dbb3333fdc5c48b2f418a74b28c49499d1660",
+      "document_sha256_before": "b8e8d19a0e2e0cf78712f0800823ac0d99ce22a8283f8acd3fd770e094756b0f",
+      "exit": 0,
+      "flags": [],
+      "generation_after": 1,
+      "key_unchanged": true,
+      "policy_sha256": null,
+      "refusal_says_not_modified": false,
+      "registry": null,
+      "registry_sha256": null,
+      "scope": null,
+      "start_from": "fork of genesis",
+      "step": "S1",
+      "traceback": false
+    },
+    {
+      "document": "unchanged",
+      "document_sha256_after": "b8e8d19a0e2e0cf78712f0800823ac0d99ce22a8283f8acd3fd770e094756b0f",
+      "document_sha256_before": "b8e8d19a0e2e0cf78712f0800823ac0d99ce22a8283f8acd3fd770e094756b0f",
+      "exit": 1,
+      "flags": [],
+      "generation_after": 0,
+      "key_unchanged": true,
+      "policy_sha256": "27c63eb78d46f4e7d7bb72eb200a8cee0f3a77663f283fe0742ea55919925df8",
+      "refusal_says_not_modified": true,
+      "registry": "R_T",
+      "registry_sha256": "ad08d62b7f6dbdc75a98267a1aed3f0a90efa98b860ecec2449da177fb232da4",
+      "scope": "REFUTED_FOR_REFERENCE",
+      "start_from": "main",
+      "step": "S2",
+      "traceback": false
+    },
+    {
+      "document": "unchanged",
+      "document_sha256_after": "b8e8d19a0e2e0cf78712f0800823ac0d99ce22a8283f8acd3fd770e094756b0f",
+      "document_sha256_before": "b8e8d19a0e2e0cf78712f0800823ac0d99ce22a8283f8acd3fd770e094756b0f",
+      "exit": 1,
+      "flags": [],
+      "generation_after": 0,
+      "key_unchanged": true,
+      "policy_sha256": "27c63eb78d46f4e7d7bb72eb200a8cee0f3a77663f283fe0742ea55919925df8",
+      "refusal_says_not_modified": true,
+      "registry": "R_F",
+      "registry_sha256": "13c58862c7707e73d545de3ca298b7e6da90ecc44eab7e55567c5dbce8001649",
+      "scope": "UNAUTHORIZED_ISSUER",
+      "start_from": "main",
+      "step": "S3",
+      "traceback": false
+    },
+    {
+      "document": "changes",
+      "document_sha256_after": "2ec78152c7341843dc293c8abb9dbb3333fdc5c48b2f418a74b28c49499d1660",
+      "document_sha256_before": "b8e8d19a0e2e0cf78712f0800823ac0d99ce22a8283f8acd3fd770e094756b0f",
+      "exit": 0,
+      "flags": [
+        "--also-proceed-on",
+        "UNAUTHORIZED_ISSUER"
+      ],
+      "generation_after": 1,
+      "key_unchanged": true,
+      "policy_sha256": "27c63eb78d46f4e7d7bb72eb200a8cee0f3a77663f283fe0742ea55919925df8",
+      "refusal_says_not_modified": false,
+      "registry": "R_F",
+      "registry_sha256": "13c58862c7707e73d545de3ca298b7e6da90ecc44eab7e55567c5dbce8001649",
+      "scope": null,
+      "start_from": "fork of main after S3",
+      "step": "S4",
+      "traceback": false
+    },
+    {
+      "document": "unchanged",
+      "document_sha256_after": "b8e8d19a0e2e0cf78712f0800823ac0d99ce22a8283f8acd3fd770e094756b0f",
+      "document_sha256_before": "b8e8d19a0e2e0cf78712f0800823ac0d99ce22a8283f8acd3fd770e094756b0f",
+      "exit": 1,
+      "flags": [],
+      "generation_after": 0,
+      "key_unchanged": true,
+      "policy_sha256": "27c63eb78d46f4e7d7bb72eb200a8cee0f3a77663f283fe0742ea55919925df8",
+      "refusal_says_not_modified": true,
+      "registry": "R_T+F",
+      "registry_sha256": "f02f57e70917817062721f00bbbf4a1b1f5b8e6c9d8b376c796f4e0d449bd079",
+      "scope": "REFUTED_FOR_REFERENCE",
+      "start_from": "main",
+      "step": "S5",
+      "traceback": false
+    },
+    {
+      "document": "unchanged",
+      "document_sha256_after": "b8e8d19a0e2e0cf78712f0800823ac0d99ce22a8283f8acd3fd770e094756b0f",
+      "document_sha256_before": "b8e8d19a0e2e0cf78712f0800823ac0d99ce22a8283f8acd3fd770e094756b0f",
+      "exit": 1,
+      "flags": [],
+      "generation_after": 0,
+      "key_unchanged": true,
+      "policy_sha256": null,
+      "refusal_says_not_modified": true,
+      "registry": "R_F",
+      "registry_sha256": "13c58862c7707e73d545de3ca298b7e6da90ecc44eab7e55567c5dbce8001649",
+      "scope": "REFUTED_FOR_REFERENCE",
+      "start_from": "fork of main before S7",
+      "step": "S6",
+      "traceback": false
+    },
+    {
+      "document": "changes",
+      "document_sha256_after": "2c43980cc80bba06af461685acd048778860e8d67fa0be4afb337edea86b05cf",
+      "document_sha256_before": "b8e8d19a0e2e0cf78712f0800823ac0d99ce22a8283f8acd3fd770e094756b0f",
+      "exit": 0,
+      "flags": [],
+      "generation_after": 1,
+      "key_unchanged": true,
+      "policy_sha256": "27c63eb78d46f4e7d7bb72eb200a8cee0f3a77663f283fe0742ea55919925df8",
+      "refusal_says_not_modified": false,
+      "registry": "R_T+T",
+      "registry_sha256": "6178433d26f207dc2afcbaaad46f9d648be5ec618ef2a0f1fde5b276bdc0d8b7",
+      "scope": null,
+      "start_from": "main",
+      "step": "S7",
+      "traceback": false
+    },
+    {
+      "document": "unchanged",
+      "document_sha256_after": "b8e8d19a0e2e0cf78712f0800823ac0d99ce22a8283f8acd3fd770e094756b0f",
+      "document_sha256_before": "b8e8d19a0e2e0cf78712f0800823ac0d99ce22a8283f8acd3fd770e094756b0f",
+      "exit": 1,
+      "flags": [],
+      "generation_after": 0,
+      "key_unchanged": true,
+      "policy_sha256": "27c63eb78d46f4e7d7bb72eb200a8cee0f3a77663f283fe0742ea55919925df8",
+      "refusal_says_not_modified": true,
+      "registry": "R_T",
+      "registry_sha256": "ad08d62b7f6dbdc75a98267a1aed3f0a90efa98b860ecec2449da177fb232da4",
+      "scope": "REFUTED_FOR_REFERENCE",
+      "start_from": "fork of main before S7",
+      "step": "S8",
+      "traceback": false
+    }
+  ]
+}
