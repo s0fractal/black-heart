@@ -36,13 +36,47 @@ class RollbackIncompleteError(OSError):
             f"ROLLBACK_INCOMPLETE: Commit failed ({commit_error}) and rollback encountered errors: {details}"
         )
 
+class SecretMaterialError(ValueError):
+    """Refusal to pack files that look like private key material."""
+
+    def __init__(self, findings: List[Tuple[str, List[str]]]):
+        self.findings = findings
+        listed = "; ".join(f"{path} ({', '.join(reasons)})" for path, reasons in findings)
+        super().__init__(
+            f"Refusing to pack private key material into a vault: {listed}. "
+            "A vault is a public reproducibility archive, not a secret store.")
+
+
+def find_secret_material(file_paths: List[str], base_dir: str) -> List[Tuple[str, List[str]]]:
+    """Every member that looks like private key material, with the reasons."""
+    from keystore import secret_material_reasons
+    findings = []
+    for rel_path in sorted(file_paths):
+        abs_path = os.path.join(base_dir, rel_path)
+        if not os.path.isfile(abs_path):
+            continue
+        with open(abs_path, "rb") as f:
+            reasons = secret_material_reasons(os.path.basename(rel_path), f.read())
+        if reasons:
+            findings.append((rel_path, reasons))
+    return findings
+
+
 def pack_files_to_vault(file_paths: List[str], base_dir: str) -> Tuple[bytes, str, Dict[str, Any]]:
     """
     Packs a list of files into a deterministic, compressed tar.gz byte stream.
     Explicitly enforces mtime=0 in both gzip wrapper and tar member metadata
     to guarantee byte-identical, reproducible archives regardless of system clock.
     Computes cryptographic SHA-256 hash of the vault archive and builds manifest.
+
+    Refuses, naming each file, when any member looks like private key material:
+    a key or keystore file, a named secret field, or a secret next to its own
+    public key. Checked here so no caller can skip it.
     """
+    findings = find_secret_material(file_paths, base_dir)
+    if findings:
+        raise SecretMaterialError(findings)
+
     buf = io.BytesIO()
     manifest_entries = []
 

@@ -71,7 +71,6 @@ def organism_to_dict(org: Organism) -> Dict[str, Any]:
         "generation": org.generation,
         "parent_hash": org.parent_hash,
         "public_key_hex": org.public_key_hex,
-        "secret_key_hex": org.secret_key_hex,
         "chromosomes": [c.to_dict() for c in org.chromosomes],
         "birth_timestamp_utc": org.birth_timestamp_utc,
         "organism_hash": org.organism_hash
@@ -82,7 +81,9 @@ def organism_from_dict(d: Dict[str, Any]) -> Organism:
         generation=int(d["generation"]),
         parent_hash=str(d["parent_hash"]),
         public_key_hex=str(d["public_key_hex"]),
-        secret_key_hex=str(d.get("secret_key_hex", "")),
+        # Never read a secret from a public state; states written before S5a
+        # carried one, and it is ignored. Keys come from a Keystore.
+        secret_key_hex="",
         chromosomes=[Chromosome.from_dict(c) for c in d.get("chromosomes", [])],
         birth_timestamp_utc=str(d.get("birth_timestamp_utc", "")),
         organism_hash=str(d.get("organism_hash", ""))
@@ -387,6 +388,7 @@ class Colony:
           5. Spore Revival.
           6. Living Ledger Settlement.
         """
+        self.require_keys()
         epoch_idx = len(self.epochs)
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         prev_h = self.epochs[-1].epoch_hash if self.epochs else "0" * 64
@@ -430,7 +432,7 @@ class Colony:
                 # If warrant author is not this organism and not already endorsed
                 endorser_pks = [e.endorser_pk_hex for e in warrant.endorsements]
                 if st.organism.public_key_hex != warrant.author_pk_hex and st.organism.public_key_hex not in endorser_pks:
-                    org_sk = st.organism.secret_key_hex or "00" * 32
+                    org_sk = st.organism.secret_key_hex
                     verdict = self.immune_evaluator.audition_warrant(
                         st.organism,
                         warrant,
@@ -463,7 +465,7 @@ class Colony:
                         fixtures_fingerprint=FrozenEvaluator().fixtures_fingerprint,
                         experiment_id="hyp_" + hashlib.sha256((rule_name + pre_pattern + post_pattern).encode()).hexdigest()[:8]
                     )
-                    org_sk = st.organism.secret_key_hex or "00" * 32
+                    org_sk = st.organism.secret_key_hex
                     trial_warrant = export_warrant_from_receipt(
                         receipt,
                         org_sk
@@ -560,7 +562,7 @@ class Colony:
         self.epochs.append(rec)
 
         # Record in living ledger using stable authority key
-        sk_rec = self.authority_sk_hex or generate_keypair()[0]
+        sk_rec = self.authority_sk_hex
         self.ledger.append_block(
             signer_name=f"{self.name} Engine",
             signer_role="Epoch Hypervisor",
@@ -652,8 +654,7 @@ class Colony:
         }
         if self.authority_pk_hex:
             d["authority_pk_hex"] = self.authority_pk_hex
-        if self.authority_sk_hex:
-            d["authority_sk_hex"] = self.authority_sk_hex
+        # The authority secret is private and never part of this public state.
         return d
 
     @classmethod
@@ -667,7 +668,10 @@ class Colony:
         colony.ledger = ledger_from_dict(data.get("ledger", {}))
         colony.epochs = [EpochRecord.from_dict(d) for d in data.get("epochs", [])]
         colony.authority_pk_hex = str(data.get("authority_pk_hex", ""))
-        colony.authority_sk_hex = str(data.get("authority_sk_hex", ""))
+        # Constructing the colony above generated a throwaway authority key for
+        # a fresh ledger; the loaded ledger replaced it. The loaded colony has no
+        # secret until one is attached from a Keystore.
+        colony.authority_sk_hex = ""
         if verify_on_load:
             colony.verify()
         return colony
@@ -680,6 +684,58 @@ class Colony:
     def load_from_file(cls, path: str) -> Colony:
         with open(path, "r", encoding="utf-8") as f:
             return cls.from_dict(json.load(f))
+
+    # ---- private recovery -------------------------------------------------
+
+    def keystore(self):
+        """Every secret this colony holds in memory, for private custody."""
+        from keystore import Keystore
+        store = Keystore()
+        if self.authority_sk_hex:
+            store.add(self.authority_sk_hex)
+        for st in self.population:
+            if st.organism.secret_key_hex:
+                store.add(st.organism.secret_key_hex)
+        return store
+
+    def attach_keys(self, store) -> None:
+        """Take secrets from a Keystore for the authority and every organism it covers."""
+        if self.authority_pk_hex and store.has(self.authority_pk_hex):
+            self.authority_sk_hex = store.secret_for(self.authority_pk_hex)
+        for st in self.population:
+            if store.has(st.organism.public_key_hex):
+                st.organism.secret_key_hex = store.secret_for(st.organism.public_key_hex)
+
+    def missing_keys(self):
+        """Who cannot sign: 'authority' and/or organism public-key prefixes."""
+        from crypto import public_key_from_secret
+        missing = []
+
+        def owns(sk, pk):
+            try:
+                return bool(sk) and public_key_from_secret(bytes.fromhex(sk)).hex() == bytes.fromhex(pk).hex()
+            except Exception:
+                return False
+
+        if not owns(self.authority_sk_hex, self.authority_pk_hex):
+            missing.append("authority")
+        for st in self.population:
+            if not owns(st.organism.secret_key_hex, st.organism.public_key_hex):
+                missing.append(st.organism.public_key_hex[:16])
+        return missing
+
+    def require_keys(self) -> None:
+        """Refuse before any state changes if anyone who may sign has no key.
+
+        Replaces two silent fallbacks: organisms signing with the all-zero key,
+        and the ledger signing with a freshly generated, unrelated key.
+        """
+        missing = self.missing_keys()
+        if missing:
+            from keystore import MissingKeyError
+            raise MissingKeyError(
+                f"colony '{self.name}' cannot step: no private key for {', '.join(missing)}. "
+                "Attach a Keystore; the public state never supplies one.")
 
 
 # ============================================================================

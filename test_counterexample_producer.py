@@ -337,6 +337,10 @@ class InoculateCliTest(unittest.TestCase):
         assert proc.returncode == 0, proc.stderr
         with open(cls.pristine, "rb") as fh:
             cls.pristine_bytes = fh.read()
+        # Since S5a the secret keys live in a keystore next to the state, not in
+        # it. A copy of the state needs its keystore copied beside it too.
+        with open(cls.pristine + ".keys", "rb") as fh:
+            cls.pristine_keys = fh.read()
         cls.origin = next(iter(json.loads(cls.pristine_bytes.decode())["organisms"]))
 
     @classmethod
@@ -354,6 +358,9 @@ class InoculateCliTest(unittest.TestCase):
         self.state = os.path.join(self.work.name, "swarm.json")
         with open(self.state, "wb") as fh:
             fh.write(self.pristine_bytes)
+        with open(self.state + ".keys", "wb") as fh:
+            fh.write(self.pristine_keys)
+        os.chmod(self.state + ".keys", 0o600)
         self.out = os.path.join(self.work.name, "out.json")
 
     def inoculate(self, *args, output=True):

@@ -101,10 +101,14 @@ class TestAutonomousOrganism(unittest.TestCase):
             self.assertIn("[✓ METABOLISM SOUND]", res_rep.stdout)
             self.assertIn("[⚓ SUCCESS] BORN OFFSPRING: Gen #0001!", res_rep.stdout)
 
-            # Verify child file exists in tempdir
-            files = [f for f in os.listdir(tmpdir) if f.startswith("organism_gen0001_")]
+            # Verify child file exists in tempdir. Since S5a the child's secret
+            # key is written to its own sidecar, not into the public PDF, so the
+            # directory holds the child document and, separately, its key.
+            files = [f for f in os.listdir(tmpdir)
+                     if f.startswith("organism_gen0001_") and f.endswith(".pdf")]
             self.assertEqual(len(files), 1)
             child_pdf = os.path.join(tmpdir, files[0])
+            self.assertEqual(os.stat(child_pdf + ".key").st_mode & 0o777, 0o600)
 
             # Child must be runnable and able to report its own status
             res_child = subprocess.run(

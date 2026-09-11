@@ -298,7 +298,8 @@ class SwarmInoculationCascade:
 
         origin_state = swarm.organism_states[origin_id]
         origin_org = swarm.organisms[origin_id]
-        origin_sk = swarm.organism_keys[origin_id][1]
+        swarm.require_all_keys()        # relays may be anyone; refuse before any hop
+        origin_sk = swarm.secret_key_for(origin_id)
 
         initial_signal = TombstoneSignal(
             tombstone=tombstone,
@@ -366,7 +367,7 @@ class SwarmInoculationCascade:
                         hop_count=current_signal.hop_count - 1,
                         max_hops=current_signal.max_hops
                     )
-                    relay_sk = swarm.organism_keys[peer_id][1]
+                    relay_sk = swarm.secret_key_for(peer_id)
                     relay_signal.sign(relay_sk)
                     queue.append((peer_id, relay_signal))
 
@@ -771,6 +772,7 @@ class SwarmMembrane:
 
     def step(self, num_ticks: int = 1) -> Dict[str, Any]:
         """Advances simulation by num_ticks time-steps."""
+        self.require_all_keys()
         total_atp_harvested = 0
         extinctions = 0
         autophagies = 0
@@ -806,7 +808,7 @@ class SwarmMembrane:
 
                 # 3. Metabolic Homeostasis & Starvation Autophagy
                 if org.atp_reserve <= 80:
-                    sk = self.organism_keys[oid][1]
+                    sk = self.secret_key_for(oid)
                     pk = self.organism_keys[oid][0]
                     report = StarvationAutophagy.trigger_autophagy(org, sk, pk)
                     if report.triggered:
@@ -842,7 +844,8 @@ class SwarmMembrane:
             "grid_height": self.grid.height,
             "organisms": {oid: org.to_dict() for oid, org in self.organisms.items()},
             "organism_states": {oid: st.to_dict() for oid, st in self.organism_states.items()},
-            "organism_keys": {oid: list(keys) for oid, keys in self.organism_keys.items()},
+            # Public keys only. Secrets live in a Keystore, never in this state.
+            "organism_public_keys": {oid: keys[0] for oid, keys in self.organism_keys.items()},
             "canon": [ax.to_dict() for ax in self.canon],
             "proposals": [p.to_dict() for p in self.proposals],
         }
@@ -858,11 +861,49 @@ class SwarmMembrane:
             org = EpistemicOrganism.from_dict(o_dict)
             st_dict = d["organism_states"][oid]
             st = SwarmOrganismState.from_dict(st_dict)
-            keys = tuple(d["organism_keys"][oid])
-            swarm.add_organism(org, st, keys[0], keys[1])
+            if "organism_public_keys" in d:
+                public_key = d["organism_public_keys"][oid]
+            else:
+                # States written before S5a carried [public, secret]. Only the
+                # public half is read; that secret must be treated as exposed.
+                public_key = d["organism_keys"][oid][0]
+            swarm.add_organism(org, st, public_key, "")
         swarm.canon = [SwarmAxiom.from_dict(ax) for ax in d.get("canon", [])]
         swarm.proposals = [SwarmProposal.from_dict(p) for p in d.get("proposals", [])]
         return swarm
+
+    # ---- private recovery -------------------------------------------------
+
+    def keystore(self):
+        """Every secret this swarm holds in memory, for private custody."""
+        from keystore import Keystore
+        store = Keystore()
+        for _, secret in self.organism_keys.values():
+            if secret:
+                store.add(secret)
+        return store
+
+    def attach_keys(self, store) -> None:
+        for oid, (public, secret) in list(self.organism_keys.items()):
+            if store.has(public):
+                self.organism_keys[oid] = (public, store.secret_for(public))
+
+    def secret_key_for(self, organism_id: str) -> str:
+        """The organism's secret key, or a named MissingKeyError. Never a default."""
+        public, secret = self.organism_keys[organism_id]
+        if not secret:
+            from keystore import MissingKeyError
+            raise MissingKeyError(f"no private key for organism '{organism_id}'. "
+                                  "Attach a Keystore; the public state never supplies one.")
+        return secret
+
+    def require_all_keys(self) -> None:
+        """Refuse before any change if any organism that may sign has no key."""
+        missing = [oid for oid, (_, secret) in self.organism_keys.items() if not secret]
+        if missing:
+            from keystore import MissingKeyError
+            raise MissingKeyError(f"no private key for {len(missing)} organism(s): "
+                                  f"{', '.join(sorted(missing))}. Attach a Keystore.")
 
 
 # ============================================================================
