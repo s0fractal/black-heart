@@ -295,14 +295,15 @@ class TestWarrantKernel(unittest.TestCase):
 
     def test_06_tri_state_verifier_counterexample(self):
         """Verify Grade C: existential refutation via structured counterexample operands."""
-        # Parent: K x y -> x (True selector). Successor: K I x y -> y (False selector).
-        # Counterexample input: "🤍 (🖤 🤍)"
-        # Parent("🤍 (🖤 🤍)") -> 🤍
-        # Successor("🤍 (🖤 🤍)") -> 🖤 🤍
+        # The audit applies the input as a single argument, so parent K and
+        # successor K I each receive one operand. Operands below are what the
+        # engine computes, not what arity-two intuition suggests:
+        #   Parent      🖤 (🤍 (🖤 🤍)) -> 🖤 (🖤 🤍)   in 1 ATP
+        #   Successor   🖤 🤍 (🤍 (🖤 🤍)) -> 🤍          in 1 ATP
         witness = CounterexampleWitness(
             input_expr="🤍 (🖤 🤍)",
-            expected_normal_form="🤍",
-            actual_divergence="🖤 🤍",
+            expected_normal_form="🖤 (🖤 🤍)",
+            actual_divergence="🤍",
             atp_to_diverge=2
         )
         claim = EdgeClaim.create_and_sign(
@@ -467,7 +468,7 @@ class TestWarrantKernel(unittest.TestCase):
                                          EmpiricalWitness(fix, fp, 1, 1), self.sk_author, self.pk_author)
 
         c_div = EdgeClaim.create_and_sign("p", "🖤 🤍", "🖤", "s", Polarity.REFUTE,
-                                         CounterexampleWitness("🤍 (🖤 🤍)", "🤍", "🖤 🤍", 2),
+                                         CounterexampleWitness("🤍 (🖤 🤍)", "🖤 (🖤 🤍)", "🤍", 2),
                                          self.sk_author, self.pk_author)
 
         claims = [c_ground, c_ax, c_emp, c_div]
