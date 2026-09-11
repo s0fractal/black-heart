@@ -201,8 +201,8 @@ class TestEGraphKernel(unittest.TestCase):
         append_bytes = append_egraph_hud(pdf_bytes, append_path, egraph)
         self.assertTrue(append_bytes.startswith(pdf_bytes))
 
-        # Test standalone Python execution
-        cmd = [sys.executable, pdf_path]
+        # Test standalone Python execution, under the supported isolated profile (S7)
+        cmd = [sys.executable, "-I", pdf_path]
         proc = subprocess.run(cmd, capture_output=True, text=True)
         self.assertEqual(proc.returncode, 0, f"Polyglot runner failed: {proc.stderr}")
         self.assertIn("EPISTEMIC E-GRAPH KERNEL", proc.stdout)

@@ -59,9 +59,11 @@ _ENV = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
 _ENV["PYTHONDONTWRITEBYTECODE"] = "1"
 
 
-def run_pdf(pdf, *args, cwd=None):
-    r = subprocess.run([sys.executable, pdf, *args], capture_output=True, text=True,
-                       env=_ENV, cwd=cwd, timeout=120)
+def run_pdf(pdf, *args, cwd=None, isolated=True):
+    """The supported launch profile is `python3 -I <file>`. `isolated=False`
+    is used only to assert that a plain invocation is refused (S7 R1)."""
+    argv = [sys.executable] + (["-I"] if isolated else []) + ["-B", pdf, *args]
+    r = subprocess.run(argv, capture_output=True, text=True, env=_ENV, cwd=cwd, timeout=120)
     return r.returncode, (r.stdout + r.stderr)
 
 
@@ -212,13 +214,22 @@ class EgraphRunnerTest(unittest.TestCase):
         self.assertGreater(appended.rindex(m_pre), len(source) - 1)
 
 
-class NoForeignCodeTest(unittest.TestCase):
-    """Section C: the egraph runner ran planted code before S7."""
+class LaunchProfileTest(unittest.TestCase):
+    """Section C: the runners ran neighbouring code before S7. R1 showed that
+    dropping `import egraph_kernel` closed one name; Python still puts the
+    script's directory on sys.path, so a neighbouring `hashlib.py` (a stdlib
+    name both runners import) ran first. The supported profile is python3 -I,
+    and a non-isolated launch refuses before importing anything shadowable."""
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         self.d = self._tmp.name
+
+    def sheaf_doc(self, where):
+        p = os.path.join(where, "sheaf.pdf")
+        sh.generate_sheaf_pdf(sheaf_report(), p)
+        return p
 
     def egraph_doc(self, where):
         g = eg.EGraph()
@@ -229,33 +240,54 @@ class NoForeignCodeTest(unittest.TestCase):
         eg.generate_egraph_pdf(g, p, sample_proof=g.explain_equivalence(parse("I x"), parse("x")))
         return p
 
-    def plant(self, where):
-        sentinel = os.path.join(where, "PLANTED_RAN")
-        with open(os.path.join(where, "egraph_kernel.py"), "w") as f:
-            f.write("import pathlib, os\n"
+    def plant_stdlib(self, where):
+        """A neighbouring hashlib.py that records that it ran, then delegates so
+        the runner would otherwise proceed normally."""
+        sentinel = os.path.join(where, "NEIGHBOUR_RAN")
+        with open(os.path.join(where, "hashlib.py"), "w") as f:
+            f.write("import pathlib\n"
                     f"pathlib.Path({sentinel!r}).write_text('ran')\n"
-                    "class EGraph:\n"
-                    "    @classmethod\n"
-                    "    def from_dict(cls, d):\n"
-                    "        return cls()\n")
+                    "from _hashlib import openssl_sha256 as sha256\n")
         return sentinel
 
-    def test_C1_a_planted_module_in_the_cwd_does_not_run(self):
+    def docs(self):
+        return {"sheaf": self.sheaf_doc, "egraph": self.egraph_doc}
+
+    def test_C1_a_non_isolated_launch_is_refused_before_any_shadowable_import(self):
+        for name, make in self.docs().items():
+            with self.subTest(runner=name):
+                folder = os.path.join(self.d, "ni_" + name)
+                os.makedirs(folder)
+                pdf = make(folder)
+                sentinel = self.plant_stdlib(folder)
+                rc, out = run_pdf(pdf, cwd=folder, isolated=False)
+                self.assertEqual(rc, 3, out)
+                self.assertIn("Refusing to run without import isolation", out)
+                self.assertFalse(os.path.exists(sentinel),
+                                 "a neighbouring hashlib.py ran before the isolation gate")
+                self.assertNotIn("self-consistency", out)
+
+    def test_C2_under_isolation_a_neighbouring_stdlib_module_does_not_run(self):
+        for name, make in self.docs().items():
+            with self.subTest(runner=name):
+                folder = os.path.join(self.d, "iso_" + name)
+                os.makedirs(folder)
+                pdf = make(folder)
+                sentinel = self.plant_stdlib(folder)
+                rc, out = run_pdf(pdf, cwd=folder, isolated=True)
+                self.assertFalse(os.path.exists(sentinel),
+                                 "a neighbouring hashlib.py ran under -I")
+                self.assertIn("Manifest self-consistency: OK", out)
+                self.assertIn(name == "sheaf" and "GLUING ADMISSIBLE" or "asserts no soundness", out)
+
+    def test_C3_a_neighbouring_stdlib_module_in_the_cwd_does_not_run_under_isolation(self):
         run_dir = os.path.join(self.d, "run")
         os.makedirs(run_dir)
         pdf = self.egraph_doc(self.d)
-        sentinel = self.plant(run_dir)
-        rc, out = run_pdf(pdf, cwd=run_dir)
+        sentinel = self.plant_stdlib(run_dir)
+        rc, out = run_pdf(pdf, cwd=run_dir, isolated=True)
         self.assertEqual(rc, 0, out)
-        self.assertFalse(os.path.exists(sentinel), "the runner executed a planted egraph_kernel.py from the cwd")
-        self.assertIn("Manifest self-consistency: OK", out)
-
-    def test_C2_a_planted_module_beside_the_document_does_not_run(self):
-        pdf = self.egraph_doc(self.d)
-        sentinel = self.plant(self.d)
-        rc, out = run_pdf(pdf, cwd=os.path.dirname(self.d))
-        self.assertEqual(rc, 0, out)
-        self.assertFalse(os.path.exists(sentinel), "the runner executed a planted module beside the document")
+        self.assertFalse(os.path.exists(sentinel), "a neighbouring hashlib.py in the cwd ran under -I")
 
 
 if __name__ == "__main__":

@@ -191,8 +191,8 @@ class TestEpistemicSheafKernel(unittest.TestCase):
                 content = f.read()
                 self.assertIn(b"%PDF-1.7", content)
 
-            # Standalone audit execution
-            proc = subprocess.run([sys.executable, pdf_path], capture_output=True, text=True)
+            # Standalone audit execution, under the supported isolated profile (S7)
+            proc = subprocess.run([sys.executable, "-I", pdf_path], capture_output=True, text=True)
             self.assertEqual(proc.returncode, 0, f"Standalone audit error: {proc.stderr}")
             self.assertIn("EPISTEMIC SHEAF KERNEL & CECH COHOMOLOGY", proc.stdout)
             self.assertIn("Manifest self-consistency: OK", proc.stdout)
@@ -207,7 +207,7 @@ class TestEpistemicSheafKernel(unittest.TestCase):
             with open(pdf_path, "wb") as f:
                 f.write(tampered)
 
-            proc_tamper = subprocess.run([sys.executable, pdf_path], capture_output=True, text=True)
+            proc_tamper = subprocess.run([sys.executable, "-I", pdf_path], capture_output=True, text=True)
             self.assertNotEqual(proc_tamper.returncode, 0)
             self.assertIn("self-consistency check failed", proc_tamper.stdout)
 

@@ -1054,7 +1054,7 @@ def generate_egraph_pdf(
         "/F1 8 Tf",
         "0.40 0.45 0.55 rg",
         "30 25 Td",
-        "(ISO 32000 Polyglot: Run 'python3 <file>.pdf' for trustless E-Graph proof verification) Tj",
+        "(ISO 32000 Polyglot: Run 'python3 -I <file>.pdf' for the manifest self-consistency report) Tj",
         "ET",
         "Q"
     ])
@@ -1130,12 +1130,21 @@ def _egraph_manifest_bytes(egraph: "EGraph") -> bytes:
 
 # A manifest reporter, not a prover. It verifies the embedded manifest against
 # its own SHA-256 and reports the recorded counts. It re-derives nothing and
-# claims no soundness. It does NOT put the cwd (or the document's directory) on
-# sys.path and does NOT import egraph_kernel: before S7 it did, so a file placed
-# next to a planted egraph_kernel.py ran that code and still printed "sound".
+# claims no soundness. Supported launch profile: `python3 -I <file>.pdf`.
+# Python prepends the script's directory to sys.path, so a neighbouring
+# hashlib.py/json.py would run before any check; `sys` is a built-in module, so
+# the isolation gate runs before any shadowable import, and under -I the script
+# directory is not on the path. The first S7 pass only dropped the cwd insert
+# and `import egraph_kernel`, which closed one name, not this mechanism (R1).
 _EGRAPH_RUNNER = r"""
 # coding: latin-1
-import sys, json, hashlib
+import sys
+if not sys.flags.isolated:
+    print("\033[1;31m[!] Refusing to run without import isolation: a file named "
+          "hashlib.py or json.py next to this document would run first.\033[0m")
+    print("    Re-run under the supported profile:  python3 -I " + sys.argv[0])
+    sys.exit(3)
+import json, hashlib
 
 def audit_egraph_polyglot():
     print("\033[1;36m" + "=" * 70)

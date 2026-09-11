@@ -103,7 +103,7 @@ BT
 /F1 8 Tf
 0.40 0.45 0.55 rg
 30 30 Td
-(ISO 32000 Polyglot: Run 'python3 <file>.pdf --audit' for trustless in-memory Sheaf audit) Tj
+(ISO 32000 Polyglot: Run 'python3 -I <file>.pdf' for the manifest self-consistency report) Tj
 ET
 Q
 endstream
@@ -128,7 +128,13 @@ startxref
 '''
 
 # coding: latin-1
-import sys, json, hashlib
+import sys
+if not sys.flags.isolated:
+    print("\033[1;31m[!] Refusing to run without import isolation: a file named "
+          "hashlib.py or json.py next to this document would run first.\033[0m")
+    print("    Re-run under the supported profile:  python3 -I " + sys.argv[0])
+    sys.exit(3)
+import json, hashlib
 
 MANIFEST_DATA = json.loads('''{"claim_name":"LAFONT_INTERACTION_CONFLUENCE","cocycle_count":3,"cover_count":3,"global_normal_form":"K I","global_section_id":"e02d5bf320b58f0eeb84d2db","h1_dimension":0,"is_admissible":true,"rejection_reason":"NONE"}''')
 MANIFEST_HASH = "8a0ec1c102074c5ee43b2ade2cbfaf67e22cf63891cf42db66c6faa45a44d54a"

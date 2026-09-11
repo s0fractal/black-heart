@@ -727,7 +727,7 @@ def generate_sheaf_pdf(
         "/F1 8 Tf",
         "0.40 0.45 0.55 rg",
         "30 30 Td",
-        "(ISO 32000 Polyglot: Run 'python3 <file>.pdf --audit' for trustless in-memory Sheaf audit) Tj",
+        "(ISO 32000 Polyglot: Run 'python3 -I <file>.pdf' for the manifest self-consistency report) Tj",
         "ET",
         "Q"
     ])
@@ -781,9 +781,22 @@ def generate_sheaf_pdf(
     # independent soundness, and its exit code follows the recorded verdict.
     # Before S7 it printed "ALL INVARIANTS SATISFIED" for every manifest,
     # including a recorded OBSTRUCTED verdict, and a re-hashed forgery.
+    # Supported launch profile: `python3 -I <file>.pdf`. Python prepends the
+    # script's own directory to sys.path, so a neighbouring `hashlib.py` or
+    # `json.py` would be imported and run before any check. `sys` is a built-in
+    # module (never loaded from a file), so the isolation gate below runs before
+    # any shadowable import; under -I the script directory is not on the path.
+    # Removing `import egraph_kernel` in the first S7 pass closed one name, not
+    # this mechanism (review R1).
     audit_script = f"""
 # coding: latin-1
-import sys, json, hashlib
+import sys
+if not sys.flags.isolated:
+    print("\\033[1;31m[!] Refusing to run without import isolation: a file named "
+          "hashlib.py or json.py next to this document would run first.\\033[0m")
+    print("    Re-run under the supported profile:  python3 -I " + sys.argv[0])
+    sys.exit(3)
+import json, hashlib
 
 MANIFEST_DATA = json.loads('''{manifest_json}''')
 MANIFEST_HASH = "{manifest_hash}"
