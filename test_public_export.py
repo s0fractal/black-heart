@@ -491,13 +491,16 @@ class HardeningTest(_Dir):
         with tarfile.open(fileobj=io.BytesIO(packed), mode="r:gz") as archive:
             self.assertNotIn(sk.encode(), archive.extractfile("payload.json").read())
 
-    def test_G8_the_older_sidecar_writers_refuse_a_planted_link_too(self):
-        """autopoiesis and morpho-autopoiesis wrote their `.key` the same way
-        before S5a (O_TRUNC, and a plain open plus chmod); they now share the writer."""
+    def twins(self):
+        """autopoiesis and morpho-autopoiesis wrote their `.key` unsafely before
+        S5a (O_TRUNC, and a plain open plus chmod); they now share the writer."""
         from autopoiesis import init_autopoietic_organism
         from morpho_autopoiesis import init_morpho_autopoietic_organism
-        for name, init in (("auto.pdf", init_autopoietic_organism),
-                           ("morpho.pdf", init_morpho_autopoietic_organism)):
+        return (("auto.pdf", init_autopoietic_organism),
+                ("morpho.pdf", init_morpho_autopoietic_organism))
+
+    def test_G8_a_planted_link_is_refused_and_no_document_is_created(self):
+        for name, init in self.twins():
             with self.subTest(writer=name):
                 target, pdf = self.planted(), self.path(name)
                 os.symlink(target, pdf + ".key")
@@ -505,9 +508,43 @@ class HardeningTest(_Dir):
                     init(pdf, secret_key_hex=generate_keypair()[0])
                 self.assertEqual(read(target), b"innocent")
                 self.assertTrue(os.path.islink(pdf + ".key"))
-        pdf = self.path("clean.pdf")
-        init_autopoietic_organism(pdf, secret_key_hex=generate_keypair()[0])
-        self.assertEqual(mode(pdf + ".key"), 0o600)
+                self.assertFalse(os.path.exists(pdf))
+
+    def test_G9_a_planted_link_leaves_an_existing_document_unchanged(self):
+        """Review K4, the reviewer's scenario: a genuine document and key, the key
+        moved aside and a link put in its place, init called again. The refusal
+        used to come after the document had been replaced."""
+        def check(name, make):
+            pdf = self.path(name)
+            make(pdf)
+            before = read(pdf)
+            backup = self.path(name + ".original-key")
+            os.rename(pdf + ".key", backup)
+            key_before = read(backup)
+            os.symlink(backup, pdf + ".key")
+            with self.assertRaises(PrivateFileError):
+                make(pdf)
+            self.assertEqual(read(pdf), before, f"{name}: the refused call changed the document")
+            self.assertEqual(read(backup), key_before)
+            self.assertTrue(os.path.islink(pdf + ".key"))
+
+        for name, init in self.twins():
+            with self.subTest(writer=name):
+                check(name, lambda p, init=init: init(p, secret_key_hex=generate_keypair()[0]))
+        with self.subTest(writer="organism"):
+            check("organism.pdf", lambda p: PolyglotOrganismCompiler.compile(create_genesis_organism(), p))
+
+    def test_G10_an_honest_init_writes_a_usable_pair(self):
+        for name, init in self.twins():
+            with self.subTest(writer=name):
+                pdf = self.path(name)
+                org, _ = init(pdf)
+                self.assertEqual(mode(pdf + ".key"), 0o600)
+                with open(pdf + ".key") as fh:
+                    sk = fh.read().strip()
+                self.assertEqual(public_key_from_secret(bytes.fromhex(sk)).hex(),
+                                 bytes.fromhex(org.public_key_hex).hex())
+                self.assertEqual(keypairs_in(read(pdf)), 0)
 
     def test_G7_scan_exhaustion_is_a_refusal_not_a_clean_result(self):
         _, sk, pk = self.store()

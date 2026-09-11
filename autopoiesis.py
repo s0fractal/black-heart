@@ -659,15 +659,17 @@ def init_autopoietic_organism(
 
     polyglot_bytes = bytes(out)
 
-    with open(pdf_path, "wb") as f:
-        f.write(polyglot_bytes)
-
-    # The private key lives only in the sidecar, never in the PDF. Written through
-    # the shared private-file writer, which refuses a link planted at the path;
-    # a failure is raised, not swallowed, because an organism whose key was not
-    # kept cannot evolve.
+    # The private key lives only in the sidecar, never in the PDF. Written FIRST,
+    # through the shared private-file writer, which refuses a link planted at the
+    # path: a refused key must leave an existing document as it was and create
+    # no new one (review K4). A failure is raised, not swallowed, because an
+    # organism whose key was not kept cannot evolve. Not a transaction: if
+    # writing the document fails after the key was written, nothing rolls back.
     from keystore import write_private_file
     write_private_file(pdf_path + ".key", sk_hex.strip() + "\n")
+
+    with open(pdf_path, "wb") as f:
+        f.write(polyglot_bytes)
 
     return org, genesis_receipt
 

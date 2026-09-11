@@ -76,3 +76,8 @@ They are not rewritten.
 
 Where a keystore lives beyond the file next to the state, who may hold it, or
 how keys rotate or are revoked. Nothing here re-secures a key already published.
+
+Two files are not one transaction. The organism, autopoiesis and
+morpho-autopoiesis writers write the key before the document, so a refused key
+path leaves an existing document unchanged and creates no new one. If writing
+the document fails after the key was written, nothing rolls back.
