@@ -20,6 +20,10 @@ What the sections pin:
      reachable through the file path and can be opted into; a trusted one
      cannot; a foreign readoption lifts nothing; a malformed policy file is
      refused by name
+  D  a key is its decoded bytes, not its spelling. Review round 1: an
+     uppercase spelling of the trusted key turned the same signed retirement
+     from REFUTED_FOR_REFERENCE into UNAUTHORIZED_ISSUER, which the override
+     then let through
 """
 from __future__ import annotations
 
@@ -357,6 +361,116 @@ class CliTest(_Organism, unittest.TestCase):
         proc = self.evolve("--tombstones", path, "--trusted-issuers", self.trusted_file())
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertGreater(len(self.pdf_bytes()), len(before))
+
+
+
+def _spellings(pk):
+    """Every hex spelling crypto validation accepts is a case pattern of the
+    same 64 characters. A fixed sample: all lower, all upper, and patterns."""
+    out = {"lower": pk.lower(), "upper": pk.upper(),
+           "alternating": "".join(c.upper() if i % 2 else c.lower() for i, c in enumerate(pk)),
+           "first half upper": pk[:32].upper() + pk[32:].lower(),
+           "last half upper": pk[:32].lower() + pk[32:].upper()}
+    for name, value in out.items():
+        assert crypto.is_valid_public_key(value), name
+    return out
+
+
+class KeyIdentityTest(_Keys, unittest.TestCase):
+    """Section D: identity is the decoded key, on both sides of the comparison."""
+
+    def ask(self, registry, issuers):
+        return ResurrectionDefense.refuted_for(registry, CAND, REF, issuers)
+
+    def test_D1_every_spelling_in_the_policy_is_the_same_retirement_issuer(self):
+        registry = self.retire(EpistemicTombstoneRegistry(), "r", self.sk_t, self.pk_t, REF, CAND)
+        for name, spelling in _spellings(self.pk_t).items():
+            with self.subTest(policy_spelling=name):
+                report = self.ask(registry, IssuerPolicy.same_for_both({spelling}))
+                self.assertEqual(report.scope, REFUTED)
+                self.assertTrue(report.prohibits())
+
+    def test_D2_every_spelling_in_the_policy_is_the_same_readoption_issuer(self):
+        registry = self.retire(EpistemicTombstoneRegistry(), "r", self.sk_t, self.pk_t, REF, CAND)
+        self.readopt(registry, "r", self.sk_t, self.pk_t)
+        for name, spelling in _spellings(self.pk_t).items():
+            with self.subTest(readoption_spelling=name):
+                policy = IssuerPolicy(retirement_issuers={self.pk_t},
+                                      readoption_issuers={spelling})
+                self.assertEqual(self.ask(registry, policy).scope, NOTHING)
+
+    def test_D3_a_signed_author_field_in_any_spelling_is_the_same_key(self):
+        """The spelling here is inside the signed body, and the signature holds."""
+        for name, spelling in _spellings(self.pk_t).items():
+            with self.subTest(author_spelling=name):
+                registry = self.retire(EpistemicTombstoneRegistry(), "r", self.sk_t, spelling,
+                                       REF, CAND)
+                self.assertTrue(registry.tombstones["r"].verify_signature())
+                self.assertEqual(registry.tombstones["r"].author_pk_hex, spelling,
+                                 "the signed body is not rewritten")
+                self.assertEqual(self.ask(registry, self.policy).scope, REFUTED)
+
+    def test_D3b_a_signed_readoption_author_in_any_spelling_is_the_same_key(self):
+        """The readoption half of D3: its author spelling is inside its own signed body."""
+        for name, spelling in _spellings(self.pk_t).items():
+            with self.subTest(readoption_author_spelling=name):
+                registry = self.retire(EpistemicTombstoneRegistry(), "r", self.sk_t, self.pk_t,
+                                       REF, CAND)
+                self.readopt(registry, "r", self.sk_t, spelling)
+                self.assertTrue(registry.readoptions["r"].is_admissible_for(
+                    "r", registry.tombstones["r"]))
+                self.assertEqual(registry.readoptions["r"].author_pk_hex, spelling)
+                self.assertEqual(self.ask(registry, self.policy).scope, NOTHING)
+
+    def test_D4_the_policy_holds_one_identity_per_key(self):
+        policy = IssuerPolicy.same_for_both(set(_spellings(self.pk_t).values()))
+        self.assertEqual(policy.retirement_issuers, frozenset({self.pk_t.lower()}))
+        self.assertEqual(policy, IssuerPolicy.same_for_both({self.pk_t.upper()}))
+
+    def test_D5_a_really_different_key_stays_foreign_in_every_spelling(self):
+        registry = self.retire(EpistemicTombstoneRegistry(), "r", self.sk_f, self.pk_f, REF, CAND)
+        for name, spelling in _spellings(self.pk_t).items():
+            with self.subTest(policy_spelling=name):
+                self.assertEqual(self.ask(registry, IssuerPolicy.same_for_both({spelling})).scope,
+                                 UNAUTHORIZED)
+
+    def test_D6_a_borrowed_name_in_any_spelling_stays_untrusted(self):
+        for name, spelling in _spellings(self.pk_t).items():
+            with self.subTest(borrowed_spelling=name):
+                registry = self.retire(EpistemicTombstoneRegistry(), "r", self.sk_f, self.pk_f,
+                                       REF, CAND)
+                registry.tombstones["r"].author_pk_hex = spelling
+                self.assertFalse(registry.tombstones["r"].verify_signature())
+                self.assertEqual(self.ask(registry, self.policy).scope, UNTRUSTED)
+
+    def test_D7_the_two_role_lists_stay_separate_under_any_spelling(self):
+        registry = self.retire(EpistemicTombstoneRegistry(), "r", self.sk_t, self.pk_t, REF, CAND)
+        self.readopt(registry, "r", self.sk_t, self.pk_t)
+        policy = IssuerPolicy(retirement_issuers={self.pk_t.upper()},
+                              readoption_issuers={self.pk_f.upper()})
+        report = self.ask(registry, policy)
+        self.assertEqual(report.scope, REFUTED, "trusted for retiring, not for lifting")
+        self.assertEqual(report.ignored_readoptions, ("r",))
+
+    def test_D8_the_cli_file_accepts_any_spelling_as_the_same_key(self):
+        """Pinned through the real CLI: the supported behaviour is normalization."""
+        case = CliTest("test_C1_a_trusted_refutation_refuses_and_writes_nothing")
+        case.setUp()
+        try:
+            registry = case.write("reg.json",
+                                  case.pair_registry(case.sk_t, case.pk_t).to_dict())
+            before = case.pdf_bytes()
+            for name, spelling in _spellings(case.pk_t).items():
+                with self.subTest(file_spelling=name):
+                    issuers = case.write("issuers.json", {"retirement_issuers": [spelling],
+                                                          "readoption_issuers": [spelling]})
+                    proc = case.evolve("--tombstones", registry, "--trusted-issuers", issuers,
+                                       "--also-proceed-on", "UNAUTHORIZED_ISSUER")
+                    self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+                    self.assertIn("REFUTED_FOR_REFERENCE", proc.stdout)
+                    self.assertEqual(case.pdf_bytes(), before)
+        finally:
+            case.doCleanups()
 
 
 if __name__ == "__main__":

@@ -82,6 +82,27 @@ assertion be silently outvoted by the absence of a trusted one. I chose
 refusal because it is reversible by an explicit flag and the other is not
 visible at all. The choice is stated here so it can be reversed on purpose.
 
+## Amendment 1 — a key is its bytes, not its spelling
+
+Dated 2026-09-11, after review round 1 of PR #16. The table above is unchanged.
+
+The "Terms" section said a record is trusted when its `author_pk_hex` "is in the
+caller's list". The first implementation read that literally and compared the
+strings as written. Key validation and signature verification both decode hex,
+so `AB..`, `ab..` and `aB..` are one key to them, but they were three identities
+to the list. Measured on one unchanged, genuinely signed retirement: under a
+lowercase policy it was `REFUTED_FOR_REFERENCE`, under the uppercase spelling of
+the same key it was `UNAUTHORIZED_ISSUER`, and the explicit override then let it
+through. A signed author field in another spelling, and a readoption list in
+another spelling, failed the same way.
+
+The rule is now: a key's identity is its 32 decoded bytes. The policy stores one
+canonical form per key, and the record's author is canonicalized at the moment
+of comparison. Nothing signed is rewritten. Authentication still comes first,
+so a record whose signature does not verify under the key it names is still
+`UNTRUSTED_EVIDENCE` in every spelling, and a genuinely different key is still
+foreign in every spelling.
+
 ## What this does not decide
 
 - Where the list of trusted keys comes from, or who maintains it. The caller

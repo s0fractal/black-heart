@@ -192,6 +192,23 @@ class RefutationScopeReport:
         return self.scope == RefutationScope.REFUTED_FOR_REFERENCE
 
 
+def _canonical_key(value: Any) -> Optional[str]:
+    """The identity of an Ed25519 public key: its 32 decoded bytes, spelled once.
+
+    `crypto.is_valid_public_key` and the signature verifier both decode hex, so
+    'AB..', 'ab..' and 'aB..' are one key to them. Comparing the strings as
+    written made them three identities to the issuer list: the same signed
+    record was REFUTED_FOR_REFERENCE under one spelling of the trusted key and
+    UNAUTHORIZED_ISSUER under another. Identity is therefore taken from the
+    decoded bytes, on both sides of the comparison, and nothing signed is
+    rewritten to get there. None for anything that is not a valid key.
+    """
+    if not isinstance(value, str) or not crypto.is_valid_public_key(value):
+        return None
+    raw = bytes.fromhex(value)
+    return raw.hex() if len(raw) == 32 else None
+
+
 @dataclass(frozen=True)
 class IssuerPolicy:
     """
@@ -214,12 +231,13 @@ class IssuerPolicy:
             keys = getattr(self, field_name)
             if isinstance(keys, (str, bytes)):
                 raise TypeError(f"{field_name} must be a collection of keys, not one string")
-            keys = frozenset(keys)
-            for key in keys:
+            canonical = set()
+            for key in frozenset(keys):
                 if not crypto.is_valid_public_key(key):
                     raise ValueError(
                         f"{field_name} holds {key!r}, which is not a valid Ed25519 public key")
-            object.__setattr__(self, field_name, keys)
+                canonical.add(_canonical_key(key))
+            object.__setattr__(self, field_name, frozenset(canonical))
 
     @classmethod
     def same_for_both(cls, keys) -> "IssuerPolicy":
@@ -243,10 +261,10 @@ class IssuerPolicy:
                    readoption_issuers=frozenset(d["readoption_issuers"]))
 
     def trusts_retirement(self, record: RetirementRecord) -> bool:
-        return record.author_pk_hex in self.retirement_issuers
+        return _canonical_key(record.author_pk_hex) in self.retirement_issuers
 
     def trusts_readoption(self, record: ReAdoptionRecord) -> bool:
-        return record.author_pk_hex in self.readoption_issuers
+        return _canonical_key(record.author_pk_hex) in self.readoption_issuers
 
 
 @dataclass(frozen=True)
