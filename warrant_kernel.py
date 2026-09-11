@@ -255,11 +255,16 @@ class CounterexampleWitness:
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> CounterexampleWitness:
+        # Preserve the signed numeric domain at the transport boundary. Coercing
+        # bool/float/string to int can turn altered bytes back into a valid claim.
+        atp = d.get("atp_to_diverge")
+        if type(atp) is not int or atp < 0:
+            raise ValueError("atp_to_diverge must be an explicit non-negative integer")
         return cls(
             input_expr=str(d["input_expr"]),
             expected_normal_form=str(d["expected_normal_form"]),
             actual_divergence=str(d["actual_divergence"]),
-            atp_to_diverge=int(d.get("atp_to_diverge", 1))
+            atp_to_diverge=atp
         )
 
 
@@ -705,7 +710,14 @@ class WarrantVerifier:
 
         elif claim.grade == EvidenceGrade.COUNTEREXAMPLE:
             w_c: CounterexampleWitness = claim.witness
-            # Polarity must be REFUTE
+            # A Grade C PASS asserts one sentence: replayed here, this input drives
+            # the two sides to two different normal forms, and they are the two the
+            # witness named, within the cost it declared. Every clause below is a
+            # conjunct of that sentence. Anything the replay cannot establish leaves
+            # by FAIL (the evidence contradicts the claim) or UNVERIFIED (the check
+            # never reached a verdict) -- never by PASS.
+
+            # 1. Polarity: a counterexample refutes; it cannot affirm.
             if claim.polarity != Polarity.REFUTE:
                 return Verdict(
                     status=VerificationStatus.FAIL,
@@ -713,42 +725,129 @@ class WarrantVerifier:
                     reason="Counterexample witness must carry REFUTE polarity"
                 )
 
+            # 2. The witness must denote terms. A syntax error is a malformed
+            #    witness, not a discovered divergence.
             try:
-                # Replay input through both parent and successor
+                declared_expected = glyph.parse(w_c.expected_normal_form)
+                declared_actual = glyph.parse(w_c.actual_divergence)
+                inp_term = glyph.parse(w_c.input_expr)
+            except Exception as e:
+                return Verdict(
+                    status=VerificationStatus.FAIL,
+                    grade=EvidenceGrade.COUNTEREXAMPLE,
+                    reason=f"Counterexample witness operands do not parse: {e}",
+                    details={"input": w_c.input_expr}
+                )
+            try:
                 p_term = glyph.parse(f"{claim.omega} ({w_c.input_expr})")
                 s_term = glyph.parse(f"{claim.tau} ({w_c.input_expr})")
-
-                res_p = glyph.evaluate(p_term, max_atp=self.trust_config.max_atp_budget)
-                res_s = glyph.evaluate(s_term, max_atp=self.trust_config.max_atp_budget)
-
-                out_p = str(res_p.term)
-                out_s = str(res_s.term)
-
-                if out_p == out_s:
-                    return Verdict(
-                        status=VerificationStatus.FAIL,
-                        grade=EvidenceGrade.COUNTEREXAMPLE,
-                        reason=f"Refutation failed: outputs coincide on counterexample ({out_p})"
-                    )
-
+            except Exception as e:
                 return Verdict(
-                    status=VerificationStatus.PASS,
+                    status=VerificationStatus.FAIL,
                     grade=EvidenceGrade.COUNTEREXAMPLE,
-                    reason="Divergence independently reproduced: counterexample successfully refutes claim",
+                    reason=f"Claim endpoints do not parse against the witness input: {e}",
+                    details={"omega": claim.omega, "tau": claim.tau, "input": w_c.input_expr}
+                )
+
+            # 3. The declared cost must be a cost: a plain non-negative integer.
+            #    `type(...) is not int` also rejects bool, which would otherwise
+            #    compare as 0 or 1.
+            if type(w_c.atp_to_diverge) is not int or w_c.atp_to_diverge < 0:
+                return Verdict(
+                    status=VerificationStatus.FAIL,
+                    grade=EvidenceGrade.COUNTEREXAMPLE,
+                    reason=f"Counterexample witness declares a non-integral or negative atp_to_diverge: {w_c.atp_to_diverge!r}",
+                    details={"atp_to_diverge": repr(w_c.atp_to_diverge)}
+                )
+
+            # 4. Replay both sides. An engine fault is the absence of evidence.
+            budget = self.trust_config.max_atp_budget
+            try:
+                res_p = glyph.evaluate(p_term, max_atp=budget)
+                res_s = glyph.evaluate(s_term, max_atp=budget)
+            except Exception as e:
+                return Verdict(
+                    status=VerificationStatus.UNVERIFIED,
+                    grade=EvidenceGrade.COUNTEREXAMPLE,
+                    reason=f"Counterexample replay did not complete: {type(e).__name__}: {e}",
+                    details={"input": w_c.input_expr, "replay_error": str(e)}
+                )
+
+            # 5. Both sides must reach a normal form. Two intermediate states
+            #    suspended at the ceiling differ for no stated reason: bounded
+            #    non-termination is not a proved divergence.
+            if not res_p.is_settled() or not res_s.is_settled():
+                return Verdict(
+                    status=VerificationStatus.UNVERIFIED,
+                    grade=EvidenceGrade.COUNTEREXAMPLE,
+                    reason=(f"Counterexample replay did not settle within the ATP budget "
+                            f"({budget}): parent {res_p.status.value}, successor {res_s.status.value}"),
                     details={
                         "input": w_c.input_expr,
-                        "parent_output": out_p,
-                        "successor_output": out_s
+                        "max_atp_budget": budget,
+                        "parent_status": res_p.status.value,
+                        "successor_status": res_s.status.value
                     }
                 )
-            except Exception as e:
-                # If candidate crashes or diverges, it's also a valid refutation
+
+            out_p = str(res_p.term)
+            out_s = str(res_s.term)
+
+            # 6. The normal forms must actually differ.
+            if glyph.canonical_bytes(res_p.term) == glyph.canonical_bytes(res_s.term):
                 return Verdict(
-                    status=VerificationStatus.PASS,
+                    status=VerificationStatus.FAIL,
                     grade=EvidenceGrade.COUNTEREXAMPLE,
-                    reason=f"Refutation confirmed: execution divergence / exception: {e}",
-                    details={"input": w_c.input_expr, "divergence_error": str(e)}
+                    reason=f"Refutation failed: outputs coincide on counterexample ({out_p})"
                 )
+
+            # 7. They must be the two normal forms the witness named, in their
+            #    stated roles. Without this the witness describes nothing: any
+            #    separating input would carry any pair of operands.
+            if glyph.canonical_bytes(res_p.term) != glyph.canonical_bytes(declared_expected):
+                return Verdict(
+                    status=VerificationStatus.FAIL,
+                    grade=EvidenceGrade.COUNTEREXAMPLE,
+                    reason=(f"Witness expected_normal_form '{w_c.expected_normal_form}' does not match "
+                            f"the parent replay '{out_p}'"),
+                    details={"declared": w_c.expected_normal_form, "parent_output": out_p}
+                )
+            if glyph.canonical_bytes(res_s.term) != glyph.canonical_bytes(declared_actual):
+                return Verdict(
+                    status=VerificationStatus.FAIL,
+                    grade=EvidenceGrade.COUNTEREXAMPLE,
+                    reason=(f"Witness actual_divergence '{w_c.actual_divergence}' does not match "
+                            f"the successor replay '{out_s}'"),
+                    details={"declared": w_c.actual_divergence, "successor_output": out_s}
+                )
+
+            # 8. The declared cost must cover the replay. Reduction here is
+            #    deterministic and leftmost-outermost, so a run under max_atp = n
+            #    settles exactly when n >= the steps this run spent; comparing the
+            #    counts is the same test as re-running under the declared budget.
+            required_atp = max(res_p.atp_spent, res_s.atp_spent)
+            if w_c.atp_to_diverge < required_atp:
+                return Verdict(
+                    status=VerificationStatus.FAIL,
+                    grade=EvidenceGrade.COUNTEREXAMPLE,
+                    reason=(f"Declared atp_to_diverge {w_c.atp_to_diverge} does not cover the replay, "
+                            f"which needs {required_atp} ATP"),
+                    details={"declared_atp": w_c.atp_to_diverge, "required_atp": required_atp}
+                )
+
+            return Verdict(
+                status=VerificationStatus.PASS,
+                grade=EvidenceGrade.COUNTEREXAMPLE,
+                reason="Divergence independently reproduced: counterexample successfully refutes claim",
+                details={
+                    "input": w_c.input_expr,
+                    "parent_output": out_p,
+                    "successor_output": out_s,
+                    "parent_atp": res_p.atp_spent,
+                    "successor_atp": res_s.atp_spent,
+                    "declared_atp": w_c.atp_to_diverge
+                }
+            )
 
         return Verdict(
             status=VerificationStatus.UNVERIFIED,

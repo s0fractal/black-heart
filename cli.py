@@ -1775,7 +1775,7 @@ def cmd_warrant_kernel(args):
         c_emp = EdgeClaim.create_and_sign("p_root", "🤍", "🤍 🤍", "s_emp", Polarity.AFFIRM,
                                          emp_w, sk, pk)
         c_div = EdgeClaim.create_and_sign("p_root", "🖤 🤍", "🖤", "s_div", Polarity.REFUTE,
-                                         CounterexampleWitness("🤍 (🖤 🤍)", "🤍", "🖤 🤍", 2), sk, pk)
+                                         CounterexampleWitness("🤍 (🖤 🤍)", "🖤 (🖤 🤍)", "🤍", 2), sk, pk)
         claims = [c_ground, c_ax, c_emp, c_div]
         tc = TrustConfig()
         generate_warrant_ledger_pdf(claims, out_path, tc)

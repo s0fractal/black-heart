@@ -47,6 +47,7 @@ SUITES = [
     ("Autopoietic Quine Organisms", "test_autopoiesis"),
     ("Morphogenetic Autopoiesis Master Synthesis", "test_morpho_autopoiesis"),
     ("Epistemic Kernel & Unified Edge-Claims", "test_warrant_kernel"),
+    ("Counterexample Evidence: Replay Must Match the Witness", "test_counterexample_evidence"),
     ("Controlled Forgetting & Epistemic Retirement", "test_controlled_forgetting"),
     ("Retirement / Re-adoption Body Binding", "test_retirement_binding"),
     ("Autonomic Epistemic Immune System", "test_epistemic_immune"),
