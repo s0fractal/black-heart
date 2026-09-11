@@ -340,9 +340,92 @@ class NoTrackedWriteTest(unittest.TestCase):
         r = subprocess.run([sys.executable, "-B", os.path.join(_HERE, "test_all.py")],
                            cwd=_HERE, env=env, capture_output=True, text=True, timeout=1800)
         after = _tracked_digest(_HERE)
+        # Unconditional: even a failed or incomplete child run must not have
+        # rewritten tracked bytes.
         self.assertEqual(before, after,
                          f"a full suite run modified tracked file bytes "
                          f"(child returncode={r.returncode})")
+        # Independent of the byte check (review R3): unchanged bytes from a
+        # child that crashed, timed out, or was otherwise cut short is not
+        # evidence that the intended FULL run passed -- it may simply not have
+        # reached the point where it would have written anything. Measured by
+        # the reviewer with a synthetic returncode=1 child whose bytes never
+        # moved: the byte assertion alone reported this test as passing.
+        self.assertEqual(r.returncode, 0,
+                         f"the spawned test_all.py did not complete successfully "
+                         f"(returncode={r.returncode})\n--- stdout ---\n{r.stdout}\n"
+                         f"--- stderr ---\n{r.stderr}")
+
+
+def _fake_child_run(returncode, stdout="", stderr=""):
+    """A `subprocess.run` side_effect that intercepts only the call whose argv
+    ends in test_all.py (C2's spawned child) and answers with `returncode`
+    WITHOUT actually running the suite; every other call (in particular
+    `_tracked_digest`'s own `git ls-files`) is delegated to the real
+    `subprocess.run`, exactly as the reviewer's probe does it."""
+    real_run = subprocess.run
+
+    def side_effect(cmd, *args, **kwargs):
+        if isinstance(cmd, list) and any(str(x).endswith("test_all.py") for x in cmd):
+            return subprocess.CompletedProcess(cmd, returncode, stdout=stdout, stderr=stderr)
+        return real_run(cmd, *args, **kwargs)
+    return side_effect
+
+
+class C2HarnessTest(unittest.TestCase):
+    """Controls on C2 itself (review R3): it must fail on a byte change and on
+    a failed child, independently of each other, not only when both coincide."""
+
+    def setUp(self):
+        if not os.path.exists(os.path.join(_HERE, ".git")):
+            self.skipTest("not a git checkout")
+
+    def _run_c2(self, returncode, digest_pair=None):
+        """`digest_pair`, if given, replaces `_tracked_digest`'s two calls
+        (before/after) with fixed values instead of reading git; otherwise the
+        real digest is read twice (and so is identical both times, since
+        nothing in this harness touches the working tree)."""
+        case = NoTrackedWriteTest("test_C2_a_full_run_leaves_tracked_file_bytes_unchanged")
+        result = unittest.TestResult()
+        with contextlib.ExitStack() as stack:
+            # Clear BLACKHEART_SUITE_CHILD for the duration of this call. C2's
+            # own recursion guard (against a REAL spawn recursing into ANOTHER
+            # real spawn) would otherwise also skip THIS fully-mocked
+            # invocation whenever this harness itself happens to run nested
+            # inside an already-spawned child (e.g. a real full-suite run that
+            # reaches test_suite_isolation a second time) -- the guard belongs
+            # to test_C2's real subprocess call, not to this mocked one.
+            stack.enter_context(patch.dict(os.environ, {}, clear=False))
+            os.environ.pop("BLACKHEART_SUITE_CHILD", None)
+            # subprocess.run is the actual module attribute both C2 and
+            # _tracked_digest call through; the side_effect delegates every
+            # non-test_all.py invocation to the real subprocess.run.
+            stack.enter_context(patch.object(subprocess, "run", side_effect=_fake_child_run(returncode)))
+            if digest_pair is not None:
+                stack.enter_context(patch.object(sys.modules[__name__], "_tracked_digest",
+                                                 side_effect=list(digest_pair)))
+            case.run(result)
+        return result
+
+    def test_H1_a_failed_child_with_unchanged_bytes_still_fails_C2(self):
+        """The reviewer's own control: real digests (nothing actually changes
+        the tree), a synthetic returncode=1 child. Before the R3 fix this
+        reported success."""
+        result = self._run_c2(returncode=1, digest_pair=("same", "same"))
+        self.assertFalse(result.wasSuccessful())
+        self.assertEqual(len(result.errors) + len(result.failures), 1)
+
+    def test_H2_a_successful_child_with_unchanged_bytes_passes_C2(self):
+        result = self._run_c2(returncode=0, digest_pair=("same", "same"))
+        self.assertTrue(result.wasSuccessful())
+
+    def test_H3_changed_bytes_fail_C2_even_when_the_child_succeeds(self):
+        result = self._run_c2(returncode=0, digest_pair=("before", "after"))
+        self.assertFalse(result.wasSuccessful())
+
+    def test_H4_changed_bytes_fail_C2_even_when_the_child_fails(self):
+        result = self._run_c2(returncode=1, digest_pair=("before", "after"))
+        self.assertFalse(result.wasSuccessful())
 
 
 if __name__ == "__main__":
