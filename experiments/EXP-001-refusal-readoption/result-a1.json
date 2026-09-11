@@ -1,0 +1,191 @@
+{
+  "all_predictions_held": true,
+  "attribution_held": true,
+  "attribution_mismatches": [],
+  "experiment": "EXP-001",
+  "genesis_document_sha256": "5899e476792584f9e02b9d10b81dbd35cf8bbd2b76dbb66412bc21972b83ea56",
+  "holds": true,
+  "issuer_public_key": "c797cc8efb4868fc6e5abaee8b9c5c559f8a725e3adbeddda512c619a2e56df3",
+  "main_document_unchanged_through_s3": true,
+  "mismatches": [],
+  "pair": {
+    "candidate": "🖤 (🌿 🤍 🤍)",
+    "gene_id": "GENE-OPT-04",
+    "input": "x",
+    "other_reference": "🤍",
+    "reference": "🌿 (🖤 (🌿 🤍)) (🖤 🤍)"
+  },
+  "predictions": {
+    "S1": {
+      "document": "changes",
+      "exit": 0,
+      "scope": null
+    },
+    "S2": {
+      "document": "unchanged",
+      "exit": 1,
+      "scope": "REFUTED_FOR_REFERENCE"
+    },
+    "S3": {
+      "document": "unchanged",
+      "exit": 1,
+      "scope": "REFUTED_FOR_ANOTHER_REFERENCE"
+    },
+    "S4": {
+      "document": "changes",
+      "exit": 0,
+      "scope": null
+    },
+    "S5": {
+      "document": "changes",
+      "exit": 0,
+      "generation": 1,
+      "scope": null
+    },
+    "S6": {
+      "document": "unchanged",
+      "exit": 1,
+      "scope": "REFUTED_FOR_REFERENCE"
+    }
+  },
+  "protocol": "EXP-001 + amendment 1",
+  "python": "3.14.7",
+  "registries": {
+    "R_other": {
+      "readoption_record_id": null,
+      "retirement_record_id": "285c339485656606b0836f40a3071c5ae766f9368287b6fe82001beab711b4b1",
+      "sha256": "0c5f09875806d758469e31f3927376449436b1a31bedef3ad35e7ecc516d292f"
+    },
+    "R_same": {
+      "readoption_record_id": null,
+      "retirement_record_id": "2c582bdc47d6390bbd2140536c76fa47987cd68d188762c18a5b501da48d1d40",
+      "sha256": "10bb1c5dc2dddaa196dcbd37f5b351efb96905420d0d502c6e9a1ae0fe1c26e3"
+    },
+    "R_same_readopted": {
+      "readoption_record_id": "76e85269d2afbac7476aa6760e2867558e24385608a1519879174ba8ac641c72",
+      "retirement_record_id": "2c582bdc47d6390bbd2140536c76fa47987cd68d188762c18a5b501da48d1d40",
+      "sha256": "d46a4d1599140914c0bf05e768f6512a6b81504d0d7baba8d8f63a23b9bac402"
+    }
+  },
+  "repo_commit": "3c99c3ee134b6696b73a3ec893ff27e85f6a83d4",
+  "repo_dirty": false,
+  "repo_dirty_paths": [],
+  "repo_state_read": "before the run wrote anything",
+  "started_utc": "2026-09-11T04:29:49Z",
+  "steps": [
+    {
+      "document": "changes",
+      "document_sha256_after": "5882717d2fa35406dfb95da6fa3a11c173491a2a3a4e016e0ada40512009ffbc",
+      "document_sha256_before": "5899e476792584f9e02b9d10b81dbd35cf8bbd2b76dbb66412bc21972b83ea56",
+      "exit": 0,
+      "flags": [],
+      "generation_after": 1,
+      "key_unchanged": true,
+      "refusal_says_not_modified": false,
+      "registry": null,
+      "registry_sha256": null,
+      "scope": null,
+      "start_from": "genesis document",
+      "step": "S1",
+      "target": "fork",
+      "traceback": false
+    },
+    {
+      "document": "unchanged",
+      "document_sha256_after": "5899e476792584f9e02b9d10b81dbd35cf8bbd2b76dbb66412bc21972b83ea56",
+      "document_sha256_before": "5899e476792584f9e02b9d10b81dbd35cf8bbd2b76dbb66412bc21972b83ea56",
+      "exit": 1,
+      "flags": [
+        "--tombstones"
+      ],
+      "generation_after": 0,
+      "key_unchanged": true,
+      "refusal_says_not_modified": true,
+      "registry": "R_same",
+      "registry_sha256": "10bb1c5dc2dddaa196dcbd37f5b351efb96905420d0d502c6e9a1ae0fe1c26e3",
+      "scope": "REFUTED_FOR_REFERENCE",
+      "start_from": "genesis document",
+      "step": "S2",
+      "target": "main",
+      "traceback": false
+    },
+    {
+      "document": "unchanged",
+      "document_sha256_after": "5899e476792584f9e02b9d10b81dbd35cf8bbd2b76dbb66412bc21972b83ea56",
+      "document_sha256_before": "5899e476792584f9e02b9d10b81dbd35cf8bbd2b76dbb66412bc21972b83ea56",
+      "exit": 1,
+      "flags": [
+        "--tombstones"
+      ],
+      "generation_after": 0,
+      "key_unchanged": true,
+      "refusal_says_not_modified": true,
+      "registry": "R_other",
+      "registry_sha256": "0c5f09875806d758469e31f3927376449436b1a31bedef3ad35e7ecc516d292f",
+      "scope": "REFUTED_FOR_ANOTHER_REFERENCE",
+      "start_from": "genesis document",
+      "step": "S3",
+      "target": "main",
+      "traceback": false
+    },
+    {
+      "document": "changes",
+      "document_sha256_after": "e3b6306d00301ab46b39331a210bd25125dbaca3aafedfc04385fd9a878f14a8",
+      "document_sha256_before": "5899e476792584f9e02b9d10b81dbd35cf8bbd2b76dbb66412bc21972b83ea56",
+      "exit": 0,
+      "flags": [
+        "--tombstones",
+        "--also-proceed-on",
+        "REFUTED_FOR_ANOTHER_REFERENCE"
+      ],
+      "generation_after": 1,
+      "key_unchanged": true,
+      "refusal_says_not_modified": false,
+      "registry": "R_other",
+      "registry_sha256": "0c5f09875806d758469e31f3927376449436b1a31bedef3ad35e7ecc516d292f",
+      "scope": null,
+      "start_from": "main after S3",
+      "step": "S4",
+      "target": "fork",
+      "traceback": false
+    },
+    {
+      "document": "changes",
+      "document_sha256_after": "e3b6306d00301ab46b39331a210bd25125dbaca3aafedfc04385fd9a878f14a8",
+      "document_sha256_before": "5899e476792584f9e02b9d10b81dbd35cf8bbd2b76dbb66412bc21972b83ea56",
+      "exit": 0,
+      "flags": [
+        "--tombstones"
+      ],
+      "generation_after": 1,
+      "key_unchanged": true,
+      "refusal_says_not_modified": false,
+      "registry": "R_same_readopted",
+      "registry_sha256": "d46a4d1599140914c0bf05e768f6512a6b81504d0d7baba8d8f63a23b9bac402",
+      "scope": null,
+      "start_from": "main after S4",
+      "step": "S5",
+      "target": "main",
+      "traceback": false
+    },
+    {
+      "document": "unchanged",
+      "document_sha256_after": "5899e476792584f9e02b9d10b81dbd35cf8bbd2b76dbb66412bc21972b83ea56",
+      "document_sha256_before": "5899e476792584f9e02b9d10b81dbd35cf8bbd2b76dbb66412bc21972b83ea56",
+      "exit": 1,
+      "flags": [
+        "--tombstones"
+      ],
+      "generation_after": 0,
+      "key_unchanged": true,
+      "refusal_says_not_modified": true,
+      "registry": "R_same",
+      "registry_sha256": "10bb1c5dc2dddaa196dcbd37f5b351efb96905420d0d502c6e9a1ae0fe1c26e3",
+      "scope": "REFUTED_FOR_REFERENCE",
+      "start_from": "main immediately before S5",
+      "step": "S6",
+      "target": "fork",
+      "traceback": false
+    }
+  ]
+}

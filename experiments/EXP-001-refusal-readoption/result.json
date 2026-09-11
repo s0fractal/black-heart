@@ -1,0 +1,170 @@
+{
+  "all_predictions_held": true,
+  "experiment": "EXP-001",
+  "genesis_document_sha256": "cba20515ef5da237783bbfe63f13c1f1d29b32a37f644080af5c1b1626eb7ccd",
+  "issuer_public_key": "dd0fb9b9e096ebacf98448da9837eda8ecf9686b1364be3b30189ab5f60f3802",
+  "main_document_unchanged_through_s3": true,
+  "mismatches": [],
+  "pair": {
+    "candidate": "🖤 (🌿 🤍 🤍)",
+    "gene_id": "GENE-OPT-04",
+    "input": "x",
+    "other_reference": "🤍",
+    "reference": "🌿 (🖤 (🌿 🤍)) (🖤 🤍)"
+  },
+  "predictions": {
+    "S1": {
+      "document": "changes",
+      "exit": 0,
+      "scope": null
+    },
+    "S2": {
+      "document": "unchanged",
+      "exit": 1,
+      "scope": "REFUTED_FOR_REFERENCE"
+    },
+    "S3": {
+      "document": "unchanged",
+      "exit": 1,
+      "scope": "REFUTED_FOR_ANOTHER_REFERENCE"
+    },
+    "S4": {
+      "document": "changes",
+      "exit": 0,
+      "scope": null
+    },
+    "S5": {
+      "document": "changes",
+      "exit": 0,
+      "generation": 1,
+      "scope": null
+    },
+    "S6": {
+      "document": "unchanged",
+      "exit": 1,
+      "scope": "REFUTED_FOR_REFERENCE"
+    }
+  },
+  "python": "3.14.7",
+  "registries": {
+    "R_other": {
+      "record_id": "4ee7b87315e303fcf94784e278b8060fd046b8783c85e7d0d317d7c849903f67",
+      "sha256": "bde66266715cfa516f1b6bca6d8b0f99fbda40d71851e0e5a7d2257a8f19c3c2"
+    },
+    "R_same": {
+      "record_id": "f2971530ef8d233792da6f6e9bf788054f16df9a71fdb22682f96ecc61b06e52",
+      "sha256": "a7eca25ac24de09a327cc51023a7a9d2be5bded92f276ffc50c4bbc8df895168"
+    },
+    "R_same_readopted": {
+      "readoption_record_id": "25b1c4c3fe6450620df554ec06d209122cb5e15866fc6bac328fe75370fe3ce9",
+      "sha256": "56bd1aacbe7d02fe3c52783353bf5c17857e49bd2936323ef6ec0a09cafdf038"
+    }
+  },
+  "repo_commit": "4e1c1957d989d7f4ec72b9cd31616b4c89e05473",
+  "repo_dirty": false,
+  "started_utc": "2026-09-11T04:09:09Z",
+  "steps": [
+    {
+      "document": "changes",
+      "document_sha256_after": "abba7ea746773a87190fe05efc498152107c71b3083b0e1588013b6f7937a221",
+      "document_sha256_before": "cba20515ef5da237783bbfe63f13c1f1d29b32a37f644080af5c1b1626eb7ccd",
+      "exit": 0,
+      "flags": [],
+      "generation_after": 1,
+      "key_unchanged": true,
+      "refusal_says_not_modified": false,
+      "registry": null,
+      "scope": null,
+      "step": "S1",
+      "target": "fork taken at genesis",
+      "traceback": false
+    },
+    {
+      "document": "unchanged",
+      "document_sha256_after": "cba20515ef5da237783bbfe63f13c1f1d29b32a37f644080af5c1b1626eb7ccd",
+      "document_sha256_before": "cba20515ef5da237783bbfe63f13c1f1d29b32a37f644080af5c1b1626eb7ccd",
+      "exit": 1,
+      "flags": [
+        "--tombstones"
+      ],
+      "generation_after": 0,
+      "key_unchanged": true,
+      "refusal_says_not_modified": true,
+      "registry": "R_same",
+      "scope": "REFUTED_FOR_REFERENCE",
+      "step": "S2",
+      "target": "main",
+      "traceback": false
+    },
+    {
+      "document": "unchanged",
+      "document_sha256_after": "cba20515ef5da237783bbfe63f13c1f1d29b32a37f644080af5c1b1626eb7ccd",
+      "document_sha256_before": "cba20515ef5da237783bbfe63f13c1f1d29b32a37f644080af5c1b1626eb7ccd",
+      "exit": 1,
+      "flags": [
+        "--tombstones"
+      ],
+      "generation_after": 0,
+      "key_unchanged": true,
+      "refusal_says_not_modified": true,
+      "registry": "R_other",
+      "scope": "REFUTED_FOR_ANOTHER_REFERENCE",
+      "step": "S3",
+      "target": "main",
+      "traceback": false
+    },
+    {
+      "document": "changes",
+      "document_sha256_after": "abba7ea746773a87190fe05efc498152107c71b3083b0e1588013b6f7937a221",
+      "document_sha256_before": "cba20515ef5da237783bbfe63f13c1f1d29b32a37f644080af5c1b1626eb7ccd",
+      "exit": 0,
+      "flags": [
+        "--tombstones",
+        "--also-proceed-on",
+        "REFUTED_FOR_ANOTHER_REFERENCE"
+      ],
+      "generation_after": 1,
+      "key_unchanged": true,
+      "refusal_says_not_modified": false,
+      "registry": "R_other",
+      "scope": null,
+      "step": "S4",
+      "target": "fork taken after S3",
+      "traceback": false
+    },
+    {
+      "document": "changes",
+      "document_sha256_after": "abba7ea746773a87190fe05efc498152107c71b3083b0e1588013b6f7937a221",
+      "document_sha256_before": "cba20515ef5da237783bbfe63f13c1f1d29b32a37f644080af5c1b1626eb7ccd",
+      "exit": 0,
+      "flags": [
+        "--tombstones"
+      ],
+      "generation_after": 1,
+      "key_unchanged": true,
+      "refusal_says_not_modified": false,
+      "registry": "R_same_readopted",
+      "scope": null,
+      "step": "S5",
+      "target": "main",
+      "traceback": false
+    },
+    {
+      "document": "unchanged",
+      "document_sha256_after": "cba20515ef5da237783bbfe63f13c1f1d29b32a37f644080af5c1b1626eb7ccd",
+      "document_sha256_before": "cba20515ef5da237783bbfe63f13c1f1d29b32a37f644080af5c1b1626eb7ccd",
+      "exit": 1,
+      "flags": [
+        "--tombstones"
+      ],
+      "generation_after": 0,
+      "key_unchanged": true,
+      "refusal_says_not_modified": true,
+      "registry": "R_same",
+      "scope": "REFUTED_FOR_REFERENCE",
+      "step": "S6",
+      "target": "fork taken before S5",
+      "traceback": false
+    }
+  ]
+}
