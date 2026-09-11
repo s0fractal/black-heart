@@ -22,6 +22,7 @@ from typing import List, Dict, Optional, Tuple, Any
 
 from crypto import (
     generate_keypair,
+    is_valid_public_key,
     public_key_from_secret,
     sign_bytes,
     verify_bytes,
@@ -65,9 +66,66 @@ class TelemetryIncident:
             "raw_evidence_hash": self.raw_evidence_hash
         }
 
+def _canonical_pk(pk_hex: Any) -> str:
+    """One spelling per key: the 32 decoded bytes, as the verifier sees them."""
+    if not isinstance(pk_hex, str) or not is_valid_public_key(pk_hex):
+        raise ValueError(f"not a valid Ed25519 public key: {pk_hex!r}")
+    return bytes.fromhex(pk_hex).hex()
+
+
+def _same_key(a: Any, b: Any) -> bool:
+    try:
+        return _canonical_pk(a) == _canonical_pk(b)
+    except ValueError:
+        return False
+
+
+def _in_domain(value: Any, name: str, low: float, high: float) -> float:
+    # The chained comparison is false for NaN and for both infinities, so the
+    # range test rejects them too. A separate NaN guard was measured redundant
+    # (its mutant survived), and was removed rather than kept as decoration.
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not (low <= value <= high):
+        raise ValueError(f"outcome input out of domain: {name} = {value!r} (expected a finite number in [{low}, {high}])")
+    return float(value)
+
+
+def _non_negative_int(value: Any, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(f"outcome input out of domain: {name} = {value!r} (expected a non-negative integer)")
+    return value
+
+
+@dataclass(frozen=True)
+class AdjudicationTrust:
+    """What the CALLER trusts, supplied from outside both documents.
+
+    `expected_author_pk_hex` trusts any agreement that author signed;
+    `expected_agreement_sha256` trusts exactly one agreement file. Either
+    earns a settlement; neither means there is no trust root, and the result
+    is an evaluation only. A document can never supply this for itself.
+    Keys are compared as their decoded bytes, so any hex spelling of the
+    same key is the same key.
+    """
+    expected_author_pk_hex: Optional[str] = None
+    expected_agreement_sha256: Optional[str] = None
+
+    def __post_init__(self):
+        if self.expected_author_pk_hex is not None:
+            object.__setattr__(self, "expected_author_pk_hex", _canonical_pk(self.expected_author_pk_hex))
+        if self.expected_agreement_sha256 is not None:
+            h = self.expected_agreement_sha256
+            if not isinstance(h, str) or len(h) != 64 or any(c not in "0123456789abcdefABCDEF" for c in h):
+                raise ValueError(f"an agreement pin must be a 64-hex SHA-256, got {h!r}")
+            object.__setattr__(self, "expected_agreement_sha256", h.lower())
+
+    @property
+    def is_pinned(self) -> bool:
+        return bool(self.expected_author_pk_hex or self.expected_agreement_sha256)
+
+
 @dataclass
 class BilateralSettlementReceipt:
-    status: str  # "SETTLED_COMPLIANT" or "SETTLED_BREACH"
+    status: str  # "SETTLED_COMPLIANT" / "SETTLED_BREACH" only with a caller pin; else "EVALUATION_ONLY"
     agreement_title: str
     oracle_name: str
     oracle_pk_hex: str
@@ -81,6 +139,9 @@ class BilateralSettlementReceipt:
     timestamp_utc: str
     agreement_author_pk_hex: str = ""
     trust_status: str = "TRUSTED"
+    outcome: str = ""                      # "COMPLIANT" / "BREACH": what the formula gives, trusted or not
+    checks: Dict[str, str] = field(default_factory=dict)
+    untrusted_reasons: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -98,6 +159,9 @@ class BilateralSettlementReceipt:
             "timestamp_utc": self.timestamp_utc,
             "agreement_author_pk_hex": self.agreement_author_pk_hex,
             "trust_status": self.trust_status,
+            "outcome": self.outcome,
+            "checks": dict(self.checks),
+            "untrusted_reasons": list(self.untrusted_reasons),
         }
 
 # ============================================================================
@@ -432,22 +496,46 @@ class BilateralAgreementPolyglot:
 def adjudicate_bilateral(
     agreement_pdf_path: str,
     oracle_pdf_path: str,
-    expected_agreement_hash: Optional[str] = None,
-    expected_author_pk_hex: Optional[str] = None,
+    *,
+    trust: Optional[AdjudicationTrust] = None,
 ) -> BilateralSettlementReceipt:
     """
-    Executes bilateral adjudication between an Agreement Polyglot and an Oracle Polyglot.
-    Verifies mutual Ed25519 signatures, recomputed anchors, identity constraints,
-    author authenticity pin, and mandatory registered party signatures.
+    Adjudicates an agreement document against an oracle document.
+
+    Trust comes only from `trust`, which the caller supplies and which is never
+    read from either document. Four checks are kept apart:
+
+      integrity      the agreement matches a caller-pinned hash, if one is given;
+                     the manifests parse; the oracle anchor recomputes
+      signatures     the author's signature over the terms, every listed party's,
+                     and the oracle's over its payload
+      authorization  the author is the caller-pinned author, if one is given; the
+                     oracle is the one the signed terms name; at least two
+                     distinct signers stand behind the terms
+      outcome        the signed facts and terms are in domain (a finite uptime and
+                     target in [0, 100], non-negative integer fees) before the
+                     SLA formula runs
+
+    A failed integrity, signature, pin or domain check raises. A pair that
+    passes all of them but has no caller pin, or fewer than two distinct
+    signers, vouches only for itself: the receipt says EVALUATION_ONLY with
+    the reasons, never SETTLED_*. Before S5b, the runner embedded in every
+    agreement pinned the author that document names, so any self-consistent
+    pair got a trusted settlement. The keyword arguments that let it do so
+    (`expected_author_pk_hex=`, `expected_agreement_hash=`) are gone, so old
+    embedded runners now fail closed.
     """
+    trust = trust if trust is not None else AdjudicationTrust()
+    if not isinstance(trust, AdjudicationTrust):
+        raise TypeError("trust must be an AdjudicationTrust supplied by the caller")
     # 1. Read Agreement Polyglot
     with open(agreement_pdf_path, "rb") as f:
         ag_content = f.read()
 
-    if expected_agreement_hash:
+    if trust.expected_agreement_sha256:
         actual_ag_anchor = hashlib.sha256(ag_content).hexdigest()
-        if actual_ag_anchor != expected_agreement_hash:
-            raise PermissionError(f"Agreement anchor mismatch: expected {expected_agreement_hash}, got {actual_ag_anchor}")
+        if actual_ag_anchor != trust.expected_agreement_sha256:
+            raise PermissionError(f"Agreement anchor mismatch: expected {trust.expected_agreement_sha256}, got {actual_ag_anchor}")
 
     ag_prefix = AGREEMENT_MANIFEST_PREFIX.encode("utf-8")
     ag_idx = ag_content.find(ag_prefix)
@@ -480,9 +568,9 @@ def adjudicate_bilateral(
     if not author_pk or not author_sig:
         raise PermissionError("Agreement is missing cryptographic signature! Untrusted agreement.")
 
-    if expected_author_pk_hex is not None:
-        if author_pk != expected_author_pk_hex:
-            raise PermissionError(f"Agreement author PK mismatch: expected {expected_author_pk_hex}, got {author_pk}")
+    if trust.expected_author_pk_hex is not None:
+        if not _same_key(author_pk, trust.expected_author_pk_hex):
+            raise PermissionError(f"Agreement author PK mismatch: expected {trust.expected_author_pk_hex}, got {author_pk}")
 
     if not verify_bytes(bytes.fromhex(author_pk), terms_bytes, bytes.fromhex(author_sig)):
         raise PermissionError("Agreement terms altered or signature invalid! Refusing unverified agreement.")
@@ -525,25 +613,37 @@ def adjudicate_bilateral(
 
     # 6. Verify Oracle Identity Constraint
     trusted_pk = ag_manifest["trusted_oracle_pk_hex"]
-    if or_manifest["public_key_hex"] != trusted_pk:
+    if not _same_key(or_manifest["public_key_hex"], trusted_pk):
         raise PermissionError(f"Oracle identity mismatch! Expected PK: {trusted_pk[:16]}..., got: {or_manifest['public_key_hex'][:16]}...")
 
     # 7. Extract oracle_name STRICTLY from signed payload
     oracle_name = payload_data.get("oracle_name", "UNKNOWN_ORACLE")
 
-    # 8. Adjudicate SLA Formula against attested facts
-    actual_uptime = payload_data["measured_uptime_percent"]
-    target_uptime = ag_manifest["target_uptime_percent"]
-    base_fee = ag_manifest["base_fee_usd"]
-    penalty_rate = ag_manifest["penalty_rate_usd"]
+    # 8. Outcome: inputs in domain before the SLA formula runs. A signature says
+    # who stated a number, not that the number means anything: before S5b a
+    # trusted oracle's NaN or 250% uptime settled as fully compliant.
+    actual_uptime = _in_domain(payload_data.get("measured_uptime_percent"), "measured uptime", 0.0, 100.0)
+    target_uptime = _in_domain(ag_manifest["target_uptime_percent"], "target uptime", 0.0, 100.0)
+    base_fee = _non_negative_int(ag_manifest["base_fee_usd"], "base fee")
+    penalty_rate = _non_negative_int(ag_manifest["penalty_rate_usd"], "penalty rate")
 
     breach = actual_uptime < target_uptime
     deficit = max(0.0, target_uptime - actual_uptime)
     tenths = int(deficit * 10)
     penalty_due = tenths * penalty_rate
     net_payable = max(0, base_fee - penalty_due)
+    outcome = "BREACH" if breach else "COMPLIANT"
 
-    status = "SETTLED_BREACH" if breach else "SETTLED_COMPLIANT"
+    # Authorization for a SETTLEMENT: a caller pin, and at least two distinct
+    # signers behind the terms. Without either, this is an evaluation.
+    signers = {_canonical_pk(author_pk)} | {_canonical_pk(p["public_key_hex"]) for p in parties}
+    untrusted_reasons: List[str] = []
+    if not trust.is_pinned:
+        untrusted_reasons.append("no caller-supplied trust pin: the two documents vouch only for each other")
+    if len(signers) < 2:
+        untrusted_reasons.append(f"{len(signers)} distinct signer behind the terms; a bilateral settlement needs two")
+
+    status = f"SETTLED_{outcome}" if not untrusted_reasons else "EVALUATION_ONLY"
     ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
     # 9. Joint Bilateral Digest
@@ -553,7 +653,16 @@ def adjudicate_bilateral(
     joint_payload = f"{ag_anchor}|{or_anchor}|{status}|{penalty_due}|{net_payable}|{ts}"
     joint_digest = hashlib.sha256(joint_payload.encode("utf-8")).hexdigest()
 
-    trust_status = "AUTHENTICATED_PINNED" if (expected_agreement_hash or expected_author_pk_hex) else "UNTRUSTED_ISSUER_EVALUATION"
+    trust_status = "AUTHENTICATED_PINNED" if trust.is_pinned else "UNTRUSTED_ISSUER_EVALUATION"
+    pinned = [label for label, on in (("author", trust.expected_author_pk_hex),
+                                      ("agreement hash", trust.expected_agreement_sha256)) if on]
+    checks = {
+        "integrity": "PASS" + (" (agreement hash pinned by caller)" if trust.expected_agreement_sha256 else ""),
+        "signatures": f"PASS (author, {len(parties)} listed part{'y' if len(parties) == 1 else 'ies'}, oracle)",
+        "authorization": (f"PASS (caller pinned {' and '.join(pinned)}; {len(signers)} distinct signers)"
+                          if not untrusted_reasons else "NOT_ESTABLISHED: " + "; ".join(untrusted_reasons)),
+        "outcome": f"PASS ({outcome})",
+    }
 
     return BilateralSettlementReceipt(
         status=status,
@@ -570,6 +679,9 @@ def adjudicate_bilateral(
         timestamp_utc=ts,
         agreement_author_pk_hex=author_pk,
         trust_status=trust_status,
+        outcome=outcome,
+        checks=checks,
+        untrusted_reasons=untrusted_reasons,
     )
 
 def _escape_pdf(text: str) -> str:
@@ -638,7 +750,16 @@ def _generate_agreement_runner(author_pk_hex: str = "") -> str:
 # --- BILATERAL AGREEMENT STANDALONE ADJUDICATOR ---
 import os, sys, json
 
-PINNED_AUTHOR_PK = "{author_pk_hex}"
+# The author this document NAMES, printed for information only. A document
+# cannot be the trust root for itself (S5b): to ask for a settlement, pin an
+# author key or this file's SHA-256 on the command line.
+DOCUMENT_AUTHOR_PK = "{author_pk_hex}"
+
+def _flag(args, name):
+    if name not in args:
+        return None
+    i = args.index(name)
+    return args[i + 1] if i + 1 < len(args) else ""
 
 def main():
     target = sys.argv[0]
@@ -648,11 +769,10 @@ def main():
     print("=" * 70 + "\\033[0m\\n")
 
     if "--adjudicate-with" in args:
-        idx = args.index("--adjudicate-with")
-        if idx + 1 >= len(args):
+        oracle_pdf = _flag(args, "--adjudicate-with")
+        if not oracle_pdf:
             print("\\033[1;31m[!] Missing oracle PDF path!\\033[0m")
             sys.exit(1)
-        oracle_pdf = args[idx + 1]
 
         # Ensure repo in sys.path
         target_dir = os.path.dirname(os.path.abspath(target))
@@ -660,9 +780,19 @@ def main():
         for p in (target_dir, parent_dir):
             if p not in sys.path: sys.path.insert(0, p)
 
-        from cross_proof import adjudicate_bilateral
+        from cross_proof import adjudicate_bilateral, AdjudicationTrust
         try:
-            rcpt = adjudicate_bilateral(target, oracle_pdf, expected_author_pk_hex=PINNED_AUTHOR_PK or None)
+            trust = AdjudicationTrust(expected_author_pk_hex=_flag(args, "--pinned-author-pk"),
+                                      expected_agreement_sha256=_flag(args, "--pinned-agreement-hash"))
+            rcpt = adjudicate_bilateral(target, oracle_pdf, trust=trust)
+            if rcpt.status == "EVALUATION_ONLY":
+                print("\\033[1;33m[! EVALUATION ONLY] Not a settlement.\\033[0m")
+                for reason in rcpt.untrusted_reasons:
+                    print("  - " + reason)
+                print(f"  Computed (unauthoritative): {{rcpt.outcome}}, net service due ${{rcpt.net_service_due_usd:,}} USD")
+                print(f"  Author named by this document: {{DOCUMENT_AUTHOR_PK[:16]}}... (not a trust root)")
+                print("  Pin one with --pinned-author-pk HEX or --pinned-agreement-hash SHA256.")
+                sys.exit(2)
             print("\\033[1;32m[✓ GREEN] BILATERAL CROSS-VERIFICATION SOUND & COMPLETED.\\033[0m")
             print(f"  Contract:         {{rcpt.agreement_title}}")
             print(f"  Trust Status:     {{rcpt.trust_status}}")
@@ -674,12 +804,14 @@ def main():
             print(f"  Net Service Due:  \\033[1;32m${{rcpt.net_service_due_usd:,}} USD\\033[0m")
             print(f"\\n  Joint Bilateral Witness Anchor:")
             print(f"  \\033[1;35m⚓ ⟨digest:{{rcpt.joint_bilateral_digest}}⟩\\033[0m\\n")
+        except SystemExit:
+            raise
         except Exception as e:
             print(f"\\033[1;31m[✗ REFUTED] Bilateral Adjudication Blocked: {{e}}\\033[0m")
             sys.exit(1)
     else:
         print("[*] To adjudicate this contract against attested oracle telemetry, run:")
-        print(f"    python3 {{os.path.basename(target)}} --adjudicate-with <telemetry_oracle.pdf>")
+        print(f"    python3 {{os.path.basename(target)}} --adjudicate-with <telemetry_oracle.pdf> --pinned-author-pk <HEX>")
     print("\\033[1;36m" + "=" * 70 + "\\033[0m")
 if __name__ == "__main__": main()
 '''

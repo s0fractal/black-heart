@@ -474,7 +474,8 @@ class TestSecurityAuditG1toG9(unittest.TestCase):
 
             # Baseline adjudication with pin
             pin = hashlib.sha256(agreement_pdf.read_bytes()).hexdigest()
-            rcpt = X.adjudicate_bilateral(str(agreement_pdf), str(oracle_pdf), expected_agreement_hash=pin)
+            rcpt = X.adjudicate_bilateral(str(agreement_pdf), str(oracle_pdf),
+                                          trust=X.AdjudicationTrust(expected_agreement_sha256=pin))
             self.assertEqual(rcpt.net_service_due_usd, 9500)
             self.assertEqual(rcpt.trust_status, "AUTHENTICATED_PINNED")
 
@@ -509,7 +510,8 @@ class TestSecurityAuditG1toG9(unittest.TestCase):
 
             # Adjudication with expected author pin MUST raise PermissionError
             with self.assertRaises(PermissionError):
-                X.adjudicate_bilateral(str(agreement_pdf), str(oracle_pdf), expected_author_pk_hex=self.pk)
+                X.adjudicate_bilateral(str(agreement_pdf), str(oracle_pdf),
+                                       trust=X.AdjudicationTrust(expected_author_pk_hex=self.pk))
 
     # ========================================================================
     # R6: Missing VAULT_HASH Marker Rejection
