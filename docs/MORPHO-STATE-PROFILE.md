@@ -46,11 +46,14 @@ signatures are left exactly as they are.
 
 - `audit_morpho_autopoietic_organism` returns `False`.
 - `unsupported_history_reason(path)` returns the named reason and the guidance
-  below; it returns `None` for a document that is in domain.
-- `evolve_morpho_autopoietic_organism` raises that reason **before reading or
-  writing anything**, so a refused document is never modified — and its owner is
-  told their history is unsupported, not that their honest document is
-  "tampered".
+  below. `None` is **not a certificate of validity** — it says only that this
+  contract has no objection, and it is also what an unreadable document
+  returns, since refusing that is the ordinary audit's business.
+- `evolve_morpho_autopoietic_organism` raises that reason **before any
+  mutation**, so a refused document is never modified — and its owner is told
+  their history is unsupported, not that their honest document is "tampered".
+  It must of course read the file to find the marker: the guarantee is that
+  nothing is written, not that nothing is read.
 
 The replay is **not** weakened to let old artifacts through. Accepting them would
 mean accepting a genome the chain cannot reconstruct, which is precisely the hole

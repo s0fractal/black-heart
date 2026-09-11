@@ -239,8 +239,9 @@ def _unsupported_profile_reason(manifest: Dict[str, Any]) -> Optional[str]:
 def unsupported_history_reason(pdf_path: str) -> Optional[str]:
     """Why this document's history is not accepted, or None if it is in domain.
 
-    Returns None for anything unreadable too: a malformed document is the
-    ordinary audit's business to refuse, not this contract's.
+    Returning None is NOT a certificate of validity: it says only that this
+    contract has no objection. It is also what an unreadable document returns
+    -- refusing that is the ordinary audit's business, not this contract's.
     """
     try:
         with open(pdf_path, "rb") as f:
