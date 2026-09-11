@@ -684,7 +684,8 @@ def check_palimpsest_guard(
     current_org: Organism,
     candidate_org: Organism,
     tombstone_registry: Optional[Any] = None,
-    refutation_policy: Optional[Any] = None
+    refutation_policy: Optional[Any] = None,
+    issuer_policy: Optional[Any] = None
 ) -> Tuple[bool, str, Optional[Any]]:
     """
     Evaluates candidate organism against Invariant PAL4 (Autonomic Guard).
@@ -703,6 +704,8 @@ def check_palimpsest_guard(
          `ResurrectionDefense.refuted_for` says what the registry holds about
          that exact pair. `refutation_policy` (default: proceed only when
          nothing is measured) decides what is enough to go on.
+         `issuer_policy`, when given, names which keys may issue retirements
+         and readoptions; without it every authentic author counts, as before.
 
     The reference is trusted because of where `current_org` comes from: on the
     live path, `evolve_autopoietic_organism` audits the document before reading
@@ -734,16 +737,19 @@ def check_palimpsest_guard(
             return False, f"Candidate chromosome '{c.gene_id}' contains quarantined tombstone allele", None
 
     # 1b. Scoped refutation of each replacement, against an explicit reference.
-    from epistemic_immune import ResurrectionDefense, RefutationAdmissionPolicy
+    from epistemic_immune import ResurrectionDefense, RefutationAdmissionPolicy, IssuerPolicy
     policy = refutation_policy if refutation_policy is not None else RefutationAdmissionPolicy()
     if not isinstance(policy, RefutationAdmissionPolicy):
         return False, "Refutation policy is not a RefutationAdmissionPolicy", None
+    if issuer_policy is not None and not isinstance(issuer_policy, IssuerPolicy):
+        return False, "Issuer policy is not an IssuerPolicy", None
     current_by_gene = {c.gene_id: c.expression for c in current_org.chromosomes}
     for c in candidate_org.chromosomes:
         reference = current_by_gene.get(c.gene_id)
         if reference is None or reference == c.expression:
             continue        # nothing replaced: no pair to ask about
-        report = ResurrectionDefense.refuted_for(tombstone_registry, c.expression, reference)
+        report = ResurrectionDefense.refuted_for(tombstone_registry, c.expression, reference,
+                                                 issuer_policy)
         if not policy.permits(report):
             return False, (
                 f"Candidate chromosome '{c.gene_id}' replacement refused under refutation "
@@ -811,7 +817,8 @@ def evolve_autopoietic_organism(
     pdf_path: str,
     secret_key_hex: Optional[str] = None,
     tombstone_registry: Optional[Any] = None,
-    refutation_policy: Optional[Any] = None
+    refutation_policy: Optional[Any] = None,
+    issuer_policy: Optional[Any] = None
 ) -> Tuple[Organism, AutopoiesisReceipt]:
     """
     Reads the autopoietic organism from pdf_path, inspects its combinator genome,
@@ -923,7 +930,7 @@ def evolve_autopoietic_organism(
 
     # PALIMPSEST AUTONOMIC VALUE DRIFT GUARD (Invariant PAL4)
     is_safe, guard_msg, _ = check_palimpsest_guard(current_org, succ, tombstone_registry,
-                                                   refutation_policy)
+                                                   refutation_policy, issuer_policy)
     if not is_safe:
         raise ValueError(f"Autopoietic evolution aborted: Palimpsest Autonomic Guard rejected candidate mutation: {guard_msg}")
 

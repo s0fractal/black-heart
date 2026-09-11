@@ -1557,7 +1557,7 @@ def cmd_autopoiesis(args):
             print(f"[!] Target file '{args.file}' not found.")
             sys.exit(1)
         from controlled_forgetting import EpistemicTombstoneRegistry
-        from epistemic_immune import RefutationAdmissionPolicy, RefutationScope
+        from epistemic_immune import IssuerPolicy, RefutationAdmissionPolicy, RefutationScope
         registry = None
         if args.tombstones:
             try:
@@ -1568,13 +1568,24 @@ def cmd_autopoiesis(args):
                       f"'{args.tombstones}' could not be loaded: {e}\033[0m")
                 print("    The organism was not modified.")
                 sys.exit(1)
+        issuers = None
+        if args.trusted_issuers:
+            try:
+                with open(args.trusted_issuers, "r", encoding="utf-8") as fh:
+                    issuers = IssuerPolicy.from_document(json.load(fh))
+            except (OSError, ValueError, KeyError, TypeError) as e:
+                print(f"\033[1;31m[!] Evolution refused: issuer policy "
+                      f"'{args.trusted_issuers}' could not be loaded: {e}\033[0m")
+                print("    The organism was not modified.")
+                sys.exit(1)
         scopes = {RefutationScope.NO_MEASURED_REFUTATION}
         scopes |= {RefutationScope(name) for name in (args.also_proceed_on or [])}
         policy = RefutationAdmissionPolicy(proceed_on=frozenset(scopes))
         try:
             succ, rec = evolve_autopoietic_organism(
                 args.file, secret_key_hex=args.secret_key,
-                tombstone_registry=registry, refutation_policy=policy)
+                tombstone_registry=registry, refutation_policy=policy,
+                issuer_policy=issuers)
         except ValueError as e:
             print(f"\033[1;31m[!] Evolution refused: {e}\033[0m")
             print("    The organism was not modified.")
@@ -4148,13 +4159,18 @@ def main():
     p_auto_evolve.add_argument("--secret-key", default=None, help="Author Ed25519 secret key hex (optional)")
     p_auto_evolve.add_argument("--tombstones", default=None,
                                help="JSON tombstone registry consulted before the in-place append")
+    p_auto_evolve.add_argument("--trusted-issuers", default=None,
+                               help="JSON issuer policy, exactly {\"retirement_issuers\": [...], "
+                                    "\"readoption_issuers\": [...]}. Without it every authentic "
+                                    "author counts, as before")
     p_auto_evolve.add_argument("--also-proceed-on", action="append", default=None,
-                               choices=["REFUTED_FOR_ANOTHER_REFERENCE"],
-                               help="Proceed through a refutation measured against another reference "
-                                    "too. By default a replacement proceeds only when nothing measured "
-                                    "addresses it. There is no file-path override for untrusted "
-                                    "evidence: a registry file holding an unverifiable record is "
-                                    "refused whole, before any policy is consulted")
+                               choices=["REFUTED_FOR_ANOTHER_REFERENCE", "UNAUTHORIZED_ISSUER"],
+                               help="Proceed through this uncertain scope too: a refutation measured "
+                                    "against another reference, or one signed by a key not in "
+                                    "--trusted-issuers. By default a replacement proceeds only when "
+                                    "nothing measured addresses it. There is no file-path override "
+                                    "for untrusted evidence: a registry file holding an unverifiable "
+                                    "record is refused whole, before any policy is consulted")
 
     p_auto_audit = auto_subs.add_parser("audit", help="Audit all generational receipts and replay AST transitions")
     p_auto_audit.add_argument("file", help="Target autopoietic organism PDF")
