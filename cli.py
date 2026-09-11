@@ -372,6 +372,7 @@ def cmd_adjudicate(args):
             print(f"\033[1;31m[✗] ZK ADJUDICATION FAILED: {e}\033[0m\n")
             sys.exit(1)
 
+    from cross_proof import AdjudicationTrust
     pinned_pk = getattr(args, "pinned_author_pk", None)
     pinned_hash = getattr(args, "pinned_agreement_hash", None)
     allow_untrusted = getattr(args, "allow_untrusted_issuer", False)
@@ -380,36 +381,40 @@ def cmd_adjudicate(args):
         print("\033[1;31m[✗] ADJUDICATION REJECTED: UNTRUSTED_ISSUER_EVALUATION.\033[0m")
         print("    Trust root pinning is required to adjudicate bilateral contracts.")
         print("    Provide --pinned-author-pk <HEX> or --pinned-agreement-hash <HEX>,")
-        print("    or explicitly pass --allow-untrusted-issuer to override.")
+        print("    or pass --allow-untrusted-issuer for an evaluation that is not a settlement.")
         sys.exit(1)
 
     try:
-        res = adjudicate_bilateral(
-            agreement_pdf,
-            oracle_pdf,
-            expected_agreement_hash=pinned_hash,
-            expected_author_pk_hex=pinned_pk
-        )
+        trust = AdjudicationTrust(expected_author_pk_hex=pinned_pk, expected_agreement_sha256=pinned_hash)
+    except ValueError as e:
+        print(f"\033[1;31m[✗] ADJUDICATION REJECTED: invalid pin: {e}\033[0m\n")
+        sys.exit(1)
+
+    try:
+        res = adjudicate_bilateral(agreement_pdf, oracle_pdf, trust=trust)
     except Exception as e:
         print(f"\033[1;31m[✗] ADJUDICATION FAILED: {e}\033[0m\n")
         sys.exit(1)
 
-    if res.trust_status == "UNTRUSTED_ISSUER_EVALUATION" and not allow_untrusted:
-        print("\033[1;31m[✗] ADJUDICATION REJECTED: UNTRUSTED_ISSUER_EVALUATION.\033[0m\n")
-        sys.exit(1)
+    if res.status == "EVALUATION_ONLY":
+        # Before S5b this printed "[✓] ADJUDICATION VERIFIED & SETTLED" and
+        # exited 0 for any self-consistent pair under --allow-untrusted-issuer.
+        print("\033[1;33m[!] EVALUATION ONLY — NOT A SETTLEMENT.\033[0m")
+        for reason in res.untrusted_reasons:
+            print(f"    - {reason}")
+        print(f"    Computed outcome (unauthoritative): {res.outcome}, net service fee ${res.net_service_due_usd:,} USD\n")
+        sys.exit(2)
 
-    if res.status in ("SETTLED_COMPLIANT", "SETTLED_BREACH"):
-        status_color = "\033[1;32m" if res.status == "SETTLED_COMPLIANT" else "\033[1;33m"
-        penalty_str = "COMPLIANT" if res.status == "SETTLED_COMPLIANT" else "BREACHED"
-        print(f"{status_color}[✓] ADJUDICATION VERIFIED & SETTLED: {res.status}\033[0m")
-        print(f"    Joint Bilateral Anchor: ⚓ {res.joint_bilateral_digest}")
-        print(f"    Agreement:              {res.agreement_title}")
-        print(f"    Trust Status:           {res.trust_status}")
-        print(f"    Oracle:                 {res.oracle_name} ({res.oracle_pk_hex[:16]}...)")
-        print(f"    Payment Status:         {penalty_str} | Net Service Fee: ${res.net_service_due_usd:,} USD\n")
-    else:
-        print(f"\033[1;31m[✗] ADJUDICATION REJECTED: {res.status}\033[0m\n")
-        sys.exit(1)
+    status_color = "\033[1;32m" if res.status == "SETTLED_COMPLIANT" else "\033[1;33m"
+    penalty_str = "COMPLIANT" if res.status == "SETTLED_COMPLIANT" else "BREACHED"
+    print(f"{status_color}[✓] ADJUDICATION VERIFIED & SETTLED: {res.status}\033[0m")
+    print(f"    Joint Bilateral Anchor: ⚓ {res.joint_bilateral_digest}")
+    print(f"    Agreement:              {res.agreement_title}")
+    print(f"    Trust Status:           {res.trust_status}")
+    for name, verdict in res.checks.items():
+        print(f"    Check {name + ':':<17}{verdict}")
+    print(f"    Oracle:                 {res.oracle_name} ({res.oracle_pk_hex[:16]}...)")
+    print(f"    Payment Status:         {penalty_str} | Net Service Fee: ${res.net_service_due_usd:,} USD\n")
 
 def cmd_cross_proof(args):
     """Bilateral Zero-Knowledge Cross-Proof & Interlocking Contract operations."""
@@ -3932,7 +3937,7 @@ def main():
     p_adj.add_argument("--zk", action="store_true", help="Execute Zero-Knowledge cross-proof adjudication")
     p_adj.add_argument("--pinned-author-pk", default=None, help="Pinned Ed25519 public key hex of the agreement author")
     p_adj.add_argument("--pinned-agreement-hash", default=None, help="Pinned SHA-256 agreement document anchor")
-    p_adj.add_argument("--allow-untrusted-issuer", action="store_true", help="Explicitly allow evaluation without pinned trust root")
+    p_adj.add_argument("--allow-untrusted-issuer", action="store_true", help="Evaluate without a caller trust pin. The result is EVALUATION ONLY, never a settlement (exit 2)")
 
     # cross-proof
     p_cross = subparsers.add_parser("cross-proof", help="Bilateral Zero-Knowledge Cross-Proof & Interlocking Contracts")

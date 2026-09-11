@@ -57,8 +57,11 @@ class TestBilateralCrossProof(unittest.TestCase):
             self.assertTrue(os.path.exists(agreement_pdf))
 
             # 3. Adjudicate
+            # No caller pin: the pair is evaluated, not settled (S5b). This test
+            # asserted SETTLED_BREACH here before, which was the defect itself.
             receipt = adjudicate_bilateral(agreement_pdf, oracle_pdf)
-            self.assertEqual(receipt.status, "SETTLED_BREACH")
+            self.assertEqual(receipt.status, "EVALUATION_ONLY")
+            self.assertEqual(receipt.outcome, "BREACH")
             self.assertEqual(receipt.penalty_due_usd, 500)
             self.assertEqual(receipt.net_service_due_usd, 9500)
             self.assertEqual(len(receipt.joint_bilateral_digest), 64)

@@ -95,6 +95,7 @@ SUITES = [
     ("Interaction Combinators", "test_interaction"),
     ("Autonomous Organisms", "test_organism"),
     ("Bilateral Cross-Proofs & Vaults", "test_cross_proof"),
+    ("Adjudication Trust: The Caller Pins, Not the Documents", "test_adjudication_trust"),
     ("Continuum Checkpointed Thunks", "test_continuum"),
     ("Ed25519 Zero-Knowledge Proofs", "test_zk_glyph"),
     ("P2P Polyglot Mesh Synchronization", "test_mesh"),
