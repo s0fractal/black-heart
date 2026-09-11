@@ -168,6 +168,7 @@ class RefutationScope(str, Enum):
     """
     REFUTED_FOR_REFERENCE = "REFUTED_FOR_REFERENCE"
     REFUTED_FOR_ANOTHER_REFERENCE = "REFUTED_FOR_ANOTHER_REFERENCE"
+    UNTRUSTED_EVIDENCE = "UNTRUSTED_EVIDENCE"
     NO_MEASURED_REFUTATION = "NO_MEASURED_REFUTATION"
 
 
@@ -178,9 +179,13 @@ class RefutationScopeReport:
     record_id: Optional[str] = None
     target_id: Optional[str] = None
     measured_reference: Optional[str] = None
+    untrusted_slots: Tuple[str, ...] = ()
 
     def prohibits(self) -> bool:
-        """True only for a refutation measured against the reference asked about."""
+        """True only for an authenticated refutation measured against the
+        reference asked about. UNTRUSTED_EVIDENCE is not a prohibition, and it is
+        not permission either: it says the registry holds a record this query
+        could not authenticate, so it cannot rule the pair in or out."""
         return self.scope == RefutationScope.REFUTED_FOR_REFERENCE
 
 
@@ -249,26 +254,69 @@ class ResurrectionDefense:
         candidate has not been measured at all, and that case is reported as
         its own scope rather than as permission or as prohibition.
         """
+        # A record is evidence only after it has been checked here, against the
+        # slot it actually occupies, as it is right now. `is_admitted` cannot
+        # stand in for that: it returns False both for a genuine retirement and
+        # for a record it refuses to trust -- a signature that no longer covers
+        # the body, a record filed under someone else's slot, numbers out of
+        # domain, an identity in a profile nobody can read. That is correct for
+        # admission, which fails closed. Read as "this record is a measured
+        # refutation", it turns every corrupted entry into proof.
+        same_pair: Optional[Tuple[str, RetirementRecord]] = None
         other_reference: Optional[RetirementRecord] = None
+        untrusted: List[str] = []
+        try:
+            candidate_address = glyph.term_address(glyph.parse(candidate_expr))
+        except Exception:
+            candidate_address = None
+
         for tid, tomb in registry.tombstones.items():
             identity = tomb.rule_identity
-            if identity is None or tomb.mode != RetirementMode.REFUTED:
+            if identity is None:
+                continue                          # label-only history: not a measurement
+            authentic = (isinstance(identity, RuleIdentity)
+                         and identity.has_valid_domain()
+                         and tomb.is_admissible_for(tid))
+            if not authentic:
+                untrusted.append(tid)
                 continue
-            if registry.is_admitted(tid):
+            if tomb.mode != RetirementMode.REFUTED:
                 continue
+            readoption = registry.readoptions.get(tid)
+            if readoption is not None and readoption.is_admissible_for(tid, tomb):
+                continue                          # a valid readoption suppresses it
             if identity.addresses(candidate_expr, reference_expr):
-                return RefutationScopeReport(
-                    scope=RefutationScope.REFUTED_FOR_REFERENCE,
-                    detail=(f"'{candidate_expr}' was refuted against this very reference "
-                            f"under label '{identity.label}'."),
-                    record_id=tomb.record_id, target_id=tid,
-                    measured_reference=identity.reference_address)
-            try:
-                candidate_address = glyph.term_address(glyph.parse(candidate_expr))
-            except Exception:
+                if same_pair is None:
+                    same_pair = (tid, tomb)
                 continue
-            if identity.candidate_address == candidate_address and other_reference is None:
+            if (candidate_address is not None
+                    and identity.candidate_address == candidate_address
+                    and other_reference is None):
                 other_reference = tomb
+
+        # The whole registry is scanned before deciding, so `untrusted_slots` is
+        # complete even when an authentic refutation is found.
+        if same_pair is not None:
+            tid, tomb = same_pair
+            return RefutationScopeReport(
+                scope=RefutationScope.REFUTED_FOR_REFERENCE,
+                detail=(f"'{candidate_expr}' was refuted against this very reference "
+                        f"under label '{tomb.rule_identity.label}'."),
+                record_id=tomb.record_id, target_id=tid,
+                measured_reference=tomb.rule_identity.reference_address,
+                untrusted_slots=tuple(untrusted))
+
+        # Nothing authentic addresses this pair. A record that could not be
+        # authenticated might have, so the answer is "cannot tell", reported as
+        # its own scope, ahead of a refutation against another reference.
+        if untrusted:
+            return RefutationScopeReport(
+                scope=RefutationScope.UNTRUSTED_EVIDENCE,
+                detail=(f"{len(untrusted)} registered record(s) carry an identity that "
+                        "could not be authenticated for the slot they occupy, or is "
+                        "outside the supported profile. They are neither refutation "
+                        "nor permission for this pair."),
+                untrusted_slots=tuple(untrusted))
 
         if other_reference is not None:
             ident = other_reference.rule_identity

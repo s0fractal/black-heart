@@ -249,6 +249,40 @@ class RuleIdentity:
     def digest(self) -> str:
         return hashlib.sha256(self._encoded()).hexdigest()
 
+    def validate_domain(self) -> None:
+        """Raise unless this identity is one this module knows how to read.
+
+        Checked where an identity is USED, not only where it is deserialized.
+        A live object can be built with `dataclasses.replace` or mutated, and a
+        signature says only that its author meant these bytes. It does not say
+        the bytes are in a profile anyone can interpret: a correctly signed
+        `forgetting.rule-identity.v999` read under v1 rules would be a guess
+        presented as a measurement.
+
+        Construction stays permissive on purpose, so the encoding can still be
+        tested on arbitrary strings; nothing here trusts an identity it has not
+        just validated.
+        """
+        for name in ("profile", "label", "reference_address",
+                     "candidate_address", "input_address"):
+            if type(getattr(self, name)) is not str:
+                raise TypeError(f"rule identity field {name!r} must be a str, "
+                                f"got {type(getattr(self, name)).__name__}")
+        if self.profile != RULE_IDENTITY_PROFILE:
+            raise ValueError(f"unsupported rule identity profile {self.profile!r}; "
+                             f"this module reads only {RULE_IDENTITY_PROFILE!r}")
+        for name in ("reference_address", "candidate_address", "input_address"):
+            if not glyph.is_term_address(getattr(self, name)):
+                raise ValueError(f"rule identity {name} {getattr(self, name)!r} is not "
+                                 f"a {glyph.TERM_ADDRESS_PROFILE} term address")
+
+    def has_valid_domain(self) -> bool:
+        try:
+            self.validate_domain()
+        except (TypeError, ValueError):
+            return False
+        return True
+
     def addresses(self, candidate_expr: str, reference_expr: str) -> bool:
         """True when this identity is about exactly this candidate and reference.
 
@@ -257,6 +291,8 @@ class RuleIdentity:
         answering otherwise would let an inequality between one pair authorize a
         prohibition everywhere.
         """
+        if not self.has_valid_domain():
+            return False
         try:
             candidate = glyph.term_address(glyph.parse(candidate_expr))
             reference = glyph.term_address(glyph.parse(reference_expr))
@@ -365,6 +401,14 @@ class RetirementRecord:
         """
         _require_ratio(self.negative_space_coverage, "negative_space_coverage")
         _require_non_negative_int(self.atp_gas_recovered, "atp_gas_recovered")
+        # A carried identity is part of what this record asserts, so it is part
+        # of its domain. Absent is fine: records written before identities
+        # existed are in domain exactly as they always were.
+        if self.rule_identity is not None:
+            if not isinstance(self.rule_identity, RuleIdentity):
+                raise TypeError("rule_identity must be a RuleIdentity or None, got "
+                                f"{type(self.rule_identity).__name__}")
+            self.rule_identity.validate_domain()
 
     def has_valid_body_domain(self) -> bool:
         try:
@@ -642,6 +686,8 @@ class EpistemicTombstoneRegistry:
         existing = self.tombstones.get(target_id)
         if existing is None or rule_identity is None or existing.rule_identity is None:
             return None
+        if not isinstance(existing.rule_identity, RuleIdentity):
+            return existing
         if existing.rule_identity.digest() == rule_identity.digest():
             return None
         return existing
@@ -668,6 +714,10 @@ class EpistemicTombstoneRegistry:
         not one; before this, the second overwrote the first and the first
         tombstone simply disappeared.
         """
+        if rule_identity is not None:
+            if not isinstance(rule_identity, RuleIdentity):
+                raise TypeError("rule_identity must be a RuleIdentity or None")
+            rule_identity.validate_domain()
         existing = self.conflicting_tombstone(target_id, rule_identity)
         if existing is not None:
             raise ValueError(

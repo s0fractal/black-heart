@@ -33,7 +33,11 @@ What the sections pin:
      second rewrite cannot take a name that already holds another
   D  the scoped question: refuted against THIS reference, against ANOTHER one,
      or not measured at all -- and only the first prohibits
-  E  the aggregate runner refuses to test a different checkout
+  E  the aggregate runner refuses a suite module loaded from another checkout
+     (its origin only, not the dependency closure)
+  F  a record is evidence only after authentication for its own slot and a
+     domain check of its identity; anything else is UNTRUSTED_EVIDENCE, which
+     is neither prohibition nor permission
 
 The predicate, in full: a tombstone that carries an identity says which
 candidate diverged from which reference on which input. It does not say the
@@ -382,6 +386,179 @@ class ScopedRefutationTest(unittest.TestCase):
         self.assertEqual((len(self.org.claims), len(self.registry.tombstones),
                           self.org.atp_reserve, self.org.total_bounties_reclaimed),
                          before)
+
+
+class UntrustedEvidenceTest(unittest.TestCase):
+    """
+    Section F: a record is evidence only after it is authenticated for its slot.
+
+    Round 1 of review found `refuted_for` skipping admitted records and trusting
+    every other one. But `is_admitted` is False both for a genuine retirement
+    and for a record it refuses to trust, so each of these became a measured
+    refutation with `prohibits() == True`, reproduced on 7e90514:
+
+        identity replaced, old signature kept   -> REFUTED_FOR_REFERENCE (even I vs I)
+        signature zeroed                        -> REFUTED_FOR_REFERENCE
+        genuine record moved to another slot    -> REFUTED_FOR_REFERENCE, wrong slot named
+        unknown profile, correctly re-signed    -> REFUTED_FOR_REFERENCE under v1 rules
+
+    Every case keeps the authentic positive alongside it, so an implementation
+    that simply refuses all evidence fails here too.
+    """
+
+    def setUp(self):
+        self.sk, self.pk = crypto.generate_keypair()
+        self.org = EpistemicOrganism(
+            organism_id="O", generation=0,
+            chromosomes=[Chromosome(gene_id="G1", gene_name="n", expression="\U0001f5a4",
+                                    expected_normal_form="\U0001f5a4", vital=False)],
+            public_key_hex=self.pk, atp_reserve=500)
+        obs = observe_divergence(PARENT, CANDIDATE, INPUT)
+        out = CounterexampleMetabolism.metabolize_counterexample(
+            organism=self.org, gene_id="G1", rule_name="K I (S K)",
+            parent_term=PARENT, candidate_term=CANDIDATE, input_fixture=INPUT,
+            expected_norm=obs.parent_output, actual_norm=obs.candidate_output,
+            atp_cost=obs.atp_required, secret_key_hex=self.sk, public_key_hex=self.pk)
+        self.assertTrue(out.granted(), out.verdict.reason)
+        self.registry = self.org.tombstone_registry
+        self.record = out.retirement
+
+    def scope(self, candidate=CANDIDATE, reference=PARENT):
+        return ResurrectionDefense.refuted_for(self.registry, candidate, reference)
+
+    def snapshot(self):
+        return (json.dumps({k: v.to_dict() for k, v in self.registry.tombstones.items()},
+                           sort_keys=True, default=str),
+                json.dumps({k: v.to_dict() for k, v in self.registry.readoptions.items()},
+                           sort_keys=True, default=str))
+
+    def assertUntrusted(self, report, slot):
+        self.assertEqual(report.scope, RefutationScope.UNTRUSTED_EVIDENCE, report.detail)
+        self.assertFalse(report.prohibits())
+        self.assertIn(slot, report.untrusted_slots)
+
+    def test_F0_the_authentic_record_still_prohibits(self):
+        report = self.scope()
+        self.assertEqual(report.scope, RefutationScope.REFUTED_FOR_REFERENCE)
+        self.assertTrue(report.prohibits())
+        self.assertEqual(report.untrusted_slots, ())
+
+    def test_F1_an_identity_changed_without_resigning_is_untrusted(self):
+        self.record.rule_identity = RuleIdentity.from_terms("K I (S K)", "\U0001f90d", "\U0001f90d", "x")
+        self.assertFalse(self.record.verify_signature())
+        self.assertUntrusted(self.scope("\U0001f90d", "\U0001f90d"), "K I (S K)")
+        self.assertUntrusted(self.scope(), "K I (S K)")
+
+    def test_F2_a_corrupt_signature_is_untrusted(self):
+        self.record.signature_hex = "00" * 64
+        self.assertUntrusted(self.scope(), "K I (S K)")
+
+    def test_F3_a_record_in_someone_elses_slot_is_untrusted(self):
+        self.registry.tombstones = {"wrong-slot": self.record}
+        self.assertTrue(self.record.verify_signature())
+        report = self.scope()
+        self.assertUntrusted(report, "wrong-slot")
+        self.assertIsNone(report.target_id, "no evidence may be attributed to a false slot")
+
+    def test_F4_numbers_out_of_domain_are_untrusted(self):
+        object.__setattr__(self.record, "negative_space_coverage", 2.0)
+        self.assertUntrusted(self.scope(), "K I (S K)")
+
+    def test_F5_an_unknown_profile_is_untrusted_even_when_signed(self):
+        """Signature validity and domain validity are separate questions."""
+        from dataclasses import replace
+        self.record.rule_identity = replace(self.record.rule_identity,
+                                            profile="forgetting.rule-identity.v999")
+        self.record.sign(self.sk)
+        self.assertTrue(self.record.verify_signature())
+        self.assertFalse(self.record.is_admissible_for("K I (S K)"))
+        self.assertUntrusted(self.scope(), "K I (S K)")
+
+    def test_F6_every_identity_address_must_be_in_profile(self):
+        """input_address too, though matching reads only the other two."""
+        from dataclasses import replace
+        for field_name, bad in (("reference_address", "deadbeef" * 8),
+                                ("candidate_address", "glyph.term.v1:" + "0" * 64),
+                                ("input_address", "not-an-address"),
+                                ("input_address", "glyph.term.v2:" + "0" * 63)):
+            with self.subTest(field=field_name, value=bad):
+                self.setUp()
+                self.record.rule_identity = replace(self.record.rule_identity,
+                                                    **{field_name: bad})
+                self.record.sign(self.sk)
+                self.assertTrue(self.record.verify_signature())
+                self.assertFalse(self.record.rule_identity.has_valid_domain())
+                self.assertUntrusted(self.scope(), "K I (S K)")
+
+    def test_F7_field_types_are_checked_before_addresses_are_read(self):
+        from dataclasses import replace
+        for field_name, bad in (("label", 7), ("profile", None),
+                                ("candidate_address", b"glyph.term.v2:" + b"0" * 64)):
+            with self.subTest(field=field_name):
+                ident = replace(self.record.rule_identity, **{field_name: bad})
+                self.assertFalse(ident.has_valid_domain())
+                self.assertFalse(ident.addresses(CANDIDATE, PARENT))
+
+    def test_F8_the_live_object_and_the_transport_agree(self):
+        from dataclasses import replace
+        bad = replace(self.record.rule_identity, profile="forgetting.rule-identity.v999")
+        with self.assertRaises(ValueError):
+            RuleIdentity.from_dict(bad.to_dict())
+        with self.assertRaises(ValueError):
+            bad.validate_domain()
+        with self.assertRaises(ValueError):
+            self.registry.retire("another", "d" * 64, RetirementMode.REFUTED, "loss",
+                                 self.sk, self.pk, rule_identity=bad)
+        self.assertNotIn("another", self.registry.tombstones)
+
+    def test_F9_another_reference_still_reports_its_own_scope(self):
+        report = self.scope(CANDIDATE, "\U0001f90d")
+        self.assertEqual(report.scope, RefutationScope.REFUTED_FOR_ANOTHER_REFERENCE)
+        self.assertFalse(report.prohibits())
+
+    def test_F10_untrusted_outranks_another_reference(self):
+        """A record nobody can read might have been about this very pair."""
+        self.registry.tombstones["forged"] = RetirementRecord.from_dict(
+            json.loads(json.dumps(self.record.to_dict())))
+        self.registry.tombstones["forged"].signature_hex = "00" * 64
+        report = self.scope(CANDIDATE, "\U0001f90d")
+        self.assertUntrusted(report, "forged")
+
+    def test_F11_an_authentic_match_is_reported_with_the_untrusted_list_complete(self):
+        self.registry.tombstones["forged"] = RetirementRecord.from_dict(
+            json.loads(json.dumps(self.record.to_dict())))
+        self.registry.tombstones["forged"].signature_hex = "00" * 64
+        report = self.scope()
+        self.assertTrue(report.prohibits())
+        self.assertEqual(report.untrusted_slots, ("forged",))
+
+    def test_F12_a_valid_readoption_still_suppresses_a_valid_retirement(self):
+        self.registry.readopt(target_id="K I (S K)", justification="new evidence",
+                              new_evidence_claim_id="c" * 64,
+                              author_sk_hex=self.sk, author_pk_hex=self.pk)
+        self.assertEqual(self.scope().scope, RefutationScope.NO_MEASURED_REFUTATION)
+
+    def test_F13_an_invalid_readoption_does_not_suppress(self):
+        self.registry.readopt(target_id="K I (S K)", justification="new evidence",
+                              new_evidence_claim_id="c" * 64,
+                              author_sk_hex=self.sk, author_pk_hex=self.pk)
+        self.registry.readoptions["K I (S K)"].signature_hex = "00" * 64
+        self.assertTrue(self.scope().prohibits())
+
+    def test_F14_the_query_changes_nothing(self):
+        self.registry.tombstones["forged"] = RetirementRecord.from_dict(
+            json.loads(json.dumps(self.record.to_dict())))
+        self.registry.tombstones["forged"].signature_hex = "00" * 64
+        before = self.snapshot()
+        for cand, ref in ((CANDIDATE, PARENT), (CANDIDATE, "\U0001f90d"), ("\U0001f33f", PARENT)):
+            self.scope(cand, ref)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_F15_the_label_gate_still_fails_closed(self):
+        """Admission is untouched: an untrusted retirement keeps its label out."""
+        self.record.signature_hex = "00" * 64
+        self.assertFalse(self.registry.is_admitted("K I (S K)"))
+        self.assertFalse(ResurrectionDefense.preflight_check(self.registry, "K I (S K)")[0])
 
 
 class RunnerHygieneTest(unittest.TestCase):

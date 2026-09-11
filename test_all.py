@@ -24,8 +24,13 @@ import time
 # them has run, a later `loadTestsFromName` can resolve a module -- including a
 # TEST module -- out of another clone. That is not hypothetical: this file
 # reported a green aggregate for a worktree while running another checkout's
-# copy of test_mycelium.py against this one's sources. A wrong-clone run is now
-# a loud failure instead of a number nobody can trust.
+# copy of test_mycelium.py against this one's sources.
+#
+# Scope of the guard, stated so it is not over-read: it checks where each
+# SELECTED SUITE MODULE was loaded from. It does not check the dependency
+# closure. An engine module already cached from another checkout, or resolved
+# there later, is not caught here. This makes one observed failure loud; it does
+# not make the suite hermetic.
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if sys.path and sys.path[0] != _HERE:
     sys.path.insert(0, _HERE)
