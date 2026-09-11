@@ -2567,7 +2567,7 @@ def cmd_egraph(args):
     """Engine #28: Epistemic E-Graph Kernel & Proof-Carrying Equality Saturation (EGRAPH-0.1)."""
     import egraph_kernel
     from egraph_kernel import (
-        EGraph, RewriteRule, STANDARD_COMBINATOR_RULES,
+        EGraph, RewriteRule, STANDARD_COMBINATOR_RULES, DerivationStatus,
         generate_egraph_pdf, append_egraph_hud
     )
     from glyph import parse, tree_size
@@ -2614,14 +2614,18 @@ def cmd_egraph(args):
         print(f"  Term A:        {t1_str}")
         print(f"  Term B:        {t2_str}")
         print(f"  Equivalent:    {col}{proof.is_equivalent}\033[0m")
+        print(f"  Derivation:    {proof.derivation_status.value}")
 
-        if proof.is_equivalent:
-            print(f"  Proof Steps:   {len(proof.proof_steps)} equational derivations\n")
-            print("STEP  FROM                     TO                       JUSTIFICATION")
-            print("-" * 75)
+        if proof.derivation_status == DerivationStatus.CHECKED:
+            print(f"  Proof Steps:   {len(proof.proof_steps)} steps, each replayed against the saturation rules\n")
+            print("STEP  FROM                     TO                       RULE                 AT      DIR")
+            print("-" * 95)
             for s in proof.proof_steps:
-                print(f"#{s.step_num:<4} {s.from_expr[:24]:<24} {s.to_expr[:24]:<24} {s.justification[:24]}")
+                at = "".join(map(str, s.address)) or "root"
+                print(f"#{s.step_num:<4} {s.from_expr[:24]:<24} {s.to_expr[:24]:<24} {s.justification[:20]:<20} {at:<7} {s.direction}")
             print()
+        elif proof.is_equivalent:
+            print("  Note:          equivalent in the e-graph; no derivation found within budget, and none is shown.\n")
         else:
             print("  Reason:        Terms belong to disjoint E-Classes under active theories.\n")
 

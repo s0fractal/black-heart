@@ -15,10 +15,13 @@ Normative implementation of EGRAPH-0.1:
      Solves the Phase Ordering Problem. Rewriting rules union e-classes without
      destroying intermediate representations, allowing multiple competing optimizations
      to coexist simultaneously.
-  4. Homotopic Proof Forest (Step-by-Step Proof Certificates):
-     Every union records an explicit justification. When querying equivalence between
-     two terms, the kernel traverses the proof forest to produce a sound, verifiable
-     step-by-step equational derivation tree (t1 = u1 = u2 ... = t2).
+  4. Proof Forest and Checked Explanations:
+     Every union records which classes it joined and why (`proof_edges`, by class id).
+     An explanation is a separate thing: a derivation t1 = u1 = ... = t2 searched over
+     the rules this e-graph was saturated with, in which every step names its rule,
+     address and direction and is replayed by `check_derivation` before it is
+     returned. When none is found within budget, the explanation says so and has no
+     steps (before S4d it invented one; see test_egraph_explanation.py).
   5. Dynamic Programming Optimal Term Extraction:
      Computes globally minimal-energy, minimal-AST normal forms using Bellman-Ford
      cost relaxation across cyclic e-graphs.
@@ -134,36 +137,60 @@ class JustificationEdge:
     subst_desc: str = ""
 
 
+class DerivationStatus(str, Enum):
+    """What stands behind an explanation's steps."""
+    CHECKED = "CHECKED"                                  # every step replayed against the e-graph's rules
+    NOT_FOUND_WITHIN_BUDGET = "NOT_FOUND_WITHIN_BUDGET"  # equivalent in the e-graph; no derivation found, none invented
+    NOT_EQUIVALENT = "NOT_EQUIVALENT"                    # different e-classes
+    UNCHECKED = "UNCHECKED"                              # built by hand; nothing was replayed
+    INVALID = "INVALID"                                  # steps attached that do not replay
+
+
 @dataclass
 class EquivalenceProofStep:
-    """A single human/machine readable equational proof step."""
+    """One rewrite. `justification` names the rule, applied once at `address`
+    of `from_expr` (forward) or of `to_expr` (reverse). An address is the path
+    from the root, 0 = left and 1 = right."""
     step_num: int
     from_expr: str
     to_expr: str
     justification: str
+    address: Tuple[int, ...] = ()
+    direction: str = "forward"
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "step_num": self.step_num,
             "from_expr": self.from_expr,
             "to_expr": self.to_expr,
-            "justification": self.justification
+            "justification": self.justification,
+            "address": list(self.address),
+            "direction": self.direction
         }
 
 
 @dataclass
 class EquivalenceProofTree:
-    """Complete certified equational derivation connecting two terms."""
+    """Why two terms share an e-class.
+
+    `is_equivalent` is the e-graph's union-find answer. `proof_steps` is
+    non-empty only when `derivation_status` is CHECKED: every step was replayed
+    by `check_derivation` against the rules the e-graph was saturated with.
+    NOT_FOUND_WITHIN_BUDGET means equivalent in the e-graph with no derivation
+    found; nothing stands in for one.
+    """
     term_a: str
     term_b: str
     is_equivalent: bool
     proof_steps: List[EquivalenceProofStep] = field(default_factory=list)
+    derivation_status: DerivationStatus = DerivationStatus.UNCHECKED
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "term_a": self.term_a,
             "term_b": self.term_b,
             "is_equivalent": self.is_equivalent,
+            "derivation_status": DerivationStatus(self.derivation_status).value,
             "steps": [s.to_dict() for s in self.proof_steps]
         }
 
@@ -192,6 +219,218 @@ STANDARD_COMBINATOR_RULES = [
     RewriteRule.from_strings("RULE-SKK-COLLAPSE", "S K K", "I"),
     RewriteRule.from_strings("RULE-SKI-COLLAPSE", "S K I", "I"),
 ]
+
+
+# ============================================================================
+# 3b. DERIVATIONS: STEPS THAT REPLAY
+# ============================================================================
+
+def _match(pattern: Term, term: Term, subst: Dict[str, Term]) -> Optional[Dict[str, Term]]:
+    if isinstance(pattern, Var):
+        bound = subst.get(pattern.name)
+        if bound is None:
+            return {**subst, pattern.name: term}
+        return subst if bound == term else None
+    if isinstance(pattern, Comb):
+        return subst if term == pattern else None
+    if isinstance(pattern, App) and isinstance(term, App):
+        left = _match(pattern.left, term.left, subst)
+        return None if left is None else _match(pattern.right, term.right, left)
+    return None
+
+
+def _instantiate_term(pattern: Term, subst: Dict[str, Term]) -> Term:
+    if isinstance(pattern, Var):
+        return subst[pattern.name]  # KeyError: a right-hand variable the left did not bind
+    if isinstance(pattern, App):
+        return App(_instantiate_term(pattern.left, subst), _instantiate_term(pattern.right, subst))
+    return pattern
+
+
+def _subterm_at(term: Term, address: Tuple[int, ...]) -> Optional[Term]:
+    for bit in address:
+        if not isinstance(term, App) or bit not in (0, 1):
+            return None
+        term = term.left if bit == 0 else term.right
+    return term
+
+
+def _replace_at(term: Term, address: Tuple[int, ...], new: Term) -> Term:
+    if not address:
+        return new
+    if address[0] == 0:
+        return App(_replace_at(term.left, address[1:], new), term.right)
+    return App(term.left, _replace_at(term.right, address[1:], new))
+
+
+def _addresses(term: Term, prefix: Tuple[int, ...] = ()):
+    yield prefix
+    if isinstance(term, App):
+        yield from _addresses(term.left, prefix + (0,))
+        yield from _addresses(term.right, prefix + (1,))
+
+
+def rewrite_at(term: Term, address: Tuple[int, ...], rule: RewriteRule) -> Optional[Term]:
+    """`term` with `rule` applied once, forward, at `address`; None if it does not apply there."""
+    sub = _subterm_at(term, address)
+    if sub is None:
+        return None
+    subst = _match(rule.lhs, sub, {})
+    if subst is None:
+        return None
+    try:
+        return _replace_at(term, address, _instantiate_term(rule.rhs, subst))
+    except KeyError:
+        return None
+
+
+def check_derivation(
+    term_a: Term,
+    term_b: Term,
+    steps: List[EquivalenceProofStep],
+    rules: Dict[str, RewriteRule]
+) -> Optional[str]:
+    """Why `steps` is not a derivation of `term_b` from `term_a` under `rules`, or None.
+
+    Each step must name a rule in `rules`, and that rule applied once at the
+    step's address must turn from_expr into to_expr (forward) or to_expr into
+    from_expr (reverse). The steps must chain: the first starts at term_a, each
+    starts where the previous one ended, and the last ends at term_b. Terms are
+    compared as ASTs. Nothing is searched: the address is part of the claim, and
+    it is replayed.
+    """
+    current = term_a
+    for i, s in enumerate(steps, 1):
+        try:
+            a, b = parse(s.from_expr), parse(s.to_expr)
+        except Exception as e:
+            return f"step {i}: not a term: {e}"
+        if a != current:
+            return f"step {i} starts at '{s.from_expr}', not where the derivation stands ('{current}')"
+        rule = rules.get(s.justification)
+        if rule is None:
+            return f"step {i}: rule {s.justification!r} is not in the theory"
+        if s.direction == "forward":
+            replayed = rewrite_at(a, tuple(s.address), rule) == b
+        elif s.direction == "reverse":
+            replayed = rewrite_at(b, tuple(s.address), rule) == a
+        else:
+            return f"step {i}: unknown direction {s.direction!r}"
+        if not replayed:
+            return (f"step {i}: {s.justification} at {list(s.address)} does not rewrite "
+                    f"'{s.from_expr}' to '{s.to_expr}' ({s.direction})")
+        current = b
+    if current != term_b:
+        return f"the derivation ends at '{current}', not at '{term_b}'"
+    return None
+
+
+def find_derivation(
+    term_a: Term,
+    term_b: Term,
+    rules: Dict[str, RewriteRule],
+    max_terms: int = 20000
+) -> Optional[List[EquivalenceProofStep]]:
+    """A derivation of `term_b` from `term_a` under `rules`, or None.
+
+    Rewrites forward from both ends, breadth first, until the two sides meet;
+    the half grown from term_b is returned as reverse steps. So it finds a
+    common reduct, a valley. It does not find a derivation that must pass
+    through a term neither side reaches by rewriting forward. `max_terms`
+    bounds the distinct terms held by both sides together.
+    """
+    if term_a == term_b:
+        return []
+    ordered = sorted(rules.items())
+    seen_a: Dict[Term, Optional[Tuple[Term, str, Tuple[int, ...]]]] = {term_a: None}
+    seen_b: Dict[Term, Optional[Tuple[Term, str, Tuple[int, ...]]]] = {term_b: None}
+    frontiers = [[term_a], [term_b]]
+    meet: Optional[Term] = None
+
+    while meet is None and (frontiers[0] or frontiers[1]):
+        for side in (0, 1):
+            seen, other = (seen_a, seen_b) if side == 0 else (seen_b, seen_a)
+            grown: List[Term] = []
+            for t in frontiers[side]:
+                for address in _addresses(t):
+                    for name, rule in ordered:
+                        u = rewrite_at(t, address, rule)
+                        if u is None or u in seen:
+                            continue
+                        if len(seen_a) + len(seen_b) >= max_terms:
+                            return None
+                        seen[u] = (t, name, address)
+                        if u in other:
+                            meet = u
+                            break
+                        grown.append(u)
+                    if meet is not None:
+                        break
+                if meet is not None:
+                    break
+            frontiers[side] = grown
+            if meet is not None:
+                break
+    if meet is None:
+        return None
+
+    down: List[Tuple[Term, str, Tuple[int, ...], Term]] = []
+    cur = meet
+    while seen_a[cur] is not None:
+        prev, name, address = seen_a[cur]
+        down.append((prev, name, address, cur))
+        cur = prev
+    down.reverse()
+    up: List[Tuple[Term, str, Tuple[int, ...], Term]] = []
+    cur = meet
+    while seen_b[cur] is not None:
+        prev, name, address = seen_b[cur]
+        up.append((cur, name, address, prev))
+        cur = prev
+
+    steps = [EquivalenceProofStep(step_num=0, from_expr=str(a), to_expr=str(b),
+                                  justification=name, address=address, direction="forward")
+             for a, name, address, b in down]
+    steps += [EquivalenceProofStep(step_num=0, from_expr=str(a), to_expr=str(b),
+                                   justification=name, address=address, direction="reverse")
+              for a, name, address, b in up]
+    for i, s in enumerate(steps, 1):
+        s.step_num = i
+    return steps
+
+
+def replay_explanation(egraph: "EGraph", proof: EquivalenceProofTree) -> Tuple[DerivationStatus, str]:
+    """What `proof` may be credited with in `egraph`, decided from its content.
+
+    Its `derivation_status` and `is_equivalent` fields are ignored: they are
+    public mutable data. Any consumer that credits an explanation calls this.
+
+    - CHECKED: the endpoints parse and the attached steps replay under
+      `egraph.theory` (zero steps only for identical terms).
+    - INVALID: steps are attached and do not replay, or an endpoint does not parse.
+    - Otherwise the e-graph itself is asked, adding nothing:
+      NOT_FOUND_WITHIN_BUDGET if both terms are already in one class, and
+      NOT_EQUIVALENT if they are not.
+
+    A replay shows derivability under the e-graph's rules. It does not show
+    that those rules are right.
+    """
+    try:
+        a, b = parse(proof.term_a), parse(proof.term_b)
+    except Exception as e:
+        return DerivationStatus.INVALID, f"an endpoint does not parse: {e}"
+    try:
+        reason = check_derivation(a, b, list(proof.proof_steps), egraph.theory)
+    except Exception as e:
+        return DerivationStatus.INVALID, f"the attached steps are malformed: {type(e).__name__}"
+    if reason is None:
+        return DerivationStatus.CHECKED, ""
+    if proof.proof_steps:
+        return DerivationStatus.INVALID, reason
+    ca, cb = egraph.lookup(a), egraph.lookup(b)
+    if ca is not None and ca == cb:
+        return DerivationStatus.NOT_FOUND_WITHIN_BUDGET, "equivalent in the e-graph; no derivation attached"
+    return DerivationStatus.NOT_EQUIVALENT, "the e-graph does not put these terms in one class"
 
 
 # ============================================================================
@@ -227,6 +466,9 @@ class EGraph:
         self.hashcons: Dict[ENode, int] = {}
         self.dirty_classes: Set[int] = set()
         self.proof_edges: List[JustificationEdge] = []
+        # Every rule this e-graph was saturated with, by name: what an
+        # explanation's steps may cite.
+        self.theory: Dict[str, RewriteRule] = {}
         self._next_id = 0
 
     def _allocate_class(self) -> int:
@@ -250,6 +492,22 @@ class EGraph:
             enode = ENode("@", (left_id, right_id))
             return self._add_enode(enode)
         raise TypeError(f"Unknown term type: {type(term)}")
+
+    def lookup(self, term: Term) -> Optional[int]:
+        """The canonical class of `term` if this e-graph already holds it; never adds."""
+        if isinstance(term, Comb):
+            node = ENode(term.symbol, ())
+        elif isinstance(term, Var):
+            node = ENode(f"${term.name}", ())
+        elif isinstance(term, App):
+            left, right = self.lookup(term.left), self.lookup(term.right)
+            if left is None or right is None:
+                return None
+            node = ENode("@", (left, right))
+        else:
+            return None
+        cid = self.hashcons.get(node.canonical(self.uf))
+        return None if cid is None else self.uf.find(cid)
 
     def _add_enode(self, enode: ENode) -> int:
         can_node = enode.canonical(self.uf)
@@ -399,6 +657,14 @@ class EGraph:
         Executes equality saturation loop.
         Applies rules non-destructively until reaching a fixed point or spending fuel.
         """
+        pending = dict(self.theory)
+        for rule in rules:
+            known = pending.get(rule.name)
+            if known is not None and (known.lhs, known.rhs) != (rule.lhs, rule.rhs):
+                raise ValueError(f"rule name {rule.name!r} already names a different rule in this e-graph")
+            pending[rule.name] = rule
+        self.theory = pending
+
         start_time = time.time()
         applied_total = 0
         iterations_run = 0
@@ -451,79 +717,34 @@ class EGraph:
     # 6. HOMOTOPIC PROOF EXPLANATIONS (STEP-BY-STEP JUSTIFICATIONS)
     # ========================================================================
 
-    def explain_equivalence(self, term_a: Term, term_b: Term) -> EquivalenceProofTree:
+    def explain_equivalence(self, term_a: Term, term_b: Term, max_terms: int = 20000) -> EquivalenceProofTree:
         """
-        Finds the shortest justification path connecting two terms in the proof forest.
-        Produces a certified equational proof tree: (t_a = u_1 = ... = t_b).
+        Why term_a and term_b share an e-class, as a derivation that replays.
+
+        Equivalence is the e-graph's union-find answer. The steps are searched
+        over `self.theory`, the rules this e-graph was saturated with, and are
+        returned only after `check_derivation` accepts them. If none is found
+        within `max_terms`, the status is NOT_FOUND_WITHIN_BUDGET and there are
+        no steps. The proof forest links class ids, not terms, so it is not
+        offered as an explanation. Before S4d this method searched it from the
+        class root of both terms, found the empty path every time, and emitted
+        one invented step instead.
         """
         id_a = self.add_term(term_a)
         id_b = self.add_term(term_b)
         self.rebuild()
+        str_a, str_b = str(term_a), str(term_b)
 
-        str_a = str(term_a)
-        str_b = str(term_b)
+        if self.uf.find(id_a) != self.uf.find(id_b):
+            return EquivalenceProofTree(term_a=str_a, term_b=str_b, is_equivalent=False,
+                                        proof_steps=[], derivation_status=DerivationStatus.NOT_EQUIVALENT)
 
-        root_a = self.uf.find(id_a)
-        root_b = self.uf.find(id_b)
-
-        if root_a != root_b:
-            return EquivalenceProofTree(
-                term_a=str_a,
-                term_b=str_b,
-                is_equivalent=False,
-                proof_steps=[]
-            )
-
-        # BFS over justification graph
-        adj: Dict[int, List[Tuple[int, str]]] = {}
-        for edge in self.proof_edges:
-            adj.setdefault(edge.source_class, []).append((edge.target_class, edge.rule_name))
-            adj.setdefault(edge.target_class, []).append((edge.source_class, edge.rule_name))
-
-        queue: List[Tuple[int, List[Tuple[int, str]]]] = [(id_a, [])]
-        visited: Set[int] = {id_a}
-        found_path: Optional[List[Tuple[int, str]]] = None
-
-        while queue:
-            curr, path = queue.pop(0)
-            if self.uf.find(curr) == self.uf.find(id_b) and curr == id_b:
-                found_path = path
-                break
-
-            for nxt, rule in adj.get(curr, []):
-                if nxt not in visited:
-                    visited.add(nxt)
-                    queue.append((nxt, path + [(nxt, rule)]))
-
-        steps = []
-        if found_path:
-            curr_str = str_a
-            for i, (nxt_id, rname) in enumerate(found_path):
-                # Extract representative for next class
-                nxt_term = self.extract_optimal(nxt_id)[0]
-                nxt_str = str(nxt_term)
-                steps.append(EquivalenceProofStep(
-                    step_num=i + 1,
-                    from_expr=curr_str,
-                    to_expr=nxt_str,
-                    justification=rname
-                ))
-                curr_str = nxt_str
-        else:
-            # Direct congruence
-            steps.append(EquivalenceProofStep(
-                step_num=1,
-                from_expr=str_a,
-                to_expr=str_b,
-                justification="Congruence Closure (Structural Identity)"
-            ))
-
-        return EquivalenceProofTree(
-            term_a=str_a,
-            term_b=str_b,
-            is_equivalent=True,
-            proof_steps=steps
-        )
+        steps = find_derivation(term_a, term_b, self.theory, max_terms=max_terms)
+        if steps is None or check_derivation(term_a, term_b, steps, self.theory) is not None:
+            return EquivalenceProofTree(term_a=str_a, term_b=str_b, is_equivalent=True,
+                                        proof_steps=[], derivation_status=DerivationStatus.NOT_FOUND_WITHIN_BUDGET)
+        return EquivalenceProofTree(term_a=str_a, term_b=str_b, is_equivalent=True,
+                                    proof_steps=steps, derivation_status=DerivationStatus.CHECKED)
 
     # ========================================================================
     # 7. OPTIMAL TERM EXTRACTION
@@ -755,14 +976,18 @@ def generate_egraph_pdf(
         )
         return s.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
-    if sample_proof and sample_proof.is_equivalent:
+    # What the attached explanation is credited with is decided here, by
+    # replaying it against this e-graph, never read from its own status fields:
+    # those are public mutable data (review E1 on PR #21).
+    replayed, replay_reason = replay_explanation(egraph, sample_proof) if sample_proof else (None, "")
+    if replayed == DerivationStatus.CHECKED:
         clean_a = _clean_latin1(sample_proof.term_a)
         clean_b = _clean_latin1(sample_proof.term_b)
         stream_lines.extend([
             "0 -18 Td",
             f"(Theorem Claim: {clean_a} === {clean_b}) Tj",
             "0 -14 Td",
-            f"(Derivation Path ({len(sample_proof.proof_steps)} steps):) Tj",
+            f"(Derivation: CHECKED, {len(sample_proof.proof_steps)} steps replayed against the e-graph's rules:) Tj",
         ])
         for step in sample_proof.proof_steps[:6]:
             f_expr = _clean_latin1(step.from_expr[:22])
@@ -772,6 +997,18 @@ def generate_egraph_pdf(
                 "0 -13 Td",
                 f"(  [{step.step_num}] {f_expr} -> {t_expr}  | {just}) Tj",
             ])
+    elif replayed == DerivationStatus.NOT_FOUND_WITHIN_BUDGET:
+        stream_lines.extend([
+            "0 -18 Td",
+            f"(Claim: {_clean_latin1(sample_proof.term_a)} === {_clean_latin1(sample_proof.term_b)}) Tj",
+            "0 -14 Td",
+            "(Equivalent in the e-graph; no checked derivation within budget.) Tj",
+        ])
+    elif replayed is not None:
+        stream_lines.extend([
+            "0 -20 Td",
+            f"(Attached explanation NOT credited: {_clean_latin1(replay_reason[:70])}) Tj",
+        ])
     else:
         stream_lines.extend([
             "0 -20 Td",
