@@ -71,6 +71,7 @@ SUITES = [
     ("Epistemic Mycelium & Warrant Mesh", "test_mycelium"),
     ("Rule Identity: What a Tombstone Addresses", "test_rule_identity"),
     ("Refutation Consumer: Autopoiesis Guard", "test_refutation_consumer"),
+    ("EXP-001: Refusal, Readoption, Evolution", "test_exp001"),
     ("Living Colony Ecosystem", "test_colony"),
     ("Morphogenetic Proof-Nets & Ontogeny", "test_morpho_net"),
     ("Gödelian Incompleteness & Event Horizon", "test_goedel"),
