@@ -255,11 +255,16 @@ class CounterexampleWitness:
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> CounterexampleWitness:
+        # Preserve the signed numeric domain at the transport boundary. Coercing
+        # bool/float/string to int can turn altered bytes back into a valid claim.
+        atp = d.get("atp_to_diverge")
+        if type(atp) is not int or atp < 0:
+            raise ValueError("atp_to_diverge must be an explicit non-negative integer")
         return cls(
             input_expr=str(d["input_expr"]),
             expected_normal_form=str(d["expected_normal_form"]),
             actual_divergence=str(d["actual_divergence"]),
-            atp_to_diverge=int(d.get("atp_to_diverge", 1))
+            atp_to_diverge=atp
         )
 
 

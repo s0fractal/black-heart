@@ -103,6 +103,24 @@ class CounterexampleAuditTest(unittest.TestCase):
 
     # ---------------------------------------------------------------- A ---
 
+    def test_transport_cannot_normalize_invalid_cost_into_signed_integer(self):
+        import copy
+        claim = EdgeClaim.create_and_sign(
+            "0" * 64, TAU, OMEGA, "a" * 64, Polarity.REFUTE,
+            self.witness(atp_to_diverge=1), self.sk, self.pk)
+        honest = EdgeClaim.from_dict(claim.to_dict())
+        self.assertEqual(self.verifier.audit_claim(honest).status, VerificationStatus.PASS)
+        for value in (True, 1.9, "1", None, -1):
+            with self.subTest(value=value):
+                raw = copy.deepcopy(claim.to_dict())
+                raw["body"]["witness"]["atp_to_diverge"] = value
+                with self.assertRaises(ValueError):
+                    EdgeClaim.from_dict(raw)
+        raw = copy.deepcopy(claim.to_dict())
+        del raw["body"]["witness"]["atp_to_diverge"]
+        with self.assertRaises(ValueError):
+            EdgeClaim.from_dict(raw)
+
     def test_A0_the_fixture_is_what_the_engine_actually_computes(self):
         """The operands are measured here, so the rest of the suite rests on fact."""
         p, s = replay(OMEGA, INPUT), replay(TAU, INPUT)
