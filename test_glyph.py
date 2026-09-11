@@ -7,7 +7,8 @@ import unittest
 from glyph import (
     parse, evaluate, resume, tree_size, term_hash,
     K, I, S, Y, TRUE, FALSE, CHURCH_0, CHURCH_1,
-    BudgetExceededError, EvalStatus, SporeStore, SporeReceipt, Var, App
+    BudgetExceededError, EvalStatus, SporeStore, SporeReceipt, Var, App,
+    term_address
 )
 
 class TestGlyphCombinators(unittest.TestCase):
@@ -116,23 +117,37 @@ class TestGlyphCombinators(unittest.TestCase):
 
         # 1. Forward run creates legitimate receipt
         res, _ = store.forward(expr, atp=100)
-        receipt = store._receipts[term_hash(expr)]
+        # Keyed by the profile-qualified address; the legacy digest is not a key.
+        receipt = store._receipts[term_address(expr)]
 
         # 2. Honest audit passes
         ok, msg = store.audit(expr, receipt)
         self.assertTrue(ok)
         self.assertEqual(msg, "AUDIT_VERIFIED_HONEST")
 
-        # 3. Forged receipt (tampered output hash) fails audit
+        # 3. Forged receipt (tampered output address) fails audit
         fake_receipt = SporeReceipt(
             input_hash=receipt.input_hash,
-            output_hash="0000000000000000000000000000000000000000000000000000000000000000",
+            output_hash="glyph.term.v2:" + "0" * 64,
             atp_spent=receipt.atp_spent,
             status=receipt.status
         )
         ok_fake, msg_fake = store.audit(expr, fake_receipt)
         self.assertFalse(ok_fake)
-        self.assertIn("Output hash mismatch", msg_fake)
+        self.assertIn("Output address mismatch", msg_fake)
+
+        # 4. A receipt carrying a bare legacy digest is refused by PROFILE,
+        #    before any comparison: the encoding it was written under cannot
+        #    tell two terms apart, so it is re-derived, not reinterpreted.
+        legacy_receipt = SporeReceipt(
+            input_hash="0" * 64,
+            output_hash="0" * 64,
+            atp_spent=receipt.atp_spent,
+            status=receipt.status
+        )
+        ok_legacy, msg_legacy = store.audit(expr, legacy_receipt)
+        self.assertFalse(ok_legacy)
+        self.assertIn("Unknown address profile", msg_legacy)
 
 if __name__ == "__main__":
     unittest.main()
