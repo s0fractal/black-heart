@@ -41,6 +41,8 @@ from enum import Enum
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Tuple, Set, Union, Callable
 
+from glyph import EvalStatus, evaluate, parse
+
 
 def sha256_hex(data: Union[bytes, str]) -> str:
     """Compute SHA-256 hexadecimal digest."""
@@ -254,6 +256,46 @@ class LocalSection:
         )
 
 
+def local_computation_failure(section: LocalSection, context: EpistemicContext) -> Optional[str]:
+    """Why `section` does not hold in `context`, or None when it does.
+
+    The predicate, exactly: the term parses; the declared normal form parses;
+    the term settles within `context.budget_ceiling` ATP, the context's own
+    budget with no floor, to a term EQUAL to the declared one. Equality is
+    between ASTs, so `K I` and `🖤 🤍` are the same form. The section also may
+    not claim fewer `verified_steps` than the reduction took, because
+    restriction trusts that number against each overlap's budget.
+    Overstating steps is allowed: the number is checked as an upper bound.
+
+    This says the local computation holds. It says nothing about what the
+    claim's name means. No section status exempts a section from the check.
+    """
+    if not section.term_expression:
+        return "it declares no term"
+    if not section.normal_form:
+        return "it declares no normal form"
+    try:
+        term = parse(section.term_expression)
+    except Exception as e:
+        return f"its term {section.term_expression!r} does not parse: {e}"
+    try:
+        declared = parse(section.normal_form)
+    except Exception as e:
+        return f"its normal form {section.normal_form!r} does not parse: {e}"
+    try:
+        result = evaluate(term, max_atp=context.budget_ceiling)
+    except Exception as e:
+        return f"evaluating its term failed: {type(e).__name__}: {e}"
+    if result.status != EvalStatus.SETTLED:
+        return f"its term does not settle within the context budget of {context.budget_ceiling} ATP"
+    if result.term != declared:
+        return (f"Computational divergence: the term settles to '{result.term}', "
+                f"the section declares '{section.normal_form}'")
+    if section.verified_steps < result.steps:
+        return f"it claims {section.verified_steps} verified steps; its term takes {result.steps}"
+    return None
+
+
 # ============================================================================
 # 3. ČECH COHOMOLOGY & DESCENT ENGINE (SHEAF DESCENT & GLUING)
 # ============================================================================
@@ -368,24 +410,20 @@ class EpistemicSheafKernel:
                     h1_dimension=1,
                     rejection_reason=f"Cannot glue obstructed local section for context '{ctx.name}'"
                 )
-            # Verify computational validity if term expression is present
-            if sec.term_expression and sec.normal_form:
-                try:
-                    from glyph import parse, evaluate
-                    t = parse(sec.term_expression)
-                    eval_res = evaluate(t, max_atp=max(50, ctx.budget_ceiling))
-                    if eval_res.status.value == "NORMAL_FORM" and str(eval_res.normal_form) != sec.normal_form:
-                        return SheafDescentReport(
-                            claim_name=claim_name,
-                            cover_contexts=cover,
-                            local_sections={ctx.context_id: sec},
-                            cocycles=[],
-                            is_gluing_admissible=False,
-                            h1_dimension=1,
-                            rejection_reason=f"Computational divergence in local section '{sec.claim_name}': expected '{sec.normal_form}', got '{eval_res.normal_form}'"
-                        )
-                except Exception:
-                    pass
+            # Every section must hold locally before it can be glued. Before S4a
+            # this compared against a status glyph never produces
+            # ("NORMAL_FORM") inside `except: pass`, so it never refused.
+            failure = local_computation_failure(sec, ctx)
+            if failure:
+                return SheafDescentReport(
+                    claim_name=claim_name,
+                    cover_contexts=cover,
+                    local_sections={ctx.context_id: sec},
+                    cocycles=[],
+                    is_gluing_admissible=False,
+                    h1_dimension=1,
+                    rejection_reason=f"Local section for context '{ctx.name}' does not hold: {failure}"
+                )
 
             local_secs[ctx.context_id] = sec
 

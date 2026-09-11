@@ -100,6 +100,7 @@ SUITES = [
     ("Review 12 Remediation & Probe Defenses (f2e05e6)", "test_remediation_f2e05e6"),
     ("Epistemic Palimpsest — Value Drift Cartography", "test_palimpsest_kernel"),
     ("Epistemic Sheaf Kernel & Čech Cohomology", "test_sheaf_kernel"),
+    ("Sheaf Local Validity: Only Sections That Hold Are Glued", "test_sheaf_local_validity"),
     ("Sovereign Continuity Quine & Forgetting Membrane", "test_sovereign_continuity"),
     ("Federated Sheaf Agora & Cohomological Constitutionalism", "test_sheaf_agora"),
     ("Findings F01–F12 Comprehensive Remediation", "test_sovereign_remediation"),
