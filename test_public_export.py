@@ -235,6 +235,44 @@ class RecoveryTest(_Dir):
         else:
             self.assertIn("Epistemic", r.stdout + r.stderr, "mating refused for its own reasons")
 
+    def test_C5_organism_reproduces_from_the_environment(self):
+        pdf = self.organism_pdf()
+        with open(pdf + ".key") as fh:
+            sk = fh.read().strip()
+        os.remove(pdf + ".key")
+        env = dict(os.environ, BLACK_HEART_SECRET_KEY=sk)
+        r = subprocess.run([sys.executable, pdf, "--reproduce"], cwd=self.d,
+                           capture_output=True, text=True, env=env)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        children = [f for f in os.listdir(self.d) if f.startswith("organism_gen0001_") and f.endswith(".pdf")]
+        self.assertEqual(len(children), 1)
+        self.assertEqual(keypairs_in(read(self.path(children[0]))), 0)
+
+    def test_C6_an_explicit_secret_key_comes_before_the_sidecar(self):
+        """The sidecar holds a foreign key; the explicit key is used, so it wins."""
+        pdf = self.organism_pdf()
+        with open(pdf + ".key") as fh:
+            sk = fh.read().strip()
+        with open(pdf + ".key", "w") as fh:
+            fh.write(generate_keypair()[0])
+        env = {k: v for k, v in os.environ.items() if k != "BLACK_HEART_SECRET_KEY"}
+        r = subprocess.run([sys.executable, pdf, "--reproduce", "--secret-key", sk], cwd=self.d,
+                           capture_output=True, text=True, env=env)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertNotIn("does not belong", r.stdout)
+
+    def test_C7_swarm_steps_with_an_explicit_keys_path_and_keeps_it_there(self):
+        state = self.swarm_state()
+        explicit = self.path("elsewhere.keys")
+        os.replace(sidecar_path(state), explicit)
+        before = len(Keystore.load(explicit))
+        r = cli("swarm", "step", state, "--keys", explicit, cwd=self.d)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertFalse(os.path.exists(sidecar_path(state)), "keys were written beside the state instead")
+        self.assertGreaterEqual(len(Keystore.load(explicit)), before)
+        self.assertEqual(mode(explicit), 0o600)
+        self.assertEqual(keypairs_in(read(state)), 0)
+
 
 class RefusalTest(_Dir):
     """Section D: no key source means no signature and no write."""
@@ -289,9 +327,10 @@ class RefusalTest(_Dir):
         state = self.swarm_state()
         os.remove(sidecar_path(state))
         before = read(state)
-        oid = next(iter(json.loads(before)["organisms"]))
+        oids = list(json.loads(before)["organisms"])
         for argv in (("swarm", "step", state),
-                     ("swarm", "inoculate", state, "--origin", oid, "--demo")):
+                     ("swarm", "mate", state, "--parent-a", oids[0], "--parent-b", oids[1]),
+                     ("swarm", "inoculate", state, "--origin", oids[0], "--demo")):
             with self.subTest(action=argv[1]):
                 r = cli(*argv, cwd=self.d)
                 self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
