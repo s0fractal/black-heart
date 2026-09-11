@@ -100,6 +100,7 @@ from agora import (
     AgoraConsensusEngine,
     grow_agora_page,
     audit_agora_parliament,
+    AGORA_MANIFEST_PREFIX,
 )
 
 MORPHO_AUTOPOIESIS_MANIFEST_PREFIX = "# %\U0001F5A4 MORPHO_AUTOPOIESIS_MANIFEST: "
@@ -110,6 +111,15 @@ MORPHO_AUTOPOIESIS_MANIFEST_PREFIX = "# %\U0001F5A4 MORPHO_AUTOPOIESIS_MANIFEST:
 # require this, so a receipt cannot claim this name for an epoch that actually
 # changed something, or claim a nonzero credit for one that did not.
 NO_MUTATION_FOUND_RULE = "NO_MUTATION_FOUND"
+
+# An Agora submission debits the organism. It is its own signed step in the
+# receipt chain -- never a re-signing of an earlier receipt -- because S6a
+# binds atp_reserve to that chain: money cannot move without a step that says
+# so. It needs no new signed field: `tabled_proposal_id` and
+# `agora_atp_staked` are already inside canonical_bytes_for_signing, so the
+# accepted domain of existing state does not change (review R2's lesson,
+# applied before making the mistake rather than after).
+AGORA_STAKE_RULE = "AGORA_STAKE"
 
 
 def _expected_credit(atp_saved: int) -> int:
@@ -158,6 +168,72 @@ def _organism_hash_of(
         f"{archetype_key}:{weisfeiler_lehman_digest}"
     )
     return hashlib.sha256(data.encode("utf-8")).hexdigest()
+
+
+def _valid_stake_receipt(rec) -> bool:
+    """A stake step must name a strictly positive integer amount and the one
+    submission it paid for. `bool` is excluded explicitly: True is an int in
+    Python and would otherwise read as a 1 ATP stake."""
+    s = rec.agora_atp_staked
+    if isinstance(s, bool) or not isinstance(s, int) or s <= 0:
+        return False
+    return bool(rec.tabled_proposal_id)
+
+
+def _agora_identity(agora_pdf_path: str) -> str:
+    """A STABLE, document-distinguishing identifier for an Agora: its founder key.
+
+    Not a digest of the whole file: that changes on every publish, so a repeated
+    submission would derive a different id and escape duplicate detection, which
+    is the very thing being fixed here.
+
+    And NOT the genesis `receipt_hash`, which looks like the obvious choice and
+    is wrong. Measured: two independently created Agora documents carry the
+    IDENTICAL genesis receipt_hash, because the ratified constitution is
+    deterministic content and that hash does not cover the founder's signature.
+    Using it would let a stake taken for one floor be resumed onto another. The
+    founder's public key is fixed at creation, never changes as the floor grows,
+    and differs per document.
+    """
+    records = _agora_records(agora_pdf_path)
+    if not records:
+        raise ValueError(f"Agora document has no records: {agora_pdf_path}")
+    founder = records[0].get("proposal", {}).get("author_public_key", "")
+    if not founder:
+        raise ValueError(f"Agora genesis names no founder key: {agora_pdf_path}")
+    return str(founder)
+
+
+def _agora_records(agora_pdf_path: str):
+    with open(agora_pdf_path, "rb") as f:
+        raw = f.read()
+    pre = AGORA_MANIFEST_PREFIX.encode("utf-8")
+    idx = raw.rfind(pre)
+    if idx == -1:
+        raise ValueError(f"No Agora manifest found in {agora_pdf_path}")
+    return json.loads(raw[idx + len(pre):].split(b"\n", 1)[0].decode("utf-8"))
+
+
+def _agora_proposal_ids(agora_pdf_path: str) -> set:
+    return {r.get("proposal", {}).get("proposal_id")
+            for r in _agora_records(agora_pdf_path) if isinstance(r, dict)}
+
+
+def derive_submission_id(organism_pk_hex: str, theorem_organism_hash: str,
+                         theorem_generation: int, rule_name: str, gene_id: str,
+                         agora_identity: str) -> str:
+    """The stable identity of one submission.
+
+    Rule name plus generation is NOT enough: two different organisms evolve
+    the same rule at the same generation and would collide. This binds the
+    submitting organism, the state its theorem produced, the theorem itself,
+    and the target Agora -- so the same theorem submitted twice to the same
+    floor derives the SAME id and is caught against stored data, while the
+    same theorem aimed at a different floor derives a different one.
+    """
+    seed = (f"MORPHO_SUBMISSION:{organism_pk_hex}:{theorem_organism_hash}:"
+            f"{theorem_generation}:{rule_name}:{gene_id}:{agora_identity}")
+    return "prop_morpho_" + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:24]
 
 
 def _canonical_expression(expression: str) -> str:
@@ -1269,6 +1345,87 @@ def evolve_morpho_autopoietic_organism(
 # 8. AGORA PARLIAMENT FEDERATION (GROK 5)
 # ============================================================================
 
+def _read_organism(pdf_path: str) -> "MorphoAutopoieticOrganism":
+    """Parse the organism from its manifest. Read-only."""
+    with open(pdf_path, "rb") as f:
+        data = f.read()
+    prefix = MORPHO_AUTOPOIESIS_MANIFEST_PREFIX.encode("utf-8")
+    idx = data.rfind(prefix)
+    if idx == -1:
+        raise ValueError(f"Manifest not found in {pdf_path}")
+    return MorphoAutopoieticOrganism.from_dict(
+        json.loads(data[idx + len(prefix):].split(b"\n", 1)[0].decode("utf-8")))
+
+
+def _append_manifest_revision(pdf_path: str, org: "MorphoAutopoieticOrganism") -> None:
+    """Append a new manifest line recording `org`'s current state.
+
+    Append-only, like every other write to these documents: the previous bytes
+    stay byte-identical and the reader takes the LAST manifest. A stake step
+    changes no genome, so it adds no visual page -- the chain, not the page
+    count, is what the auditor reads.
+    """
+    payload = org.to_dict()
+    payload["source_dir"] = os.path.dirname(os.path.abspath(__file__))
+    line = (MORPHO_AUTOPOIESIS_MANIFEST_PREFIX.encode("utf-8")
+            + json.dumps(payload, separators=(",", ":")).encode("utf-8") + b"\n")
+    with open(pdf_path, "ab") as f:
+        f.write(line)
+
+
+def _latest_theorem(org: "MorphoAutopoieticOrganism"):
+    """The most recent receipt that actually proved something."""
+    for rec in reversed(org.receipt_chain):
+        if rec.rule_name not in (AGORA_STAKE_RULE, "GENESIS_SEED", NO_MUTATION_FOUND_RULE):
+            return rec
+    return None
+
+
+def _build_proposal(theorem, org, submission_id: str, stake_atp: int,
+                    sk_hex: str, now: str) -> AgoraProposal:
+    proposal = AgoraProposal(
+        proposal_id=submission_id,
+        proposal_type=ProposalType.THEOREM_CONGRUENCE.value,
+        title=f"Autopoietic Congruence Theorem: {theorem.rule_name} on {theorem.gene_id}",
+        statement=(f"Semantic congruence verified via FrozenEvaluator: "
+                   f"'{theorem.pre_term}' == '{theorem.post_term}', "
+                   f"saving {theorem.atp_saved} ATP."),
+        pre_term=theorem.pre_term,
+        post_term=theorem.post_term,
+        target_value=float(theorem.atp_saved),
+        stake_atp=stake_atp,
+        timestamp_utc=now,
+    )
+    proposal.sign(sk_hex)
+    return proposal
+
+
+def _publish_to_agora(proposal, org, agora_pdf_path: str, reserve_before: int,
+                      stake_atp: int, sk_hex: str) -> None:
+    """Table, vote and settle on the Agora floor, then grow its page.
+
+    The engine is registered with the balance the organism held WHEN IT STAKED,
+    which is what the engine models. Its own duplicate and sufficiency checks
+    still run, but they are no longer the only ones: this submission path checks
+    duplicates against the STORED Agora records before anything is written.
+    """
+    engine = AgoraConsensusEngine()
+    engine.register_citizen(org.public_key_hex, initial_atp=reserve_before)
+    engine.table_proposal(proposal)
+    voter_burned = min(100, reserve_before - stake_atp) if reserve_before > stake_atp else 25
+    ballot = AgoraBallot(
+        proposal_id=proposal.proposal_id,
+        voter_public_key=org.public_key_hex,
+        direction=VoteDirection.AYE.value,
+        atp_burned=voter_burned,
+        quadratic_weight=int(math.isqrt(voter_burned)),
+        reason=f"Author attestation with {proposal.target_value:.0f} ATP savings",
+    )
+    ballot.sign(sk_hex)
+    engine.cast_ballot(ballot)
+    grow_agora_page(agora_pdf_path, engine.evaluate_and_settle(proposal.proposal_id))
+
+
 def table_to_agora(
     organism_pdf_path: str,
     agora_pdf_path: str,
@@ -1276,26 +1433,44 @@ def table_to_agora(
     stake_atp: int = 100
 ) -> Tuple[AgoraProposal, str]:
     """
-    Autonomously tables the organism's latest accepted algebraic theorem
-    directly as an AgoraProposal onto the Mycelial Agora floor.
+    Tables the organism's latest proved theorem onto the Mycelial Agora floor,
+    paying a stake that is actually debited.
+
+    Before S6b the debit existed only in memory: `org.atp_reserve -= stake_atp`
+    was never written back, so five submissions of 150 ATP claimed 750 ATP
+    against a balance that never moved, produced five records under one
+    proposal id, and both auditors still passed. The engine's own duplicate and
+    balance checks were correct but ran on a FRESH engine registered from the
+    file balance, so they never saw a previous submission.
+
+    Write order is DEBIT then PUBLISH, and the two files are not one
+    transaction. The order is chosen by which partial failure is safer:
+    publishing first would leave a proposal on the floor backed by a stake that
+    was never taken -- the defect itself, made permanent. Debiting first can
+    instead leave a stake taken whose publication did not land; the next call
+    RESUMES that same submission and never debits twice. An automatic refund is
+    not offered: the Agora write may have landed before the error surfaced.
+
+    The guarantee is for this submission path. It does not establish that every
+    record already on an Agora floor is backed.
     """
+    # ---- 1. Validate everything before the first write ----------------------
+    if isinstance(stake_atp, bool) or not isinstance(stake_atp, int) or stake_atp <= 0:
+        raise ValueError(f"Stake must be a strictly positive integer, not {stake_atp!r}.")
+    for path in (organism_pdf_path, agora_pdf_path):
+        if not os.path.exists(path):
+            raise ValueError(f"Not found: {path}")
+    legacy = unsupported_history_reason(organism_pdf_path)
+    if legacy is not None:
+        raise ValueError(f"Cannot table from {organism_pdf_path}: {legacy}")
     if not audit_morpho_autopoietic_organism(organism_pdf_path):
         raise ValueError("Cannot table proposal from untrusted or tampered organism.")
+    if not audit_agora_parliament(agora_pdf_path):
+        raise ValueError(f"Cannot table onto an untrusted or tampered Agora: {agora_pdf_path}")
 
-    with open(organism_pdf_path, "rb") as f:
-        data = f.read()
-
-    prefix = MORPHO_AUTOPOIESIS_MANIFEST_PREFIX.encode("utf-8")
-    idx = data.rfind(prefix)
-    line = data[idx + len(prefix):].split(b"\n", 1)[0]
-    org_dict = json.loads(line.decode("utf-8"))
-    org = MorphoAutopoieticOrganism.from_dict(org_dict)
-
-    if org.atp_reserve < stake_atp:
-        raise ValueError(f"Insufficient ATP reserve ({org.atp_reserve} < {stake_atp}) to stake bill.")
-
-    latest_rec = org.receipt_chain[-1]
-    if not latest_rec.pre_term or latest_rec.pre_term == "GENESIS":
+    org = _read_organism(organism_pdf_path)
+    theorem = _latest_theorem(org)
+    if theorem is None or not theorem.pre_term or theorem.pre_term == "GENESIS":
         raise ValueError("No evolved algebraic theorem available to table on Agora floor.")
 
     from keystore import PRIVATE_KEY_SUFFIX
@@ -1307,55 +1482,97 @@ def table_to_agora(
                 sk_hex = kf.read().strip()
         elif "BLACK_HEART_SECRET_KEY" in os.environ:
             sk_hex = os.environ["BLACK_HEART_SECRET_KEY"]
-
     if not sk_hex:
         raise ValueError("Secret key required to sign Agora bill.")
+    try:
+        signer_pk = public_key_from_secret(bytes.fromhex(sk_hex)).hex()
+    except Exception as exc:
+        raise ValueError(f"Malformed secret key: {exc}")
+    if signer_pk != org.public_key_hex:
+        raise ValueError("That key does not belong to this organism; it cannot stake its ATP.")
 
+    identity = _agora_identity(agora_pdf_path)
+    published = _agora_proposal_ids(agora_pdf_path)
+    submission_id = derive_submission_id(org.public_key_hex, theorem.organism_hash,
+                                         theorem.generation, theorem.rule_name,
+                                         theorem.gene_id, identity)
     now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    proposal_id = f"prop_morpho_{latest_rec.rule_name.lower()}_{latest_rec.generation}"
 
-    proposal = AgoraProposal(
-        proposal_id=proposal_id,
-        proposal_type=ProposalType.THEOREM_CONGRUENCE.value,
-        title=f"Autopoietic Congruence Theorem: {latest_rec.rule_name} on {latest_rec.gene_id}",
-        statement=f"Semantic congruence verified via FrozenEvaluator: '{latest_rec.pre_term}' == '{latest_rec.post_term}', saving {latest_rec.atp_saved} ATP.",
-        pre_term=latest_rec.pre_term,
-        post_term=latest_rec.post_term,
-        target_value=float(latest_rec.atp_saved),
-        stake_atp=stake_atp,
+    # ---- 2. An earlier debit whose publication did not land is RESUMED ------
+    last = org.receipt_chain[-1]
+    if last.rule_name == AGORA_STAKE_RULE and last.tabled_proposal_id not in published:
+        if last.tabled_proposal_id != submission_id:
+            raise ValueError(
+                f"{last.agora_atp_staked} ATP was already debited for submission "
+                f"{last.tabled_proposal_id}, and its publication is not confirmed on THIS "
+                f"Agora document. Refusing: publishing here would be a second claim, and "
+                f"refunding is unsafe because the original Agora write may have landed. "
+                f"Re-run against the Agora that submission was staked for.")
+        proposal = _build_proposal(theorem, org, submission_id,
+                                   last.agora_atp_staked, sk_hex, now)
+        _publish_to_agora(proposal, org, agora_pdf_path,
+                          org.atp_reserve + last.agora_atp_staked,
+                          last.agora_atp_staked, sk_hex)
+        return proposal, submission_id
+
+    # ---- 3. Duplicates are caught against STORED records, not a new engine --
+    if submission_id in published:
+        raise ValueError(
+            f"This theorem was already tabled on this Agora as {submission_id}. "
+            f"Refusing to stake a second time for the same submission.")
+    if org.atp_reserve < stake_atp:
+        raise ValueError(f"Insufficient ATP reserve ({org.atp_reserve} < {stake_atp}) to stake bill.")
+
+    # ---- 4. DEBIT first, as its own signed step -----------------------------
+    reserve_before = org.atp_reserve
+    gene0 = org.chromosomes[0]
+    # Advance the organism to this step FIRST, so the receipt commits to the
+    # hash the step actually produces. The genome does not move, but the
+    # generation and the parent hash do, and organism_hash covers both -- a
+    # receipt built from the pre-step hash would fail the backward replay.
+    new_generation = len(org.receipt_chain)
+    org.parent_hash = org.organism_hash
+    org.generation = new_generation
+    org.atp_reserve = reserve_before - stake_atp
+    org.organism_hash = org.compute_hash()
+
+    stake_receipt = MorphoAutopoiesisReceipt(
+        generation=new_generation,
         timestamp_utc=now,
+        parent_hash=org.parent_hash,
+        organism_hash=org.organism_hash,
+        gene_id=gene0.gene_id,
+        rule_name=AGORA_STAKE_RULE,
+        site_address=[],
+        pre_term=gene0.expression,
+        post_term=gene0.expression,
+        atp_saved=0,
+        size_saved=0,
+        experiment_id=derive_experiment_id(gene0.gene_id, (), AGORA_STAKE_RULE,
+                                           gene0.expression, gene0.expression),
+        experiments_count=len(org.experiment_log.records),
+        archetype=org.archetype_key,
+        feed_rate_f=org.feed_rate_f,
+        kill_rate_k=org.kill_rate_k,
+        pde_steps=0,
+        initial_nodes=0,
+        reduced_steps=0,
+        net_atp_burned=0,
+        weisfeiler_lehman_digest=org.weisfeiler_lehman_digest,
+        tabled_proposal_id=submission_id,
+        agora_atp_staked=stake_atp,
+        resulting_atp_reserve=reserve_before - stake_atp,
+        public_key_hex=org.public_key_hex,
     )
-    proposal.sign(sk_hex)
+    stake_receipt.sign(sk_hex)
 
-    # Set up consensus engine to evaluate and settle bill on Agora floor
-    engine = AgoraConsensusEngine()
-    engine.register_citizen(org.public_key_hex, initial_atp=org.atp_reserve)
-    engine.table_proposal(proposal)
+    org.receipt_chain.append(stake_receipt)
+    _append_manifest_revision(organism_pdf_path, org)
 
-    # Cast voting ballot with quadratic weight
-    voter_burned = min(100, org.atp_reserve - stake_atp) if org.atp_reserve > stake_atp else 25
-    voter_weight = int(math.isqrt(voter_burned))
-    ballot = AgoraBallot(
-        proposal_id=proposal_id,
-        voter_public_key=org.public_key_hex,
-        direction=VoteDirection.AYE.value,
-        atp_burned=voter_burned,
-        quadratic_weight=voter_weight,
-        reason=f"Author attestation with {latest_rec.atp_saved} ATP savings",
-    )
-    ballot.sign(sk_hex)
-    engine.cast_ballot(ballot)
-
-    settlement = engine.evaluate_and_settle(proposal_id)
-    grow_agora_page(agora_pdf_path, settlement)
-
-    # Deduct stake from organism
-    org.atp_reserve -= stake_atp
-    latest_rec.tabled_proposal_id = proposal_id
-    latest_rec.agora_atp_staked = stake_atp
-    latest_rec.sign(sk_hex)
-
-    return proposal, proposal_id
+    # ---- 5. Then publish ----------------------------------------------------
+    proposal = _build_proposal(theorem, org, submission_id, stake_atp, sk_hex, now)
+    _publish_to_agora(proposal, org, agora_pdf_path, reserve_before, stake_atp, sk_hex)
+    return proposal, submission_id
 
 
 # ============================================================================
@@ -1441,11 +1658,13 @@ def audit_morpho_autopoietic_organism(pdf_path: str) -> bool:
             return False  # only generation 0 may claim genesis
 
         site = tuple(rec.site_address)
-        if rec.rule_name == NO_MUTATION_FOUND_RULE:
+        if rec.rule_name in (NO_MUTATION_FOUND_RULE, AGORA_STAKE_RULE):
             if rec.pre_term != rec.post_term or rec.atp_saved != 0 or rec.size_saved != 0:
                 return False
             if site != ():
                 return False  # nothing moved, so no site may be claimed
+            if rec.rule_name == AGORA_STAKE_RULE and not _valid_stake_receipt(rec):
+                return False
         else:
             try:
                 pre_t, post_t = parse(rec.pre_term), parse(rec.post_term)
@@ -1469,7 +1688,14 @@ def audit_morpho_autopoietic_organism(pdf_path: str) -> bool:
                 rec.gene_id, site, rec.rule_name, rec.pre_term, rec.post_term):
             return False
 
-        expected_reserve += _expected_credit(rec.atp_saved)
+        # A step either credits a measured saving or debits an Agora stake,
+        # never both, and a step that is not a stake may carry no stake fields
+        # at all -- otherwise a debit could be smuggled through a receipt that
+        # looks like an ordinary evolution.
+        if rec.rule_name != AGORA_STAKE_RULE and (
+                rec.agora_atp_staked != 0 or rec.tabled_proposal_id):
+            return False
+        expected_reserve += _expected_credit(rec.atp_saved) - rec.agora_atp_staked
         if rec.resulting_atp_reserve != expected_reserve:
             return False
 

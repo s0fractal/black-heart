@@ -121,6 +121,7 @@ SUITES = [
     ("Autopoietic Quine Organisms", "test_autopoiesis"),
     ("Morphogenetic Autopoiesis Master Synthesis", "test_morpho_autopoiesis"),
     ("Morpho-Autopoiesis Economy: ATP Bound to the Receipt Chain", "test_morpho_economy_binding"),
+    ("Agora Stake Accounting: The Debit Is a Signed Step", "test_agora_stake_accounting"),
     ("Epistemic Kernel & Unified Edge-Claims", "test_warrant_kernel"),
     ("Counterexample Evidence: Replay Must Match the Witness", "test_counterexample_evidence"),
     ("Controlled Forgetting & Epistemic Retirement", "test_controlled_forgetting"),
