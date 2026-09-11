@@ -316,8 +316,12 @@ class TestMycelium(unittest.TestCase):
             gene_id="G2",
             site_address=(),
             rule_name="MUTATION_OPERAND_SWAP",
+            # A real transposition, measured: swapping the root application of
+            # "🌿 a b" gives "b (🌿 a)". The old post_term "a" was not
+            # reachable by this rule from this pre_term at any site; nothing
+            # checked that until the exploratory rules were given a replay.
             pre_term="🌿 a b",
-            post_term="a",
+            post_term="b (🌿 a)",
             atp_saved=-2,  # nominal trial value <= 0
             size_saved=-1,
             fixtures_fingerprint="fp2",

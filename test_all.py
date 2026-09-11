@@ -14,9 +14,35 @@ Runs all 46 mathematical and polyglot tests across all nine engines:
   - test_mesh.py: Peer-to-peer living polyglot mesh sync & gossip (3 tests)
 """
 
+import os
 import sys
 import unittest
 import time
+
+# This runner must test the checkout it lives in. Six engine modules prepend a
+# hard-coded absolute path to `sys.path` when they are imported, so once any of
+# them has run, a later `loadTestsFromName` can resolve a module -- including a
+# TEST module -- out of another clone. That is not hypothetical: this file
+# reported a green aggregate for a worktree while running another checkout's
+# copy of test_mycelium.py against this one's sources. A wrong-clone run is now
+# a loud failure instead of a number nobody can trust.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if sys.path and sys.path[0] != _HERE:
+    sys.path.insert(0, _HERE)
+
+
+def _assert_local(module_name: str) -> None:
+    module = sys.modules.get(module_name)
+    path = getattr(module, "__file__", None)
+    if path is None:
+        return
+    resolved = os.path.dirname(os.path.abspath(path))
+    if resolved != _HERE:
+        raise ImportError(
+            f"'{module_name}' was loaded from {path}, outside this checkout "
+            f"({_HERE}). Some earlier module put another clone ahead on sys.path; "
+            "the result of this run would describe neither checkout."
+        )
 
 SUITES = [
     ("Optional trusted-local CLI cache", "test_verify_cached"),
@@ -38,6 +64,7 @@ SUITES = [
     ("Turing Morphogenesis & Phenotypes", "test_morphogenesis"),
     ("Autonomous Form Metamorphosis", "test_metamorphosis"),
     ("Epistemic Mycelium & Warrant Mesh", "test_mycelium"),
+    ("Rule Identity: What a Tombstone Addresses", "test_rule_identity"),
     ("Living Colony Ecosystem", "test_colony"),
     ("Morphogenetic Proof-Nets & Ontogeny", "test_morpho_net"),
     ("Gödelian Incompleteness & Event Horizon", "test_goedel"),
@@ -85,7 +112,10 @@ def run_all_tests() -> bool:
 
     for name, module_name in SUITES:
         print(f"\033[1;33m[*] Testing: {name} ({module_name}.py)...\033[0m")
+        if sys.path[0] != _HERE:
+            sys.path.insert(0, _HERE)
         suite = loader.loadTestsFromName(module_name)
+        _assert_local(module_name)
         runner = unittest.TextTestRunner(verbosity=1)
         res = runner.run(suite)
         total_ran += res.testsRun

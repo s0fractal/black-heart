@@ -23,7 +23,7 @@ import json
 import hashlib
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any, Tuple, Union
+from typing import Optional, List, Dict, Any, Tuple, Union, Callable
 
 from crypto import (
     sign_bytes,
@@ -51,8 +51,52 @@ def _to_bytes(k: Union[bytes, str]) -> bytes:
         return bytes.fromhex(k)
     return k
 
+def _swap_children(sub: Term) -> Optional[Term]:
+    """The exploratory operand transposition, as `metamorphosis` replays it."""
+    if isinstance(sub, App):
+        return App(sub.right, sub.left)
+    return None
+
+
+def _collapse_to_k(sub: Term) -> Optional[Term]:
+    """The exploratory collapse to the constant K, as `metamorphosis` replays it."""
+    return K
+
+
+def _is_single_site_rewrite(
+    pre_t: Term,
+    post_t: Term,
+    rewrite: Callable[[Term], Optional[Term]]
+) -> bool:
+    """
+    True when `post_t` is `pre_t` with `rewrite` applied at exactly one site.
+
+    What this establishes and what it does not: the pair is reachable by this
+    rewrite at SOME address. It does not establish that the address a receipt
+    elsewhere claims is the one used; `metamorphosis.verify_metamorphic_receipt`
+    checks that, because it is given the site. Here there is no site to check
+    against, so the honest predicate is existence, and the search is over every
+    address rather than a guess.
+    """
+    for addr, sub in enumerate_subterm_addresses(pre_t):
+        replacement = rewrite(sub)
+        if replacement is None or replacement == sub:
+            continue
+        if replace_subterm_at(pre_t, addr, replacement) == post_t:
+            return True
+    return False
+
+
 def verify_rewrite_rule(rule_name: str, pre_str: str, post_str: str) -> bool:
-    """Verifies that rule_name applied to pre_str algebraically yields post_str."""
+    """
+    Verifies that rule_name applied to pre_str algebraically yields post_str.
+
+    The three exploratory MUTATION_* rules used to return True for any pair at
+    all, so the rule name on a warrant was decorative: `"x" -> "y"` verified
+    under MUTATION_OPERAND_SWAP although `x` has no application to swap. They
+    are now replayed like the algebraic rules, against the same definitions
+    `metamorphosis` uses when it replays a receipt.
+    """
     if rule_name not in ALLOWED_MUTATION_RULES:
         return False
     try:
@@ -85,8 +129,10 @@ def verify_rewrite_rule(rule_name: str, pre_str: str, post_str: str) -> bool:
                 isinstance(pre_t.right, App) and pre_t.right.left == K and pre_t.right.right == I):
                 return post_t == I
             return False
-        elif rule_name in ALLOWED_MUTATION_RULES:
-            return True
+        elif rule_name in ("MUTATION_OPERAND_SWAP", "MUTATION_CHILD_SWAP"):
+            return _is_single_site_rewrite(pre_t, post_t, _swap_children)
+        elif rule_name == "MUTATION_CONSTANT_COLLAPSE":
+            return _is_single_site_rewrite(pre_t, post_t, _collapse_to_k)
         return False
     except Exception:
         return False
