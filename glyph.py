@@ -13,9 +13,10 @@ Glyphs:
 
 from __future__ import annotations
 import hashlib
+import re
 import sys
 from dataclasses import dataclass
-from typing import Union, List, Optional, Tuple
+from typing import Union, List, Optional, Tuple, Any
 
 # Support deep combinator reductions, Y-combinator chains, and deeply nested ASTs
 sys.setrecursionlimit(max(sys.getrecursionlimit(), 50000))
@@ -172,8 +173,85 @@ def canonical_bytes(term: Term) -> bytes:
         return b"(" + canonical_bytes(term.left) + b" " + canonical_bytes(term.right) + b")"
     raise TypeError(f"Unknown term type: {type(term)}")
 
+TERM_ADDRESS_PROFILE = "glyph.term.v2"
+_LEGACY_SAFE_NAME = re.compile(r"^(?:[0-9A-Za-z_\-]+|\$)$")
+
+
+def _encode_term_v2(term: Term) -> bytes:
+    """Prefix-free encoding: distinct terms have distinct bytes, always.
+
+    Each node carries a tag and each leaf carries the byte length of its
+    payload, so no node's encoding is a prefix of another's and the split
+    between siblings cannot move.
+    """
+    if isinstance(term, Comb):
+        payload = term.symbol.encode("utf-8")
+        return b"C" + str(len(payload)).encode("ascii") + b":" + payload
+    if isinstance(term, Var):
+        payload = term.name.encode("utf-8")
+        return b"V" + str(len(payload)).encode("ascii") + b":" + payload
+    if isinstance(term, App):
+        return b"A" + _encode_term_v2(term.left) + _encode_term_v2(term.right)
+    raise TypeError(f"not a term: {type(term).__name__}")
+
+
+def term_address(term: Term) -> str:
+    """The content address of a term, qualified by its profile.
+
+    Returns `glyph.term.v2:<64 hex>`. The profile travels with the value so a
+    consumer can tell what it is holding, and so a digest under one profile can
+    never be mistaken for a digest under another.
+    """
+    digest = hashlib.sha256(
+        TERM_ADDRESS_PROFILE.encode("ascii") + b"\x00" + _encode_term_v2(term)
+    ).hexdigest()
+    return f"{TERM_ADDRESS_PROFILE}:{digest}"
+
+
+def is_term_address(value: Any) -> bool:
+    """True for a well-formed address under the CURRENT profile, and nothing else.
+
+    A bare 64-hex string is not one: that is what a legacy `term_hash` looks
+    like, and treating it as an address is the silent reinterpretation this
+    profile exists to prevent.
+    """
+    if not isinstance(value, str) or not value.startswith(TERM_ADDRESS_PROFILE + ":"):
+        return False
+    digest = value[len(TERM_ADDRESS_PROFILE) + 1:]
+    return len(digest) == 64 and all(c in "0123456789abcdef" for c in digest)
+
+
+def in_legacy_address_domain(term: Term) -> bool:
+    """True if `term_hash` is unambiguous for this term.
+
+    `canonical_bytes` writes a variable as `$name` and an application as
+    `(left right)`. That determines the term only while no name contains a
+    space or a `$`, since otherwise the split between siblings can move:
+
+        App(Var('a'), Var('b $c'))   and   App(Var('a $b'), Var('c'))
+
+    both render as `($a $b $c)`. `parse` cannot produce such names — it tokenizes
+    `$` on its own — so terms that came from text are inside the domain, and a
+    consumer that keeps using the legacy digest can CHECK that rather than
+    assume it.
+    """
+    if isinstance(term, Comb):
+        return bool(_LEGACY_SAFE_NAME.match(term.symbol)) or term.symbol in (
+            GLYPH_K, GLYPH_I, GLYPH_S, GLYPH_Y)
+    if isinstance(term, Var):
+        return bool(_LEGACY_SAFE_NAME.match(term.name))
+    if isinstance(term, App):
+        return in_legacy_address_domain(term.left) and in_legacy_address_domain(term.right)
+    return False
+
+
 def term_hash(term: Term) -> str:
-    """SHA-256 digest of canonical normal form."""
+    """LEGACY content digest. Unambiguous only inside `in_legacy_address_domain`.
+
+    Kept because it is what historical artifacts were addressed with, and
+    rewriting those would destroy the evidence they are. It is not the address
+    for new work: use `term_address`.
+    """
     return hashlib.sha256(canonical_bytes(term)).hexdigest()
 
 from enum import Enum
@@ -335,6 +413,14 @@ def resume(result: EvalResult, additional_atp: int, raise_on_limit: bool = False
 
 @dataclass(frozen=True)
 class SporeReceipt:
+    """A memoized reduction, addressed under a named profile.
+
+    `input_hash` and `output_hash` keep their names and now carry PROFILE-
+    QUALIFIED addresses (`glyph.term.v2:<hex>`). A receipt written before this
+    change carries bare digests under the ambiguous legacy encoding; `audit`
+    refuses those by profile rather than reinterpreting them, so a legacy
+    receipt is not silently accepted as a v2 one.
+    """
     input_hash: str
     output_hash: str
     atp_spent: int
@@ -358,7 +444,7 @@ class SporeStore:
         Forward evaluation with O(1) cache lookup.
         Returns (EvalResult, was_cached: bool).
         """
-        h_in = term_hash(term)
+        h_in = term_address(term)
         if h_in in self._cache:
             cached = self._cache[h_in]
             if cached.status == EvalStatus.SETTLED:
@@ -369,7 +455,7 @@ class SporeStore:
             self._cache[h_in] = res
             self._receipts[h_in] = SporeReceipt(
                 input_hash=h_in,
-                output_hash=res.hash,
+                output_hash=term_address(res.term),
                 atp_spent=res.atp_spent,
                 status=res.status
             )
@@ -379,14 +465,29 @@ class SporeStore:
         """
         Reverse audit: Recompute term from scratch and check whether the receipt was honest.
         Returns (is_valid: bool, reason: str).
+
+        Addresses are compared under the current profile. A receipt whose
+        addresses are not of this profile is REFUSED, not reinterpreted: a bare
+        digest was written under an encoding that cannot tell two terms apart,
+        and accepting it here would carry that ambiguity forward. Such receipts
+        have to be re-derived from their term.
         """
-        actual_in_hash = term_hash(term)
+        for field, value in (("input", claimed_receipt.input_hash),
+                             ("output", claimed_receipt.output_hash)):
+            if not is_term_address(value):
+                return False, (
+                    f"Unknown address profile for {field}: {value[:24]!r} is not a "
+                    f"{TERM_ADDRESS_PROFILE} address. A receipt written under the "
+                    "legacy digest cannot be verified here; re-derive it.")
+
+        actual_in_hash = term_address(term)
         if actual_in_hash != claimed_receipt.input_hash:
-            return False, f"Input hash mismatch: expected {claimed_receipt.input_hash}, got {actual_in_hash}"
+            return False, f"Input address mismatch: expected {claimed_receipt.input_hash}, got {actual_in_hash}"
 
         recomputed = evaluate(term, max_atp=claimed_receipt.atp_spent + 10)
-        if recomputed.hash != claimed_receipt.output_hash:
-            return False, f"Output hash mismatch: claimed {claimed_receipt.output_hash}, got {recomputed.hash}"
+        if term_address(recomputed.term) != claimed_receipt.output_hash:
+            return False, (f"Output address mismatch: claimed {claimed_receipt.output_hash}, "
+                           f"got {term_address(recomputed.term)}")
         if recomputed.atp_spent != claimed_receipt.atp_spent:
             return False, f"ATP mismatch: claimed {claimed_receipt.atp_spent}, recomputed {recomputed.atp_spent}"
         if recomputed.status != claimed_receipt.status:

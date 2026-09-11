@@ -22,6 +22,7 @@ SUITES = [
     ("Optional trusted-local CLI cache", "test_verify_cached"),
     ("CLI data verification and bounded CEGIS parser", "test_cli_verify"),
     ("Glyph Combinatory Logic", "test_glyph"),
+    ("Term Addressing: Profile Migration", "test_term_address"),
     ("Church Numerals, REPL & Polyglot Runner", "test_church_and_repl"),
     ("Literate Polyglot Monad", "test_monad"),
     ("Living Polyglot Ledger", "test_living_ledger"),
