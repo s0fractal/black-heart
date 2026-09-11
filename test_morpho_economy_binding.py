@@ -62,18 +62,38 @@ experiment id must be the producer's own derivation over the five transition
 fields, so they cannot be re-mixed independently. No new receipt field is
 added: the binding re-reads fields that were already signed.
 
+Review R2 (second amendment). The R1 note above claimed that adding no new
+receipt field meant "no migration". That was false, and this file said so where
+it should have measured it: the binding needs each historical genome
+reconstructable exactly, hence canonical spelling back to genesis, which
+documents from the previous generator do not have. Measured against real
+documents built by the pre-S6a module, at generations 0, 1 and 5:
+
+  generation 0 previous_audit True current_audit False bytes_unchanged True
+  generation 1 previous_audit True current_audit False bytes_unchanged True
+  generation 5 previous_audit True current_audit False bytes_unchanged True
+
+The accepted domain of existing signed state changed. That break is now
+DECLARED by a `state_profile` rather than asserted away: state without a
+supported profile is refused by name, bytes and signatures untouched, and
+`evolve` raises that reason before reading or writing anything. No in-place
+migration exists and none is offered. See docs/MORPHO-STATE-PROFILE.md.
+
 Sections:
   A  honest positive: a real improvement is credited; nothing found credits zero
   B  the reproduced defect, as permanent negative controls
   C  replay: named, not silently prevented
   D  review R1: a pair is bound to the transition it claims to describe
+  E  review R2: the declared disposition for history from before this profile
 """
 from __future__ import annotations
 
 import copy
+import importlib.util
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -90,6 +110,7 @@ for _name, _mod in list(sys.modules.items()):
         del sys.modules[_name]
 
 import morpho_autopoiesis as M
+from keystore import PRIVATE_KEY_SUFFIX
 from metamorphosis import FrozenEvaluator, MutationVerdict
 from glyph import parse
 
@@ -97,9 +118,39 @@ if os.path.dirname(os.path.abspath(M.__file__)) != _HERE:
     raise ImportError(f"morpho_autopoiesis resolved to {M.__file__}, outside {_HERE}")
 
 
-# The private-key sidecar suffix. Named once so the pending ".key" -> U+1F511
-# rename (PR #26) lands on a single line when this branch rebases onto it.
-KEY_SUFFIX = ".key"
+# The private-key sidecar suffix, from the keystore that owns it (PR #26).
+KEY_SUFFIX = PRIVATE_KEY_SUFFIX
+
+_PREVIOUS_GENERATOR_REF = "413f1ce"  # pre-S6a main: the previous generator
+
+
+def _previous_generator_available() -> bool:
+    """True when this checkout has enough history to build the OLD module.
+
+    CI checks out shallow (`actions/checkout@v4`, no `fetch-depth`), so the
+    generated-before control below skips there instead of failing. It is
+    decisive locally, where the history is present.
+    """
+    try:
+        return subprocess.run(
+            ["git", "cat-file", "-e", f"{_PREVIOUS_GENERATOR_REF}:morpho_autopoiesis.py"],
+            cwd=_HERE, capture_output=True).returncode == 0
+    except Exception:
+        return False
+
+
+def load_previous_generator(dest_dir):
+    """Import the pre-S6a morpho module, exactly as committed, as `previous_morpho`."""
+    src = subprocess.check_output(
+        ["git", "show", f"{_PREVIOUS_GENERATOR_REF}:morpho_autopoiesis.py"], cwd=_HERE)
+    path = os.path.join(dest_dir, "previous_morpho.py")
+    with open(path, "wb") as f:
+        f.write(src)
+    spec = importlib.util.spec_from_file_location("previous_morpho", path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod
 
 
 def read_manifest(pdf_path: str) -> dict:
@@ -535,6 +586,106 @@ class TransitionBindingTest(_Organism):
         for c in read_manifest(self.pdf)["chromosomes"]:
             self.assertEqual(c["expression"], str(parse(c["expression"])),
                              f"{c['gene_id']} is not stored canonically")
+
+
+class LegacyHistoryTest(_Organism):
+    """Section E, review R2: state written before this verification contract.
+
+    The break is declared, not repaired. Every test here also asserts the
+    document's bytes survive the refusal untouched."""
+
+    def snapshot(self):
+        with open(self.pdf, "rb") as f:
+            doc = f.read()
+        with open(self.key_path, "rb") as f:
+            key = f.read()
+        return doc, key
+
+    def strip_profile(self):
+        manifest = read_manifest(self.pdf)
+        manifest.pop("state_profile", None)
+        write_manifest(self.pdf, manifest)
+
+    def test_E1_state_without_a_supported_profile_is_refused_by_name(self):
+        self.evolve()
+        self.assertTrue(M.audit_morpho_autopoietic_organism(self.pdf))
+        self.assertIsNone(M.unsupported_history_reason(self.pdf))
+
+        self.strip_profile()
+        reason = M.unsupported_history_reason(self.pdf)
+        self.assertIsNotNone(reason, "unsupported history must be NAMED, not merely rejected")
+        self.assertIn("MORPHO-STATE-PROFILE", reason, "the refusal must point at the contract")
+        self.assertFalse(M.audit_morpho_autopoietic_organism(self.pdf))
+
+    def test_E2_evolve_refuses_unsupported_history_without_touching_the_document(self):
+        """And names it as unsupported history, not as tampering -- the owner of
+        an honest old document must not be told their document is forged."""
+        self.evolve()
+        self.strip_profile()
+        before = self.snapshot()
+
+        with self.assertRaises(ValueError) as caught:
+            self.evolve()
+        self.assertIn("state profile", str(caught.exception))
+        self.assertNotIn("tampered", str(caught.exception))
+        self.assertEqual(self.snapshot(), before, "a refused legacy document was modified")
+
+    def test_E3_the_profile_marker_is_routing_not_trust(self):
+        """Declaring the current profile cannot rescue state the replay refuses.
+        Here the genesis spelling is reverted to the legacy ASCII form while the
+        current marker stays in place: routing says "in domain", and the audit
+        still refuses. The marker can never grant acceptance."""
+        manifest = read_manifest(self.pdf)
+        self.assertEqual(manifest.get("state_profile"), M.MORPHO_STATE_PROFILE)
+        manifest["chromosomes"][0]["expression"] = "S (K alpha) I"
+        write_manifest(self.pdf, manifest)
+
+        self.assertIsNone(M.unsupported_history_reason(self.pdf),
+                          "the marker still declares the current profile")
+        self.assertFalse(M.audit_morpho_autopoietic_organism(self.pdf))
+
+    def test_E4_a_new_document_declares_the_profile_and_keeps_passing(self):
+        """The generated-after half of the control."""
+        self.assertEqual(read_manifest(self.pdf).get("state_profile"), M.MORPHO_STATE_PROFILE)
+        for _ in range(3):
+            self.evolve()
+        self.assertIsNone(M.unsupported_history_reason(self.pdf))
+        self.assertTrue(M.audit_morpho_autopoietic_organism(self.pdf))
+        self.assertEqual(read_manifest(self.pdf).get("state_profile"), M.MORPHO_STATE_PROFILE)
+
+    @unittest.skipUnless(_previous_generator_available(),
+                         "shallow checkout: the pre-S6a module is not reachable here")
+    def test_E5_real_documents_from_the_previous_generator_get_the_declared_disposition(self):
+        """The generated-BEFORE half, decisive: documents built by the actual
+        pre-S6a module, at the same generations the reviewer measured.
+
+        Skips under a shallow CI checkout, where the old module cannot be read;
+        it is decisive locally, where the history is present."""
+        self.addCleanup(lambda: sys.modules.pop("previous_morpho", None))
+        with tempfile.TemporaryDirectory() as d:
+            old = load_previous_generator(d)
+            for n in (0, 1, 5):
+                with self.subTest(generation=n):
+                    p = os.path.join(d, f"old-{n}.pdf")
+                    old.init_morpho_autopoietic_organism(p)
+                    for _ in range(n):
+                        old.evolve_morpho_autopoietic_organism(p)
+                    with open(p, "rb") as f:
+                        before = f.read()
+
+                    # Honest under its own pinned semantics...
+                    self.assertTrue(old.audit_morpho_autopoietic_organism(p),
+                                    "the fixture must be an HONEST old document")
+                    # ...and out of this profile's domain, by name.
+                    self.assertIsNotNone(M.unsupported_history_reason(p))
+                    self.assertFalse(M.audit_morpho_autopoietic_organism(p))
+                    with self.assertRaises(ValueError) as caught:
+                        M.evolve_morpho_autopoietic_organism(p)
+                    self.assertIn("state profile", str(caught.exception))
+
+                    with open(p, "rb") as f:
+                        self.assertEqual(f.read(), before,
+                                         "the refused old document's bytes were modified")
 
 
 if __name__ == "__main__":

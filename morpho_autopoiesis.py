@@ -195,6 +195,65 @@ def _transition_is_local(pre_t, post_t, site) -> bool:
         return False
     return not any(localizes(site + (d,)) for d in ("L", "R"))
 
+
+# The state profile is a VERIFICATION CONTRACT, not merely the shape of the
+# manifest's JSON. `transition-bound.v1` is the first profile whose auditor
+# binds every measured pair to the genome transition it claims to describe
+# (review R1), and that binding needs each historical genome reconstructable
+# exactly -- which in turn needs canonical expression spelling all the way back
+# to genesis. Documents written before this profile stored a hand-written ASCII
+# genesis, and no later epoch can retroactively canonicalize that already-signed
+# state. They are therefore OUTSIDE this auditor's accepted domain: refused by
+# name, with their bytes and signatures left untouched. See
+# docs/MORPHO-STATE-PROFILE.md.
+MORPHO_STATE_PROFILE = "morpho-autopoiesis.transition-bound.v1"
+SUPPORTED_STATE_PROFILES = (MORPHO_STATE_PROFILE,)
+
+_UNSUPPORTED_HISTORY_GUIDANCE = (
+    "This document predates the {profile!r} state profile (it declares {found!r}). "
+    "Its history is outside this auditor's accepted domain and is REFUSED, not "
+    "repaired: its bytes and signatures are left exactly as they are. There is no "
+    "in-place migration -- normalizing and re-signing the chain would destroy the "
+    "attested history it exists to carry. To keep using this document, verify and "
+    "continue it with the pinned pre-S6a code; to use the current profile, start a "
+    "new chain, which explicitly does NOT preserve the old attested history. "
+    "See docs/MORPHO-STATE-PROFILE.md."
+)
+
+
+def _unsupported_profile_reason(manifest: Dict[str, Any]) -> Optional[str]:
+    """The named refusal for state this auditor does not accept, or None.
+
+    This is a ROUTING signal, never a trust signal. Declaring the current
+    profile on an old document does not make it pass -- the transition replay
+    still refuses it -- and removing it from a current document only earns this
+    refusal. It can never grant acceptance, only choose which named refusal you
+    get instead of an opaque hash mismatch.
+    """
+    found = manifest.get("state_profile", "")
+    if found in SUPPORTED_STATE_PROFILES:
+        return None
+    return _UNSUPPORTED_HISTORY_GUIDANCE.format(profile=MORPHO_STATE_PROFILE, found=found)
+
+
+def unsupported_history_reason(pdf_path: str) -> Optional[str]:
+    """Why this document's history is not accepted, or None if it is in domain.
+
+    Returns None for anything unreadable too: a malformed document is the
+    ordinary audit's business to refuse, not this contract's.
+    """
+    try:
+        with open(pdf_path, "rb") as f:
+            data = f.read()
+        prefix = MORPHO_AUTOPOIESIS_MANIFEST_PREFIX.encode("utf-8")
+        idx = data.rfind(prefix)
+        if idx == -1:
+            return None
+        manifest = json.loads(data[idx + len(prefix):].split(b"\n", 1)[0].decode("utf-8"))
+    except Exception:
+        return None
+    return _unsupported_profile_reason(manifest)
+
 # ============================================================================
 # 1. MORPHOGENETIC AUTOPOIESIS RECEIPT
 # ============================================================================
@@ -391,6 +450,9 @@ class MorphoAutopoieticOrganism:
     receipt_chain: List[MorphoAutopoiesisReceipt] = field(default_factory=list)
     experiment_log: ExperimentLog = field(default_factory=ExperimentLog)
     atp_reserve: int = 1000
+    # Declares which verification contract this state was written under. Legacy
+    # documents carry "" (the key did not exist) and are refused by name.
+    state_profile: str = MORPHO_STATE_PROFILE
 
     def compute_genome_hash(self) -> str:
         return _genome_hash_of(
@@ -460,6 +522,7 @@ class MorphoAutopoieticOrganism:
             "kill_rate_k": self.kill_rate_k,
             "weisfeiler_lehman_digest": self.weisfeiler_lehman_digest,
             "atp_reserve": self.atp_reserve,
+            "state_profile": self.state_profile,
             "receipt_chain": [r.to_dict() for r in self.receipt_chain],
             "experiment_log": self.experiment_log.to_list(),
         }
@@ -508,6 +571,10 @@ class MorphoAutopoieticOrganism:
             receipt_chain=receipts,
             experiment_log=elog,
             atp_reserve=int(d.get("atp_reserve", 1000)),
+            # Absent on documents written before the profile existed. Defaults
+            # to "" rather than to the current profile, so legacy state is never
+            # silently promoted into this auditor's accepted domain.
+            state_profile=str(d.get("state_profile", "")),
         )
 
 
@@ -950,6 +1017,12 @@ def evolve_morpho_autopoietic_organism(
     Lafont proof-net compilation & WL reduction, and strictly appends an
     ISO 32000 §7.5.6 revision page directly to the file.
     """
+    # Refuse unsupported history by name, so an owner of a legacy document is
+    # told what happened and what their options are, rather than being told
+    # their honest document is "tampered". Nothing is written either way.
+    _legacy = unsupported_history_reason(pdf_path)
+    if _legacy is not None:
+        raise ValueError(f"Cannot evolve {pdf_path}: {_legacy}")
     if not audit_morpho_autopoietic_organism(pdf_path):
         raise ValueError(f"Cannot evolve tampered or invalid organism: {pdf_path}")
 
@@ -1334,6 +1407,11 @@ def audit_morpho_autopoietic_organism(pdf_path: str) -> bool:
     except Exception:
         return False
 
+    # State written under an older verification contract is refused by name,
+    # before any of the checks below can fail it with an opaque hash mismatch.
+    if _unsupported_profile_reason(manifest) is not None:
+        return False
+
     if not org.receipt_chain:
         return False
 
@@ -1415,7 +1493,12 @@ def audit_morpho_autopoietic_organism(pdf_path: str) -> bool:
     # genome it implies no longer hashes to the parent's committed hash.
     #
     # This needs no new receipt field: it re-reads fields that were already
-    # signed, so it imposes no migration on existing receipts.
+    # signed. It does NOT follow that there is no migration (review R2): the
+    # binding requires each historical genome to be reconstructable exactly,
+    # which requires canonical spelling back to genesis, which documents written
+    # by the previous generator do not have. Their accepted domain changed. That
+    # break is declared by the state profile above and in
+    # docs/MORPHO-STATE-PROFILE.md -- it is not absent, it is named.
     try:
         for c in org.chromosomes:
             if c.expression != _canonical_expression(c.expression):

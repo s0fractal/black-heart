@@ -1700,6 +1700,7 @@ def cmd_morpho_autopoiesis(args):
         init_morpho_autopoietic_organism,
         evolve_morpho_autopoietic_organism,
         audit_morpho_autopoietic_organism,
+        unsupported_history_reason,
         table_to_agora,
         MORPHO_AUTOPOIESIS_MANIFEST_PREFIX,
     )
@@ -1744,12 +1745,18 @@ def cmd_morpho_autopoiesis(args):
         if not os.path.exists(args.file):
             print(f"[!] Target file '{args.file}' not found.")
             sys.exit(1)
+        legacy = unsupported_history_reason(args.file)
         ok = audit_morpho_autopoietic_organism(args.file)
         print("\033[1;36m=================================================================\033[0m")
         print("  %🖤 MORPHOGENETIC AUTOPOIESIS TOPOLOGICAL & CRYPTO AUDITOR")
         print("\033[1;36m=================================================================\033[0m")
         if ok:
             print(f"  \033[1;32m[✓ SOUND] All generational receipts, Turing kinetics, and proof-nets verified fail-closed.\033[0m\n")
+        elif legacy:
+            # Honest state written under an older verification contract is not
+            # "tampered", and saying so would be a false accusation.
+            print(f"  \033[1;33m[! UNSUPPORTED HISTORY] {legacy}\033[0m\n")
+            sys.exit(1)
         else:
             print(f"  \033[1;31m[✗ UNSOUND] Document failed audit (tampered genome, invalid signature, or kinetic divergence).\033[0m\n")
             sys.exit(1)
