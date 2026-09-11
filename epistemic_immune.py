@@ -72,7 +72,7 @@ from warrant_kernel import (
 )
 import controlled_forgetting
 from controlled_forgetting import (
-    RetirementMode, AdmissionStatus, NegativeSpaceMeter,
+    RetirementMode, AdmissionStatus, NegativeSpaceMeter, RuleIdentity,
     RetirementRecord, ReAdoptionRecord, EpistemicTombstoneRegistry,
     ResurrectionGuard, EpistemicResurrectionError, append_retirement_tombstone_to_pdf
 )
@@ -158,6 +158,37 @@ class EpistemicOrganism:
 # 2. RESURRECTION DEFENSE (PRE-FLIGHT IMMUNE GATE)
 # ============================================================================
 
+class RefutationScope(str, Enum):
+    """
+    How far a registered refutation reaches for one candidate/reference pair.
+
+    The three are kept apart because collapsing them is the error this package
+    exists to correct: an inequality measured against one reference is not a
+    prohibition everywhere, and a name that matches is not a measurement.
+    """
+    REFUTED_FOR_REFERENCE = "REFUTED_FOR_REFERENCE"
+    REFUTED_FOR_ANOTHER_REFERENCE = "REFUTED_FOR_ANOTHER_REFERENCE"
+    UNTRUSTED_EVIDENCE = "UNTRUSTED_EVIDENCE"
+    NO_MEASURED_REFUTATION = "NO_MEASURED_REFUTATION"
+
+
+@dataclass(frozen=True)
+class RefutationScopeReport:
+    scope: RefutationScope
+    detail: str
+    record_id: Optional[str] = None
+    target_id: Optional[str] = None
+    measured_reference: Optional[str] = None
+    untrusted_slots: Tuple[str, ...] = ()
+
+    def prohibits(self) -> bool:
+        """True only for an authenticated refutation measured against the
+        reference asked about. UNTRUSTED_EVIDENCE is not a prohibition, and it is
+        not permission either: it says the registry holds a record this query
+        could not authenticate, so it cannot rule the pair in or out."""
+        return self.scope == RefutationScope.REFUTED_FOR_REFERENCE
+
+
 class ResurrectionDefense:
     """
     Enforces Invariant I3 at the mutation proposal site.
@@ -199,6 +230,117 @@ class ResurrectionDefense:
                 return False, f"Resurrection Defense Refusal: pattern '{cid}' was refuted by counterexample."
 
         return True, ""
+
+    @staticmethod
+    def refuted_for(
+        registry: EpistemicTombstoneRegistry,
+        candidate_expr: str,
+        reference_expr: str
+    ) -> RefutationScopeReport:
+        """
+        Does this registry hold a measured refutation of THIS candidate offered
+        in place of THIS reference?
+
+        `preflight_check` above answers a different and coarser question: is
+        anything filed under this name. That question is answered by string
+        identity, so it blocks `'K I (S K)'` while the term that was actually
+        refuted walks straight through, and it cannot tell two rewrites that
+        share a label apart. It is left exactly as it is, because tightening it
+        silently would change what every existing caller is refused for.
+
+        This one compares term addresses, and it requires BOTH ends to match. A
+        counterexample shows that one candidate and one reference are not
+        interchangeable. Offered against some other reference, the same
+        candidate has not been measured at all, and that case is reported as
+        its own scope rather than as permission or as prohibition.
+        """
+        # A record is evidence only after it has been checked here, against the
+        # slot it actually occupies, as it is right now. `is_admitted` cannot
+        # stand in for that: it returns False both for a genuine retirement and
+        # for a record it refuses to trust -- a signature that no longer covers
+        # the body, a record filed under someone else's slot, numbers out of
+        # domain, an identity in a profile nobody can read. That is correct for
+        # admission, which fails closed. Read as "this record is a measured
+        # refutation", it turns every corrupted entry into proof.
+        same_pair: Optional[Tuple[str, RetirementRecord]] = None
+        other_reference: Optional[RetirementRecord] = None
+        untrusted: List[str] = []
+        try:
+            candidate_address = glyph.term_address(glyph.parse(candidate_expr))
+        except Exception:
+            candidate_address = None
+
+        for tid, tomb in registry.tombstones.items():
+            # Authenticate the record for the slot it occupies BEFORE asking
+            # whether it carries an identity. Asked the other way round, deleting
+            # the identity field without re-signing made a tampered record look
+            # exactly like honest label-only history, and the loss of evidence
+            # disappeared with it.
+            try:
+                authentic = tomb.is_admissible_for(tid)
+            except Exception:
+                authentic = False
+            if not authentic:
+                untrusted.append(tid)
+                continue
+            identity = tomb.rule_identity
+            if identity is None:
+                continue                          # authentic label-only history: not a measurement
+            if not (isinstance(identity, RuleIdentity) and identity.has_valid_domain()):
+                untrusted.append(tid)
+                continue
+            if tomb.mode != RetirementMode.REFUTED:
+                continue
+            readoption = registry.readoptions.get(tid)
+            if readoption is not None and readoption.is_admissible_for(tid, tomb):
+                continue                          # a valid readoption suppresses it
+            if identity.addresses(candidate_expr, reference_expr):
+                if same_pair is None:
+                    same_pair = (tid, tomb)
+                continue
+            if (candidate_address is not None
+                    and identity.candidate_address == candidate_address
+                    and other_reference is None):
+                other_reference = tomb
+
+        # The whole registry is scanned before deciding, so `untrusted_slots` is
+        # complete even when an authentic refutation is found.
+        if same_pair is not None:
+            tid, tomb = same_pair
+            return RefutationScopeReport(
+                scope=RefutationScope.REFUTED_FOR_REFERENCE,
+                detail=(f"'{candidate_expr}' was refuted against this very reference "
+                        f"under label '{tomb.rule_identity.label}'."),
+                record_id=tomb.record_id, target_id=tid,
+                measured_reference=tomb.rule_identity.reference_address,
+                untrusted_slots=tuple(untrusted))
+
+        # Nothing authentic addresses this pair. A record that could not be
+        # authenticated might have, so the answer is "cannot tell", reported as
+        # its own scope, ahead of a refutation against another reference.
+        if untrusted:
+            return RefutationScopeReport(
+                scope=RefutationScope.UNTRUSTED_EVIDENCE,
+                detail=(f"{len(untrusted)} registered record(s) carry an identity that "
+                        "could not be authenticated for the slot they occupy, or is "
+                        "outside the supported profile. They are neither refutation "
+                        "nor permission for this pair."),
+                untrusted_slots=tuple(untrusted))
+
+        if other_reference is not None:
+            ident = other_reference.rule_identity
+            return RefutationScopeReport(
+                scope=RefutationScope.REFUTED_FOR_ANOTHER_REFERENCE,
+                detail=(f"'{candidate_expr}' was refuted against a different reference "
+                        f"({ident.reference_address}) under label '{ident.label}'. That "
+                        "says nothing about the reference asked about here."),
+                record_id=other_reference.record_id,
+                target_id=other_reference.target_id,
+                measured_reference=ident.reference_address)
+
+        return RefutationScopeReport(
+            scope=RefutationScope.NO_MEASURED_REFUTATION,
+            detail="No registered tombstone addresses this candidate and reference.")
 
 
 # ============================================================================
@@ -294,6 +436,7 @@ class MetabolismStatus(str, Enum):
     METABOLIZED = "METABOLIZED"   # the claim passed an independent audit; effects applied
     REFUSED = "REFUSED"           # the audit contradicted the claim; nothing applied
     UNVERIFIED = "UNVERIFIED"     # the audit reached no verdict; nothing applied
+    SUBJECT_COLLISION = "SUBJECT_COLLISION"   # the label already names another rewrite
 
 
 @dataclass
@@ -311,6 +454,8 @@ class MetabolismOutcome:
     verdict: Verdict
     retirement: Optional[RetirementRecord] = None
     gas_bounty: int = 0
+    rule_identity: Optional[RuleIdentity] = None
+    collision: Optional[RetirementRecord] = None
 
     def granted(self) -> bool:
         return self.status == MetabolismStatus.METABOLIZED
@@ -398,7 +543,21 @@ class CounterexampleMetabolism:
                         else MetabolismStatus.UNVERIFIED),
                 claim=claim, verdict=verdict, retirement=None, gas_bounty=0)
 
-        # 4. Effects. Everything below this line rests on the verdict above.
+        # 4. The subject slot. Asked before the first effect, because a refusal
+        #    raised half-way through would leave the claim recorded with no
+        #    tombstone and no bounty -- a partial state this function promises
+        #    never to produce.
+        identity = RuleIdentity.from_terms(
+            label=rule_name, reference_expr=parent_term,
+            candidate_expr=candidate_term, input_expr=input_fixture)
+        clash = organism.tombstone_registry.conflicting_tombstone(rule_name, identity)
+        if clash is not None:
+            return MetabolismOutcome(
+                status=MetabolismStatus.SUBJECT_COLLISION, claim=claim, verdict=verdict,
+                retirement=None, gas_bounty=0, rule_identity=identity,
+                collision=clash)
+
+        # 5. Effects. Everything below this line rests on the verdict above.
         organism.claims.append(claim)
 
         coverage = NegativeSpaceMeter.calculate_coverage(rule_name)
@@ -410,6 +569,10 @@ class CounterexampleMetabolism:
             f"candidate '{candidate_term}' (parent -> '{expected_norm}', candidate -> "
             f"'{actual_norm}', {atp_cost} ATP declared). Audited as claim {claim.claim_id}."
         )
+        # `target_digest` is the digest of the LABEL, and stays that way so
+        # existing records keep verifying. `identity`, built above, is what
+        # addresses the rewrite: which candidate diverged from which reference,
+        # on which input, by term address rather than by spelling.
         rule_digest = hashlib.sha256(rule_name.encode("utf-8")).hexdigest()
 
         ret_record = organism.tombstone_registry.retire(
@@ -419,7 +582,8 @@ class CounterexampleMetabolism:
             loss_declaration=loss_desc,
             author_sk_hex=secret_key_hex,
             author_pk_hex=public_key_hex,
-            rule_or_pattern=rule_name
+            rule_or_pattern=rule_name,
+            rule_identity=identity
         )
 
         # 5. Credit metabolic fuel.
@@ -428,7 +592,7 @@ class CounterexampleMetabolism:
 
         return MetabolismOutcome(
             status=MetabolismStatus.METABOLIZED, claim=claim, verdict=verdict,
-            retirement=ret_record, gas_bounty=gas_bounty)
+            retirement=ret_record, gas_bounty=gas_bounty, rule_identity=identity)
 
 
 # ============================================================================

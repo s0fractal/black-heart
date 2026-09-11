@@ -184,6 +184,149 @@ class NegativeSpaceMeter:
 # 4. RETIREMENT & RE-ADOPTION RECORDS (INVARIANTS I1, I4, I6)
 # ============================================================================
 
+RULE_IDENTITY_PROFILE = "forgetting.rule-identity.v1"
+
+
+@dataclass(frozen=True)
+class RuleIdentity:
+    """
+    What a refutation actually retired.
+
+    A display label is a name. "K I (S K)" and "simplify" are names, two
+    different rewrites can carry the same one, and a name cannot be run. This
+    addresses the rewrite itself: the reference term the candidate was measured
+    against, the candidate term that diverged from it, and the input that
+    separated them -- each by the profile-qualified term address from
+    `glyph.term_address`, so spacing and parenthesisation do not make two names
+    for one term.
+
+    What an identity claims: this candidate is not interchangeable with THIS
+    reference, on evidence measured with THIS input. It does not claim the
+    candidate is invalid in general, and it does not claim the label denotes the
+    candidate. The label rides along as provenance and is never compared as if
+    it were code.
+    """
+    label: str
+    reference_address: str
+    candidate_address: str
+    input_address: str
+    profile: str = RULE_IDENTITY_PROFILE
+
+    @classmethod
+    def from_terms(
+        cls,
+        label: str,
+        reference_expr: str,
+        candidate_expr: str,
+        input_expr: str
+    ) -> RuleIdentity:
+        """Build an identity from source expressions, each parsed on its own.
+
+        Raises if any of the three is not a term in its own right. An endpoint
+        that cannot be parsed alone has no address, and an identity built from
+        one would address nothing.
+        """
+        return cls(
+            label=label,
+            reference_address=glyph.term_address(glyph.parse(reference_expr)),
+            candidate_address=glyph.term_address(glyph.parse(candidate_expr)),
+            input_address=glyph.term_address(glyph.parse(input_expr)),
+        )
+
+    def _encoded(self) -> bytes:
+        """Prefix-free serialization: every field carries its own byte length.
+
+        Without the lengths, a label ending in a colon and an address beginning
+        with one would produce the same bytes as a different pair.
+        """
+        out = bytearray(b"rule-identity:")
+        for field_name in ("profile", "label", "reference_address",
+                           "candidate_address", "input_address"):
+            raw = getattr(self, field_name).encode("utf-8")
+            out += f"{field_name}:{len(raw)}:".encode("ascii") + raw + b";"
+        return bytes(out)
+
+    def digest(self) -> str:
+        return hashlib.sha256(self._encoded()).hexdigest()
+
+    def validate_domain(self) -> None:
+        """Raise unless this identity is one this module knows how to read.
+
+        Checked where an identity is USED, not only where it is deserialized.
+        A live object can be built with `dataclasses.replace` or mutated, and a
+        signature says only that its author meant these bytes. It does not say
+        the bytes are in a profile anyone can interpret: a correctly signed
+        `forgetting.rule-identity.v999` read under v1 rules would be a guess
+        presented as a measurement.
+
+        Construction stays permissive on purpose, so the encoding can still be
+        tested on arbitrary strings; nothing here trusts an identity it has not
+        just validated.
+        """
+        for name in ("profile", "label", "reference_address",
+                     "candidate_address", "input_address"):
+            if type(getattr(self, name)) is not str:
+                raise TypeError(f"rule identity field {name!r} must be a str, "
+                                f"got {type(getattr(self, name)).__name__}")
+        if self.profile != RULE_IDENTITY_PROFILE:
+            raise ValueError(f"unsupported rule identity profile {self.profile!r}; "
+                             f"this module reads only {RULE_IDENTITY_PROFILE!r}")
+        for name in ("reference_address", "candidate_address", "input_address"):
+            if not glyph.is_term_address(getattr(self, name)):
+                raise ValueError(f"rule identity {name} {getattr(self, name)!r} is not "
+                                 f"a {glyph.TERM_ADDRESS_PROFILE} term address")
+
+    def has_valid_domain(self) -> bool:
+        try:
+            self.validate_domain()
+        except (TypeError, ValueError):
+            return False
+        return True
+
+    def addresses(self, candidate_expr: str, reference_expr: str) -> bool:
+        """True when this identity is about exactly this candidate and reference.
+
+        Both sides are required. A refutation measured against one reference
+        says nothing about the same candidate offered in place of another, and
+        answering otherwise would let an inequality between one pair authorize a
+        prohibition everywhere.
+        """
+        if not self.has_valid_domain():
+            return False
+        try:
+            candidate = glyph.term_address(glyph.parse(candidate_expr))
+            reference = glyph.term_address(glyph.parse(reference_expr))
+        except Exception:
+            return False
+        return (self.candidate_address == candidate
+                and self.reference_address == reference)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "profile": self.profile,
+            "label": self.label,
+            "reference_address": self.reference_address,
+            "candidate_address": self.candidate_address,
+            "input_address": self.input_address,
+        }
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> RuleIdentity:
+        profile = str(d.get("profile", ""))
+        if profile != RULE_IDENTITY_PROFILE:
+            raise ValueError(
+                f"Unknown rule identity profile {profile!r}: refusing to read it as "
+                f"{RULE_IDENTITY_PROFILE!r}. Re-derive the identity from its terms."
+            )
+        return cls(
+            label=str(d["label"]),
+            reference_address=str(d["reference_address"]),
+            candidate_address=str(d["candidate_address"]),
+            input_address=str(d["input_address"]),
+            profile=profile,
+        )
+
+
 @dataclass
 class RetirementRecord:
     """
@@ -201,6 +344,7 @@ class RetirementRecord:
     signature_hex: str
     replacement_id: Optional[str] = None    # Mandatory if SUPERSEDED
     timestamp_utc: str = field(default_factory=lambda: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+    rule_identity: Optional[RuleIdentity] = None   # Which rewrite this retired (I1)
 
     def __post_init__(self):
         # Invariant I4: Loss is first-class (must not be empty or whitespace)
@@ -223,7 +367,7 @@ class RetirementRecord:
             self.record_id = self.compute_record_id()
 
     def body_dict(self) -> Dict[str, Any]:
-        return {
+        body = {
             "target_id": self.target_id,
             "target_digest": self.target_digest,
             "mode": self.mode.value,
@@ -234,6 +378,13 @@ class RetirementRecord:
             "timestamp_utc": self.timestamp_utc,
             "author_pk_hex": self.author_pk_hex
         }
+        # The key is present only when this record carries an identity. A record
+        # retired before identities existed keeps its exact body, so its id and
+        # signature still verify; nothing historical is re-signed to fit a field
+        # that did not exist when it was written.
+        if self.rule_identity is not None:
+            body["rule_identity"] = self.rule_identity.to_dict()
+        return body
 
     def compute_record_id(self) -> str:
         body_bytes = canonical_jcs(self.body_dict())
@@ -250,6 +401,14 @@ class RetirementRecord:
         """
         _require_ratio(self.negative_space_coverage, "negative_space_coverage")
         _require_non_negative_int(self.atp_gas_recovered, "atp_gas_recovered")
+        # A carried identity is part of what this record asserts, so it is part
+        # of its domain. Absent is fine: records written before identities
+        # existed are in domain exactly as they always were.
+        if self.rule_identity is not None:
+            if not isinstance(self.rule_identity, RuleIdentity):
+                raise TypeError("rule_identity must be a RuleIdentity or None, got "
+                                f"{type(self.rule_identity).__name__}")
+            self.rule_identity.validate_domain()
 
     def has_valid_body_domain(self) -> bool:
         try:
@@ -337,7 +496,9 @@ class RetirementRecord:
             author_pk_hex=str(b["author_pk_hex"]),
             signature_hex=str(d.get("signature_hex", "")),
             replacement_id=b.get("replacement_id"),
-            timestamp_utc=str(b.get("timestamp_utc", ""))
+            timestamp_utc=str(b.get("timestamp_utc", "")),
+            rule_identity=(RuleIdentity.from_dict(b["rule_identity"])
+                           if b.get("rule_identity") is not None else None)
         )
         return rec
 
@@ -510,6 +671,27 @@ class EpistemicTombstoneRegistry:
                 historical.append(item)
         return active, historical
 
+    def conflicting_tombstone(
+        self,
+        target_id: str,
+        rule_identity: Optional[RuleIdentity]
+    ) -> Optional[RetirementRecord]:
+        """The tombstone already filed under this name for a DIFFERENT rewrite.
+
+        None when the slot is free, when either side carries no identity, or
+        when both identities are the same rewrite. Callers that must not raise
+        part-way through a sequence of effects ask this first; `retire` asks it
+        too and refuses.
+        """
+        existing = self.tombstones.get(target_id)
+        if existing is None or rule_identity is None or existing.rule_identity is None:
+            return None
+        if not isinstance(existing.rule_identity, RuleIdentity):
+            return existing
+        if existing.rule_identity.digest() == rule_identity.digest():
+            return None
+        return existing
+
     def retire(
         self,
         target_id: str,
@@ -519,9 +701,33 @@ class EpistemicTombstoneRegistry:
         author_sk_hex: str,
         author_pk_hex: str,
         replacement_id: Optional[str] = None,
-        rule_or_pattern: str = ""
+        rule_or_pattern: str = "",
+        rule_identity: Optional[RuleIdentity] = None
     ) -> RetirementRecord:
-        """Creates, signs, and registers a RetirementRecord."""
+        """Creates, signs, and registers a RetirementRecord.
+
+        `target_id` is the slot this record occupies, and it is a name. When the
+        caller supplies a `rule_identity`, the record also says which rewrite it
+        retired, and a second retirement filed under the same name for a
+        DIFFERENT rewrite is refused instead of silently replacing the first.
+        Two distinct refutations that happen to share a label are two subjects,
+        not one; before this, the second overwrote the first and the first
+        tombstone simply disappeared.
+        """
+        if rule_identity is not None:
+            if not isinstance(rule_identity, RuleIdentity):
+                raise TypeError("rule_identity must be a RuleIdentity or None")
+            rule_identity.validate_domain()
+        existing = self.conflicting_tombstone(target_id, rule_identity)
+        if existing is not None:
+            raise ValueError(
+                f"Refusing to retire '{target_id}': that name already holds a tombstone "
+                f"for a different rewrite (registered candidate "
+                f"{existing.rule_identity.candidate_address}, offered "
+                f"{rule_identity.candidate_address}). Two rewrites sharing a label are "
+                "two subjects; file the new one under its own name."
+            )
+
         coverage = NegativeSpaceMeter.calculate_coverage(rule_or_pattern)
         atp_gas = NegativeSpaceMeter.compute_gas_reclamation(coverage)
 
@@ -535,7 +741,8 @@ class EpistemicTombstoneRegistry:
             negative_space_coverage=coverage,
             atp_gas_recovered=atp_gas,
             author_pk_hex=author_pk_hex,
-            signature_hex=""
+            signature_hex="",
+            rule_identity=rule_identity
         )
         record.sign(author_sk_hex)
         if not record.verify_signature():
