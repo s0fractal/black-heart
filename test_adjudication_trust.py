@@ -54,8 +54,15 @@ CLI = os.path.join(_HERE, "cli.py")
 ENV = dict(os.environ, PYTHONPATH=_HERE, PYTHONDONTWRITEBYTECODE="1")
 
 
+def read_bytes(path):
+    """Read a file fully and close it. Used everywhere bytes are compared,
+    so a test never leaks a handle (the module used to emit ResourceWarning)."""
+    with open(path, "rb") as fh:
+        return fh.read()
+
+
 def edit_manifest(path, prefix, change):
-    raw = open(path, "rb").read()
+    raw = read_bytes(path)
     pre = prefix.encode("utf-8")
     start = raw.index(pre) + len(pre)
     end = raw.index(b"\n", start)
@@ -143,7 +150,7 @@ class ControlTest(_Pairs):
         self.assertEqual(set(r.checks), {"integrity", "signatures", "authorization", "outcome"})
         self.assertTrue(all(v.startswith("PASS") for v in r.checks.values()), r.checks)
         self.assertEqual(r.untrusted_reasons, [])
-        digest = hashlib.sha256(open(ap, "rb").read()).hexdigest()
+        digest = hashlib.sha256(read_bytes(ap)).hexdigest()
         by_hash = adjudicate_bilateral(ap, op, trust=AdjudicationTrust(expected_agreement_sha256=digest))
         self.assertEqual(by_hash.status, "SETTLED_BREACH")
         self.assertIn("pinned by caller", by_hash.checks["integrity"])
@@ -156,7 +163,7 @@ class ControlTest(_Pairs):
 
     def test_A2_a_foreign_author_is_refused(self):
         ap, op = self.pair()
-        digest = hashlib.sha256(open(ap, "rb").read()).hexdigest()
+        digest = hashlib.sha256(read_bytes(ap)).hexdigest()
         fap, fop = self.forged()
         with self.assertRaisesRegex(PermissionError, "author PK mismatch"):
             adjudicate_bilateral(fap, fop, trust=self.pinned())
@@ -214,12 +221,12 @@ class ResidualTest(_Pairs):
         ho = os.path.join(_HERE, "examples", "provider_telemetry_oracle.pdf")
         if not (os.path.exists(ha) and os.path.exists(ho)):
             self.skipTest("historical example not present")
-        before = (open(ha, "rb").read(), open(ho, "rb").read())
+        before = (read_bytes(ha), read_bytes(ho))
         run = subprocess.run([sys.executable, ha, "--adjudicate-with", ho], capture_output=True,
                              text=True, env=ENV, timeout=300)
         self.assertNotEqual(run.returncode, 0, run.stdout)
         self.assertNotIn("GREEN", run.stdout)
-        self.assertEqual((open(ha, "rb").read(), open(ho, "rb").read()), before)
+        self.assertEqual((read_bytes(ha), read_bytes(ho)), before)
 
     def test_B3_outcome_inputs_out_of_domain_are_refused(self):
         for i, value in enumerate((float("nan"), 250.0, -1.0, "99", True)):

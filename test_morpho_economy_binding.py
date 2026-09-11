@@ -76,7 +76,8 @@ documents built by the pre-S6a module, at generations 0, 1 and 5:
 The accepted domain of existing signed state changed. That break is now
 DECLARED by a `state_profile` rather than asserted away: state without a
 supported profile is refused by name, bytes and signatures untouched, and
-`evolve` raises that reason before reading or writing anything. No in-place
+`evolve` raises that reason before any mutation (it must read the file to
+find the marker; the guarantee is that nothing is written). No in-place
 migration exists and none is offered. See docs/MORPHO-STATE-PROFILE.md.
 
 Sections:
