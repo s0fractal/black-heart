@@ -73,6 +73,7 @@ SUITES = [
     ("Refutation Consumer: Autopoiesis Guard", "test_refutation_consumer"),
     ("EXP-001: Refusal, Readoption, Evolution", "test_exp001"),
     ("Trusted Issuers: Who May Refute", "test_trusted_issuers"),
+    ("EXP-002: The Issuer as the One Factor", "test_exp002"),
     ("Living Colony Ecosystem", "test_colony"),
     ("Morphogenetic Proof-Nets & Ontogeny", "test_morpho_net"),
     ("Gödelian Incompleteness & Event Horizon", "test_goedel"),
