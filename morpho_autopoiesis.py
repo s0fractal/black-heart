@@ -104,6 +104,28 @@ from agora import (
 
 MORPHO_AUTOPOIESIS_MANIFEST_PREFIX = "# %\U0001F5A4 MORPHO_AUTOPOIESIS_MANIFEST: "
 
+# The rule name an epoch's receipt carries when no proposal (including the
+# exploratory operand swaps) was accepted this epoch. Its pre_term/post_term
+# must be identical and its atp_saved must be zero; both `evolve` and `audit`
+# require this, so a receipt cannot claim this name for an epoch that actually
+# changed something, or claim a nonzero credit for one that did not.
+NO_MUTATION_FOUND_RULE = "NO_MUTATION_FOUND"
+
+
+def _expected_credit(atp_saved: int) -> int:
+    """The ATP an epoch may credit, as a pure function of its OWN atp_saved.
+
+    Zero measured saving credits zero. A positive saving credits at least 5,
+    twice the saving otherwise -- the formula `evolve_morpho_autopoietic_organism`
+    always used for a genuine improvement. Called by both the producer (to
+    apply the credit) and the auditor (to check it was not skipped, inflated,
+    or applied twice), so the two can never disagree about what a given
+    atp_saved was worth.
+    """
+    if atp_saved <= 0:
+        return 0
+    return max(5, atp_saved * 2)
+
 # ============================================================================
 # 1. MORPHOGENETIC AUTOPOIESIS RECEIPT
 # ============================================================================
@@ -143,6 +165,16 @@ class MorphoAutopoiesisReceipt:
     # Agora federation (Grok 5)
     tabled_proposal_id: str = ""
     agora_atp_staked: int = 0
+    # The organism's ATP reserve immediately after this receipt's own credit is
+    # applied. Signed, so it binds the mutable, otherwise-unauthenticated
+    # `MorphoAutopoieticOrganism.atp_reserve` field to this receipt chain: an
+    # audit can require org.atp_reserve == receipt_chain[-1].resulting_atp_reserve,
+    # and require each step's credit to follow from that step's own atp_saved
+    # by the same formula the producer uses. Before this field existed, nothing
+    # bound atp_reserve to anything -- it could be edited in the manifest to any
+    # value with no receipt at all, and audit_morpho_autopoietic_organism still
+    # reported the document sound.
+    resulting_atp_reserve: int = 0
     # Cryptographic attestation
     public_key_hex: str = ""
     signature_hex: str = ""
@@ -158,7 +190,7 @@ class MorphoAutopoiesisReceipt:
             f"{self.feed_rate_f:.6f}:{self.kill_rate_k:.6f}:{self.pde_steps}:"
             f"{self.initial_nodes}:{self.reduced_steps}:{self.net_atp_burned}:"
             f"{self.weisfeiler_lehman_digest}:{self.tabled_proposal_id}:{self.agora_atp_staked}:"
-            f"{self.public_key_hex}"
+            f"{self.resulting_atp_reserve}:{self.public_key_hex}"
         )
         return payload.encode("utf-8")
 
@@ -226,6 +258,7 @@ class MorphoAutopoiesisReceipt:
             "weisfeiler_lehman_digest": self.weisfeiler_lehman_digest,
             "tabled_proposal_id": self.tabled_proposal_id,
             "agora_atp_staked": self.agora_atp_staked,
+            "resulting_atp_reserve": self.resulting_atp_reserve,
             "public_key_hex": self.public_key_hex,
             "signature_hex": self.signature_hex,
             "receipt_hash": self.receipt_hash,
@@ -257,6 +290,7 @@ class MorphoAutopoiesisReceipt:
             weisfeiler_lehman_digest=str(d["weisfeiler_lehman_digest"]),
             tabled_proposal_id=str(d.get("tabled_proposal_id", "")),
             agora_atp_staked=int(d.get("agora_atp_staked", 0)),
+            resulting_atp_reserve=int(d.get("resulting_atp_reserve", 0)),
             public_key_hex=str(d["public_key_hex"]),
             signature_hex=str(d.get("signature_hex", "")),
             receipt_hash=str(d.get("receipt_hash", "")),
@@ -747,6 +781,7 @@ def init_morpho_autopoietic_organism(
         reduced_steps=0,
         net_atp_burned=0,
         weisfeiler_lehman_digest=org.weisfeiler_lehman_digest,
+        resulting_atp_reserve=org.atp_reserve,
         public_key_hex=org.public_key_hex,
     )
     genesis_receipt.sign(sk_hex)
@@ -912,12 +947,19 @@ def evolve_morpho_autopoietic_organism(
             mutated_chroms.append(chrom)
 
     if not mutation_found:
+        # Genuinely nothing improved this epoch: every proposal (including the
+        # exploratory operand swaps) was rejected. Before this fix, this branch
+        # still minted a signed "METABOLIC_DRIFT" receipt claiming pre_term ==
+        # post_term (literally no change) with atp_saved=1, so once a genome
+        # reached a locally stable form, every later `evolve` call fabricated
+        # free ATP forever. Record the epoch honestly instead: zero economy,
+        # under a rule name that does not claim a transition happened.
         applied_gene_id = org.chromosomes[0].gene_id
-        applied_rule_name = "METABOLIC_DRIFT"
+        applied_rule_name = NO_MUTATION_FOUND_RULE
         applied_site = []
         pre_term_str = org.chromosomes[0].expression
         post_term_str = org.chromosomes[0].expression
-        atp_saved = 1
+        atp_saved = 0
         size_saved = 0
         experiment_id = derive_experiment_id(applied_gene_id, tuple(applied_site), applied_rule_name, pre_term_str, post_term_str)
 
@@ -925,7 +967,9 @@ def evolve_morpho_autopoietic_organism(
     org.chromosomes = mutated_chroms
     org.generation += 1
     org.parent_hash = org.organism_hash
-    org.atp_reserve += max(5, atp_saved * 2)
+    # Credit follows from atp_saved by the same formula the audit re-derives
+    # (`_expected_credit`); zero measured saving now means zero credit.
+    org.atp_reserve += _expected_credit(atp_saved)
 
     # 3. Kinetic Drift & Reaction-Diffusion Morphogenesis (Grok 3)
     f, k, arch = org.compute_kinetic_drift()
@@ -969,6 +1013,7 @@ def evolve_morpho_autopoietic_organism(
         reduced_steps=steps_red,
         net_atp_burned=steps_red,
         weisfeiler_lehman_digest=wl_digest,
+        resulting_atp_reserve=org.atp_reserve,
         public_key_hex=org.public_key_hex,
     )
     next_receipt.sign(sk_hex)
@@ -1170,6 +1215,16 @@ def audit_morpho_autopoietic_organism(pdf_path: str) -> bool:
       - Recomputes kinetic drift (F, k) and validates Turing archetype consistency.
       - Recomputes current organism hash from active genome, ensuring
         tamper-resistance between receipts and memory state.
+      - Re-derives each receipt's economy: a claimed transition is re-evaluated
+        under the same FrozenEvaluator profile that produced it, atp_saved must
+        equal what that gives, and a NO_MUTATION_FOUND epoch must claim zero.
+        Each step's ATP credit must follow from its own atp_saved by the one
+        formula the producer uses, and the organism's live atp_reserve must
+        equal the last receipt's committed resulting_atp_reserve. Before this,
+        atp_reserve was a bare int in the manifest bound to nothing: editing it
+        directly, with no receipt at all, still audited sound, and an epoch
+        where nothing was accepted still minted a signed 1-ATP "METABOLIC_DRIFT"
+        receipt claiming pre_term == post_term, forever, on every later call.
     """
     if not os.path.exists(pdf_path):
         return False
@@ -1193,6 +1248,7 @@ def audit_morpho_autopoietic_organism(pdf_path: str) -> bool:
         return False
 
     expected_parent = "0" * 64
+    expected_reserve = None
     for i, rec in enumerate(org.receipt_chain):
         if not rec.verify_integrity():
             return False
@@ -1203,6 +1259,40 @@ def audit_morpho_autopoietic_organism(pdf_path: str) -> bool:
         if rec.parent_hash != expected_parent:
             return False
         expected_parent = rec.organism_hash
+
+        if i == 0:
+            # Genesis commits to its own starting balance; there is no prior
+            # receipt to derive it from.
+            if rec.rule_name != "GENESIS_SEED":
+                return False
+            expected_reserve = rec.resulting_atp_reserve
+            continue
+
+        if rec.rule_name == "GENESIS_SEED":
+            return False  # only generation 0 may claim genesis
+
+        if rec.rule_name == NO_MUTATION_FOUND_RULE:
+            if rec.pre_term != rec.post_term or rec.atp_saved != 0 or rec.size_saved != 0:
+                return False
+        else:
+            try:
+                pre_t, post_t = parse(rec.pre_term), parse(rec.post_term)
+            except Exception:
+                return False
+            eval_res = FrozenEvaluator().evaluate_transformation(pre_t, post_t)
+            if eval_res.verdict != MutationVerdict.ACCEPTED_MORE_EFFICIENT:
+                return False
+            if rec.atp_saved != max(1, -eval_res.atp_delta):
+                return False
+            if rec.size_saved != max(0, -eval_res.size_delta):
+                return False
+
+        expected_reserve += _expected_credit(rec.atp_saved)
+        if rec.resulting_atp_reserve != expected_reserve:
+            return False
+
+    if org.atp_reserve != org.receipt_chain[-1].resulting_atp_reserve:
+        return False
 
     # Verify kinetic drift consistency
     f_exp, k_exp, arch_exp = org.compute_kinetic_drift()
