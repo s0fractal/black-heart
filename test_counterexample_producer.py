@@ -31,7 +31,8 @@ What the sections pin:
      neither old call shape can bind against the new signature
   D  an observation grants nothing, and no success flag travels
   E  the command-line adapter, driven as a process: it will not invent operands,
-     and every refusal leaves the state file byte-identical
+     it will not accept an endpoint that is not a term, and every refusal leaves
+     the input state and any pre-existing output byte-identical
 
 The predicate, in full: effects follow a PASS verdict on that same claim, issued
 inside the call that applies them, over operands the caller stated. Nothing here
@@ -258,6 +259,28 @@ class ProducerTest(unittest.TestCase):
                 secret_key_hex=self.sk, public_key_hex=self.pk)
         self.assertEqual(self.state(), (0, 0, 500, 0))
 
+    def test_B9_an_endpoint_that_is_not_a_term_is_refused(self):
+        """
+        The endpoint used to be composed into the input's source text, so an
+        empty parent vanished and the input's own behaviour was credited to a
+        function nobody supplied. Directly through the API, not only the CLI.
+        """
+        before = self.state()
+        for field, bad in [(f, b) for f in ("parent_term", "candidate_term")
+                           for b in ("", " ", "\t")]:
+            with self.subTest(**{field: bad}):
+                out = self.metabolize(**{field: bad})
+                self.assertRefused(out, before)
+                self.assertIn("parse", out.verdict.reason.lower())
+
+    def test_B10_the_observation_calls_it_unparseable(self):
+        for bad in ("", " ", "\t", "("):
+            with self.subTest(endpoint=bad):
+                self.assertEqual(observe_divergence(bad, CANDIDATE, INPUT).status,
+                                 ObservationStatus.UNPARSEABLE)
+                self.assertEqual(observe_divergence(PARENT, bad, INPUT).status,
+                                 ObservationStatus.UNPARSEABLE)
+
     # ---------------------------------------------------------------- D ---
 
     def test_D1_an_observation_is_not_a_grant(self):
@@ -417,6 +440,57 @@ class InoculateCliTest(unittest.TestCase):
                                       "--candidate-term", CANDIDATE, "--input-expr", bad)
                 self.assertUntouched(proc)
                 self.assertIn("UNPARSEABLE", proc.stdout)
+
+    def test_E9_an_empty_or_blank_endpoint_refuses_and_preserves_both_files(self):
+        """
+        R2 through the real CLI. A pre-existing output file must survive too,
+        not merely be absent.
+        """
+        complete = {"--target-term": "label", "--parent-term": PARENT,
+                    "--candidate-term": CANDIDATE, "--input-expr": INPUT}
+        for flag in ("--parent-term", "--candidate-term", "--input-expr"):
+            for blank in ("", " ", "\t"):
+                with self.subTest(flag=flag, value=repr(blank)):
+                    with open(self.out, "wb") as fh:
+                        fh.write(b"existing output sentinel")
+                    argv = [a for k, v in complete.items()
+                            for a in (k, blank if k == flag else v)]
+                    proc = self.inoculate(*argv)
+                    self.assertNotEqual(proc.returncode, 0, proc.stdout)
+                    with open(self.state, "rb") as fh:
+                        self.assertEqual(fh.read(), self.pristine_bytes)
+                    with open(self.out, "rb") as fh:
+                        self.assertEqual(fh.read(), b"existing output sentinel")
+
+    def test_E10_an_independent_pair_still_earns_its_claim(self):
+        """Not the demonstration pair: I versus K on x."""
+        proc = self.inoculate("--target-term", "candidate-K", "--parent-term", "🤍",
+                              "--candidate-term", "🖤", "--input-expr", "x")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        after = self.organism(self.out)
+        from warrant_kernel import EdgeClaim
+        claim = EdgeClaim.from_dict(after["claims"][0])
+        self.assertEqual((claim.omega, claim.tau), ("🤍", "🖤"))
+        self.assertEqual(WarrantVerifier(TrustConfig()).audit_claim(claim).status,
+                         VerificationStatus.PASS)
+        self.assertIn("candidate-K", after["tombstones"]["tombstones"])
+        with open(self.state, "rb") as fh:
+            self.assertEqual(fh.read(), self.pristine_bytes)
+
+    def test_E11_the_demonstration_replay_and_bounty_are_unchanged(self):
+        """Measured before the R2 repair and pinned here unchanged."""
+        proc = self.inoculate("--demo")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        before, after = self.organism(self.state), self.organism(self.out)
+        from warrant_kernel import EdgeClaim
+        claim = EdgeClaim.from_dict(after["claims"][0])
+        self.assertEqual((claim.omega, claim.tau), (PARENT, CANDIDATE))
+        self.assertEqual(claim.witness.input_expr, INPUT)
+        self.assertEqual((claim.witness.expected_normal_form,
+                          claim.witness.actual_divergence,
+                          claim.witness.atp_to_diverge),
+                         (PARENT_OUT, CANDIDATE_OUT, ATP))
+        self.assertEqual(after["atp_reserve"] - before["atp_reserve"], 91)
 
     def test_E8_a_non_divergence_refuses_even_in_place(self):
         """Without -o the state path is its own output; it must survive too."""

@@ -246,13 +246,19 @@ def observe_divergence(
     """
     Applies `input_fixture` as a single argument to each term and reports what
     the engine did. The application shape is exactly the one the Grade C audit
-    replays: `<term> (<input_fixture>)`.
+    replays: each endpoint is parsed on its own and applied to the parsed input,
+    so an endpoint that is not a term in its own right is UNPARSEABLE here and
+    FAIL there, never a divergence.
     """
     base = dict(parent_term=parent_term, candidate_term=candidate_term,
                 input_fixture=input_fixture)
+    # Each side is parsed on its own and joined as an AST. Composing the
+    # source text first would let an empty endpoint vanish into its
+    # neighbours, so a replay would attribute the input's own behaviour to a
+    # function nobody supplied.
     try:
-        p_term = parse(f"{parent_term} ({input_fixture})")
-        c_term = parse(f"{candidate_term} ({input_fixture})")
+        p_term = glyph.parse_application(parent_term, input_fixture)
+        c_term = glyph.parse_application(candidate_term, input_fixture)
     except Exception as e:
         return DivergenceObservation(status=ObservationStatus.UNPARSEABLE,
                                      detail=f"{type(e).__name__}: {e}", **base)

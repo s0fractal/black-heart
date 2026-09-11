@@ -163,6 +163,22 @@ def tree_size(term: Term) -> int:
         return 1 + tree_size(term.left) + tree_size(term.right)
     return 1
 
+
+def parse_application(head_expr: str, argument_expr: str) -> Term:
+    """
+    Build `head_expr applied to argument_expr` by parsing each side on its own
+    and joining the two ASTs.
+
+    Never compose the two into one string first. Source text concatenation lets
+    an endpoint disappear into its neighbours: `f"{head} ({arg})"` with an empty
+    head parses as just the argument, so a replay attributes the argument's own
+    behaviour to a function that was never supplied. Each side must stand alone
+    as a term, or this raises.
+    """
+    head = parse(head_expr)
+    argument = parse(argument_expr)
+    return App(head, argument)
+
 def canonical_bytes(term: Term) -> bytes:
     """Deterministic content-addressed byte representation."""
     if isinstance(term, Comb):
