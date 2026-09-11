@@ -205,8 +205,12 @@ class TestEGraphKernel(unittest.TestCase):
         cmd = [sys.executable, pdf_path]
         proc = subprocess.run(cmd, capture_output=True, text=True)
         self.assertEqual(proc.returncode, 0, f"Polyglot runner failed: {proc.stderr}")
-        self.assertIn("EPISTEMIC E-GRAPH KERNEL AUDITOR", proc.stdout)
-        self.assertIn("E-Graph structural topology and congruence closure sound", proc.stdout)
+        self.assertIn("EPISTEMIC E-GRAPH KERNEL", proc.stdout)
+        # S7: the runner reports manifest integrity and names its scope; it no
+        # longer claims congruence "sound".
+        self.assertIn("Manifest self-consistency: OK", proc.stdout)
+        self.assertNotIn("congruence closure sound", proc.stdout)
+        self.assertIn("asserts no soundness", proc.stdout)
 
 
 if __name__ == "__main__":

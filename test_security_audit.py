@@ -1713,7 +1713,9 @@ class TestSecurityAuditG1toG9(unittest.TestCase):
 
             proc_sheaf = subprocess.run([sys.executable, sheaf_pdf], capture_output=True, text=True)
             self.assertNotEqual(proc_sheaf.returncode, 0)
-            self.assertIn("Cryptographic manifest tampering detected", proc_sheaf.stdout)
+            # S7: the tamper (flipping is_admissible without recomputing the hash)
+            # now fails the manifest self-consistency check by that name.
+            self.assertIn("self-consistency check failed", proc_sheaf.stdout)
 
         # 3. Sovereign Continuity Negative Controls (Engine #34: SOVEREIGN-0.1)
         from sovereign_continuity import (

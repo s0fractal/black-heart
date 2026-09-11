@@ -774,6 +774,13 @@ def generate_sheaf_pdf(
         "r'''\n"
     ).encode("latin-1")
 
+    # The embedded runner checks ONE thing: that this manifest's bytes match the
+    # SHA-256 the compiler embedded (self-consistency). It then reports the
+    # verdict the compiler RECORDED. It does not re-derive the descent -- the
+    # inputs (contexts, local sections) are not carried here -- so it asserts no
+    # independent soundness, and its exit code follows the recorded verdict.
+    # Before S7 it printed "ALL INVARIANTS SATISFIED" for every manifest,
+    # including a recorded OBSTRUCTED verdict, and a re-hashed forgery.
     audit_script = f"""
 # coding: latin-1
 import sys, json, hashlib
@@ -783,24 +790,31 @@ MANIFEST_HASH = "{manifest_hash}"
 
 def audit():
     print("\\033[1;36m" + "=" * 65)
-    print("  %K EPISTEMIC SHEAF KERNEL & CECH COHOMOLOGY -- STANDALONE AUDITOR")
+    print("  %K EPISTEMIC SHEAF KERNEL & CECH COHOMOLOGY -- MANIFEST REPORTER")
     print("=" * 65 + "\\033[0m")
     calc_hash = hashlib.sha256(json.dumps(MANIFEST_DATA, sort_keys=True, separators=(',', ':')).encode("utf-8")).hexdigest()
     if calc_hash != MANIFEST_HASH:
-        print("\\033[1;31m[!] FAILED: Cryptographic manifest tampering detected!\\033[0m")
+        print("\\033[1;31m[!] FAILED: manifest self-consistency check failed "
+              "(contents do not match the embedded SHA-256).\\033[0m")
         sys.exit(1)
-    print("  \\033[1;32m[*] Cryptographic Manifest Hash: VALID\\033[0m")
+    print("  \\033[1;32m[*] Manifest self-consistency: OK (contents match embedded SHA-256).\\033[0m")
     print("      SHA-256: " + MANIFEST_HASH)
     print(f"  [*] Claim Name:         \\033[1;35m{{MANIFEST_DATA['claim_name']}}\\033[0m")
-    print(f"  [*] Gluing Admissible:  \\033[1;32m{{MANIFEST_DATA['is_admissible']}}\\033[0m")
+    print(f"  [*] Recorded verdict:   Gluing Admissible = {{MANIFEST_DATA['is_admissible']}}")
     print(f"  [*] Cech dim H^1:       {{MANIFEST_DATA['h1_dimension']}}")
     print(f"  [*] Cover Charts:       {{MANIFEST_DATA['cover_count']}}")
-    print(f"  [*] Cocycles Checked:   {{MANIFEST_DATA['cocycle_count']}}")
+    print(f"  [*] Cocycles Recorded:  {{MANIFEST_DATA['cocycle_count']}}")
     print(f"  [*] Global Section ID:  {{MANIFEST_DATA['global_section_id']}}")
     print(f"  [*] Normal Form:        {{MANIFEST_DATA['global_normal_form']}}")
-    if not MANIFEST_DATA['is_admissible']:
-        print(f"  [*] Rejection Reason:   \\033[1;31m{{MANIFEST_DATA['rejection_reason']}}\\033[0m")
-    print("\\033[1;32m[+] SHEAF DESCENT AUDIT COMPLETE: ALL INVARIANTS SATISFIED\\033[0m\\n")
+    print("  [i] Scope: this runner verified the integrity of a compiler-produced")
+    print("      manifest only. It did NOT re-derive the sheaf descent and asserts")
+    print("      no independent soundness; the verdict above is as recorded.")
+    if MANIFEST_DATA['is_admissible']:
+        print("\\033[1;32m[+] Recorded verdict: GLUING ADMISSIBLE (as recorded by the compiler).\\033[0m\\n")
+        sys.exit(0)
+    print(f"  [*] Rejection Reason:   \\033[1;31m{{MANIFEST_DATA['rejection_reason']}}\\033[0m")
+    print("\\033[1;31m[-] Recorded verdict: OBSTRUCTED -- not admissible.\\033[0m\\n")
+    sys.exit(2)
 
 if __name__ == "__main__":
     audit()
