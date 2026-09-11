@@ -229,6 +229,13 @@ def run_experiment(workdir, tamper=None, evidence_dir=None):
     consumed registry bytes, which hold public keys and signatures only.
     """
     started = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    # The tree is described as it was BEFORE this run wrote anything. Read at
+    # the end, the flag also counted this run's own evidence bundle whenever
+    # that was written inside the repository, and a clean checkout was reported
+    # dirty.
+    repo_commit = _git("rev-parse", "HEAD")
+    dirty_paths = [line[3:] for line in (_git("status", "--porcelain") or "").splitlines()
+                   if line.strip()]
     main = os.path.join(workdir, "organism.pdf")
     proc = _cli("autopoiesis", "init", "-o", main)
     if proc.returncode != 0:
@@ -316,8 +323,10 @@ def run_experiment(workdir, tamper=None, evidence_dir=None):
         "experiment": "EXP-001",
         "protocol": PROTOCOL,
         "started_utc": started,
-        "repo_commit": _git("rev-parse", "HEAD"),
-        "repo_dirty": bool(_git("status", "--porcelain")),
+        "repo_commit": repo_commit,
+        "repo_dirty": bool(dirty_paths),
+        "repo_dirty_paths": dirty_paths,
+        "repo_state_read": "before the run wrote anything",
         "python": sys.version.split()[0],
         "genesis_document_sha256": d0,
         "main_document_unchanged_through_s3": steps[1]["document_sha256_before"] == d0

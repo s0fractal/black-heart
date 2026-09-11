@@ -70,6 +70,19 @@ They hold public keys and signatures only. Their digests and record ids match
 `result-a1.json`, and the test checks that readback. The organism documents
 are not kept; their per-step digests are in the record.
 
+## Correction to the first successor record's dirty flag
+
+The first `result-a1.json`, committed in `fdc2377`, says `repo_dirty: true`. The
+tree was clean when that run started; the code commit `2023b6c` had just been
+made. The runner read the tree state at the END of the run, after it had
+written `evidence-a1/` inside the repository, so it counted its own evidence
+bundle as a local change. The flag measured the tree after the run, not before.
+
+The runner now reads the commit and the dirty paths before it writes anything,
+records the paths themselves, and says when it read them. `result-a1.json` and
+`evidence-a1/` were then re-recorded on a clean tree. The earlier pair stays in
+git history at `fdc2377`; its outcomes and attribution results were the same.
+
 ## Disposition
 
 - `result.json`: outcomes observed; attribution unverified, and unverifiable now.
