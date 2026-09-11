@@ -31,7 +31,17 @@ from crypto import is_valid_public_key, public_key_from_secret
 
 KEYSTORE_PROFILE = "black-heart.keystore.v1"
 KEYSTORE_SUFFIX = ".keys"
-SECRET_FILE_SUFFIXES = (".key", ".keys")
+# A single organism/autopoiesis/morpho-autopoiesis document's own private-key
+# sidecar. Written as the escape, not a literal glyph in this source file, so
+# it survives regardless of an editor's or a tool's declared encoding; it is
+# the same 🔑 (U+1F511) either way. Chosen over ".key" to read at a glance,
+# consistent with this project's other glyph-named things (%🖤, GLYPH_K = 🖤).
+PRIVATE_KEY_SUFFIX = "\U0001F511"
+# ".key" is kept recognized here ONLY so the secret-material detector below
+# still refuses a sidecar written by a checkout from before this rename; no
+# writer in this repo creates ".key" going forward.
+_LEGACY_PRIVATE_KEY_SUFFIX = ".key"
+SECRET_FILE_SUFFIXES = (PRIVATE_KEY_SUFFIX, _LEGACY_PRIVATE_KEY_SUFFIX, KEYSTORE_SUFFIX)
 
 _HEX64 = re.compile(r"^[0-9a-fA-F]{64}$")
 _HEX64_BYTES = re.compile(rb"(?<![0-9a-fA-F])([0-9a-fA-F]{64})(?![0-9a-fA-F])")

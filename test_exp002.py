@@ -30,6 +30,7 @@ if _HERE not in sys.path[:1]:
     sys.path.insert(0, _HERE)
 
 import crypto                                                    # noqa: E402
+from keystore import PRIVATE_KEY_SUFFIX                          # noqa: E402
 from controlled_forgetting import (                              # noqa: E402
     EpistemicTombstoneRegistry, RetirementMode, RetirementRecord, RuleIdentity,
 )
@@ -83,7 +84,7 @@ class Exp002Test(unittest.TestCase):
         cls.result = cls.runner.run_experiment(cls.workdir.name, evidence_dir=cls.evidence)
         cls.keys = []
         for name in os.listdir(cls.workdir.name):
-            if name.endswith(".key"):
+            if name.endswith(PRIVATE_KEY_SUFFIX):
                 with open(os.path.join(cls.workdir.name, name), encoding="utf-8") as fh:
                     cls.keys.append(fh.read().strip())
 

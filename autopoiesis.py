@@ -665,8 +665,8 @@ def init_autopoietic_organism(
     # no new one (review K4). A failure is raised, not swallowed, because an
     # organism whose key was not kept cannot evolve. Not a transaction: if
     # writing the document fails after the key was written, nothing rolls back.
-    from keystore import write_private_file
-    write_private_file(pdf_path + ".key", sk_hex.strip() + "\n")
+    from keystore import PRIVATE_KEY_SUFFIX, write_private_file
+    write_private_file(pdf_path + PRIVATE_KEY_SUFFIX, sk_hex.strip() + "\n")
 
     with open(pdf_path, "wb") as f:
         f.write(polyglot_bytes)
@@ -845,9 +845,10 @@ def evolve_autopoietic_organism(
     manifest = json.loads(raw_manifest.decode("utf-8"))
 
     # N1 Fix: Read secret key from explicit param, local sidecar keyfile, or environment (never from manifest)
+    from keystore import PRIVATE_KEY_SUFFIX
     sk_hex = secret_key_hex
     if not sk_hex:
-        key_path = pdf_path + ".key"
+        key_path = pdf_path + PRIVATE_KEY_SUFFIX
         if os.path.exists(key_path):
             try:
                 with open(key_path, "r") as kf:
@@ -857,7 +858,8 @@ def evolve_autopoietic_organism(
     if not sk_hex:
         sk_hex = os.environ.get("BLACK_HEART_SECRET_KEY")
     if not sk_hex:
-        raise ValueError("No Ed25519 secret key available to sign generational transition (provide secret_key_hex, <file>.key, or BLACK_HEART_SECRET_KEY)")
+        raise ValueError(f"No Ed25519 secret key available to sign generational transition "
+                        f"(provide secret_key_hex, <file>{PRIVATE_KEY_SUFFIX}, or BLACK_HEART_SECRET_KEY)")
 
     current_org = organism_from_dict(manifest["current_organism"], sk_hex or "")
     receipts: List[AutopoiesisReceipt] = [AutopoiesisReceipt.from_dict(r) for r in manifest["receipts"]]

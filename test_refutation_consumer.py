@@ -61,6 +61,7 @@ for _name, _mod in list(sys.modules.items()):
 import crypto
 import autopoiesis
 import epistemic_immune as ei
+from keystore import PRIVATE_KEY_SUFFIX
 from autopoiesis import (check_palimpsest_guard, evolve_autopoietic_organism,
                          init_autopoietic_organism)
 from controlled_forgetting import (EpistemicTombstoneRegistry, RetirementMode,
@@ -82,7 +83,7 @@ def _replacement_evolution_makes(pdf_path):
     with tempfile.TemporaryDirectory() as scratch:
         copy_pdf = os.path.join(scratch, "copy.pdf")
         shutil.copy(pdf_path, copy_pdf)
-        shutil.copy(pdf_path + ".key", copy_pdf + ".key")
+        shutil.copy(pdf_path + PRIVATE_KEY_SUFFIX, copy_pdf + PRIVATE_KEY_SUFFIX)
         before = {c.gene_id: c.expression
                   for c in autopoiesis.organism_from_dict(
                       _manifest(copy_pdf)["current_organism"], "").chromosomes}
@@ -134,7 +135,7 @@ class _Fixture(unittest.TestCase):
             return fh.read()
 
     def key_bytes(self):
-        with open(self.pdf + ".key", "rb") as fh:
+        with open(self.pdf + PRIVATE_KEY_SUFFIX, "rb") as fh:
             return fh.read()
 
     def registry_with(self, reference, candidate, label="asserted-refutation"):

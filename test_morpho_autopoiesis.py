@@ -13,6 +13,7 @@ import tempfile
 import unittest
 import subprocess
 
+from keystore import PRIVATE_KEY_SUFFIX
 from morpho_autopoiesis import (
     MorphoAutopoiesisReceipt,
     MorphoAutopoieticOrganism,
@@ -44,7 +45,7 @@ class TestMorphoAutopoiesis(unittest.TestCase):
         self.assertTrue(rec.verify_integrity())
 
         # Check sidecar key exists
-        key_path = f"{self.org_pdf}.key"
+        key_path = f"{self.org_pdf}{PRIVATE_KEY_SUFFIX}"
         self.assertTrue(os.path.exists(key_path))
         with open(key_path, "r") as kf:
             sk_hex = kf.read().strip()

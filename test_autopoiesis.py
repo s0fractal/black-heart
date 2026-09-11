@@ -13,6 +13,7 @@ import tempfile
 import unittest
 import subprocess
 
+from keystore import PRIVATE_KEY_SUFFIX
 from autopoiesis import (
     init_autopoietic_organism,
     evolve_autopoietic_organism,
@@ -270,7 +271,7 @@ class TestAutopoiesisEngine(unittest.TestCase):
         self.assertNotIn(sk.encode("latin1"), data, "N1: Raw secret key bytes must not appear in PDF artifact")
 
         # Sidecar file must exist with restricted permissions
-        key_path = self.pdf_path + ".key"
+        key_path = self.pdf_path + PRIVATE_KEY_SUFFIX
         self.assertTrue(os.path.exists(key_path))
         with open(key_path, "r") as kf:
             saved_key = kf.read().strip()
