@@ -22,7 +22,11 @@ What the sections pin:
      candidate, and the preserved legacy label gate
   B  the actual state change: `evolve_autopoietic_organism` on a real document
      leaves its bytes identical on refusal and appends a generation otherwise
-  C  the same through the CLI, as a process, with a registry file
+  C  the same through the CLI, as a process, with a registry file: a malformed
+     envelope is refused by name instead of read as an empty registry, and the
+     CLI offers no override for untrusted evidence it could never reach
+  D  the strict loader for external documents, and the lenient legacy loader
+     left exactly as it was
 
 The replacement used in B and C is the one evolution really makes on a fresh
 organism, derived by running evolution on a copy rather than hard-coded. It is
@@ -89,6 +93,23 @@ def _replacement_evolution_makes(pdf_path):
     return changed[0]
 
 
+def _malformed_variants(good):
+    """Envelopes that must never be read as an empty registry."""
+    return {
+        "renamed tombstones": {"tombstone": good["tombstones"],
+                               "readoptions": good["readoptions"]},
+        "missing tombstones": {"readoptions": good["readoptions"]},
+        "missing readoptions": {"tombstones": good["tombstones"]},
+        "unknown extra key": dict(good, note="x"),
+        "tombstones not an object": {"tombstones": list(good["tombstones"].values()),
+                                     "readoptions": {}},
+        "entry not an object": {"tombstones": {"asserted-refutation": "nope"},
+                                "readoptions": {}},
+        "top level not an object": [good],
+        "empty object": {},
+    }
+
+
 def _manifest(pdf_path):
     with open(pdf_path, "rb") as fh:
         content = fh.read()
@@ -110,6 +131,10 @@ class _Fixture(unittest.TestCase):
 
     def pdf_bytes(self):
         with open(self.pdf, "rb") as fh:
+            return fh.read()
+
+    def key_bytes(self):
+        with open(self.pdf + ".key", "rb") as fh:
             return fh.read()
 
     def registry_with(self, reference, candidate, label="asserted-refutation"):
@@ -322,6 +347,90 @@ class CliTest(_Fixture):
         proc = self.evolve("--also-proceed-on", "REFUTED_FOR_REFERENCE")
         self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
         self.assertEqual(self.pdf_bytes(), before)
+
+
+    def assertRefusedUnchanged(self, proc, before, key_before):
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn("could not be loaded", proc.stdout)
+        self.assertNotIn("Traceback", proc.stderr)
+        self.assertEqual(self.pdf_bytes(), before)
+        self.assertEqual(self.key_bytes(), key_before)
+
+    def test_C6_a_malformed_envelope_is_refused_by_name(self):
+        """Round 1 of review: renaming `tombstones` appended a generation."""
+        good = self.registry_with(self.reference, self.candidate).to_dict()
+        path = os.path.join(self.dir.name, "malformed.json")
+        before, key_before = self.pdf_bytes(), self.key_bytes()
+        for name, doc in _malformed_variants(good).items():
+            with self.subTest(variant=name):
+                with open(path, "w", encoding="utf-8") as fh:
+                    json.dump(doc, fh)
+                self.assertRefusedUnchanged(self.evolve("--tombstones", path),
+                                            before, key_before)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("{ this is not json")
+        self.assertRefusedUnchanged(self.evolve("--tombstones", path), before, key_before)
+
+    def test_C7_an_explicitly_empty_registry_proceeds(self):
+        path = self.write_registry(EpistemicTombstoneRegistry())
+        before = self.pdf_bytes()
+        proc = self.evolve("--tombstones", path)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertGreater(len(self.pdf_bytes()), len(before))
+
+    def test_C8_a_valid_readopted_registry_proceeds(self):
+        registry = self.registry_with(self.reference, self.candidate)
+        registry.readopt(target_id="asserted-refutation", justification="new evidence",
+                         new_evidence_claim_id="c" * 64,
+                         author_sk_hex=self.sk, author_pk_hex=self.pk)
+        path = self.write_registry(registry)
+        before = self.pdf_bytes()
+        proc = self.evolve("--tombstones", path)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertGreater(len(self.pdf_bytes()), len(before))
+
+    def test_C9_the_cli_offers_no_untrusted_override(self):
+        """The loader refuses unverifiable records before any policy, so the
+        option could never do what it said. It is gone rather than weakened."""
+        registry = self.registry_with(self.reference, self.candidate)
+        registry.tombstones["asserted-refutation"].signature_hex = "00" * 64
+        path = self.write_registry(registry)
+        before = self.pdf_bytes()
+        proc = self.evolve("--tombstones", path, "--also-proceed-on", "UNTRUSTED_EVIDENCE")
+        self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+        self.assertIn("invalid choice", proc.stderr)
+        self.assertEqual(self.pdf_bytes(), before)
+        proc = self.evolve("--tombstones", path)
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertEqual(self.pdf_bytes(), before)
+
+
+class RegistryDocumentTest(unittest.TestCase):
+    """Section D: the strict loader, and the lenient one left alone."""
+
+    def setUp(self):
+        self.sk, self.pk = crypto.generate_keypair()
+        registry = EpistemicTombstoneRegistry()
+        registry.retire("s", "d" * 64, RetirementMode.REFUTED, "loss", self.sk, self.pk)
+        self.good = registry.to_dict()
+
+    def test_D1_what_to_dict_writes_loads(self):
+        self.assertEqual(set(EpistemicTombstoneRegistry.from_document(self.good).tombstones),
+                         {"s"})
+        empty = EpistemicTombstoneRegistry().to_dict()
+        self.assertEqual(EpistemicTombstoneRegistry.from_document(empty).tombstones, {})
+
+    def test_D2_each_malformed_envelope_raises_value_error(self):
+        for name, doc in _malformed_variants(self.good).items():
+            with self.subTest(variant=name):
+                with self.assertRaises(ValueError):
+                    EpistemicTombstoneRegistry.from_document(doc)
+
+    def test_D3_the_lenient_loader_is_unchanged(self):
+        """Embedded callers still pass fragments; nothing about them changed."""
+        self.assertEqual(EpistemicTombstoneRegistry.from_dict({}).tombstones, {})
+        partial = {"tombstones": self.good["tombstones"]}
+        self.assertEqual(set(EpistemicTombstoneRegistry.from_dict(partial).tombstones), {"s"})
 
 
 if __name__ == "__main__":

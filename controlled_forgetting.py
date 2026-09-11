@@ -806,6 +806,48 @@ class EpistemicTombstoneRegistry:
             "readoptions": {k: v.to_dict() for k, v in self.readoptions.items()}
         }
 
+    DOCUMENT_KEYS = ("tombstones", "readoptions")
+
+    @classmethod
+    def from_document(cls, d: Any) -> EpistemicTombstoneRegistry:
+        """Load a registry from an EXTERNAL document, checking its envelope first.
+
+        `from_dict` is lenient about the envelope on purpose: embedded callers
+        pass fragments of larger structures, and an absent collection there
+        means empty. For a file handed in as evidence that leniency is the wrong
+        default. Misspelling `tombstones` as `tombstone` made a whole signed
+        file read as an empty registry, which the admission policy then treated
+        as "nothing measured" and let a refuted replacement through.
+
+        Required: a JSON object whose keys are exactly `tombstones` and
+        `readoptions` -- what `to_dict` writes -- each mapping a subject to a
+        record object. Anything else is refused by name before any record is
+        read. An empty registry written by `to_dict` is still accepted. This
+        checks form only; it does not say the registry is complete.
+        """
+        if not isinstance(d, dict):
+            raise ValueError(
+                f"registry document must be a JSON object, got {type(d).__name__}")
+        keys = set(d)
+        missing = [k for k in cls.DOCUMENT_KEYS if k not in keys]
+        unknown = sorted(str(k) for k in keys - set(cls.DOCUMENT_KEYS))
+        if missing or unknown:
+            raise ValueError(
+                f"registry document envelope must be exactly {list(cls.DOCUMENT_KEYS)}: "
+                f"missing {missing}, unknown {unknown}")
+        for key in cls.DOCUMENT_KEYS:
+            collection = d[key]
+            if not isinstance(collection, dict):
+                raise ValueError(
+                    f"registry document '{key}' must be an object mapping subject to "
+                    f"record, got {type(collection).__name__}")
+            for subject, record in collection.items():
+                if not isinstance(record, dict):
+                    raise ValueError(
+                        f"registry document '{key}' entry {subject!r} must be a record "
+                        f"object, got {type(record).__name__}")
+        return cls.from_dict(d)
+
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> EpistemicTombstoneRegistry:
         """Load a registry, refusing any record that does not verify.

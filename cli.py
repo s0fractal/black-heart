@@ -1562,7 +1562,7 @@ def cmd_autopoiesis(args):
         if args.tombstones:
             try:
                 with open(args.tombstones, "r", encoding="utf-8") as fh:
-                    registry = EpistemicTombstoneRegistry.from_dict(json.load(fh))
+                    registry = EpistemicTombstoneRegistry.from_document(json.load(fh))
             except (OSError, ValueError, KeyError, TypeError) as e:
                 print(f"\033[1;31m[!] Evolution refused: tombstone registry "
                       f"'{args.tombstones}' could not be loaded: {e}\033[0m")
@@ -4149,9 +4149,12 @@ def main():
     p_auto_evolve.add_argument("--tombstones", default=None,
                                help="JSON tombstone registry consulted before the in-place append")
     p_auto_evolve.add_argument("--also-proceed-on", action="append", default=None,
-                               choices=["REFUTED_FOR_ANOTHER_REFERENCE", "UNTRUSTED_EVIDENCE"],
-                               help="Proceed through this uncertain refutation scope too. By default "
-                                    "a replacement proceeds only when nothing measured addresses it")
+                               choices=["REFUTED_FOR_ANOTHER_REFERENCE"],
+                               help="Proceed through a refutation measured against another reference "
+                                    "too. By default a replacement proceeds only when nothing measured "
+                                    "addresses it. There is no file-path override for untrusted "
+                                    "evidence: a registry file holding an unverifiable record is "
+                                    "refused whole, before any policy is consulted")
 
     p_auto_audit = auto_subs.add_parser("audit", help="Audit all generational receipts and replay AST transitions")
     p_auto_audit.add_argument("file", help="Target autopoietic organism PDF")
