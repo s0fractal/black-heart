@@ -509,9 +509,22 @@ import hashlib
 import time
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
-for candidate in [os.getcwd(), current_dir, os.path.dirname(current_dir), "/Users/s0fractal/Projects/black-heart"]:
-    if os.path.isdir(candidate) and candidate not in sys.path:
-        sys.path.insert(0, candidate)
+# Put this module's OWN directory first, so every in-process import is
+# self-located and nothing on sys.path can precede and shadow it: this is what
+# makes the test suite hermetic (S9). Before S9 this block inserted os.getcwd(),
+# a parent, and a hard-coded checkout AT POSITION 0, any of which could shadow
+# the checkout under test.
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+# The polyglot document that embeds this source still has to find the engine
+# when executed from elsewhere (e.g. a temp dir). A last-resort checkout path is
+# APPENDED -- never ahead of current_dir -- so it can satisfy that standalone
+# self-import without ever preceding, or substituting for, the checkout under
+# test. A suite run resolves everything from current_dir first; test_all's
+# closure guard fails the run if any dependency is nonetheless served from here.
+_LAST_RESORT_CHECKOUT = "/Users/s0fractal/Projects/black-heart"
+if os.path.isdir(_LAST_RESORT_CHECKOUT) and _LAST_RESORT_CHECKOUT not in sys.path:
+    sys.path.append(_LAST_RESORT_CHECKOUT)
 
 PREFIX = "%" + "🖤" + " ONTOGENY_RECEIPT_CHAIN: "
 

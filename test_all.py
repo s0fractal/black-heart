@@ -19,39 +19,64 @@ import sys
 import unittest
 import time
 
-# This runner must test the checkout it lives in. Six engine modules prepend a
-# hard-coded absolute path to `sys.path` when they are imported, so once any of
-# them has run, a later `loadTestsFromName` can resolve a module -- including a
-# TEST module -- out of another clone. That is not hypothetical: this file
-# reported a green aggregate for a worktree while running another checkout's
-# copy of test_mycelium.py against this one's sources.
-#
-# Scope of the guard, stated so it is not over-read: it checks where each
-# SELECTED SUITE MODULE was loaded from. It does not check the dependency
-# closure. An engine module already cached from another checkout, or resolved
-# there later, is not caught here. This makes one observed failure loud; it does
-# not make the suite hermetic.
+# This runner must test the checkout it lives in. Until S9 several engine
+# modules prepended a hard-coded absolute checkout path (and the cwd, and a
+# parent) to `sys.path` on import, so once any had run, a later import -- a
+# TEST module OR one of its dependencies -- could resolve out of another clone.
+# This file once reported a green aggregate for a worktree while running another
+# checkout's test_mycelium.py against its sources. S9 removed those injections
+# (each module now adds only its own directory) AND checks the whole closure
+# below, not just the selected suite modules.
 _HERE = os.path.dirname(os.path.abspath(__file__))
-if sys.path and sys.path[0] != _HERE:
+# Keep this checkout first, and drop any other directory that also holds this
+# checkout's modules (a second clone on PYTHONPATH/cwd) so nothing shadows it.
+_REPO_MODULES = frozenset(
+    os.path.splitext(f)[0] for f in os.listdir(_HERE) if f.endswith(".py")
+)
+if not (sys.path and sys.path[0] == _HERE):
     sys.path.insert(0, _HERE)
 
 
+def _foreign_repo_modules() -> list:
+    """Every already-imported module that shares a name with a file in this
+    checkout but was loaded from somewhere else. This is the dependency-closure
+    origin check: it catches an engine pulled from a second checkout, not only
+    the suite module names."""
+    foreign = []
+    for name, module in list(sys.modules.items()):
+        base = name.split(".")[0]
+        if base not in _REPO_MODULES:
+            continue
+        path = getattr(module, "__file__", None)
+        if path is None:
+            continue
+        if os.path.dirname(os.path.abspath(path)) != _HERE:
+            foreign.append(f"{name} <- {path}")
+    return foreign
+
+
 def _assert_local(module_name: str) -> None:
+    # The named suite module itself...
     module = sys.modules.get(module_name)
     path = getattr(module, "__file__", None)
-    if path is None:
-        return
-    resolved = os.path.dirname(os.path.abspath(path))
-    if resolved != _HERE:
+    if path is not None and os.path.dirname(os.path.abspath(path)) != _HERE:
         raise ImportError(
             f"'{module_name}' was loaded from {path}, outside this checkout "
             f"({_HERE}). Some earlier module put another clone ahead on sys.path; "
             "the result of this run would describe neither checkout."
         )
+    # ...and its whole dependency closure.
+    foreign = _foreign_repo_modules()
+    if foreign:
+        raise ImportError(
+            "Modules from another checkout are on sys.path, so this run would "
+            f"describe neither checkout ({_HERE}). Foreign: " + "; ".join(sorted(foreign))
+        )
 
 SUITES = [
     ("Optional trusted-local CLI cache", "test_verify_cached"),
     ("CLI data verification and bounded CEGIS parser", "test_cli_verify"),
+    ("Suite Import Isolation: One Checkout, No Tracked Writes", "test_suite_isolation"),
     ("Glyph Combinatory Logic", "test_glyph"),
     ("Term Addressing: Profile Migration", "test_term_address"),
     ("Church Numerals, REPL & Polyglot Runner", "test_church_and_repl"),

@@ -169,11 +169,17 @@ class CallerTest(unittest.TestCase):
         self.assertIn("H^1", r.stdout)
 
     def test_C3_the_example_demo_glues(self):
-        r = subprocess.run([sys.executable, "-B", os.path.join(_HERE, "examples", "sheaf_demo.py")],
-                           cwd=_HERE, capture_output=True, text=True, timeout=300,
-                           env=dict(os.environ, PYTHONPATH=_HERE))
-        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertIn("Gluing Admissible: \033[1;32mTrue", r.stdout)
+        import tempfile
+        # Redirect the demo's output so running it never rewrites the tracked
+        # examples/sheaf_certificate.pdf (S9).
+        with tempfile.TemporaryDirectory() as td:
+            out = os.path.join(td, "cert.pdf")
+            r = subprocess.run([sys.executable, "-B", os.path.join(_HERE, "examples", "sheaf_demo.py")],
+                               cwd=_HERE, capture_output=True, text=True, timeout=300,
+                               env=dict(os.environ, PYTHONPATH=_HERE, BLACKHEART_SHEAF_DEMO_OUT=out))
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            self.assertIn("Gluing Admissible: \033[1;32mTrue", r.stdout)
+            self.assertTrue(os.path.exists(out))
 
 
 if __name__ == "__main__":
