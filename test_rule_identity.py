@@ -38,6 +38,8 @@ What the sections pin:
   F  a record is evidence only after authentication for its own slot and a
      domain check of its identity; anything else is UNTRUSTED_EVIDENCE, which
      is neither prohibition nor permission
+  G  authentication comes before the no-identity exit: a stripped identity is
+     tampering, an authentic label-only record is history
 
 The predicate, in full: a tombstone that carries an identity says which
 candidate diverged from which reference on which input. It does not say the
@@ -559,6 +561,97 @@ class UntrustedEvidenceTest(unittest.TestCase):
         self.record.signature_hex = "00" * 64
         self.assertFalse(self.registry.is_admitted("K I (S K)"))
         self.assertFalse(ResurrectionDefense.preflight_check(self.registry, "K I (S K)")[0])
+
+
+class StrippedIdentityTest(UntrustedEvidenceTest):
+    """
+    Section G: removing the identity is tampering too.
+
+    Round 2 of review found the no-identity early exit ran BEFORE record
+    authentication. Setting `rule_identity = None` on a genuine signed record,
+    without touching its id or signature, gave on 3c68dca:
+
+        verify_signature() False
+        refuted_for -> NO_MEASURED_REFUTATION, untrusted_slots ()
+
+    A deletion of the very field being protected read as honest label-only
+    history. No prohibition and no explicit permission, but the difference
+    between "never measured" and "evidence destroyed" was gone.
+
+    Inherits section F's fixture, so F's cases also run against this ordering.
+    """
+
+    def label_only_record(self, slot="legacy-label"):
+        """A record genuinely written without an identity, as history was."""
+        return self.registry.retire(slot, "d" * 64, RetirementMode.REFUTED,
+                                    "a pre-identity loss", self.sk, self.pk)
+
+    def test_G1_a_stripped_identity_is_untrusted_and_named(self):
+        self.record.rule_identity = None
+        self.assertFalse(self.record.verify_signature())
+        report = self.scope()
+        self.assertUntrusted(report, "K I (S K)")
+        self.assertEqual(report.untrusted_slots, ("K I (S K)",))
+
+    def test_G2_an_authentic_label_only_record_is_history_not_tampering(self):
+        """The positive control for G1: same shape, genuinely signed."""
+        legacy = self.label_only_record()
+        self.assertIsNone(legacy.rule_identity)
+        self.assertTrue(legacy.is_admissible_for("legacy-label"))
+        self.registry.tombstones = {"legacy-label": legacy}
+        report = self.scope()
+        self.assertEqual(report.scope, RefutationScope.NO_MEASURED_REFUTATION)
+        self.assertEqual(report.untrusted_slots, ())
+
+    def test_G2b_a_stripped_record_resigned_is_authentic_history(self):
+        """The reviewer's second control: strip, then re-sign with the real key."""
+        self.record.rule_identity = None
+        self.record.sign(self.sk)
+        self.assertTrue(self.record.verify_signature())
+        self.assertEqual(self.scope().scope, RefutationScope.NO_MEASURED_REFUTATION)
+        self.assertEqual(self.scope().untrusted_slots, ())
+
+    def test_G3_a_corrupt_or_misfiled_label_only_record_is_untrusted(self):
+        for how in ("signature", "slot", "domain"):
+            with self.subTest(how=how):
+                self.setUp()
+                legacy = self.label_only_record()
+                self.registry.tombstones = {}
+                slot = "legacy-label"
+                if how == "signature":
+                    legacy.signature_hex = "00" * 64
+                elif how == "slot":
+                    slot = "someone-else"
+                else:
+                    object.__setattr__(legacy, "atp_gas_recovered", -5)
+                self.registry.tombstones[slot] = legacy
+                self.assertUntrusted(self.scope(), slot)
+
+    def test_G4_a_genuine_refutation_survives_a_mixed_registry_in_both_orders(self):
+        stripped = RetirementRecord.from_dict(json.loads(json.dumps(self.record.to_dict())))
+        stripped.rule_identity = None
+        for order in ("bad-first", "good-first"):
+            with self.subTest(order=order):
+                items = [("stripped", stripped), ("K I (S K)", self.record)]
+                if order == "good-first":
+                    items.reverse()
+                self.registry.tombstones = dict(items)
+                report = self.scope()
+                self.assertTrue(report.prohibits())
+                self.assertEqual(report.untrusted_slots, ("stripped",))
+                self.assertEqual(self.scope(CANDIDATE, "\U0001f90d").scope,
+                                 RefutationScope.UNTRUSTED_EVIDENCE)
+
+    def test_G5_the_query_leaves_the_registry_bytes_alone(self):
+        self.record.rule_identity = None
+        before = self.snapshot()
+        for cand, ref in ((CANDIDATE, PARENT), ("\U0001f33f", PARENT)):
+            self.scope(cand, ref)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_G6_the_label_gate_still_refuses_a_stripped_record(self):
+        self.record.rule_identity = None
+        self.assertFalse(self.registry.is_admitted("K I (S K)"))
 
 
 class RunnerHygieneTest(unittest.TestCase):

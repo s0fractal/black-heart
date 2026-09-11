@@ -271,13 +271,22 @@ class ResurrectionDefense:
             candidate_address = None
 
         for tid, tomb in registry.tombstones.items():
+            # Authenticate the record for the slot it occupies BEFORE asking
+            # whether it carries an identity. Asked the other way round, deleting
+            # the identity field without re-signing made a tampered record look
+            # exactly like honest label-only history, and the loss of evidence
+            # disappeared with it.
+            try:
+                authentic = tomb.is_admissible_for(tid)
+            except Exception:
+                authentic = False
+            if not authentic:
+                untrusted.append(tid)
+                continue
             identity = tomb.rule_identity
             if identity is None:
-                continue                          # label-only history: not a measurement
-            authentic = (isinstance(identity, RuleIdentity)
-                         and identity.has_valid_domain()
-                         and tomb.is_admissible_for(tid))
-            if not authentic:
+                continue                          # authentic label-only history: not a measurement
+            if not (isinstance(identity, RuleIdentity) and identity.has_valid_domain()):
                 untrusted.append(tid)
                 continue
             if tomb.mode != RetirementMode.REFUTED:
