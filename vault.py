@@ -36,30 +36,78 @@ class RollbackIncompleteError(OSError):
             f"ROLLBACK_INCOMPLETE: Commit failed ({commit_error}) and rollback encountered errors: {details}"
         )
 
+class SecretMaterialError(ValueError):
+    """Refusal to pack files that look like private key material."""
+
+    def __init__(self, findings: List[Tuple[str, List[str]]]):
+        self.findings = findings
+        listed = "; ".join(f"{path} ({', '.join(reasons)})" for path, reasons in findings)
+        super().__init__(
+            f"Refusing to pack private key material into a vault: {listed}. "
+            "A vault is a public reproducibility archive, not a secret store.")
+
+
+def find_secret_material(file_paths: List[str], base_dir: str) -> List[Tuple[str, List[str]]]:
+    """Every member that looks like private key material, with the reasons.
+
+    Diagnostic only, for a message before any work starts. It reads the files
+    itself, so it is not the guard: `pack_files_to_vault` checks the very bytes
+    it archives."""
+    from keystore import secret_material_reasons
+    findings = []
+    for rel_path in sorted(file_paths):
+        abs_path = os.path.join(base_dir, rel_path)
+        if not os.path.isfile(abs_path):
+            continue
+        with open(abs_path, "rb") as f:
+            reasons = secret_material_reasons(os.path.basename(rel_path), f.read())
+        if reasons:
+            findings.append((rel_path, reasons))
+    return findings
+
+
 def pack_files_to_vault(file_paths: List[str], base_dir: str) -> Tuple[bytes, str, Dict[str, Any]]:
     """
     Packs a list of files into a deterministic, compressed tar.gz byte stream.
     Explicitly enforces mtime=0 in both gzip wrapper and tar member metadata
     to guarantee byte-identical, reproducible archives regardless of system clock.
     Computes cryptographic SHA-256 hash of the vault archive and builds manifest.
+
+    Refuses, naming each file, when any member looks like private key material:
+    a key or keystore file, a named secret field, or a secret next to its own
+    public key. Checked here so no caller can skip it, and checked on the very
+    bytes that go into the archive: each member is read once, that buffer is
+    checked, and that buffer is packed. Before the S5a review a separate scan
+    read the files and the packer read them again, so a file replaced in
+    between was published unchecked.
     """
-    buf = io.BytesIO()
-    manifest_entries = []
+    from keystore import secret_material_reasons
 
     # Sort file paths for reproducible canonical archive ordering
     sorted_files = sorted(file_paths)
 
+    members: List[Tuple[str, bytes]] = []
+    findings: List[Tuple[str, List[str]]] = []
+    for rel_path in sorted_files:
+        abs_path = os.path.join(base_dir, rel_path)
+        if not os.path.isfile(abs_path):
+            raise FileNotFoundError(f"Vault member file not found: {abs_path}")
+        with open(abs_path, "rb") as f:
+            content = f.read()
+        reasons = secret_material_reasons(os.path.basename(rel_path), content)
+        if reasons:
+            findings.append((rel_path, reasons))
+        members.append((rel_path, content))
+    if findings:
+        raise SecretMaterialError(findings)
+
+    buf = io.BytesIO()
+    manifest_entries = []
+
     # Wrap in explicit GzipFile with fixed mtime=0 and empty filename for true determinism
     with gzip.GzipFile(filename="", mode="wb", fileobj=buf, mtime=0) as gz:
         with tarfile.open(fileobj=gz, mode="w", format=tarfile.PAX_FORMAT) as tar:
-            for rel_path in sorted_files:
-                abs_path = os.path.join(base_dir, rel_path)
-                if not os.path.isfile(abs_path):
-                    raise FileNotFoundError(f"Vault member file not found: {abs_path}")
-
-                with open(abs_path, "rb") as f:
-                    content = f.read()
-
+            for rel_path, content in members:
                 f_hash = hashlib.sha256(content).hexdigest()
                 manifest_entries.append({
                     "path": rel_path,

@@ -805,18 +805,17 @@ def init_morpho_autopoietic_organism(
     out.extend(script_data)
     out.extend(manifest_line)
 
+    # Save secret key exclusively in the sidecar, FIRST, through the shared
+    # private-file writer: created 0600 rather than tightened afterwards, and a
+    # link planted at the path is refused instead of followed, before the
+    # document is created or replaced (review K4). Not a transaction: if writing
+    # the document fails after the key was written, nothing rolls back.
+    from keystore import write_private_file
+    write_private_file(f"{pdf_path}.key", sk_hex)
+
     # Write PDF
     with open(pdf_path, "wb") as f:
         f.write(bytes(out))
-
-    # Save secret key exclusively in sidecar
-    key_path = f"{pdf_path}.key"
-    with open(key_path, "w") as f:
-        f.write(sk_hex)
-    try:
-        os.chmod(key_path, 0o600)
-    except Exception:
-        pass
 
     return org, genesis_receipt
 

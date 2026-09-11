@@ -287,6 +287,15 @@ def cmd_vault(args):
             print(f"\033[1;31m[!] Error: No eligible files found in {src}\033[0m")
             sys.exit(1)
 
+        from vault import find_secret_material
+        findings = find_secret_material(file_list, src)
+        if findings:
+            print(f"\033[1;31m[!] Vault refused: private key material in {src}\033[0m")
+            for path, reasons in findings:
+                print(f"    {path}: {', '.join(reasons)}")
+            print("    A vault is a public reproducibility archive, not a secret store. Nothing was written.")
+            sys.exit(1)
+
         # Create base polyglot document if not existing
         doc = PolyglotDocument(title=args.title or "EMBEDDED CODE VAULT", author=args.author or "s0fractal")
         doc.add_section("1. Autonomous Code Vault")
@@ -792,27 +801,45 @@ def cmd_colony(args):
             initial_substrate_atp=args.atp
         )
         colony.save_to_file(file_path)
+        from keystore import sidecar_path
+        keys_path = colony.keystore().save(sidecar_path(file_path))
         print("\033[1;36m===================================================\033[0m")
         print(f"  %🖤 COLONY INITIALIZED: {colony.name}")
         print("\033[1;36m===================================================\033[0m")
         print(f"  Active Organisms:   {len(colony.active_organisms())}")
         print(f"  Substrate ATP Pool: {colony.substrate_atp}")
-        print(f"  Saved to:           {file_path}\n")
+        print(f"  Saved to:           {file_path} (public: no secret keys)")
+        print(f"  Private keys:       {keys_path} (mode 0600; never share this file)\n")
 
     elif args.action == "step":
         if not os.path.exists(file_path):
             print(f"[!] Colony state file '{file_path}' not found. Run 'init' first.")
             sys.exit(1)
+        from keystore import MissingKeyError, resolve_keystore
+        try:
+            store, key_source = resolve_keystore(getattr(args, "keys", None), file_path)
+        except (MissingKeyError, OSError, ValueError) as e:
+            print(f"\033[1;31m[!] Step refused: {e}\033[0m")
+            print("    The colony state was not modified.")
+            sys.exit(1)
         colony = Colony.load_from_file(file_path)
         if not colony.verify():
             print(f"[!] Integrity check failed: Colony state is corrupted or tampered.")
+            sys.exit(1)
+        colony.attach_keys(store)
+        try:
+            colony.require_keys()
+        except MissingKeyError as e:
+            print(f"\033[1;31m[!] Step refused: {e}\033[0m")
+            print("    The colony state was not modified.")
             sys.exit(1)
         epochs = args.epochs or 1
         for _ in range(epochs):
             rec = colony.step_epoch(solar_influx_atp=args.solar)
             print(f"[*] Epoch #{rec.epoch_index} complete | Active: {rec.active_count} | Spores: {rec.spore_count} | Minted: {rec.warrants_minted} | Adopted: {rec.warrants_adopted} | Matings: {rec.matings_count} | Anchor: {rec.epoch_hash[:16]}...")
         colony.save_to_file(file_path)
-        print(f"\n[+] Colony state saved to '{file_path}'.")
+        colony.keystore().save(key_source)
+        print(f"\n[+] Colony state saved to '{file_path}'; private keys kept in '{key_source}'.")
 
     elif args.action == "status":
         if not os.path.exists(file_path):
@@ -2292,6 +2319,23 @@ def cmd_swarm(args):
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(swarm.to_dict(), f, indent=2)
 
+    def attach_private_keys(swarm: SwarmMembrane, state_path: str) -> str:
+        """Key source for a signing action, or a refusal before anything is written."""
+        from keystore import MissingKeyError, resolve_keystore
+        try:
+            store, source = resolve_keystore(getattr(args, "keys", None), state_path)
+            swarm.attach_keys(store)
+            swarm.require_all_keys()
+        except (MissingKeyError, OSError, ValueError) as e:
+            print(f"\033[1;31m[!] Refused: {e}\033[0m")
+            print("    The swarm state was not modified.")
+            sys.exit(1)
+        return source
+
+    def persist_private_keys(swarm: SwarmMembrane, source: str, out_path: str) -> None:
+        from keystore import sidecar_path
+        swarm.keystore().save(source if getattr(args, "keys", None) else sidecar_path(out_path))
+
     if args.action == "init":
         pop = getattr(args, "population", 4) or 4
         out_path = args.output or "swarm_state.json"
@@ -2320,12 +2364,15 @@ def cmd_swarm(args):
             swarm.add_organism(org, st, pk, sk)
 
         save_swarm(swarm, out_path)
+        from keystore import sidecar_path
+        keys_path = swarm.keystore().save(sidecar_path(out_path))
         print("\033[1;36m=================================================================\033[0m")
         print(f"  %🖤 EPISTEMIC SWARM MEMBRANE INITIALIZED (SWARM-0.1)")
         print("\033[1;36m=================================================================\033[0m")
         print(f"  Population:     {pop} autonomous quine organisms")
         print(f"  Lattice:        16x16 Gray-Scott Torus")
-        print(f"  Target File:    {out_path}\n")
+        print(f"  Target File:    {out_path} (public: no secret keys)")
+        print(f"  Private Keys:   {keys_path} (mode 0600; never share this file)\n")
 
     elif args.action == "status":
         swarm = load_swarm(args.state)
@@ -2349,10 +2396,12 @@ def cmd_swarm(args):
 
     elif args.action == "step":
         swarm = load_swarm(args.state)
+        key_source = attach_private_keys(swarm, args.state)
         steps = getattr(args, "steps", 1) or 1
         res = swarm.step(num_ticks=steps)
         out_path = args.output or args.state
         save_swarm(swarm, out_path)
+        persist_private_keys(swarm, key_source, out_path)
         print("\033[1;32m=================================================================\033[0m")
         print(f"  %🖤 SIMULATION ADVANCED {steps} TICKS -> Current Tick #{res['tick']}")
         print("\033[1;32m=================================================================\033[0m")
@@ -2364,11 +2413,13 @@ def cmd_swarm(args):
 
     elif args.action == "mate":
         swarm = load_swarm(args.state)
+        key_source = attach_private_keys(swarm, args.state)
         p_a = args.parent_a
         p_b = args.parent_b
         child_org, child_st = BilateralQuineSymbiosis.recombine_and_mate(swarm, p_a, p_b)
         out_path = args.output or args.state
         save_swarm(swarm, out_path)
+        persist_private_keys(swarm, key_source, out_path)
         print("\033[1;32m=================================================================\033[0m")
         print(f"  %🖤 BILATERAL QUINE SYMBIOSIS & CROSSOVER SUCCESSFUL")
         print("\033[1;32m=================================================================\033[0m")
@@ -2424,7 +2475,8 @@ def cmd_swarm(args):
         swarm = load_swarm(args.state)
         orig = args.origin
         org = swarm.organisms[orig]
-        sk = swarm.organism_keys[orig][1]
+        key_source = attach_private_keys(swarm, args.state)
+        sk = swarm.secret_key_for(orig)
         pk = swarm.organism_keys[orig][0]
         # Whether `--target-term` denotes `--candidate-term` stays the caller's
         # assertion; it is recorded, never verified.
@@ -2464,6 +2516,7 @@ def cmd_swarm(args):
         cascade = SwarmInoculationCascade.broadcast_tombstone(swarm, orig, tomb, max_hops=args.hops or 3)
         out_path = args.output or args.state
         save_swarm(swarm, out_path)
+        persist_private_keys(swarm, key_source, out_path)
         print("\033[1;32m=================================================================\033[0m")
         print(f"  %🖤 EPIDEMIC INOCULATION CASCADE PROPAGATED")
         print("\033[1;32m=================================================================\033[0m")
@@ -3995,6 +4048,8 @@ def main():
     p_col_step = col_subs.add_parser("step", parents=[col_parent], help="Simulate colony forward by one or more epochs")
     p_col_step.add_argument("-e", "--epochs", type=int, default=1, help="Number of epochs to step")
     p_col_step.add_argument("-s", "--solar", type=int, default=200, help="Solar ATP influx per epoch")
+    p_col_step.add_argument("--keys", default=None,
+                            help="Private keystore (default: <state>.keys). Never read from the public state")
 
     p_col_stat = col_subs.add_parser("status", parents=[col_parent], help="Display summary telemetry of the colony")
 
@@ -4299,12 +4354,14 @@ def main():
     p_sw_step.add_argument("state", help="Swarm state file")
     p_sw_step.add_argument("--steps", type=int, default=1, help="Number of ticks to step")
     p_sw_step.add_argument("-o", "--output", help="Output state path (default: overwrite)")
+    p_sw_step.add_argument("--keys", default=None, help="Private keystore (default: <state>.keys). Never read from the public state")
 
     p_sw_mate = sw_subs.add_parser("mate", help="Trigger bilateral quine mating between two organisms")
     p_sw_mate.add_argument("state", help="Swarm state file")
     p_sw_mate.add_argument("--parent-a", required=True, help="First parent organism ID")
     p_sw_mate.add_argument("--parent-b", required=True, help="Second parent organism ID")
     p_sw_mate.add_argument("-o", "--output", help="Output state path")
+    p_sw_mate.add_argument("--keys", default=None, help="Private keystore (default: <state>.keys). Never read from the public state")
 
     p_sw_inoc = sw_subs.add_parser("inoculate", help="Inject refutation and broadcast epidemic cascade")
     p_sw_inoc.add_argument("state", help="Swarm state file")
@@ -4325,6 +4382,7 @@ def main():
                                 "candidate term itself. Cannot be combined with the operand flags")
     p_sw_inoc.add_argument("--hops", type=int, default=3, help="Max hop depth for gossip propagation")
     p_sw_inoc.add_argument("-o", "--output", help="Output state path")
+    p_sw_inoc.add_argument("--keys", default=None, help="Private keystore (default: <state>.keys). Never read from the public state")
 
     p_sw_prop = sw_subs.add_parser("propose", help="Table an axiom motion to the Swarm Agora")
     p_sw_prop.add_argument("state", help="Swarm state file")

@@ -344,7 +344,6 @@ class PolyglotOrganismCompiler:
             "parent_hash": organism.parent_hash,
             "organism_hash": organism.organism_hash,
             "public_key_hex": organism.public_key_hex,
-            "secret_key_hex": organism.secret_key_hex,
             "birth_timestamp_utc": organism.birth_timestamp_utc,
             "source_dir": os.path.dirname(os.path.abspath(__file__)),
             "chromosomes": [c.to_dict() for c in organism.chromosomes]
@@ -375,6 +374,14 @@ class PolyglotOrganismCompiler:
         runner_code = _generate_organism_runner()
         body.extend(runner_code.encode("utf-8"))
 
+        # The document is public and carries no secret. The key needed to
+        # reproduce goes to its own private file next to it, written FIRST, so a
+        # refusal (for example a link planted at that path) leaves nothing
+        # half-published. Sharing the PDF does not share the key.
+        if organism.secret_key_hex:
+            from keystore import write_private_file
+            write_private_file(output_path + ".key", organism.secret_key_hex + "\n")
+
         with open(output_path, "wb") as f:
             f.write(body)
 
@@ -394,11 +401,14 @@ class PolyglotOrganismCompiler:
         raw = content[idx + len(prefix):end_idx].decode("utf-8")
         d = json.loads(raw)
 
+        # A public document is never a key source. Documents written before S5a
+        # embedded the secret key; it is ignored here, and that key must be
+        # treated as exposed wherever the document went.
         org = Organism(
             generation=d["generation"],
             parent_hash=d["parent_hash"],
             public_key_hex=d["public_key_hex"],
-            secret_key_hex=d.get("secret_key_hex", ""),
+            secret_key_hex="",
             birth_timestamp_utc=d["birth_timestamp_utc"],
             organism_hash=d.get("organism_hash", "")
         )
@@ -407,8 +417,29 @@ class PolyglotOrganismCompiler:
         return org
 
 def extract_organism_from_pdf(pdf_path: str) -> Organism:
-    """Extracts and parses an Organism genome from a polyglot PDF document."""
+    """Extracts and parses an Organism genome from a polyglot PDF document.
+
+    The result carries no secret key. Signing as it needs a key the operator
+    supplies; see keystore.py.
+    """
     return PolyglotOrganismCompiler.load_from_polyglot(pdf_path)
+
+
+def document_carries_secret_key(pdf_path: str) -> bool:
+    """True when a genome document embeds a non-empty secret key.
+
+    Only documents written before S5a do. The answer is for reporting an
+    exposure; such a key is never used.
+    """
+    with open(pdf_path, "rb") as f:
+        content = f.read()
+    prefix = "%🖤 ORGANISM_GENOME: ".encode("utf-8")
+    idx = content.find(prefix)
+    if idx == -1:
+        return False
+    end_idx = content.find(b"\n", idx)
+    genome = json.loads(content[idx + len(prefix):end_idx].decode("utf-8"))
+    return bool(genome.get("secret_key_hex"))
 
 def _escape_pdf(text: str) -> str:
     return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
@@ -464,13 +495,35 @@ def main():
                 if p and p not in sys.path:
                     sys.path.insert(0, p)
 
-            # Reconstruct organism object and reproduce
+            # This document is public. Its own key, if an old version embedded
+            # one, is never used; the key comes from the operator, in order:
+            # --secret-key HEX, the sidecar <this file>.key, BLACK_HEART_SECRET_KEY.
+            sk_hex = None
+            if "--secret-key" in args:
+                i = args.index("--secret-key")
+                sk_hex = args[i + 1] if i + 1 < len(args) else None
+            key_path = target_path + ".key"
+            if not sk_hex and os.path.exists(key_path):
+                with open(key_path, "r", encoding="utf-8") as kf:
+                    sk_hex = kf.read().strip()
+            if not sk_hex:
+                sk_hex = os.environ.get("BLACK_HEART_SECRET_KEY")
+            if not sk_hex:
+                print("\033[1;31m[!] Reproduction refused: no private key source.\033[0m")
+                print("    Pass --secret-key HEX, keep the key at " + key_path + ",")
+                print("    or set BLACK_HEART_SECRET_KEY. This document never supplies one.")
+                sys.exit(1)
+
             from organism import Organism, Chromosome, PolyglotOrganismCompiler
+            from crypto import public_key_from_secret
+            if public_key_from_secret(bytes.fromhex(sk_hex)).hex() != bytes.fromhex(genome["public_key_hex"]).hex():
+                print("\033[1;31m[!] Reproduction refused: that key does not belong to this organism.\033[0m")
+                sys.exit(1)
             org = Organism(
                 generation=genome["generation"],
                 parent_hash=genome["parent_hash"],
                 public_key_hex=genome["public_key_hex"],
-                secret_key_hex=genome["secret_key_hex"],
+                secret_key_hex=sk_hex,
                 birth_timestamp_utc=genome["birth_timestamp_utc"],
                 organism_hash=genome["organism_hash"]
             )
