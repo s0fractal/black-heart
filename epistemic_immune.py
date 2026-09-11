@@ -13,11 +13,22 @@ Normative implementation of EPISTEMIC-IMMUNE-0.1:
      rule or allele is tombstoned in the EpistemicTombstoneRegistry, preventing vanity
      ATP metabolic burn before trial reductions.
   3. Counterexample Metabolism & Gas Bounty Reclamation:
-     When a candidate mutation diverges or fails frozen fixtures, it constructs a
-     Grade C CounterexampleWitness, mints an EdgeClaim(REFUTE), calculates the Negative
-     Space Coverage metric mu(C), credits gas bounties (+ATP) back to the organism's
-     metabolic reserve, and registers a signed RetirementRecord (mode=REFUTED) with
-     mandatory Invariant I4 loss declaration.
+     When a candidate mutation diverges, the caller supplies the two EXECUTABLE terms
+     and the input; this module constructs a Grade C CounterexampleWitness, mints an
+     EdgeClaim(REFUTE) over those terms, and **audits that same claim**. Only a PASS
+     buys anything: the claim is recorded, the Negative Space Coverage metric mu(C) is
+     computed, a signed RetirementRecord (mode=REFUTED) with mandatory Invariant I4
+     loss declaration is registered, and the gas bounty (+ATP) is credited. FAIL or
+     UNVERIFIED returns the verdict and changes nothing.
+
+     API compatibility: `metabolize_counterexample` now takes keyword-only arguments
+     including the required `parent_term` and `candidate_term`, and returns a
+     `MetabolismOutcome` rather than a `(claim, retirement, bounty)` tuple. No old
+     call shape binds, by design: the previous one passed a gene id and a rule name
+     where executable endpoints now go. Records emitted by the previous version stay
+     as they are; nothing is re-signed or retrospectively validated, and a historical
+     claim that fails today's audit is evidence about the producer, not a record to
+     repair.
   4. Generational Hypothesis Elevation (E -> A):
      Periodically tests empirical hypotheses that survived multiple generations against
      closed Church-Rosser reduction rules; promotes sound rules to Grade A Axiomatic
@@ -57,7 +68,7 @@ import warrant_kernel
 from warrant_kernel import (
     EvidenceGrade, VerificationStatus, Polarity,
     EdgeClaim, CounterexampleWitness, AxiomaticWitness, EmpiricalWitness,
-    TrustConfig, WarrantVerifier, promote_empirical_to_axiomatic
+    TrustConfig, WarrantVerifier, Verdict, promote_empirical_to_axiomatic
 )
 import controlled_forgetting
 from controlled_forgetting import (
@@ -194,36 +205,169 @@ class ResurrectionDefense:
 # 3. COUNTEREXAMPLE METABOLISM & GAS BOUNTY RECLAMATION
 # ============================================================================
 
+class ObservationStatus(str, Enum):
+    """
+    Outcome of replaying one input through two terms.
+    An observation records what the engine did. It grants nothing.
+    """
+    DIVERGES = "DIVERGES"                    # both settled, outputs differ
+    COINCIDES = "COINCIDES"                  # both settled, outputs equal
+    INCOMPLETE = "INCOMPLETE"                # one or both hit the ATP ceiling
+    UNPARSEABLE = "UNPARSEABLE"              # an operand is not a term
+    EVALUATION_FAILED = "EVALUATION_FAILED"  # the engine raised
+
+
+@dataclass(frozen=True)
+class DivergenceObservation:
+    """
+    A replay transcript, offered so a caller can state true operands instead of
+    guessing them. It is deliberately NOT accepted by the metabolism: the claim
+    carries the caller's own declarations and the audit re-derives everything.
+    """
+    status: ObservationStatus
+    parent_term: str
+    candidate_term: str
+    input_fixture: str
+    parent_output: Optional[str] = None
+    candidate_output: Optional[str] = None
+    atp_required: Optional[int] = None
+    detail: str = ""
+
+    def diverges(self) -> bool:
+        return self.status == ObservationStatus.DIVERGES
+
+
+def observe_divergence(
+    parent_term: str,
+    candidate_term: str,
+    input_fixture: str,
+    max_atp: int = 100_000
+) -> DivergenceObservation:
+    """
+    Applies `input_fixture` as a single argument to each term and reports what
+    the engine did. The application shape is exactly the one the Grade C audit
+    replays: each endpoint is parsed on its own and applied to the parsed input,
+    so an endpoint that is not a term in its own right is UNPARSEABLE here and
+    FAIL there, never a divergence.
+    """
+    base = dict(parent_term=parent_term, candidate_term=candidate_term,
+                input_fixture=input_fixture)
+    # Each side is parsed on its own and joined as an AST. Composing the
+    # source text first would let an empty endpoint vanish into its
+    # neighbours, so a replay would attribute the input's own behaviour to a
+    # function nobody supplied.
+    try:
+        p_term = glyph.parse_application(parent_term, input_fixture)
+        c_term = glyph.parse_application(candidate_term, input_fixture)
+    except Exception as e:
+        return DivergenceObservation(status=ObservationStatus.UNPARSEABLE,
+                                     detail=f"{type(e).__name__}: {e}", **base)
+    try:
+        res_p = evaluate(p_term, max_atp=max_atp)
+        res_c = evaluate(c_term, max_atp=max_atp)
+    except Exception as e:
+        return DivergenceObservation(status=ObservationStatus.EVALUATION_FAILED,
+                                     detail=f"{type(e).__name__}: {e}", **base)
+    if not res_p.is_settled() or not res_c.is_settled():
+        return DivergenceObservation(
+            status=ObservationStatus.INCOMPLETE,
+            detail=f"parent {res_p.status.value}, candidate {res_c.status.value} at {max_atp} ATP",
+            **base)
+    out_p, out_c = str(res_p.term), str(res_c.term)
+    required = max(res_p.atp_spent, res_c.atp_spent)
+    if glyph.canonical_bytes(res_p.term) == glyph.canonical_bytes(res_c.term):
+        return DivergenceObservation(
+            status=ObservationStatus.COINCIDES, parent_output=out_p,
+            candidate_output=out_c, atp_required=required,
+            detail="outputs coincide: no counterexample here", **base)
+    return DivergenceObservation(
+        status=ObservationStatus.DIVERGES, parent_output=out_p,
+        candidate_output=out_c, atp_required=required, **base)
+
+
+class MetabolismStatus(str, Enum):
+    """
+    Whether a proposed counterexample was metabolized.
+    REFUSED and UNVERIFIED are not observationally equivalent to each other, and
+    neither leaves any trace in the organism.
+    """
+    METABOLIZED = "METABOLIZED"   # the claim passed an independent audit; effects applied
+    REFUSED = "REFUSED"           # the audit contradicted the claim; nothing applied
+    UNVERIFIED = "UNVERIFIED"     # the audit reached no verdict; nothing applied
+
+
+@dataclass
+class MetabolismOutcome:
+    """
+    The result of one metabolism attempt.
+
+    This is a local return value, not a grant that travels. It carries no
+    success flag that another consumer could spend: `verdict` is a record of
+    what this call measured, and anyone holding the claim must audit it again.
+    Effects, when they happen, happen inside the call that did the audit.
+    """
+    status: MetabolismStatus
+    claim: EdgeClaim
+    verdict: Verdict
+    retirement: Optional[RetirementRecord] = None
+    gas_bounty: int = 0
+
+    def granted(self) -> bool:
+        return self.status == MetabolismStatus.METABOLIZED
+
+
 class CounterexampleMetabolism:
     """
     Transforms experimental failures and divergences into metabolic fuel:
-      - Synthesizes Grade C CounterexampleWitness.
-      - Mints EdgeClaim(Polarity.REFUTE).
-      - Retires candidate rule in EpistemicTombstoneRegistry with Invariant I4 loss.
-      - Calculates negative space coverage mu(C) and credits gas bounty to organism.
+      - Synthesizes Grade C CounterexampleWitness over CALLER-SUPPLIED terms.
+      - Mints EdgeClaim(Polarity.REFUTE) and audits it independently.
+      - Only on PASS: records the claim, retires the candidate rule in the
+        EpistemicTombstoneRegistry with Invariant I4 loss, credits the bounty.
+
+    Identifiers are provenance, never code. A gene id names a chromosome and a
+    rule name names a retirement subject; neither is an executable endpoint, and
+    both parse as ordinary terms (`"GENESIS_K"` is a free variable, `"x y -> y x"`
+    is an application of six of them), so a producer that put them in the claim
+    minted evidence that replays something no one intended.
     """
 
     @staticmethod
     def metabolize_counterexample(
         organism: EpistemicOrganism,
+        *,
         gene_id: str,
         rule_name: str,
+        parent_term: str,
+        candidate_term: str,
         input_fixture: str,
         expected_norm: str,
         actual_norm: str,
         atp_cost: int,
         secret_key_hex: str,
-        public_key_hex: str
-    ) -> Tuple[EdgeClaim, RetirementRecord, int]:
+        public_key_hex: str,
+        verifier: Optional[WarrantVerifier] = None
+    ) -> MetabolismOutcome:
         """
         Executes the counterexample conversion protocol:
-          1. Constructs CounterexampleWitness with explicit operands.
-          2. Issues signed Grade C EdgeClaim.
-          3. Computes negative space coverage mu(C) and gas bounty.
-          4. Mints and registers RetirementRecord(mode=REFUTED).
-          5. Credits ATP gas to organism reserve.
+          1. Constructs a CounterexampleWitness over the declared operands.
+          2. Mints a signed Grade C EdgeClaim whose endpoints are the executable
+             terms `parent_term` and `candidate_term`.
+          3. **Audits that same claim** with an independent verifier.
+          4. On PASS only: records the claim, computes mu(C), registers a signed
+             RetirementRecord(mode=REFUTED) naming the audited evidence, and
+             credits the gas bounty.
+          5. On FAIL or UNVERIFIED: returns the claim and the verdict, and leaves
+             the organism's claims, tombstones and ATP exactly as they were.
+
+        Parameters are keyword-only: the previous signature took `gene_id` and
+        `rule_name` in the positions that now hold executable terms, and a
+        positional call that silently kept working would rebuild the defect.
+
+        `gene_id` and `rule_name` stay as provenance and as the retirement
+        subject. Whether a label denotes the term supplied beside it remains the
+        caller's assertion; what is no longer assumed is that a label can be run.
         """
-        # 1. Construct Counterexample Witness
+        # 1. Construct Counterexample Witness over the declared operands.
         witness = CounterexampleWitness(
             input_expr=input_fixture,
             expected_normal_form=expected_norm,
@@ -231,28 +375,40 @@ class CounterexampleMetabolism:
             atp_to_diverge=atp_cost
         )
 
-        # 2. Mint Grade C Claim
+        # 2. Mint Grade C Claim over the executable endpoints.
         successor_hash = hashlib.sha256(actual_norm.encode("utf-8")).hexdigest()
         claim = EdgeClaim.create_and_sign(
             parent_hash=organism.compute_genome_hash(),
-            tau=rule_name,
-            omega=gene_id,
+            tau=candidate_term,
+            omega=parent_term,
             successor_hash=successor_hash,
             polarity=Polarity.REFUTE,
             witness=witness,
             secret_key_hex=secret_key_hex,
             public_key_hex=public_key_hex
         )
+
+        # 3. Audit this claim, before it is recorded and before anything is spent.
+        audit = verifier or WarrantVerifier(TrustConfig())
+        verdict = audit.audit_claim(claim)
+        if verdict.status != VerificationStatus.PASS:
+            return MetabolismOutcome(
+                status=(MetabolismStatus.REFUSED
+                        if verdict.status == VerificationStatus.FAIL
+                        else MetabolismStatus.UNVERIFIED),
+                claim=claim, verdict=verdict, retirement=None, gas_bounty=0)
+
+        # 4. Effects. Everything below this line rests on the verdict above.
         organism.claims.append(claim)
 
-        # 3. Calculate negative space coverage mu(C) & gas bounty
         coverage = NegativeSpaceMeter.calculate_coverage(rule_name)
         gas_bounty = NegativeSpaceMeter.compute_gas_reclamation(coverage)
 
-        # 4. Mint RetirementRecord (Invariant I4 mandatory loss declaration)
         loss_desc = (
-            f"Pruned candidate rewrite '{rule_name}' on gene '{gene_id}': "
-            f"semantic divergence on fixture '{input_fixture}' (expected '{expected_norm}', got '{actual_norm}')."
+            f"Pruned candidate rewrite '{rule_name}' on gene '{gene_id}': divergence "
+            f"reproduced on input '{input_fixture}' between parent '{parent_term}' and "
+            f"candidate '{candidate_term}' (parent -> '{expected_norm}', candidate -> "
+            f"'{actual_norm}', {atp_cost} ATP declared). Audited as claim {claim.claim_id}."
         )
         rule_digest = hashlib.sha256(rule_name.encode("utf-8")).hexdigest()
 
@@ -266,11 +422,13 @@ class CounterexampleMetabolism:
             rule_or_pattern=rule_name
         )
 
-        # 5. Credit metabolic fuel
+        # 5. Credit metabolic fuel.
         organism.atp_reserve += gas_bounty
         organism.total_bounties_reclaimed += gas_bounty
 
-        return claim, ret_record, gas_bounty
+        return MetabolismOutcome(
+            status=MetabolismStatus.METABOLIZED, claim=claim, verdict=verdict,
+            retirement=ret_record, gas_bounty=gas_bounty)
 
 
 # ============================================================================

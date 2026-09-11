@@ -32,7 +32,9 @@ from warrant_kernel import EvidenceGrade, EdgeClaim, CounterexampleWitness
 import controlled_forgetting
 from controlled_forgetting import RetirementMode, EpistemicTombstoneRegistry
 import epistemic_immune
-from epistemic_immune import EpistemicOrganism, CounterexampleMetabolism
+from epistemic_immune import (
+    EpistemicOrganism, CounterexampleMetabolism, observe_divergence
+)
 import epistemic_swarm
 from epistemic_swarm import (
     SwarmMorphogenGrid, TombstoneSignal, CascadeReport,
@@ -41,6 +43,24 @@ from epistemic_swarm import (
     SwarmProposal, SwarmAxiom, SwarmAgoraCommons,
     SwarmMembrane, generate_swarm_membrane_pdf, append_swarm_membrane_hud
 )
+
+
+# A real, measured divergence used wherever a test needs a metabolized
+# counterexample. Identifiers stay labels; these two terms are what runs.
+_DIV_PARENT = "\U0001f5a4"
+_DIV_CANDIDATE = "\U0001f5a4 \U0001f90d"
+_DIV_INPUT = "\U0001f90d (\U0001f5a4 \U0001f90d)"
+
+
+def _metabolize_real_divergence(org, gene_id: str, rule_name: str, sk: str, pk: str):
+    obs = observe_divergence(_DIV_PARENT, _DIV_CANDIDATE, _DIV_INPUT)
+    assert obs.diverges(), obs.detail
+    return CounterexampleMetabolism.metabolize_counterexample(
+        organism=org, gene_id=gene_id, rule_name=rule_name,
+        parent_term=_DIV_PARENT, candidate_term=_DIV_CANDIDATE,
+        input_fixture=_DIV_INPUT, expected_norm=obs.parent_output,
+        actual_norm=obs.candidate_output, atp_cost=obs.atp_required,
+        secret_key_hex=sk, public_key_hex=pk)
 
 
 def _make_dummy_organism(oid: str, x: int, y: int, atp: int = 500) -> Tuple[EpistemicOrganism, SwarmOrganismState, str, str]:
@@ -111,18 +131,12 @@ class TestEpistemicSwarm(unittest.TestCase):
         swarm.add_organism(org1, st1, pk1, sk1)
         swarm.add_organism(org2, st2, pk2, sk2)
 
-        # Organism 0 metabolizes a counterexample for a flawed candidate
-        claim, tombstone, gas_bounty = CounterexampleMetabolism.metabolize_counterexample(
-            organism=org0,
-            gene_id="GENESIS_K",
-            rule_name="K I (S K)",
-            input_fixture="x",
-            expected_norm="x",
-            actual_norm="y",
-            atp_cost=20,
-            secret_key_hex=sk0,
-            public_key_hex=pk0
-        )
+        # Organism 0 metabolizes a counterexample for a flawed candidate.
+        # The refutation is a real divergence between two terms; "K I (S K)" is
+        # the retirement subject label that travels through the cascade.
+        outcome = _metabolize_real_divergence(org0, "GENESIS_K", "K I (S K)", sk0, pk0)
+        self.assertTrue(outcome.granted(), outcome.verdict.reason)
+        claim, tombstone, gas_bounty = outcome.claim, outcome.retirement, outcome.gas_bounty
         self.assertTrue(tombstone.verify_signature())
 
         # Broadcast tombstone through swarm membrane
@@ -198,17 +212,9 @@ class TestEpistemicSwarm(unittest.TestCase):
 
         # Parent A actively uses "I x"
         # Parent B has tombstoned "I x"
-        claim_b, tomb_b, gas_b = CounterexampleMetabolism.metabolize_counterexample(
-            organism=org_b,
-            gene_id="GENESIS_I",
-            rule_name="I x",
-            input_fixture="x",
-            expected_norm="x",
-            actual_norm="divergence",
-            atp_cost=10,
-            secret_key_hex=sk_b,
-            public_key_hex=pk_b
-        )
+        outcome_b = _metabolize_real_divergence(org_b, "GENESIS_I", "I x", sk_b, pk_b)
+        self.assertTrue(outcome_b.granted(), outcome_b.verdict.reason)
+        claim_b, tomb_b, gas_b = outcome_b.claim, outcome_b.retirement, outcome_b.gas_bounty
 
         swarm.add_organism(org_a, st_a, pk_a, sk_a)
         swarm.add_organism(org_b, st_b, pk_b, sk_b)

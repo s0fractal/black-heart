@@ -25,6 +25,8 @@ What the sections pin:
   B  the operands are checked in their stated roles, the claim's own endpoints
      must denote terms, and polarity must be REFUTE
   C  what is NOT a refutation: a coincidence, a crash, an unfinished reduction
+  E  an endpoint must be a term in its own right: the replay joins ASTs instead
+     of composing source text, in this branch and in the empirical twin
   D  the reason names the disagreeing side, and the three statuses stay distinct
      — FAIL means the evidence contradicts the claim, UNVERIFIED means the check
      never reached a verdict, and neither is PASS
@@ -57,7 +59,7 @@ import crypto
 import glyph
 import warrant_kernel as wk
 from warrant_kernel import (
-    EdgeClaim, CounterexampleWitness, Polarity, EvidenceGrade,
+    EdgeClaim, CounterexampleWitness, EmpiricalWitness, Polarity, EvidenceGrade,
     WarrantVerifier, TrustConfig, VerificationStatus,
 )
 
@@ -266,6 +268,60 @@ class CounterexampleAuditTest(unittest.TestCase):
         v = self.audit(self.witness(expected_normal_form="WRONG"))
         self.assertIn("WRONG", v.reason)
         self.assertIn(PARENT_OUT, v.reason)
+
+
+    # ---------------------------------------------------------------- E ---
+    # An endpoint must be a term in its own right. The replay used to compose
+    # source text, `f"{omega} ({input})"`, so an empty omega vanished into its
+    # neighbours: the parent replay became the input alone, and the input's own
+    # behaviour was credited to a function nobody supplied. Measured before the
+    # fix: a signed Grade C claim with omega="" audited PASS.
+
+    def test_E1_parse_application_joins_asts_not_source_text(self):
+        for head, arg in ((OMEGA, INPUT), (TAU, INPUT), ("🌿 🤍 🤍", "🖤 🤍")):
+            with self.subTest(head=head):
+                self.assertEqual(glyph.parse_application(head, arg),
+                                 glyph.parse(f"{head} ({arg})"))
+
+    def test_E2_an_endpoint_that_is_not_a_term_is_refused(self):
+        for bad in ("", " ", "\t", "(", "🖤 ("):
+            with self.subTest(endpoint=bad):
+                with self.assertRaises(Exception):
+                    glyph.parse_application(bad, INPUT)
+                with self.assertRaises(Exception):
+                    glyph.parse_application(OMEGA, bad)
+
+    def test_E3_a_signed_claim_with_an_empty_endpoint_fails(self):
+        """Genuinely signed, and still refused: the signature is not the issue."""
+        for omega, tau in (("", TAU), (OMEGA, ""), ("  ", TAU), (OMEGA, "\t")):
+            with self.subTest(omega=omega, tau=tau):
+                claim = EdgeClaim.create_and_sign(
+                    "0" * 64, tau, omega, "a" * 64, Polarity.REFUTE,
+                    self.witness(), self.sk, self.pk)
+                self.assertTrue(claim.verify_signature())
+                v = self.verifier.audit_claim(claim)
+                self.assertNotEqual(v.status, VerificationStatus.PASS)
+                self.assertEqual(v.status, VerificationStatus.FAIL, v.reason)
+                self.assertIn("parse", v.reason.lower())
+
+    def test_E4_the_empirical_branch_had_the_same_boundary(self):
+        """The twin, fixed in the same pass: omega="" made the parent the fixture."""
+        fixtures = ["🤍"]
+        w = EmpiricalWitness(fixtures=fixtures, fixtures_fingerprint="",
+                             delta_atp=0, delta_size=0)
+        w.fixtures_fingerprint = w.compute_fixtures_fingerprint()
+
+        def audit(omega, tau):
+            claim = EdgeClaim.create_and_sign("0" * 64, tau, omega, "a" * 64,
+                                              Polarity.AFFIRM, w, self.sk, self.pk)
+            return self.verifier.audit_claim(claim)
+
+        for omega, tau in (("", "🤍"), ("🤍", ""), ("  ", "🤍")):
+            with self.subTest(omega=omega, tau=tau):
+                v = audit(omega, tau)
+                self.assertEqual(v.status, VerificationStatus.FAIL, v.reason)
+                self.assertIn("parse", v.reason.lower())
+        self.assertEqual(audit("🤍", "🤍").status, VerificationStatus.PASS)
 
 
 if __name__ == "__main__":

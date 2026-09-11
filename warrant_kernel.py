@@ -669,13 +669,28 @@ class WarrantVerifier:
                     reason="Empirical witness has empty fixture sample"
                 )
 
+            # Same boundary as Grade C, and it was exploitable the same way:
+            # with omega "" the parent replay became the fixture itself, and the
+            # fixture agreeing with `tau (fixture)` was reported as verified
+            # equivalence between two endpoints, one of which was not a term.
+            try:
+                parent_head = glyph.parse(claim.omega)
+                successor_head = glyph.parse(claim.tau)
+            except Exception as e:
+                return Verdict(
+                    status=VerificationStatus.FAIL,
+                    grade=EvidenceGrade.EMPIRICAL,
+                    reason=f"Claim endpoints do not parse as terms in their own right: {e}",
+                    details={"omega": claim.omega, "tau": claim.tau}
+                )
+
             total_atp_parent = 0
             total_atp_succ = 0
             try:
                 for fix in w_emp.fixtures:
                     f_term = glyph.parse(fix)
-                    p_term = glyph.parse(f"{claim.omega} ({fix})")
-                    s_term = glyph.parse(f"{claim.tau} ({fix})")
+                    p_term = glyph.App(parent_head, f_term)
+                    s_term = glyph.App(successor_head, f_term)
 
                     res_p = glyph.evaluate(p_term, max_atp=self.trust_config.max_atp_budget)
                     res_s = glyph.evaluate(s_term, max_atp=self.trust_config.max_atp_budget)
@@ -738,14 +753,19 @@ class WarrantVerifier:
                     reason=f"Counterexample witness operands do not parse: {e}",
                     details={"input": w_c.input_expr}
                 )
+            # Each endpoint is parsed on its own and joined to the input as an
+            # AST. Composing source text first would let an empty endpoint
+            # vanish into its neighbours: `f"{omega} ({input})"` with omega ""
+            # parses as the input alone, and the input's own behaviour would be
+            # credited to a function nobody supplied.
             try:
-                p_term = glyph.parse(f"{claim.omega} ({w_c.input_expr})")
-                s_term = glyph.parse(f"{claim.tau} ({w_c.input_expr})")
+                p_term = glyph.parse_application(claim.omega, w_c.input_expr)
+                s_term = glyph.parse_application(claim.tau, w_c.input_expr)
             except Exception as e:
                 return Verdict(
                     status=VerificationStatus.FAIL,
                     grade=EvidenceGrade.COUNTEREXAMPLE,
-                    reason=f"Claim endpoints do not parse against the witness input: {e}",
+                    reason=f"Claim endpoints do not parse as terms in their own right: {e}",
                     details={"omega": claim.omega, "tau": claim.tau, "input": w_c.input_expr}
                 )
 
