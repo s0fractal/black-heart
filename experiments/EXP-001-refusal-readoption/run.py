@@ -38,6 +38,7 @@ import autopoiesis                                               # noqa: E402
 from controlled_forgetting import (                              # noqa: E402
     EpistemicTombstoneRegistry, RetirementMode, RuleIdentity,
 )
+from keystore import PRIVATE_KEY_SUFFIX                          # noqa: E402
 
 # Must equal the table in README.md, which was committed before this file.
 PREDICTIONS = {
@@ -91,7 +92,7 @@ def _generation(doc):
 def _fork(doc, name):
     target = os.path.join(os.path.dirname(doc), name)
     shutil.copy(doc, target)
-    shutil.copy(doc + ".key", target + ".key")
+    shutil.copy(doc + PRIVATE_KEY_SUFFIX, target + PRIVATE_KEY_SUFFIX)
     return target
 
 
@@ -112,7 +113,7 @@ def _step(name, doc, target, start_from, registry_name, registry_path, flags, co
     registry_bytes = _read(registry_path) if registry_path else None
     if registry_bytes is not None:
         consumed[name] = registry_bytes
-    before, key_before = _sha_bytes(_read(doc)), _read(doc + ".key")
+    before, key_before = _sha_bytes(_read(doc)), _read(doc + PRIVATE_KEY_SUFFIX)
     proc = _cli("autopoiesis", "evolve", doc, *flags)
     after = _sha_bytes(_read(doc))
     match = _SCOPE.search(proc.stdout)
@@ -129,7 +130,7 @@ def _step(name, doc, target, start_from, registry_name, registry_path, flags, co
         "document_sha256_before": before,
         "document_sha256_after": after,
         "generation_after": _generation(doc),
-        "key_unchanged": _read(doc + ".key") == key_before,
+        "key_unchanged": _read(doc + PRIVATE_KEY_SUFFIX) == key_before,
         "refusal_says_not_modified": "The organism was not modified" in proc.stdout,
         "traceback": "Traceback" in proc.stderr,
     }

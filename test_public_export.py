@@ -54,8 +54,9 @@ import vault as vault_module
 from colony import Colony
 from crypto import generate_keypair, public_key_from_secret
 from epistemic_swarm import SwarmMembrane
-from keystore import (KEYSTORE_PROFILE, Keystore, MissingKeyError, PrivateFileError,
-                      resolve_keystore, secret_material_reasons, sidecar_path, write_private_file)
+from keystore import (KEYSTORE_PROFILE, PRIVATE_KEY_SUFFIX, Keystore, MissingKeyError,
+                      PrivateFileError, resolve_keystore, secret_material_reasons,
+                      sidecar_path, write_private_file)
 from organism import (PolyglotOrganismCompiler, create_genesis_organism,
                       document_carries_secret_key, extract_organism_from_pdf)
 from vault import SecretMaterialError, pack_files_to_vault
@@ -133,7 +134,7 @@ class ExportTest(_Dir):
         pdf = self.organism_pdf()
         self.assertPublic(pdf)
         self.assertFalse(document_carries_secret_key(pdf))
-        self.assertEqual(mode(pdf + ".key"), 0o600)
+        self.assertEqual(mode(pdf + PRIVATE_KEY_SUFFIX), 0o600)
 
     def test_A2_colony_state_and_pdf(self):
         state = self.colony_state()
@@ -166,7 +167,7 @@ class VerifyWithoutKeysTest(_Dir):
 
     def test_B1_organism_verifies_and_reports_status(self):
         pdf = self.organism_pdf()
-        os.remove(pdf + ".key")
+        os.remove(pdf + PRIVATE_KEY_SUFFIX)
         org = extract_organism_from_pdf(pdf)
         self.assertEqual(org.secret_key_hex, "")
         self.assertTrue(org.verify())
@@ -225,7 +226,7 @@ class RecoveryTest(_Dir):
         self.assertEqual(len(children), 1)
         child = self.path(children[0])
         self.assertEqual(keypairs_in(read(child)), 0)
-        self.assertEqual(mode(child + ".key"), 0o600)
+        self.assertEqual(mode(child + PRIVATE_KEY_SUFFIX), 0o600)
 
     def test_C4_swarm_steps_and_mating_keeps_the_new_key(self):
         state = self.swarm_state()
@@ -242,9 +243,9 @@ class RecoveryTest(_Dir):
 
     def test_C5_organism_reproduces_from_the_environment(self):
         pdf = self.organism_pdf()
-        with open(pdf + ".key") as fh:
+        with open(pdf + PRIVATE_KEY_SUFFIX) as fh:
             sk = fh.read().strip()
-        os.remove(pdf + ".key")
+        os.remove(pdf + PRIVATE_KEY_SUFFIX)
         env = dict(os.environ, BLACK_HEART_SECRET_KEY=sk)
         r = subprocess.run([sys.executable, pdf, "--reproduce"], cwd=self.d,
                            capture_output=True, text=True, env=env)
@@ -256,9 +257,9 @@ class RecoveryTest(_Dir):
     def test_C6_an_explicit_secret_key_comes_before_the_sidecar(self):
         """The sidecar holds a foreign key; the explicit key is used, so it wins."""
         pdf = self.organism_pdf()
-        with open(pdf + ".key") as fh:
+        with open(pdf + PRIVATE_KEY_SUFFIX) as fh:
             sk = fh.read().strip()
-        with open(pdf + ".key", "w") as fh:
+        with open(pdf + PRIVATE_KEY_SUFFIX, "w") as fh:
             fh.write(generate_keypair()[0])
         env = {k: v for k, v in os.environ.items() if k != "BLACK_HEART_SECRET_KEY"}
         r = subprocess.run([sys.executable, pdf, "--reproduce", "--secret-key", sk], cwd=self.d,
@@ -310,7 +311,7 @@ class RefusalTest(_Dir):
 
     def test_D4_organism_reproduction_without_a_key_is_refused(self):
         pdf = self.organism_pdf()
-        os.remove(pdf + ".key")
+        os.remove(pdf + PRIVATE_KEY_SUFFIX)
         env = {k: v for k, v in os.environ.items() if k != "BLACK_HEART_SECRET_KEY"}
         r = subprocess.run([sys.executable, pdf, "--reproduce"], cwd=self.d,
                            capture_output=True, text=True, env=env)
@@ -321,7 +322,7 @@ class RefusalTest(_Dir):
     def test_D5_organism_reproduction_with_another_organisms_key_is_refused(self):
         pdf = self.organism_pdf()
         other_sk, _ = generate_keypair()
-        with open(pdf + ".key", "w") as fh:
+        with open(pdf + PRIVATE_KEY_SUFFIX, "w") as fh:
             fh.write(other_sk)
         r = subprocess.run([sys.executable, pdf, "--reproduce"], cwd=self.d,
                            capture_output=True, text=True)
@@ -428,19 +429,19 @@ class HardeningTest(_Dir):
 
     def test_G3_the_organism_sidecar_refuses_a_link_before_anything_is_written(self):
         target, pdf = self.planted(), self.path("organism.pdf")
-        os.symlink(target, pdf + ".key")
+        os.symlink(target, pdf + PRIVATE_KEY_SUFFIX)
         with self.assertRaises(PrivateFileError):
             PolyglotOrganismCompiler.compile(create_genesis_organism(), pdf)
         self.assertEqual(read(target), b"innocent")
         self.assertFalse(os.path.exists(pdf))
 
     def test_G4_a_private_file_is_replaced_atomically_and_nothing_is_left_behind(self):
-        path = self.path("k.key")
+        path = self.path(f"k{PRIVATE_KEY_SUFFIX}")
         write_private_file(path, "first\n")
         write_private_file(path, "second\n")
         self.assertEqual(read(path), b"second\n")
         self.assertEqual(mode(path), 0o600)
-        self.assertEqual(os.listdir(self.d), ["k.key"])
+        self.assertEqual(os.listdir(self.d), [f"k{PRIVATE_KEY_SUFFIX}"])
 
     def test_G5_the_vault_archives_exactly_the_bytes_it_checked(self):
         """The file is replaced with a secret right after its check returns."""
@@ -503,11 +504,11 @@ class HardeningTest(_Dir):
         for name, init in self.twins():
             with self.subTest(writer=name):
                 target, pdf = self.planted(), self.path(name)
-                os.symlink(target, pdf + ".key")
+                os.symlink(target, pdf + PRIVATE_KEY_SUFFIX)
                 with self.assertRaises(PrivateFileError):
                     init(pdf, secret_key_hex=generate_keypair()[0])
                 self.assertEqual(read(target), b"innocent")
-                self.assertTrue(os.path.islink(pdf + ".key"))
+                self.assertTrue(os.path.islink(pdf + PRIVATE_KEY_SUFFIX))
                 self.assertFalse(os.path.exists(pdf))
 
     def test_G9_a_planted_link_leaves_an_existing_document_unchanged(self):
@@ -519,14 +520,14 @@ class HardeningTest(_Dir):
             make(pdf)
             before = read(pdf)
             backup = self.path(name + ".original-key")
-            os.rename(pdf + ".key", backup)
+            os.rename(pdf + PRIVATE_KEY_SUFFIX, backup)
             key_before = read(backup)
-            os.symlink(backup, pdf + ".key")
+            os.symlink(backup, pdf + PRIVATE_KEY_SUFFIX)
             with self.assertRaises(PrivateFileError):
                 make(pdf)
             self.assertEqual(read(pdf), before, f"{name}: the refused call changed the document")
             self.assertEqual(read(backup), key_before)
-            self.assertTrue(os.path.islink(pdf + ".key"))
+            self.assertTrue(os.path.islink(pdf + PRIVATE_KEY_SUFFIX))
 
         for name, init in self.twins():
             with self.subTest(writer=name):
@@ -539,8 +540,8 @@ class HardeningTest(_Dir):
             with self.subTest(writer=name):
                 pdf = self.path(name)
                 org, _ = init(pdf)
-                self.assertEqual(mode(pdf + ".key"), 0o600)
-                with open(pdf + ".key") as fh:
+                self.assertEqual(mode(pdf + PRIVATE_KEY_SUFFIX), 0o600)
+                with open(pdf + PRIVATE_KEY_SUFFIX) as fh:
                     sk = fh.read().strip()
                 self.assertEqual(public_key_from_secret(bytes.fromhex(sk)).hex(),
                                  bytes.fromhex(org.public_key_hex).hex())
@@ -580,7 +581,8 @@ class VaultTest(_Dir):
         sk, pk = generate_keypair()
         store = Keystore(); store.add(sk)
         cases = {
-            "a key sidecar": ("organism.pdf.key", (sk + "\n").encode()),
+            "a key sidecar (current suffix)": (f"organism.pdf{PRIVATE_KEY_SUFFIX}", (sk + "\n").encode()),
+            "a key sidecar (legacy .key, still recognized)": ("organism.pdf.key", (sk + "\n").encode()),
             "a keystore": ("private.json", json.dumps(store.to_document()).encode()),
             "a named secret field": ("state.json", json.dumps({"secret_key_hex": sk}).encode()),
             "a secret next to its public key": ("notes.txt", f"{pk}\n{sk}\n".encode()),

@@ -719,7 +719,7 @@ def init_morpho_autopoietic_organism(
       - Valid ISO 32000 PDF structure (Page 1) with obsidian vector HUD.
       - Embedded Python executable quine runner.
       - Attested Genesis receipt with Ed25519 signature.
-      - Private key safely stored in `<file>.key` (mode 0600), never in PDF bytes.
+      - Private key safely stored in `<file>` + PRIVATE_KEY_SUFFIX (mode 0600), never in PDF bytes.
     """
     org, sk_hex = create_morpho_autopoietic_seed(secret_key_hex)
     now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -810,8 +810,8 @@ def init_morpho_autopoietic_organism(
     # link planted at the path is refused instead of followed, before the
     # document is created or replaced (review K4). Not a transaction: if writing
     # the document fails after the key was written, nothing rolls back.
-    from keystore import write_private_file
-    write_private_file(f"{pdf_path}.key", sk_hex)
+    from keystore import PRIVATE_KEY_SUFFIX, write_private_file
+    write_private_file(f"{pdf_path}{PRIVATE_KEY_SUFFIX}", sk_hex)
 
     # Write PDF
     with open(pdf_path, "wb") as f:
@@ -850,9 +850,10 @@ def evolve_morpho_autopoietic_organism(
     org = MorphoAutopoieticOrganism.from_dict(org_dict)
 
     # Secret key retrieval
+    from keystore import PRIVATE_KEY_SUFFIX
     sk_hex = secret_key_hex
     if not sk_hex:
-        key_path = f"{pdf_path}.key"
+        key_path = f"{pdf_path}{PRIVATE_KEY_SUFFIX}"
         if os.path.exists(key_path):
             with open(key_path, "r") as kf:
                 sk_hex = kf.read().strip()
@@ -1097,9 +1098,10 @@ def table_to_agora(
     if not latest_rec.pre_term or latest_rec.pre_term == "GENESIS":
         raise ValueError("No evolved algebraic theorem available to table on Agora floor.")
 
+    from keystore import PRIVATE_KEY_SUFFIX
     sk_hex = secret_key_hex
     if not sk_hex:
-        key_path = f"{organism_pdf_path}.key"
+        key_path = f"{organism_pdf_path}{PRIVATE_KEY_SUFFIX}"
         if os.path.exists(key_path):
             with open(key_path, "r") as kf:
                 sk_hex = kf.read().strip()

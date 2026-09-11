@@ -12,6 +12,7 @@ import subprocess
 import json
 
 from crypto import generate_keypair
+from keystore import PRIVATE_KEY_SUFFIX
 from organism import Organism, Chromosome, PolyglotOrganismCompiler
 
 class TestAutonomousOrganism(unittest.TestCase):
@@ -108,7 +109,7 @@ class TestAutonomousOrganism(unittest.TestCase):
                      if f.startswith("organism_gen0001_") and f.endswith(".pdf")]
             self.assertEqual(len(files), 1)
             child_pdf = os.path.join(tmpdir, files[0])
-            self.assertEqual(os.stat(child_pdf + ".key").st_mode & 0o777, 0o600)
+            self.assertEqual(os.stat(child_pdf + PRIVATE_KEY_SUFFIX).st_mode & 0o777, 0o600)
 
             # Child must be runnable and able to report its own status
             res_child = subprocess.run(

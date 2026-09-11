@@ -50,6 +50,7 @@ for _name, _mod in list(sys.modules.items()):
 import crypto
 import autopoiesis
 import epistemic_immune as ei
+from keystore import PRIVATE_KEY_SUFFIX
 from autopoiesis import (check_palimpsest_guard, evolve_autopoietic_organism,
                          init_autopoietic_organism)
 from controlled_forgetting import EpistemicTombstoneRegistry, RetirementMode, RuleIdentity
@@ -227,7 +228,7 @@ class _Organism(_Keys):
         self.org0, _ = init_autopoietic_organism(self.pdf)
         scratch = os.path.join(self.dir.name, "copy.pdf")
         shutil.copy(self.pdf, scratch)
-        shutil.copy(self.pdf + ".key", scratch + ".key")
+        shutil.copy(self.pdf + PRIVATE_KEY_SUFFIX, scratch + PRIVATE_KEY_SUFFIX)
         before = {c["gene_id"]: c["expression"]
                   for c in _manifest(scratch)["current_organism"]["chromosomes"]}
         succ, _ = evolve_autopoietic_organism(scratch)

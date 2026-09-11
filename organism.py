@@ -379,8 +379,8 @@ class PolyglotOrganismCompiler:
         # refusal (for example a link planted at that path) leaves nothing
         # half-published. Sharing the PDF does not share the key.
         if organism.secret_key_hex:
-            from keystore import write_private_file
-            write_private_file(output_path + ".key", organism.secret_key_hex + "\n")
+            from keystore import PRIVATE_KEY_SUFFIX, write_private_file
+            write_private_file(output_path + PRIVATE_KEY_SUFFIX, organism.secret_key_hex + "\n")
 
         with open(output_path, "wb") as f:
             f.write(body)
@@ -497,12 +497,12 @@ def main():
 
             # This document is public. Its own key, if an old version embedded
             # one, is never used; the key comes from the operator, in order:
-            # --secret-key HEX, the sidecar <this file>.key, BLACK_HEART_SECRET_KEY.
+            # --secret-key HEX, the sidecar <this file>\U0001F511, BLACK_HEART_SECRET_KEY.
             sk_hex = None
             if "--secret-key" in args:
                 i = args.index("--secret-key")
                 sk_hex = args[i + 1] if i + 1 < len(args) else None
-            key_path = target_path + ".key"
+            key_path = target_path + "\U0001F511"
             if not sk_hex and os.path.exists(key_path):
                 with open(key_path, "r", encoding="utf-8") as kf:
                     sk_hex = kf.read().strip()

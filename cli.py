@@ -1719,7 +1719,8 @@ def cmd_morpho_autopoiesis(args):
         print(f"  WL-Digest:            ⚓ {org.weisfeiler_lehman_digest[:32]}...")
         print(f"  Active Chromosomes:   {len(org.chromosomes)}")
         print(f"  ATP Reserve:          {org.atp_reserve} ATP")
-        print(f"  Secret Key Saved:     {out_path}.key (mode 0600)")
+        from keystore import PRIVATE_KEY_SUFFIX
+        print(f"  Secret Key Saved:     {out_path}{PRIVATE_KEY_SUFFIX} (mode 0600)")
         print("  Next Step: Run 'python3 <file.pdf>' or 'python3 cli.py morpho-autopoiesis evolve <file.pdf>'\n")
 
     elif args.action == "evolve":

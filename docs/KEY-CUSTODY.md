@@ -1,6 +1,7 @@
 # Key custody: public export, private recovery
 
-Written for S5a, 2026-09-11.
+Written for S5a, 2026-09-11. The single-document sidecar's extension was
+renamed from `.key` to 🔑 afterward; nothing else in this file changed.
 
 ## The split
 
@@ -20,10 +21,20 @@ A link or anything else at the path is refused and left untouched. The files:
 
 | export | private key source for continuing it |
 |---|---|
-| organism PDF (`PolyglotOrganismCompiler.compile`) | `<file>.pdf.key`, `--secret-key HEX`, or `BLACK_HEART_SECRET_KEY` |
-| autopoiesis and morpho-autopoiesis PDFs | `<file>.pdf.key` (already so before S5a) |
+| organism PDF (`PolyglotOrganismCompiler.compile`) | `<file>.pdf🔑`, `--secret-key HEX`, or `BLACK_HEART_SECRET_KEY` |
+| autopoiesis and morpho-autopoiesis PDFs | `<file>.pdf🔑` (already so before S5a) |
 | colony state (`cli.py colony`) | `--keys PATH`, else `<state>.keys` |
 | swarm state (`cli.py swarm`) | `--keys PATH`, else `<state>.keys` |
+
+The single-document sidecar's suffix is `keystore.PRIVATE_KEY_SUFFIX`, 🔑
+(U+1F511) — before this it was `.key`. `secret_material_reasons` (the vault
+detector, below) still recognizes a plain `.key` file too, so a sidecar
+written by a checkout from before this rename is still refused when packing a
+vault; nothing in this repository writes `.key` going forward. This is
+unrelated to `.keys` (no rename): that suffix names a *keystore*, a JSON
+registry of several keys indexed by the public key each derives, used by
+colony and swarm states — conceptually a different thing from one document's
+own single key.
 
 `<state>.keys` is a keystore (`keystore.py`, profile
 `black-heart.keystore.v1`): secret keys indexed by the public key each derives,
@@ -46,14 +57,14 @@ the embedded runners' `--status` and `--audit`.
   organism's public key.
 - **Packing secrets into a vault.** `vault.pack_files_to_vault`, and so
   `cli.py vault pack` and `symbiosis`, refuse any member that looks like private
-  key material, naming it: a `.key` or `.keys` file, a keystore, a named secret
-  field, a secret next to the public key it derives, or more distinct 64-hex
-  strings than the pair scan checks (512), because a file that was not
-  scanned cannot be cleared. Each member is read once, and those exact bytes
-  are both checked and archived. A vault is a public reproducibility archive,
-  not a secret store. The detector covers these declared patterns. It is not a
-  guarantee against every encoding of a secret.
-- **Writing a key through a planted link.** A link at a keystore or `.key`
+  key material, naming it: a `🔑`, legacy `.key`, or `.keys` file, a keystore, a
+  named secret field, a secret next to the public key it derives, or more
+  distinct 64-hex strings than the pair scan checks (512), because a file that
+  was not scanned cannot be cleared. Each member is read once, and those exact
+  bytes are both checked and archived. A vault is a public reproducibility
+  archive, not a secret store. The detector covers these declared patterns. It
+  is not a guarantee against every encoding of a secret.
+- **Writing a key through a planted link.** A link at a keystore or `🔑`
   path is refused, and whatever it points to is left unchanged.
 
 ## Historical artifacts

@@ -39,6 +39,7 @@ if _HERE not in sys.path[:1]:
     sys.path.insert(0, _HERE)
 
 import crypto                                                    # noqa: E402
+from keystore import PRIVATE_KEY_SUFFIX                          # noqa: E402
 from controlled_forgetting import (                              # noqa: E402
     EpistemicTombstoneRegistry, RetirementMode, RuleIdentity,
 )
@@ -78,7 +79,7 @@ def _registered_predictions():
 def _secret_keys(directory):
     keys = []
     for name in os.listdir(directory):
-        if name.endswith(".key"):
+        if name.endswith(PRIVATE_KEY_SUFFIX):
             with open(os.path.join(directory, name), encoding="utf-8") as fh:
                 keys.append(fh.read().strip())
     return keys
