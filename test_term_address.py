@@ -176,10 +176,29 @@ class ProfilesDoNotCrossTest(unittest.TestCase):
 class LegacyDomainTest(unittest.TestCase):
     """The sites that stayed on the legacy digest can state why."""
 
-    def test_D1_text_is_inside_the_domain(self):
-        for text in ("🌿 🖤 🖤 Target", "🤍 x", "🖤 Truth Mirage", "a b $c", "a$b c"):
+    def test_D1_ordinary_text_is_inside_the_domain(self):
+        """Including Unicode letters, punctuation and the glyph aliases.
+
+        An earlier version of the helper tested an ASCII identifier shape and
+        rejected `parse("ї")` and `parse("!")`, which are ordinary parser
+        outputs. The property that matters is the absence of the four
+        characters that make the encoding ambiguous, not an identifier shape.
+        """
+        for text in ("🌿 🖤 🖤 Target", "🤍 x", "🖤 Truth Mirage", "ї", "!",
+                     "a-b_c", "Ω", "x1 y2", "K I S Y", "наслідок"):
             with self.subTest(text=text):
                 self.assertTrue(in_legacy_address_domain(parse(text)))
+
+    def test_D1b_the_one_known_false_negative_is_named(self):
+        """`parse("$")` yields Var("$"), which the helper declines to vouch for.
+
+        No colliding partner for it is known. It is excluded because admitting
+        `$` anywhere would admit the names that do collide, and a false
+        negative here means "not established", not "unsafe".
+        """
+        self.assertEqual(parse("$"), Var("$"))
+        self.assertFalse(in_legacy_address_domain(parse("$")))
+        self.assertFalse(in_legacy_address_domain(parse("a b $c")))
 
     def test_D2_the_collision_pair_is_outside_it(self):
         self.assertFalse(in_legacy_address_domain(A))
@@ -188,6 +207,65 @@ class LegacyDomainTest(unittest.TestCase):
     def test_D3_parse_cannot_build_the_collision(self):
         """`$` is tokenized on its own, so a name never absorbs one."""
         self.assertNotEqual(term_hash(parse("a b $c")), term_hash(parse("a$b c")))
+
+    def test_D6_the_domain_is_collision_free_where_it_says_yes(self):
+        """Sufficiency, searched rather than argued.
+
+        Every character the helper excludes was found by looking for colliding
+        pairs: `$` (a Comb symbol starting with it renders as a Var), a space
+        (the split between siblings moves), and parentheses (a Comb symbol can
+        imitate an application).
+        """
+        import itertools
+        alphabet = ["a", " ", "$", "(", ")", "ї", "!", "🖤", "-"]
+        leaves = [kind("".join(p)) for kind in (Var, Comb)
+                  for n in (1, 2) for p in itertools.product(alphabet, repeat=n)]
+        terms = [t for t in leaves + [App(a, b) for a in leaves for b in leaves]
+                 if in_legacy_address_domain(t)]
+        self.assertGreater(len(terms), 2000)
+        seen = {}
+        for t in terms:
+            key = canonical_bytes(t)
+            self.assertNotIn(key, seen, f"{t!r} collides with {seen.get(key)!r} in-domain")
+            seen[key] = t
+
+    def test_D8_the_parenthesis_exclusion_has_no_witness(self):
+        """Recorded as conservatism, not as a demonstrated need.
+
+        Every witness found for the paren class also carries a `$`, so the `$`
+        exclusion already covers it. A larger offline search — 7.4M terms whose
+        leaves carry parentheses but neither a space nor a `$` — found no
+        collision at all. This bounded version runs in the suite so the claim
+        is checked rather than remembered.
+        """
+        import itertools
+        alphabet = ["a", "b", "(", ")"]
+        leaves = [kind("".join(p)) for kind in (Var, Comb)
+                  for n in (1, 2, 3) for p in itertools.product(alphabet, repeat=n)]
+        terms = leaves + [App(a, b) for a in leaves for b in leaves]
+        seen = {}
+        for t in terms:
+            key = canonical_bytes(t)
+            if key in seen:
+                self.fail(f"a paren-only collision exists after all: {t!r} vs {seen[key]!r}")
+            seen[key] = t
+
+    def test_D7_each_excluded_character_is_excluded_for_a_reason(self):
+        """One witnessed collision per excluded character class."""
+        pairs = {
+            "$ makes a Comb look like a Var": (Var("a"), Comb("$a")),
+            "( ) let a Comb imitate an application":
+                (Comb("($a $b)"), App(Var("a"), Var("b"))),
+            "a space moves the split":
+                (App(Var("a"), Var(" $a")), App(Var("a $"), Var("a"))),
+        }
+        for why, (left, right) in pairs.items():
+            with self.subTest(reason=why):
+                self.assertNotEqual(left, right)
+                self.assertEqual(canonical_bytes(left), canonical_bytes(right))
+                self.assertFalse(in_legacy_address_domain(left)
+                                 and in_legacy_address_domain(right))
+                self.assertNotEqual(term_address(left), term_address(right))
 
     def test_D4_combinators_are_inside_the_domain(self):
         for t in (K, I, S, App(App(S, K), K), parse("🌿 🖤 🤍")):

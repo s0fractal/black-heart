@@ -53,11 +53,48 @@ Each would need its own reproduction before being called a defect.
 - `SporeStore` keys and receipts use the qualified address. A receipt carrying a
   bare legacy digest is **refused by profile**, not reinterpreted.
 
-## What remains unverifiable
+## What remains unverifiable, and in what sense
 
-Any `SporeReceipt` created before this change carries bare digests. It cannot be
-verified under the new profile and must be re-derived from its term. There is no
-migration that could rescue it: the digest it holds does not identify one term.
+An earlier version of this file said "there is no migration that could rescue"
+a legacy receipt. That was broader than anything measured. Three different
+statements were being run together, and they are not the same:
+
+1. **Policy refusal.** `SporeStore.audit` rejects every bare-digest receipt
+   today. That is a decision made here, not a fact about the receipt.
+2. **Ambiguity over unrestricted ASTs.** A bare digest does not identify one
+   term *when the term could be any AST*, because two terms can share it.
+3. **Impossibility of any historical verification.** Not established. A legacy
+   receipt whose term is known to be inside an explicitly specified old domain
+   could be replayed there with its original meaning. That would be a separate,
+   independently specified legacy verifier, and it would not make such a
+   receipt valid under `glyph.term.v2`.
+
+So: legacy receipts are refused here, by policy, and no legacy-to-v2 conversion
+exists. Whether a restricted legacy verifier is worth building is open.
 
 Nothing on disk is affected, because `SporeStore` has no persistence — checked,
 not assumed. Signed artifacts are untouched.
+
+## S3d-2: what moved, and what deliberately did not
+
+| Site | Decision |
+|---|---|
+| `goedel` cycle history | **migrated** to `term_address`. An internal key, never persisted or signed; two terms sharing a legacy address would have read as a repeat, i.e. a limit cycle that did not happen |
+| `epistemic_swarm` gene/tombstone lookup | **migrated**. Measured while doing it: every production caller of `retire()` keys a tombstone by a rule name, a claim id or a gene id, so this lookup cannot match a term address under either profile. The ambiguous address is gone from a comparison that appears already ineffective; no live check is claimed to be repaired |
+| `metamorphosis.fixtures_fingerprint` | **kept legacy**. It is embedded in signed mycelium warrants through `autopoiesis`, and persistent signed operands stay unchanged |
+| `warrant_kernel.GroundedWitness.expected_hash` | **kept legacy**, by decision: inside signed claims, input is parsed text |
+
+`in_legacy_address_domain` specifies a **sufficient restricted domain**, not
+uniqueness against arbitrary ASTs. It excludes `$`, space, `(` and `)` from
+leaves and admits Unicode and punctuation outside that set. The parenthesis
+exclusion is conservative; its independent necessity was not demonstrated.
+
+A term passing this predicate can still collide with a term outside the domain:
+`Var("a")` and the excluded `Comb("$a")` share legacy bytes. A legacy consumer
+must establish the domain of both stored and queried operands; validating only
+the new query does not make an unrestricted historical store unambiguous.
+
+`parse("$")` gives `Var("$")`, which this sufficient check excludes. Its
+unrestricted-AST collision partner is `Comb("$$")`, also excluded. This is not a
+collision between parser-produced terms, and does not justify rejecting all
+parser outputs containing a standalone `$`.

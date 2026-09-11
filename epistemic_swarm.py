@@ -418,11 +418,17 @@ class BilateralQuineSymbiosis:
           For every active chromosome c_B in parent_b:
             assert c_B.expression not in parent_a.tombstones
         """
+        # Addresses are profile-qualified here. Measured while migrating: every
+        # production caller of `retire()` keys a tombstone by a rule name, a
+        # claim id or a gene id, so this lookup cannot match a term address
+        # under either profile. The change removes an ambiguous address from a
+        # comparison that appears to be ineffective already; it does not claim
+        # to repair a live check.
         # Check A's genes against B's tombstones
         for c in parent_a.chromosomes:
             try:
                 t = glyph.parse(c.expression)
-                thash = glyph.term_hash(t)
+                thash = glyph.term_address(t)
             except Exception:
                 thash = c.expression
             if thash in parent_b.tombstone_registry.tombstones or c.expression in parent_b.tombstone_registry.tombstones:
@@ -432,7 +438,7 @@ class BilateralQuineSymbiosis:
         for c in parent_b.chromosomes:
             try:
                 t = glyph.parse(c.expression)
-                thash = glyph.term_hash(t)
+                thash = glyph.term_address(t)
             except Exception:
                 thash = c.expression
             if thash in parent_a.tombstone_registry.tombstones or c.expression in parent_a.tombstone_registry.tombstones:

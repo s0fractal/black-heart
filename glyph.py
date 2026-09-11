@@ -174,7 +174,21 @@ def canonical_bytes(term: Term) -> bytes:
     raise TypeError(f"Unknown term type: {type(term)}")
 
 TERM_ADDRESS_PROFILE = "glyph.term.v2"
-_LEGACY_SAFE_NAME = re.compile(r"^(?:[0-9A-Za-z_\-]+|\$)$")
+# The four characters that make `canonical_bytes` ambiguous, found by searching
+# for colliding pairs rather than by reading the function:
+#   `$`  a Comb symbol starting with it renders exactly like a Var: Comb("$a")
+#        and Var("a") both give `$a`
+#   ` `  a name or symbol containing one lets the split between siblings move:
+#        App(Var("a"), Var(" $a")) and App(Var("a $"), Var("a")) agree
+#   ( )  a Comb symbol containing them can imitate an application outright:
+#        Comb("($a $b)") and App(Var("a"), Var("b")) agree — though that witness
+#        also contains `$`, and a search over 7.4M terms whose leaves carry
+#        parentheses but neither a space nor a `$` found NO collision. The
+#        parenthesis exclusion is therefore retained as conservatism rather than
+#        demonstrated need: the search is bounded, parentheses are structural in
+#        this encoding, and the cost is only that a symbol like "(x)" is not
+#        vouched for.
+_LEGACY_UNSAFE_CHARS = frozenset(" $()")
 
 
 def _encode_term_v2(term: Term) -> bytes:
@@ -222,24 +236,32 @@ def is_term_address(value: Any) -> bool:
 
 
 def in_legacy_address_domain(term: Term) -> bool:
-    """True if `term_hash` is unambiguous for this term.
+    """A SUFFICIENT condition for `term_hash` to be unambiguous. Not a recognizer.
 
-    `canonical_bytes` writes a variable as `$name` and an application as
-    `(left right)`. That determines the term only while no name contains a
-    space or a `$`, since otherwise the split between siblings can move:
+    True establishes uniqueness only among terms inside this restricted domain.
+    It does not establish uniqueness against unrestricted ASTs: Var("a") is
+    accepted here but shares legacy bytes with the excluded Comb("$a"). Both
+    sides of a legacy lookup must therefore come from an independently enforced
+    domain; checking only the incoming term cannot validate an unrestricted cache.
+    False means this sufficient condition gives no guarantee. `parse("$")`
+    produces the excluded Var("$"), which collides with the also-excluded
+    Comb("$$"). This does not show ambiguity within parser-produced terms.
 
-        App(Var('a'), Var('b $c'))   and   App(Var('a $b'), Var('c'))
+    An earlier version of this helper was narrower still and rejected
+    `parse("ї")` and `parse("!")`, which are ordinary parser outputs: it tested
+    an ASCII identifier shape instead of the property that matters. The property
+    that matters is the absence of the four characters listed above, and every
+    other character — Unicode letters, punctuation, the glyph aliases — is
+    admitted.
 
-    both render as `($a $b $c)`. `parse` cannot produce such names — it tokenizes
-    `$` on its own — so terms that came from text are inside the domain, and a
-    consumer that keeps using the legacy digest can CHECK that rather than
-    assume it.
+    Use it to justify leaving a call site on the legacy digest, never to reject
+    input on its own: a false negative here is a term this function cannot
+    vouch for, not a term that is unsafe.
     """
     if isinstance(term, Comb):
-        return bool(_LEGACY_SAFE_NAME.match(term.symbol)) or term.symbol in (
-            GLYPH_K, GLYPH_I, GLYPH_S, GLYPH_Y)
+        return not (_LEGACY_UNSAFE_CHARS & set(term.symbol))
     if isinstance(term, Var):
-        return bool(_LEGACY_SAFE_NAME.match(term.name))
+        return not (_LEGACY_UNSAFE_CHARS & set(term.name))
     if isinstance(term, App):
         return in_legacy_address_domain(term.left) and in_legacy_address_domain(term.right)
     return False

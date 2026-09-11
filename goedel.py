@@ -39,6 +39,7 @@ from glyph import (
     parse,
     reduce_step,
     term_hash,
+    term_address,
     tree_size,
     Term,
     App,
@@ -271,7 +272,11 @@ def evaluate_with_cycle_detection(
             )
             return res, None, TruthGrade.SIZE_LIMIT, EventHorizonClass.SUPERCRITICAL_BLOWOUT
 
-        h = term_hash(curr)
+        # Profile-qualified: this history decides whether a reduction has
+        # returned to a state it already visited, and two different terms
+        # sharing a legacy address would read as a repeat, i.e. a limit cycle
+        # that never happened. Internal key, never persisted or signed.
+        h = term_address(curr)
         if h in history:
             prev_step = history[h]
             period = steps - prev_step
