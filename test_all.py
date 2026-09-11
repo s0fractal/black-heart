@@ -91,6 +91,7 @@ SUITES = [
     ("Counterexample Producer: Audit Before Effects", "test_counterexample_producer"),
     ("Epistemic Swarm Membrane & Quine Symbiosis", "test_epistemic_swarm"),
     ("Epistemic E-Graph Kernel & Equality Saturation", "test_egraph_kernel"),
+    ("E-Graph Explanations: Only Steps That Replay", "test_egraph_explanation"),
     ("Sovereign SMT Kernel & First-Order DPLL(T) Verifier", "test_smt_kernel"),
     ("UNSAT Certificate: Structure vs Checked Refutation", "test_unsat_certificate"),
     ("Quarantine: Entailment, not Consistency", "test_quarantine_predicate"),
