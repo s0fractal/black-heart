@@ -53,6 +53,7 @@ SUITES = [
     ("Epistemic E-Graph Kernel & Equality Saturation", "test_egraph_kernel"),
     ("Sovereign SMT Kernel & First-Order DPLL(T) Verifier", "test_smt_kernel"),
     ("UNSAT Certificate: Structure vs Checked Refutation", "test_unsat_certificate"),
+    ("Quarantine: Entailment, not Consistency", "test_quarantine_predicate"),
     ("Counterexample-Guided Inductive Synthesis (CEGIS)", "test_cegis_kernel"),
     ("CEGIS Credit: Operand-Bound Equivalence", "test_cegis_credit"),
     ("Scoped Re-Admission & Conditional Reopening", "test_scoped_admission"),
