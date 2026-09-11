@@ -169,6 +169,7 @@ class RefutationScope(str, Enum):
     REFUTED_FOR_REFERENCE = "REFUTED_FOR_REFERENCE"
     REFUTED_FOR_ANOTHER_REFERENCE = "REFUTED_FOR_ANOTHER_REFERENCE"
     UNTRUSTED_EVIDENCE = "UNTRUSTED_EVIDENCE"
+    UNAUTHORIZED_ISSUER = "UNAUTHORIZED_ISSUER"
     NO_MEASURED_REFUTATION = "NO_MEASURED_REFUTATION"
 
 
@@ -180,6 +181,8 @@ class RefutationScopeReport:
     target_id: Optional[str] = None
     measured_reference: Optional[str] = None
     untrusted_slots: Tuple[str, ...] = ()
+    unauthorized_slots: Tuple[str, ...] = ()
+    ignored_readoptions: Tuple[str, ...] = ()
 
     def prohibits(self) -> bool:
         """True only for an authenticated refutation measured against the
@@ -190,6 +193,63 @@ class RefutationScopeReport:
 
 
 @dataclass(frozen=True)
+class IssuerPolicy:
+    """
+    Which keys may issue the retirements and readoptions a caller honours.
+
+    A signature binds a record to a key. This list is what gives a key
+    authority, and neither stands in for the other: a record is first
+    authenticated for its slot, and only then is its author compared with this
+    list, so a record naming a trusted key it was not signed by never reaches
+    it. The consequences of each combination are fixed in
+    docs/TRUSTED-ISSUERS.md. An empty list is allowed and means nobody.
+    """
+    retirement_issuers: FrozenSet[str]
+    readoption_issuers: FrozenSet[str]
+
+    DOCUMENT_KEYS = ("retirement_issuers", "readoption_issuers")
+
+    def __post_init__(self):
+        for field_name in self.DOCUMENT_KEYS:
+            keys = getattr(self, field_name)
+            if isinstance(keys, (str, bytes)):
+                raise TypeError(f"{field_name} must be a collection of keys, not one string")
+            keys = frozenset(keys)
+            for key in keys:
+                if not crypto.is_valid_public_key(key):
+                    raise ValueError(
+                        f"{field_name} holds {key!r}, which is not a valid Ed25519 public key")
+            object.__setattr__(self, field_name, keys)
+
+    @classmethod
+    def same_for_both(cls, keys) -> "IssuerPolicy":
+        keys = frozenset(keys)
+        return cls(retirement_issuers=keys, readoption_issuers=keys)
+
+    @classmethod
+    def from_document(cls, d: Any) -> "IssuerPolicy":
+        """Load from an external document, envelope checked before anything else."""
+        if not isinstance(d, dict):
+            raise ValueError(f"issuer policy must be a JSON object, got {type(d).__name__}")
+        missing = [k for k in cls.DOCUMENT_KEYS if k not in d]
+        unknown = sorted(str(k) for k in set(d) - set(cls.DOCUMENT_KEYS))
+        if missing or unknown:
+            raise ValueError(f"issuer policy envelope must be exactly {list(cls.DOCUMENT_KEYS)}: "
+                             f"missing {missing}, unknown {unknown}")
+        for key in cls.DOCUMENT_KEYS:
+            if not isinstance(d[key], list) or not all(isinstance(k, str) for k in d[key]):
+                raise ValueError(f"issuer policy '{key}' must be a list of key strings")
+        return cls(retirement_issuers=frozenset(d["retirement_issuers"]),
+                   readoption_issuers=frozenset(d["readoption_issuers"]))
+
+    def trusts_retirement(self, record: RetirementRecord) -> bool:
+        return record.author_pk_hex in self.retirement_issuers
+
+    def trusts_readoption(self, record: ReAdoptionRecord) -> bool:
+        return record.author_pk_hex in self.readoption_issuers
+
+
+@dataclass(frozen=True)
 class RefutationAdmissionPolicy:
     """
     What a caller requires before a replacement may proceed.
@@ -197,7 +257,8 @@ class RefutationAdmissionPolicy:
     `refuted_for` answers with a scope. This names which scopes are enough to go
     ahead. "Not proven prohibited" is not "permitted": the default proceeds only
     when nothing measured addresses the pair. A refutation measured against
-    another reference, and evidence that could not be authenticated, are
+    another reference, evidence that could not be authenticated, and an
+    authentic refutation signed by a key the caller does not trust are
     uncertainty. A caller that wants to proceed through either must name it here,
     and the refusal it gets otherwise names the scope it stopped on. A
     refutation measured against the very reference being replaced can never be
@@ -270,7 +331,8 @@ class ResurrectionDefense:
     def refuted_for(
         registry: EpistemicTombstoneRegistry,
         candidate_expr: str,
-        reference_expr: str
+        reference_expr: str,
+        issuers: Optional[IssuerPolicy] = None
     ) -> RefutationScopeReport:
         """
         Does this registry hold a measured refutation of THIS candidate offered
@@ -288,6 +350,13 @@ class ResurrectionDefense:
         interchangeable. Offered against some other reference, the same
         candidate has not been measured at all, and that case is reported as
         its own scope rather than as permission or as prohibition.
+
+        `issuers`, when given, says whose records count. An authentic
+        retirement of the pair by a key not in its retirement list is
+        UNAUTHORIZED_ISSUER, never a prohibition; a readoption lifts a
+        retirement only when its author is in the readoption list. Without
+        `issuers` every authentic author counts, exactly as before. See
+        docs/TRUSTED-ISSUERS.md for the full table.
         """
         # A record is evidence only after it has been checked here, against the
         # slot it actually occupies, as it is right now. `is_admitted` cannot
@@ -300,6 +369,8 @@ class ResurrectionDefense:
         same_pair: Optional[Tuple[str, RetirementRecord]] = None
         other_reference: Optional[RetirementRecord] = None
         untrusted: List[str] = []
+        unauthorized: List[str] = []
+        ignored_readoptions: List[str] = []
         try:
             candidate_address = glyph.term_address(glyph.parse(candidate_expr))
         except Exception:
@@ -326,9 +397,16 @@ class ResurrectionDefense:
                 continue
             if tomb.mode != RetirementMode.REFUTED:
                 continue
+            trusted = issuers is None or issuers.trusts_retirement(tomb)
             readoption = registry.readoptions.get(tid)
             if readoption is not None and readoption.is_admissible_for(tid, tomb):
-                continue                          # a valid readoption suppresses it
+                if issuers is None or issuers.trusts_readoption(readoption):
+                    continue                      # a valid, trusted readoption suppresses it
+                ignored_readoptions.append(tid)   # a foreign readoption lifts nothing
+            if not trusted:
+                if identity.addresses(candidate_expr, reference_expr):
+                    unauthorized.append(tid)
+                continue                          # a foreign retirement is never a prohibition
             if identity.addresses(candidate_expr, reference_expr):
                 if same_pair is None:
                     same_pair = (tid, tomb)
@@ -348,7 +426,9 @@ class ResurrectionDefense:
                         f"under label '{tomb.rule_identity.label}'."),
                 record_id=tomb.record_id, target_id=tid,
                 measured_reference=tomb.rule_identity.reference_address,
-                untrusted_slots=tuple(untrusted))
+                untrusted_slots=tuple(untrusted),
+                unauthorized_slots=tuple(unauthorized),
+                ignored_readoptions=tuple(ignored_readoptions))
 
         # Nothing authentic addresses this pair. A record that could not be
         # authenticated might have, so the answer is "cannot tell", reported as
@@ -360,7 +440,18 @@ class ResurrectionDefense:
                         "could not be authenticated for the slot they occupy, or is "
                         "outside the supported profile. They are neither refutation "
                         "nor permission for this pair."),
-                untrusted_slots=tuple(untrusted))
+                untrusted_slots=tuple(untrusted),
+                unauthorized_slots=tuple(unauthorized),
+                ignored_readoptions=tuple(ignored_readoptions))
+
+        if unauthorized:
+            return RefutationScopeReport(
+                scope=RefutationScope.UNAUTHORIZED_ISSUER,
+                detail=(f"{len(unauthorized)} authentic retirement(s) of this pair are signed "
+                        "by a key the caller does not trust to issue retirements. They are "
+                        "neither refutation nor permission for this pair."),
+                unauthorized_slots=tuple(unauthorized),
+                ignored_readoptions=tuple(ignored_readoptions))
 
         if other_reference is not None:
             ident = other_reference.rule_identity
@@ -371,11 +462,13 @@ class ResurrectionDefense:
                         "says nothing about the reference asked about here."),
                 record_id=other_reference.record_id,
                 target_id=other_reference.target_id,
-                measured_reference=ident.reference_address)
+                measured_reference=ident.reference_address,
+                ignored_readoptions=tuple(ignored_readoptions))
 
         return RefutationScopeReport(
             scope=RefutationScope.NO_MEASURED_REFUTATION,
-            detail="No registered tombstone addresses this candidate and reference.")
+            detail="No registered tombstone addresses this candidate and reference.",
+            ignored_readoptions=tuple(ignored_readoptions))
 
 
 # ============================================================================
