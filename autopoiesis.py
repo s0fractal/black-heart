@@ -662,16 +662,12 @@ def init_autopoietic_organism(
     with open(pdf_path, "wb") as f:
         f.write(polyglot_bytes)
 
-    # N1 Fix: Save private key strictly in local sidecar file with restricted permissions (never in PDF)
-    key_path = pdf_path + ".key"
-    try:
-        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-        mode = 0o600
-        fd = os.open(key_path, flags, mode)
-        with os.fdopen(fd, "w") as kf:
-            kf.write(sk_hex.strip() + "\n")
-    except Exception:
-        pass
+    # The private key lives only in the sidecar, never in the PDF. Written through
+    # the shared private-file writer, which refuses a link planted at the path;
+    # a failure is raised, not swallowed, because an organism whose key was not
+    # kept cannot evolve.
+    from keystore import write_private_file
+    write_private_file(pdf_path + ".key", sk_hex.strip() + "\n")
 
     return org, genesis_receipt
 

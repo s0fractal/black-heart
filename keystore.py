@@ -23,6 +23,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import stat
+import tempfile
 from typing import Any, Dict, List, Optional, Tuple
 
 from crypto import is_valid_public_key, public_key_from_secret
@@ -39,6 +41,51 @@ _PAIR_SCAN_LIMIT = 512
 
 class MissingKeyError(RuntimeError):
     """A signing step was asked for and no private key source provides the key."""
+
+
+class PrivateFileError(OSError):
+    """A private key file was not written, because its path is not safe to write."""
+
+
+def write_private_file(path: str, text: str) -> str:
+    """Write `text` to `path` as a private file, mode 0600, replacing it atomically.
+
+    - The temporary file is created exclusively (`mkstemp`: O_CREAT|O_EXCL,
+      mode 0600) under an unpredictable name in the target's own directory,
+      and written only through the descriptor that created it. A link planted
+      at any temporary name cannot be followed, because no name is reopened.
+    - An existing `path` is replaced only if it is a regular file. A link,
+      directory or anything else there is refused and left as it is, so bytes
+      behind a link are never touched. If a link appears after that check,
+      `os.replace` renames over the link itself and still does not follow it.
+    - On failure, only the temporary entry this call created is removed.
+
+    Before the S5a review, `Keystore.save` opened `path.tmp-<pid>` with O_TRUNC
+    and followed a link planted there, so the secret landed in the link's target.
+    """
+    try:
+        existing = os.lstat(path)
+    except FileNotFoundError:
+        existing = None
+    if existing is not None and not stat.S_ISREG(existing.st_mode):
+        raise PrivateFileError(
+            f"refusing to write a private key at {path}: it exists and is not a regular file "
+            "(a link or other entry there is left untouched)")
+    fd, tmp = tempfile.mkstemp(prefix=f".{os.path.basename(path)}.", suffix=".tmp",
+                               dir=os.path.dirname(os.path.abspath(path)))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except FileNotFoundError:
+            pass
+        raise
+    return path
 
 
 def _canonical_public(public_key_hex: str) -> str:
@@ -105,19 +152,8 @@ class Keystore:
         return store
 
     def save(self, path: str) -> str:
-        """Write with mode 0600, created that way rather than tightened afterwards."""
-        tmp = f"{path}.tmp-{os.getpid()}"
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                json.dump(self.to_document(), fh, indent=2, sort_keys=True)
-                fh.write("\n")
-            os.chmod(tmp, 0o600)
-            os.replace(tmp, path)
-        finally:
-            if os.path.exists(tmp):
-                os.unlink(tmp)
-        return path
+        """Write as a private file; see `write_private_file`."""
+        return write_private_file(path, json.dumps(self.to_document(), indent=2, sort_keys=True) + "\n")
 
     @classmethod
     def load(cls, path: str) -> "Keystore":
@@ -166,9 +202,16 @@ def secret_material_reasons(name: str, data: bytes) -> List[str]:
 
     Four signals, each named: a private key file name, a keystore document, a
     field that holds a 64-hex secret by name, and a 64-hex value whose derived
-    public key appears in the same bytes. The last is bounded: a file with more
-    than `_PAIR_SCAN_LIMIT` distinct 64-hex strings is scanned for the named
-    signals only, and that limit is reported rather than hidden.
+    public key appears in the same bytes. The last is bounded, and exceeding
+    the bound is itself a reason: a file with more than `_PAIR_SCAN_LIMIT`
+    distinct 64-hex strings is not scanned for pairs, so it cannot be cleared
+    and is refused. Measured: about 1.6 ms per candidate, so the limit costs
+    under a second per file; no file in this repository holds more than 14.
+    (Before the S5a review, exceeding it returned the other reasons, often
+    none, so padding a secret with 513 digests made it pass.)
+
+    This detects the declared patterns. It is not a guarantee against every
+    encoding of a secret.
     """
     reasons: List[str] = []
     if name.endswith(SECRET_FILE_SUFFIXES):
@@ -179,6 +222,8 @@ def secret_material_reasons(name: str, data: bytes) -> List[str]:
         reasons.append("it holds a secret key in a named field")
     candidates = {m.group(1).lower() for m in _HEX64_BYTES.finditer(data)}
     if len(candidates) > _PAIR_SCAN_LIMIT:
+        reasons.append(f"it holds {len(candidates)} distinct 64-hex strings, more than the "
+                       f"{_PAIR_SCAN_LIMIT} the pair scan checks, so it cannot be cleared")
         return reasons
     lowered = data.lower()
     for candidate in candidates:

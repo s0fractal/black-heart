@@ -9,7 +9,14 @@ swarm PDF, a colony or swarm JSON state, a metamorphic or autopoietic document,
 a vault. It carries public keys and signatures. It never carries a secret key.
 
 **Private recovery** is what continuing one of those needs: the secret key of
-whoever signs next. It lives only in its own file, created with mode 0600:
+whoever signs next. It lives only in its own file, written by
+`keystore.write_private_file`. That function:
+
+- creates an exclusive temporary file, mode 0600, under an unpredictable name in the same directory;
+- writes it through that file's own descriptor;
+- atomically replaces the target, and only if the target is a regular file.
+
+A link or anything else at the path is refused and left untouched. The files:
 
 | export | private key source for continuing it |
 |---|---|
@@ -40,8 +47,14 @@ the embedded runners' `--status` and `--audit`.
 - **Packing secrets into a vault.** `vault.pack_files_to_vault`, and so
   `cli.py vault pack` and `symbiosis`, refuse any member that looks like private
   key material, naming it: a `.key` or `.keys` file, a keystore, a named secret
-  field, or a secret next to the public key it derives. A vault is a public
-  reproducibility archive, not a secret store.
+  field, a secret next to the public key it derives, or more distinct 64-hex
+  strings than the pair scan checks (512), because a file that was not
+  scanned cannot be cleared. Each member is read once, and those exact bytes
+  are both checked and archived. A vault is a public reproducibility archive,
+  not a secret store. The detector covers these declared patterns. It is not a
+  guarantee against every encoding of a secret.
+- **Writing a key through a planted link.** A link at a keystore or `.key`
+  path is refused, and whatever it points to is left unchanged.
 
 ## Historical artifacts
 

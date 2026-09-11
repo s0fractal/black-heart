@@ -48,7 +48,11 @@ class SecretMaterialError(ValueError):
 
 
 def find_secret_material(file_paths: List[str], base_dir: str) -> List[Tuple[str, List[str]]]:
-    """Every member that looks like private key material, with the reasons."""
+    """Every member that looks like private key material, with the reasons.
+
+    Diagnostic only, for a message before any work starts. It reads the files
+    itself, so it is not the guard: `pack_files_to_vault` checks the very bytes
+    it archives."""
     from keystore import secret_material_reasons
     findings = []
     for rel_path in sorted(file_paths):
@@ -71,29 +75,39 @@ def pack_files_to_vault(file_paths: List[str], base_dir: str) -> Tuple[bytes, st
 
     Refuses, naming each file, when any member looks like private key material:
     a key or keystore file, a named secret field, or a secret next to its own
-    public key. Checked here so no caller can skip it.
+    public key. Checked here so no caller can skip it, and checked on the very
+    bytes that go into the archive: each member is read once, that buffer is
+    checked, and that buffer is packed. Before the S5a review a separate scan
+    read the files and the packer read them again, so a file replaced in
+    between was published unchecked.
     """
-    findings = find_secret_material(file_paths, base_dir)
+    from keystore import secret_material_reasons
+
+    # Sort file paths for reproducible canonical archive ordering
+    sorted_files = sorted(file_paths)
+
+    members: List[Tuple[str, bytes]] = []
+    findings: List[Tuple[str, List[str]]] = []
+    for rel_path in sorted_files:
+        abs_path = os.path.join(base_dir, rel_path)
+        if not os.path.isfile(abs_path):
+            raise FileNotFoundError(f"Vault member file not found: {abs_path}")
+        with open(abs_path, "rb") as f:
+            content = f.read()
+        reasons = secret_material_reasons(os.path.basename(rel_path), content)
+        if reasons:
+            findings.append((rel_path, reasons))
+        members.append((rel_path, content))
     if findings:
         raise SecretMaterialError(findings)
 
     buf = io.BytesIO()
     manifest_entries = []
 
-    # Sort file paths for reproducible canonical archive ordering
-    sorted_files = sorted(file_paths)
-
     # Wrap in explicit GzipFile with fixed mtime=0 and empty filename for true determinism
     with gzip.GzipFile(filename="", mode="wb", fileobj=buf, mtime=0) as gz:
         with tarfile.open(fileobj=gz, mode="w", format=tarfile.PAX_FORMAT) as tar:
-            for rel_path in sorted_files:
-                abs_path = os.path.join(base_dir, rel_path)
-                if not os.path.isfile(abs_path):
-                    raise FileNotFoundError(f"Vault member file not found: {abs_path}")
-
-                with open(abs_path, "rb") as f:
-                    content = f.read()
-
+            for rel_path, content in members:
                 f_hash = hashlib.sha256(content).hexdigest()
                 manifest_entries.append({
                     "path": rel_path,

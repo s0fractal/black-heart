@@ -809,14 +809,11 @@ def init_morpho_autopoietic_organism(
     with open(pdf_path, "wb") as f:
         f.write(bytes(out))
 
-    # Save secret key exclusively in sidecar
-    key_path = f"{pdf_path}.key"
-    with open(key_path, "w") as f:
-        f.write(sk_hex)
-    try:
-        os.chmod(key_path, 0o600)
-    except Exception:
-        pass
+    # Save secret key exclusively in the sidecar, through the shared private-file
+    # writer: created 0600 rather than tightened afterwards, and a link planted
+    # at the path is refused instead of followed.
+    from keystore import write_private_file
+    write_private_file(f"{pdf_path}.key", sk_hex)
 
     return org, genesis_receipt
 

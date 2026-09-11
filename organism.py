@@ -374,18 +374,16 @@ class PolyglotOrganismCompiler:
         runner_code = _generate_organism_runner()
         body.extend(runner_code.encode("utf-8"))
 
+        # The document is public and carries no secret. The key needed to
+        # reproduce goes to its own private file next to it, written FIRST, so a
+        # refusal (for example a link planted at that path) leaves nothing
+        # half-published. Sharing the PDF does not share the key.
+        if organism.secret_key_hex:
+            from keystore import write_private_file
+            write_private_file(output_path + ".key", organism.secret_key_hex + "\n")
+
         with open(output_path, "wb") as f:
             f.write(body)
-
-        # The document above is public and carries no secret. The key needed to
-        # reproduce goes to its own file next to it, created with mode 0600, as
-        # autopoiesis already does. Sharing the PDF does not share the key.
-        if organism.secret_key_hex:
-            key_path = output_path + ".key"
-            fd = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-            with os.fdopen(fd, "w", encoding="utf-8") as kf:
-                kf.write(organism.secret_key_hex + "\n")
-            os.chmod(key_path, 0o600)
 
         return output_path
 

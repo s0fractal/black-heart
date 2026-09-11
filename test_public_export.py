@@ -44,13 +44,18 @@ for _name, _mod in list(sys.modules.items()):
             os.path.exists(os.path.join(_HERE, os.path.basename(_file))):
         del sys.modules[_name]
 
+import io
+import tarfile
+from unittest import mock
+
 import crypto
 import keystore as ks_module
+import vault as vault_module
 from colony import Colony
 from crypto import generate_keypair, public_key_from_secret
 from epistemic_swarm import SwarmMembrane
-from keystore import (KEYSTORE_PROFILE, Keystore, MissingKeyError, resolve_keystore,
-                      secret_material_reasons, sidecar_path)
+from keystore import (KEYSTORE_PROFILE, Keystore, MissingKeyError, PrivateFileError,
+                      resolve_keystore, secret_material_reasons, sidecar_path, write_private_file)
 from organism import (PolyglotOrganismCompiler, create_genesis_organism,
                       document_carries_secret_key, extract_organism_from_pdf)
 from vault import SecretMaterialError, pack_files_to_vault
@@ -383,6 +388,144 @@ class RefusalTest(_Dir):
         self.assertEqual(resolve_keystore(None, state)[1], sidecar_path(state))
         self.assertEqual(resolve_keystore(explicit, state)[1], explicit)
         self.assertEqual(mode(explicit), 0o600)
+
+
+class HardeningTest(_Dir):
+    """Section G: review K1-K3 on PR #19, each reproduced at 357fc4e by the
+    reviewer's probe before it was repaired."""
+
+    def planted(self):
+        target = self.path("public.txt")
+        with open(target, "w") as fh:
+            fh.write("innocent")
+        return target
+
+    def store(self):
+        sk, pk = generate_keypair()
+        s = Keystore()
+        s.add(sk)
+        return s, sk, pk
+
+    def test_G1_a_link_at_the_old_temporary_name_is_not_followed(self):
+        target, private = self.planted(), self.path("private.keys")
+        os.symlink(target, f"{private}.tmp-{os.getpid()}")
+        store, sk, pk = self.store()
+        store.save(private)
+        self.assertEqual(read(target), b"innocent")
+        self.assertFalse(os.path.islink(private))
+        self.assertEqual(mode(private), 0o600)
+        self.assertTrue(Keystore.load(private).has(pk))
+
+    def test_G2_a_link_at_the_private_path_is_refused_and_left_alone(self):
+        target, private = self.planted(), self.path("private.keys")
+        os.symlink(target, private)
+        store, sk, pk = self.store()
+        with self.assertRaises(PrivateFileError):
+            store.save(private)
+        self.assertEqual(read(target), b"innocent")
+        self.assertTrue(os.path.islink(private))
+        self.assertEqual(sorted(os.listdir(self.d)), ["private.keys", "public.txt"])
+
+    def test_G3_the_organism_sidecar_refuses_a_link_before_anything_is_written(self):
+        target, pdf = self.planted(), self.path("organism.pdf")
+        os.symlink(target, pdf + ".key")
+        with self.assertRaises(PrivateFileError):
+            PolyglotOrganismCompiler.compile(create_genesis_organism(), pdf)
+        self.assertEqual(read(target), b"innocent")
+        self.assertFalse(os.path.exists(pdf))
+
+    def test_G4_a_private_file_is_replaced_atomically_and_nothing_is_left_behind(self):
+        path = self.path("k.key")
+        write_private_file(path, "first\n")
+        write_private_file(path, "second\n")
+        self.assertEqual(read(path), b"second\n")
+        self.assertEqual(mode(path), 0o600)
+        self.assertEqual(os.listdir(self.d), ["k.key"])
+
+    def test_G5_the_vault_archives_exactly_the_bytes_it_checked(self):
+        """The file is replaced with a secret right after its check returns."""
+        src = self.path("project")
+        os.makedirs(src)
+        payload = os.path.join(src, "payload.json")
+        with open(payload, "wb") as fh:
+            fh.write(b'{"safe": true}')
+        _, sk, pk = self.store()
+        secret_doc = json.dumps({"secret_key_hex": sk, "public_key_hex": pk}).encode()
+        checked = {}
+        real = ks_module.secret_material_reasons
+
+        def check_then_swap(name, data):
+            checked[name] = data
+            answer = real(name, data)
+            with open(payload, "wb") as fh:
+                fh.write(secret_doc)
+            return answer
+
+        with mock.patch.object(ks_module, "secret_material_reasons", check_then_swap):
+            packed, _, _ = pack_files_to_vault(["payload.json"], src)
+        with tarfile.open(fileobj=io.BytesIO(packed), mode="r:gz") as archive:
+            content = archive.extractfile("payload.json").read()
+        self.assertEqual(content, checked["payload.json"])
+        self.assertNotIn(sk.encode(), content)
+
+    def test_G6_the_reviewers_model_scan_then_replace_does_not_reach_the_archive(self):
+        src = self.path("project")
+        os.makedirs(src)
+        payload = os.path.join(src, "payload.json")
+        with open(payload, "wb") as fh:
+            fh.write(b'{"safe": true}')
+        _, sk, pk = self.store()
+        real = vault_module.find_secret_material
+
+        def scan_then_replace(paths, base):
+            answer = real(paths, base)
+            with open(payload, "wb") as fh:
+                fh.write(json.dumps({"secret_key_hex": sk, "public_key_hex": pk}).encode())
+            return answer
+
+        with mock.patch.object(vault_module, "find_secret_material", scan_then_replace):
+            try:
+                packed, _, _ = pack_files_to_vault(["payload.json"], src)
+            except SecretMaterialError:
+                return
+        with tarfile.open(fileobj=io.BytesIO(packed), mode="r:gz") as archive:
+            self.assertNotIn(sk.encode(), archive.extractfile("payload.json").read())
+
+    def test_G8_the_older_sidecar_writers_refuse_a_planted_link_too(self):
+        """autopoiesis and morpho-autopoiesis wrote their `.key` the same way
+        before S5a (O_TRUNC, and a plain open plus chmod); they now share the writer."""
+        from autopoiesis import init_autopoietic_organism
+        from morpho_autopoiesis import init_morpho_autopoietic_organism
+        for name, init in (("auto.pdf", init_autopoietic_organism),
+                           ("morpho.pdf", init_morpho_autopoietic_organism)):
+            with self.subTest(writer=name):
+                target, pdf = self.planted(), self.path(name)
+                os.symlink(target, pdf + ".key")
+                with self.assertRaises(PrivateFileError):
+                    init(pdf, secret_key_hex=generate_keypair()[0])
+                self.assertEqual(read(target), b"innocent")
+                self.assertTrue(os.path.islink(pdf + ".key"))
+        pdf = self.path("clean.pdf")
+        init_autopoietic_organism(pdf, secret_key_hex=generate_keypair()[0])
+        self.assertEqual(mode(pdf + ".key"), 0o600)
+
+    def test_G7_scan_exhaustion_is_a_refusal_not_a_clean_result(self):
+        _, sk, pk = self.store()
+        pad = [hashlib.sha256(str(i).encode()).hexdigest() for i in range(513)]
+        at_limit = json.dumps([sk, pk] + pad[:510]).encode()   # 512 distinct: scanned
+        over = json.dumps([sk, pk] + pad[:511]).encode()        # 513: not scanned, refused
+        self.assertIn("it holds a secret key next to the public key it derives",
+                      secret_material_reasons("b.json", at_limit))
+        self.assertTrue(any("cannot be cleared" in r for r in secret_material_reasons("b.json", over)))
+        self.assertTrue(any("cannot be cleared" in r
+                            for r in secret_material_reasons("b.json", json.dumps(pad).encode())))
+        self.assertEqual(secret_material_reasons("b.json", json.dumps(pad[:20]).encode()), [])
+        src = self.path("project")
+        os.makedirs(src)
+        with open(os.path.join(src, "blob.json"), "wb") as fh:
+            fh.write(over)
+        with self.assertRaises(SecretMaterialError):
+            pack_files_to_vault(["blob.json"], src)
 
 
 class VaultTest(_Dir):
