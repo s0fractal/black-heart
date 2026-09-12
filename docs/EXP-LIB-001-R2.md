@@ -1,6 +1,6 @@
 # EXP-LIB-001 R2 — external-anchor profile
 
-Status: **proposed** (profile for review; no R2 run yet). Revision 3. Companion to
+Status: **proposed** (profile for review; no R2 run yet). Revision 4. Companion to
 `docs/EXP-LIB-001.md`. Defines what R2 is, before it is exercised. Until an
 actual proof is verified, R2 is `NOT_DEMONSTRATED` and R3 is `NOT_RELEASED`.
 
@@ -52,7 +52,7 @@ Bitcoin header source:
 | `REFUSED` | a proof was supplied but is malformed or does not bind the commitment — a distinct failure, never folded into `NOT_DEMONSTRATED` or `PENDING` |
 | `PENDING` | the proof binds the commitment but carries only calendar commitments; no Bitcoin attestation yet |
 | `ANCHORED_UNVERIFIED` | the proof carries a Bitcoin block attestation, but its chain time is **not** established against any accepted Bitcoin data source |
-| `CONFIRMED` | the block attestation is verified against an accepted, reader-pinned Bitcoin data source |
+| `CONFIRMED` | the block attestation's Merkle root matches an accepted, reader-pinned **block header** at that height; the verified time is that header's timestamp |
 
 **Default is `NOT_DEMONSTRATED`.** A proof is never assumed; a supplied proof
 that does not bind the commitment is `REFUSED`, not absent; a present block
@@ -67,7 +67,7 @@ Bitcoin data source the **reader** has accepted and pinned — which may be
 block headers fetched earlier and independently pinned, and therefore verified
 **offline**. Without an accepted source there is no confirmation: R2 is at most
 `ANCHORED_UNVERIFIED`. The source, and how it is pinned, is the reader's
-choice; it is **not** carried by the `.ots`. `network_calls` is reported as an
+choice; it is **not** carried by the `.ots`. The accepted source is **block data**, not a bare Merkle-root string: the reader derives both the Merkle root and the block **time** from a pinned block header, so a `CONFIRMED` result carries an actual verified time (`attested_time`) and a derived `block_id`. A dictionary of Merkle-root hex alone carries no time and can never yield `CONFIRMED`. (Proof-of-work is not checked; accepting the header set is the reader's decision.) `network_calls` is reported as an
 **observation**, never as the criterion of trust — a proof verified against a
 pinned offline header set makes zero network calls and can still be
 `CONFIRMED`, and a network call to an unaccepted server never earns it. The
@@ -95,19 +95,28 @@ The R2 reader is given `(commitment, ots_proof, accepted_source=None)`:
 - `commitment` — the same pinned root R1 uses (its 32 raw bytes; §2);
 - `ots_proof` — the detached `.ots` bytes (§2);
 - `accepted_source` — **optional**, the reader's pinned Bitcoin data source
-  (e.g. a `{block_height: merkle_root_hex}` header set fetched earlier and
-  independently pinned; §4). Without it, `CONFIRMED` is **unreachable**: the
-  reader can reach at most `ANCHORED_UNVERIFIED`.
+  (§4), a well-formed object
+  `{"name": <non-empty str>, "block_headers": {<int height>: <80-byte header hex>}}`.
+  The reader derives the Merkle root and block time from each pinned header; a
+  bare `{height: merkle_root_hex}` map is **not** accepted (it carries no time).
+  Its format is checked **before** any matching: a malformed source (missing
+  name, or a value that is not exactly an 80-byte header) is **not used** —
+  reported as `accepted_source: none` and never confirming. Without a usable
+  source, `CONFIRMED` is **unreachable**: at most `ANCHORED_UNVERIFIED`.
 
 It returns a structured result whose field names match §3/§4 exactly: `state`,
 `commitment_sha256`, `proof_sha256`, `pending_calendars`,
-`bitcoin_attestations` (each height + attested Merkle root), and the explicit
-`time_verified`, `calendar_authenticity_verified`, `accepted_source` (the name
-of the source used, or `none`), and `network_calls`. A malformed or
+`bitcoin_attestations` (each height + attested Merkle root, a 32-byte value),
+`time_verified`, `attested_time` (the verified block time when `CONFIRMED`,
+else `null`), `block_id` (derived from the pinned header when `CONFIRMED`, else
+`null`), `calendar_authenticity_verified`, `accepted_source` (the name of the
+well-formed source used, or `none`), and `network_calls`. A malformed or
 non-binding proof is `REFUSED` (§3), returned as a named result, never an
 exception (the same contract as the package reader). Supplying an
-`accepted_source` is never by itself a confirmation: the attestation must
-actually match it.
+`accepted_source` is never by itself a confirmation: a Bitcoin attestation's
+Merkle root must actually match a pinned header, which is also what yields the
+reported time. `time_verified` is `true` only for `CONFIRMED`; no other state
+reports a time.
 
 ## 8. Acceptance and the release gate
 
@@ -125,6 +134,9 @@ stays `NOT_DEMONSTRATED`.
   non-binding proof (distinct from absent/PENDING); `PENDING` and
   `ANCHORED_UNVERIFIED` from fixture proofs; the commitment file is exactly the
   32 raw bytes and equals the pinned root. `CONFIRMED` is exercised only against
-  an accepted, pinned Bitcoin data source and is otherwise reported, not
-  asserted.
+  a well-formed, pinned block-header source whose Merkle root matches the
+  attestation (asserting the derived `attested_time`), with the adjacent
+  negatives -- same source but a mismatched header, a source missing its name,
+  and the bare merkle-root-only shape -- all reaching at most
+  `ANCHORED_UNVERIFIED`. It is otherwise reported, not asserted.
 - R3 (Zenodo) remains out of scope until its own gate.
