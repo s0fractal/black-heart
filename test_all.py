@@ -111,6 +111,7 @@ SUITES = [
     ("EXP-001: Refusal, Readoption, Evolution", "test_exp001"),
     ("Trusted Issuers: Who May Refute", "test_trusted_issuers"),
     ("EXP-002: The Issuer as the One Factor", "test_exp002"),
+    ("EXP-LIB-001: Living-Library Loop (claim/counterexample/refine)", "test_exp_lib_001"),
     ("Key Custody: Public Export, Private Recovery", "test_public_export"),
     ("Key Sidecar Extension: .key -> \U0001F511", "test_key_sidecar_extension"),
     ("Living Colony Ecosystem", "test_colony"),
