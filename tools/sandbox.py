@@ -46,13 +46,36 @@ class PolyglotAuditReport:
     cryptographic_seals_valid: bool
     hermetic_evaluation_valid: bool
     audit_notes: List[str]
+    # Positive/negative evidence, so soundness is a POSITIVE confirmation rather
+    # than the mere absence of a proven negative. Before this, cryptographic and
+    # hermetic validity defaulted True and flipped only on an explicit failure,
+    # so a document with a valid header but no verifiable evidence -- no
+    # manifest, a malformed manifest, or a signature whose signed content could
+    # not be determined -- was reported SOUND.
+    verified_seal_count: int = 0        # signatures positively verified
+    passed_claim_count: int = 0         # hermetic claims settled and matched
+    unconfirmed_seal_count: int = 0     # signature present but not confirmable
+    seal_mismatch_count: int = 0        # signature explicitly wrong
+    failed_claim_count: int = 0         # claim did not settle/match
+    audit_error_count: int = 0          # parse/verify exceptions (never swallowed)
 
     def is_sound(self) -> bool:
+        # SOUND requires: valid container; at least one thing POSITIVELY
+        # verified (a signature or a hermetic claim); and nothing that failed,
+        # was left unconfirmed, or errored. "I could not verify this" is not
+        # SOUND.
+        positively_confirmed = (self.verified_seal_count + self.passed_claim_count) >= 1
+        nothing_wrong = (
+            self.seal_mismatch_count == 0
+            and self.unconfirmed_seal_count == 0
+            and self.failed_claim_count == 0
+            and self.audit_error_count == 0
+        )
         return (
             self.is_valid_iso32000
             and self.binary_marker_present
-            and self.cryptographic_seals_valid
-            and self.hermetic_evaluation_valid
+            and positively_confirmed
+            and nothing_wrong
         )
 
 def audit_polyglot_hermetic(file_path: str) -> PolyglotAuditReport:
@@ -117,43 +140,59 @@ def audit_polyglot_hermetic(file_path: str) -> PolyglotAuditReport:
     if not manifest_types:
         notes.append("[!] No known Black-Heart manifest signatures found.")
 
-    # 5. Extract and statically verify any JSON manifests
+    # 5. Extract and statically verify any JSON manifests. Every recognized
+    # manifest must resolve to a POSITIVE outcome (a verified signature) or be
+    # counted as unconfirmed/mismatch/error -- none of which is SOUND.
     lines = data.splitlines()
-    seals_found = 0
+    verified_seals = 0
+    unconfirmed_seals = 0
+    seal_mismatches = 0
+    audit_errors = 0
     for line in lines:
         for prefix, name in manifest_prefixes:
             if line.startswith(prefix):
                 try:
                     payload_json = line[len(prefix):].strip().decode("utf-8")
                     manifest = json.loads(payload_json)
-                    seals_found += 1
-                    # If manifest contains Ed25519 signature, verify it statically
-                    if "public_key_hex" in manifest and "signature_hex" in manifest:
-                        pk_bytes = bytes.fromhex(manifest["public_key_hex"])
-                        sig_bytes = bytes.fromhex(manifest["signature_hex"])
-                        # Determine signed content
-                        signed_bytes = b""
-                        if "signed_payload" in manifest:
-                            signed_bytes = manifest["signed_payload"].encode("utf-8")
-                        elif "agreement_terms" in manifest:
-                            signed_bytes = json.dumps(manifest["agreement_terms"], sort_keys=True).encode("utf-8")
-                        elif "payload_digest" in manifest:
-                            signed_bytes = manifest["payload_digest"].encode("utf-8")
+                    has_sig = (isinstance(manifest, dict)
+                               and "public_key_hex" in manifest
+                               and "signature_hex" in manifest)
+                    if not has_sig:
+                        unconfirmed_seals += 1
+                        notes.append(f"[!] {name} manifest carries no verifiable Ed25519 seal; "
+                                     f"cannot confirm it.")
+                        continue
+                    pk_bytes = bytes.fromhex(manifest["public_key_hex"])
+                    sig_bytes = bytes.fromhex(manifest["signature_hex"])
+                    signed_bytes = b""
+                    if "signed_payload" in manifest:
+                        signed_bytes = manifest["signed_payload"].encode("utf-8")
+                    elif "agreement_terms" in manifest:
+                        signed_bytes = json.dumps(manifest["agreement_terms"], sort_keys=True).encode("utf-8")
+                    elif "payload_digest" in manifest:
+                        signed_bytes = manifest["payload_digest"].encode("utf-8")
 
-                        if signed_bytes:
-                            if verify_bytes(pk_bytes, signed_bytes, sig_bytes):
-                                notes.append(f"[✓] RFC 8032 signature statically verified for {name}.")
-                            else:
-                                notes.append(f"[✗] RFC 8032 signature MISMATCH in {name}!")
-                                signatures_valid = False
+                    if not signed_bytes:
+                        unconfirmed_seals += 1
+                        notes.append(f"[!] {name} carries a signature but no determinable signed "
+                                     f"content; cannot confirm it.")
+                    elif verify_bytes(pk_bytes, signed_bytes, sig_bytes):
+                        verified_seals += 1
+                        notes.append(f"[✓] RFC 8032 signature statically verified for {name}.")
+                    else:
+                        seal_mismatches += 1
+                        notes.append(f"[✗] RFC 8032 signature MISMATCH in {name}!")
                 except Exception as ex:
-                    notes.append(f"[!] Error parsing manifest for {name}: {ex}")
+                    audit_errors += 1
+                    notes.append(f"[!] Error parsing/verifying manifest for {name}: {ex}")
+    signatures_valid = (seal_mismatches == 0 and unconfirmed_seals == 0 and audit_errors == 0)
 
     # 6. Hermetic Combinator Validation (Gas-Metered Sandbox)
     import re
     claim_prefix = "%🖤 CLAIM:".encode("utf-8")
-    hermetic_valid = True
     claims_tested = 0
+    passed_claims = 0
+    failed_claims = 0
     for line in lines:
         if line.startswith(claim_prefix):
             try:
@@ -163,18 +202,22 @@ def audit_polyglot_hermetic(file_path: str) -> PolyglotAuditReport:
                     claim_id = m.group(1).strip()
                     expr = m.group(2).strip()
                     expected = m.group(3).strip()
-                    
+
                     term = parse(expr)
                     res = evaluate(term, max_atp=50_000)
                     claims_tested += 1
+                    # Must SETTLE and match: a budget-suspended claim is not a
+                    # proof (same discipline as the warrant grounded verifier).
                     if res.is_settled() and str(res.term) == expected:
+                        passed_claims += 1
                         notes.append(f"[✓] Hermetic claim settled: {claim_id} ({expr} -> {expected}) in {res.atp_spent} ATP.")
                     else:
+                        failed_claims += 1
                         notes.append(f"[✗] Claim failed settlement: {claim_id} (got {res.term}, expected {expected})")
-                        hermetic_valid = False
             except Exception as ex:
+                audit_errors += 1
                 notes.append(f"[!] Hermetic combinator execution error: {ex}")
-                hermetic_valid = False
+    hermetic_valid = (failed_claims == 0 and audit_errors == 0)
 
     if claims_tested > 0:
         manifest_types.append("Self-Verifying Claims Document")
@@ -190,7 +233,13 @@ def audit_polyglot_hermetic(file_path: str) -> PolyglotAuditReport:
         detected_manifest_types=manifest_types,
         cryptographic_seals_valid=signatures_valid,
         hermetic_evaluation_valid=hermetic_valid,
-        audit_notes=notes
+        audit_notes=notes,
+        verified_seal_count=verified_seals,
+        passed_claim_count=passed_claims,
+        unconfirmed_seal_count=unconfirmed_seals,
+        seal_mismatch_count=seal_mismatches,
+        failed_claim_count=failed_claims,
+        audit_error_count=audit_errors,
     )
 
 def main():
