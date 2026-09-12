@@ -1478,7 +1478,10 @@ def _submission_locks(*paths):
             "because an unserialized submission can publish twice for one debit.")
     handles = []
     try:
-        for target in sorted({os.path.abspath(p) for p in paths}):
+        # realpath, not abspath: abspath is purely lexical, so two symlinked
+        # names for one document would take two different locks and race.
+        # Hard links and bind mounts still defeat this -- named, not claimed.
+        for target in sorted({os.path.realpath(p) for p in paths}):
             handle = open(target + ".lock", "a+")
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
             handles.append(handle)
@@ -1578,30 +1581,56 @@ def _table_to_agora_locked(
                                          theorem.gene_id, identity)
     now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
-    # ---- 2. An earlier debit whose publication did not land is RESUMED ------
-    last = org.receipt_chain[-1]
-    if last.rule_name == AGORA_STAKE_RULE and last.tabled_proposal_id not in published:
-        if last.tabled_proposal_id != submission_id:
-            raise ValueError(
-                f"{last.agora_atp_staked} ATP was already debited for submission "
-                f"{last.tabled_proposal_id}, and its publication is not confirmed on THIS "
-                f"Agora document. Refusing: publishing here would be a second claim, and "
-                f"refunding is unsafe because the original Agora write may have landed. "
-                f"Re-run against the Agora that submission was staked for.")
-        proposal = _build_proposal(theorem, org, submission_id,
-                                   last.agora_atp_staked, sk_hex, now)
-        _publish_to_agora(proposal, org, agora_pdf_path,
-                          org.atp_reserve + last.agora_atp_staked,
-                          last.agora_atp_staked, sk_hex)
-        return proposal, submission_id
+    # ---- 2. Prior payments come from the WHOLE chain, keyed by identity -----
+    # NOT from receipt_chain[-1]. An ordinary `evolve` may append a receipt after
+    # a failed publication, which pushes the pending stake off the end; reading
+    # only the last receipt then missed the payment and charged again. Measured
+    # on 9ba10df: fail publish -> evolve (NO_MUTATION_FOUND) -> retry gave
+    # total_debit 300, two stake receipts for one submission id, one published
+    # record, and both audits still passed.
+    paid = {}
+    for rec in org.receipt_chain:
+        if rec.rule_name == AGORA_STAKE_RULE and rec.tabled_proposal_id:
+            paid.setdefault(rec.tabled_proposal_id, rec)
 
-    # ---- 3. Duplicates are caught against STORED records, not a new engine --
     if submission_id in published:
         raise ValueError(
             f"This theorem was already tabled on this Agora as {submission_id}. "
             f"Refusing to stake a second time for the same submission.")
-    if org.atp_reserve < stake_atp:
-        raise ValueError(f"Insufficient ATP reserve ({org.atp_reserve} < {stake_atp}) to stake bill.")
+
+    already_paid = paid.get(submission_id)
+    if already_paid is not None:
+        # Paid, never published: resume that same payment. No second debit.
+        proposal = _build_proposal(theorem, org, submission_id,
+                                   already_paid.agora_atp_staked, sk_hex, now)
+        _publish_to_agora(proposal, org, agora_pdf_path,
+                          org.atp_reserve + already_paid.agora_atp_staked,
+                          already_paid.agora_atp_staked, sk_hex)
+        return proposal, submission_id
+
+    # An older payment that never reached a floor is NOT silently dropped.
+    # Staking again would strand it, and refunding it is unsafe because its
+    # Agora write may have landed where this call cannot see. So this refuses
+    # by name and says how to resolve it. Deliberately conservative: money has
+    # already left the organism.
+    unresolved = sorted(sid for sid in paid if sid not in published)
+    if unresolved:
+        stranded = paid[unresolved[0]]
+        raise ValueError(
+            f"{stranded.agora_atp_staked} ATP was already debited for submission "
+            f"{unresolved[0]}, whose publication is still unconfirmed here. Refusing to "
+            f"stake for a different submission while that payment is unresolved: it would "
+            f"be silently stranded, and refunding is unsafe because its Agora write may "
+            f"have landed. Re-run against the Agora it was staked for to resume it.")
+
+    # The whole balance cannot be staked: the debit would be written and the
+    # obligatory ballot would then fail for lack of ATP to burn, leaving a paid
+    # submission that can never publish. Checked before the first write.
+    if org.atp_reserve <= stake_atp:
+        raise ValueError(
+            f"Insufficient ATP reserve ({org.atp_reserve}) to stake {stake_atp} and still cast "
+            f"the obligatory ballot; staking the entire balance would persist the debit and then "
+            f"fail to publish.")
 
     # ---- 4. DEBIT first, as its own signed step -----------------------------
     reserve_before = org.atp_reserve
@@ -1715,6 +1744,7 @@ def audit_morpho_autopoietic_organism(pdf_path: str) -> bool:
 
     expected_parent = "0" * 64
     expected_reserve = None
+    paid_submissions = set()
     for i, rec in enumerate(org.receipt_chain):
         if not rec.verify_integrity():
             return False
@@ -1743,8 +1773,15 @@ def audit_morpho_autopoietic_organism(pdf_path: str) -> bool:
                 return False
             if site != ():
                 return False  # nothing moved, so no site may be claimed
-            if rec.rule_name == AGORA_STAKE_RULE and not _valid_stake_receipt(rec):
-                return False
+            if rec.rule_name == AGORA_STAKE_RULE:
+                if not _valid_stake_receipt(rec):
+                    return False
+                # One submission is paid at most once per chain. Without this a
+                # retry that missed an earlier payment could charge twice for
+                # one submission and still audit sound.
+                if rec.tabled_proposal_id in paid_submissions:
+                    return False
+                paid_submissions.add(rec.tabled_proposal_id)
         else:
             try:
                 pre_t, post_t = parse(rec.pre_term), parse(rec.post_term)

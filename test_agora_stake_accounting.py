@@ -106,6 +106,21 @@ class _Floor(unittest.TestCase):
         kw.setdefault("stake_atp", STAKE)
         return M.table_to_agora(self.org_pdf, self.agora_pdf, **kw)
 
+    def stabilize(self, limit=30):
+        """Evolve until the genome stops changing, so a later `evolve` appends a
+        NO_MUTATION_FOUND receipt without altering the theorem."""
+        for _ in range(limit):
+            _, rec = M.evolve_morpho_autopoietic_organism(self.org_pdf, secret_key_hex=self.sk)
+            if rec.rule_name == M.NO_MUTATION_FOUND_RULE:
+                return
+        self.fail("genome did not stabilize")
+
+    def fail_publish(self):
+        """Debit lands, publication does not."""
+        with mock.patch.object(M, "grow_agora_page", side_effect=OSError("injected")):
+            with self.assertRaises(OSError):
+                self.table()
+
     def assertSound(self):
         self.assertTrue(M.audit_morpho_autopoietic_organism(self.org_pdf), "organism audit")
         self.assertTrue(audit_agora_parliament(self.agora_pdf), "agora audit")
@@ -326,6 +341,56 @@ class FailureControlTest(_Floor):
         self.assertSound()
 
 
+    def test_B8_an_intervening_evolution_does_not_hide_a_pending_payment(self):
+        """Review r1 on PR #28, reproduced: recovery read only receipt_chain[-1],
+        so an ordinary `evolve` appended after a failed publication pushed the
+        pending stake off the end and the retry took a SECOND 150 ATP. Measured
+        on 9ba10df: total_debit 300, two stake receipts for one submission id,
+        one published record, and both audits still passed."""
+        self.stabilize()
+        before_reserve, before_records = self.reserve(), self.records()
+
+        self.fail_publish()
+        self.assertEqual(self.reserve(), before_reserve - STAKE)
+
+        _, interleaved = M.evolve_morpho_autopoietic_organism(self.org_pdf, secret_key_hex=self.sk)
+        self.assertEqual(interleaved.rule_name, M.NO_MUTATION_FOUND_RULE,
+                         "the intervening step must not change the theorem")
+
+        _, pid = self.table()                                  # retry: must RESUME
+        org = M._read_organism(self.org_pdf)
+        stakes = [r for r in org.receipt_chain
+                  if r.rule_name == M.AGORA_STAKE_RULE and r.tabled_proposal_id == pid]
+        self.assertEqual(len(stakes), 1, "the submission was paid twice")
+        self.assertEqual(self.reserve(), before_reserve - STAKE, "total debit must stay one stake")
+        self.assertEqual(self.records(), before_records + 1)
+        self.assertSound()
+
+    def test_B9_a_new_theorem_does_not_silently_strand_an_older_payment(self):
+        """After a failed publication, evolving to a DIFFERENT theorem must not
+        quietly abandon the ATP already paid for the first one."""
+        before_reserve = self.reserve()
+        first_theorem = M._latest_theorem(M._read_organism(self.org_pdf))
+        self.fail_publish()
+        self.assertEqual(self.reserve(), before_reserve - STAKE)
+
+        _, new_rec = M.evolve_morpho_autopoietic_organism(self.org_pdf, secret_key_hex=self.sk)
+        self.assertNotEqual(new_rec.rule_name, M.NO_MUTATION_FOUND_RULE,
+                            "this control needs a genuinely new theorem")
+        self.assertNotEqual(new_rec.organism_hash, first_theorem.organism_hash)
+
+        reserve, records = self.reserve(), self.records()
+        before = self.snapshot()
+        with self.assertRaises(ValueError) as caught:
+            self.table()
+        msg = str(caught.exception)
+        self.assertIn("already debited", msg)
+        self.assertIn("stranded", msg)
+        self.assertEqual(self.reserve(), reserve, "the refusal debited again")
+        self.assertEqual(self.records(), records)
+        self.assertEqual(self.snapshot(), before, "the refusal wrote something")
+
+
 class PreconditionTest(_Floor):
     """Section C: everything checked before the first write."""
 
@@ -380,6 +445,23 @@ class PreconditionTest(_Floor):
         self.assertEqual(self.snapshot(), before, "the organism was written despite a bad floor")
 
 
+    def test_C5_the_whole_balance_cannot_be_staked(self):
+        """The scan recorded this as a reliability issue, and it belongs to the
+        validate-before-debit promise: staking the entire reserve persists the
+        debit and then fails to publish, because the obligatory ballot has no
+        ATP left to burn (agora.py refuses a ballot the voter cannot pay)."""
+        reserve = self.reserve()
+        before = self.snapshot()
+        with self.assertRaises(ValueError) as caught:
+            self.table(stake_atp=reserve)
+        self.assertIn("Insufficient ATP", str(caught.exception))
+        self.assertEqual(self.snapshot(), before, "the refusal wrote something")
+        # one ATP less still works, so this is a boundary, not a blanket refusal
+        _, pid = self.table(stake_atp=reserve - 1)
+        self.assertEqual(self.reserve(), 1)
+        self.assertSound()
+
+
 class ForgedAccountingTest(_Floor):
     """Section D: the auditor re-derives the balance across credits and debits."""
 
@@ -428,6 +510,43 @@ class ForgedAccountingTest(_Floor):
             man["receipt_chain"][-1] = rec.to_dict()
             man["atp_reserve"] += 1
         self.rewrite_last(mutate)
+        self.assertFalse(M.audit_morpho_autopoietic_organism(self.org_pdf))
+
+
+    def test_D4_one_submission_may_be_paid_only_once_in_a_chain(self):
+        """A fully-signed second payment for the same submission id -- the state
+        the review's probe produced -- must not audit sound."""
+        _, pid = self.table()
+        self.assertTrue(M.audit_morpho_autopoietic_organism(self.org_pdf))
+
+        org = M._read_organism(self.org_pdf)
+        original = next(r for r in org.receipt_chain
+                        if r.rule_name == M.AGORA_STAKE_RULE and r.tabled_proposal_id == pid)
+        gene0 = org.chromosomes[0]
+        org.parent_hash = org.organism_hash
+        org.generation = len(org.receipt_chain)
+        org.atp_reserve -= STAKE
+        org.organism_hash = org.compute_hash()
+        duplicate = M.MorphoAutopoiesisReceipt(
+            generation=org.generation, timestamp_utc=original.timestamp_utc,
+            parent_hash=org.parent_hash, organism_hash=org.organism_hash,
+            gene_id=gene0.gene_id, rule_name=M.AGORA_STAKE_RULE, site_address=[],
+            pre_term=gene0.expression, post_term=gene0.expression,
+            atp_saved=0, size_saved=0,
+            experiment_id=M.derive_experiment_id(gene0.gene_id, (), M.AGORA_STAKE_RULE,
+                                                 gene0.expression, gene0.expression),
+            experiments_count=len(org.experiment_log.records), archetype=org.archetype_key,
+            feed_rate_f=org.feed_rate_f, kill_rate_k=org.kill_rate_k, pde_steps=0,
+            initial_nodes=0, reduced_steps=0, net_atp_burned=0,
+            weisfeiler_lehman_digest=org.weisfeiler_lehman_digest,
+            tabled_proposal_id=pid,                      # the SAME submission
+            agora_atp_staked=STAKE, resulting_atp_reserve=org.atp_reserve,
+            public_key_hex=org.public_key_hex)
+        duplicate.sign(self.sk)
+        self.assertTrue(duplicate.verify(), "the duplicate is genuinely signed")
+        org.receipt_chain.append(duplicate)
+        M._append_manifest_revision(self.org_pdf, org)
+
         self.assertFalse(M.audit_morpho_autopoietic_organism(self.org_pdf))
 
 
