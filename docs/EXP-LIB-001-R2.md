@@ -90,13 +90,24 @@ R2 is therefore **exempt** from the R1 determinism criterion. Only the
 
 ## 7. Reader inputs and reported result
 
-The R2 reader is given `(commitment, ots_proof)` — the commitment being the
-same pinned root R1 uses — and returns a structured result: the state (§3),
-the commitment and proof digests, any pending calendars, any Bitcoin
-attestations (height + attested Merkle root), and the explicit
-`time_verified` / `authority` / `network_calls` flags. A malformed or
-non-binding proof is a named refusal, not an exception (the same contract as
-the package reader).
+The R2 reader is given `(commitment, ots_proof, accepted_source=None)`:
+
+- `commitment` — the same pinned root R1 uses (its 32 raw bytes; §2);
+- `ots_proof` — the detached `.ots` bytes (§2);
+- `accepted_source` — **optional**, the reader's pinned Bitcoin data source
+  (e.g. a `{block_height: merkle_root_hex}` header set fetched earlier and
+  independently pinned; §4). Without it, `CONFIRMED` is **unreachable**: the
+  reader can reach at most `ANCHORED_UNVERIFIED`.
+
+It returns a structured result whose field names match §3/§4 exactly: `state`,
+`commitment_sha256`, `proof_sha256`, `pending_calendars`,
+`bitcoin_attestations` (each height + attested Merkle root), and the explicit
+`time_verified`, `calendar_authenticity_verified`, `accepted_source` (the name
+of the source used, or `none`), and `network_calls`. A malformed or
+non-binding proof is `REFUSED` (§3), returned as a named result, never an
+exception (the same contract as the package reader). Supplying an
+`accepted_source` is never by itself a confirmation: the attestation must
+actually match it.
 
 ## 8. Acceptance and the release gate
 
