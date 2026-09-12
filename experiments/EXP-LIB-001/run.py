@@ -216,6 +216,8 @@ def _structure_reason(ev: dict, index: int):
             return f"missing field {f!r}"
     if ev["profile"] != EVENT_PROFILE:
         return f"unsupported profile {ev['profile']!r} (expected {EVENT_PROFILE!r})"
+    if type(ev["index"]) is not int:
+        return f"index field {ev['index']!r} is not an int"
     if ev["index"] != index:
         return f"index field {ev['index']!r} != position {index}"
     if ev["kind"] not in _ALLOWED_KINDS:
@@ -240,6 +242,16 @@ def replay(journal: list, trust: TrustConfig, expected_root: str, expected_tip: 
         result["boundary"] = "empty journal"
         return result
 
+    # Structure and profile are validated for EVERY event before any field is
+    # read for root/tip -- otherwise a malformed event (e.g. a missing
+    # event_hash) raises instead of returning a named refusal.
+    for i, ev in enumerate(journal):
+        struct = _structure_reason(ev, i)
+        if struct is not None:
+            result["chain_ok"] = False
+            result["boundary"] = f"index {i}: {struct}"
+            return result
+
     result["root"] = journal[0]["event_hash"]
     result["tip"] = journal[-1]["event_hash"]
     result["root_matches"] = (result["root"] == expected_root)
@@ -247,12 +259,8 @@ def replay(journal: list, trust: TrustConfig, expected_root: str, expected_tip: 
 
     prev = GENESIS_PREV
     for i, ev in enumerate(journal):
-        # Structure and profile are checked BEFORE the event is interpreted, so
-        # an unsupported or malformed event is refused by name -- a signature
-        # over an unsupported format is not acceptance.
-        struct = _structure_reason(ev, i)
-        if struct is not None:
-            result["chain_ok"] = False; result["boundary"] = f"index {i}: {struct}"; break
+        # Structure and profile were validated for every event in the pre-pass
+        # above, so here we only re-derive bytes, chain, signature, and content.
         core = {k: ev[k] for k in _CORE_ORDER}
         try:
             cb = canonical_core_bytes(core)

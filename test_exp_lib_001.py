@@ -95,6 +95,33 @@ class ReplayTest(unittest.TestCase):
         self.assertFalse(rep["chain_ok"])
         self.assertIn("profile", rep["boundary"])
 
+    def test_2f_missing_field_is_a_named_refusal_not_an_exception(self):
+        """A malformed event (here, a missing event_hash on the root) must be
+        refused by name -- replay must not read a field before validating it."""
+        j = EXP.build_journal()
+        broken = [dict(e) for e in j]
+        broken[0] = dict(broken[0]); del broken[0]["event_hash"]
+        rep = EXP.replay(broken, EXP.caller_trust(), "x", "y")
+        self.assertFalse(rep["chain_ok"])
+        self.assertIn("event_hash", rep["boundary"])
+        self.assertFalse(rep["accepted"])
+
+    def test_2g_a_non_int_index_is_refused(self):
+        """index=False must not sneak through on `False == 0`: the type is
+        checked, not just the value."""
+        j = EXP.build_journal()
+        chained, prev = [], EXP.GENESIS_PREV
+        for i, e in enumerate(j):
+            core = {**e, "prev_event_hash": prev}
+            if i == 0:
+                core["index"] = False
+            r = EXP._resign_event(core); chained.append(r); prev = r["event_hash"]
+        rep = EXP.replay(chained, EXP.caller_trust(),
+                         chained[0]["event_hash"], chained[-1]["event_hash"])
+        self.assertFalse(rep["accepted"])
+        self.assertFalse(rep["chain_ok"])
+        self.assertIn("int", rep["boundary"])
+
     def test_2e_resigned_broken_prev_link_is_refused(self):
         """The event_hash attests the recorded prev value, not that it matches
         the real predecessor -- re-pointing prev and re-signing must still be
