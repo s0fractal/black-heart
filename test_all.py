@@ -124,6 +124,7 @@ SUITES = [
     ("Morpho-Autopoiesis Economy: ATP Bound to the Receipt Chain", "test_morpho_economy_binding"),
     ("Agora Stake Accounting: The Debit Is a Signed Step", "test_agora_stake_accounting"),
     ("Epistemic Kernel & Unified Edge-Claims", "test_warrant_kernel"),
+    ("Warrant Audit: Trust Root From Caller, Not Document", "test_warrant_document_trust"),
     ("Counterexample Evidence: Replay Must Match the Witness", "test_counterexample_evidence"),
     ("Controlled Forgetting & Epistemic Retirement", "test_controlled_forgetting"),
     ("Retirement / Re-adoption Body Binding", "test_retirement_binding"),
