@@ -1,6 +1,6 @@
 # EXP-LIB-001 — First living-library experiment
 
-Status: **proposed** (protocol for review; no runner yet). Revision 3.
+Status: **proposed** (protocol for review; no runner yet). Revision 4.
 
 Goal: the first Black-Heart PDF whose verifiable history — claim, application,
 counterexample, refinement — replays from its **oldest reachable confirmed
@@ -66,29 +66,53 @@ executes.
 (`controlled_forgetting.py:753,756`). It is unfit as the history of record, so
 the experiment defines its own journal — without rewriting the library.
 
-### 3.1 Event encoding (profile `black-heart.exp-lib-001.event.v1`)
+### 3.1 Event encoding — a bounded profile, not general RFC 8785
 
-Each event is a JSON object with these named fields, and no others, in the
-signed/hashed core:
+The repository's `canonical_jcs` (`controlled_forgetting.py:78`) is
+`json.dumps(sort_keys=True, separators=(',',':'), ensure_ascii=False)`. That is
+**not** full RFC 8785: it does not apply ES6 number formatting and sorts keys by
+Unicode code point rather than UTF-16 code unit. Repairing the general
+serializer is out of scope, and old signed records must not change. Instead this
+experiment defines its **own bounded canonical encoding**, small enough to
+implement directly and fully determined for the values it actually carries.
+
+Profile `black-heart.exp-lib-001.event.v1`. The event **core** is a JSON object
+with exactly these members, emitted in this **fixed order** (no key sorting at
+the top level, so key ordering cannot vary):
 
 ```
 { "profile":          "black-heart.exp-lib-001.event.v1",
-  "index":            <int, 0-based>,
-  "prev_event_hash":  <64 lowercase hex; "00"*32 for index 0>,
+  "index":            <int>,
+  "prev_event_hash":  <64 lowercase hex; "00"*32 at index 0>,
   "kind":             "CLAIM" | "COUNTEREXAMPLE" | "REFINE",
   "claim":            <EdgeClaim.to_dict()>,
   "expected_verdict": "PASS" | "FAIL" | "UNVERIFIED",
   "author_pk_hex":    <64 hex> }
 ```
 
-- **Canonical core bytes** = `canonical_jcs(core)` — the existing RFC 8785 JCS
-  serializer at `controlled_forgetting.py:78`, UTF-8 output — over exactly the
-  fields above. `event_hash` and `signature_hex` are **excluded** from the core
-  (an object cannot hash or sign its own hash/signature).
-- `event_hash = sha256(canonical core bytes)`, lowercase hex.
-- `signature_hex` = Ed25519 over the **same** canonical core bytes, by
-  `author_pk_hex`.
-- The stored event is the core plus `event_hash` and `signature_hex`.
+Encoding rules (the "EXP-LIB-001 canonical form"):
+
+- **Types allowed:** string, non-negative integer, object, array, boolean,
+  null. **No floating-point** anywhere; `NaN`, `Infinity`, `-0` are rejected.
+- **Integers:** range `[0, 2**53 - 1]`, shortest decimal, no sign, no leading
+  zeros, no fraction, no exponent.
+- **Strings:** UTF-8; escape **only** `"`→`\"`, `\`→`\\`, and U+0000–U+001F
+  as `\u00xx` (lowercase); every other code point, including non-ASCII, is
+  emitted raw. No other escaping.
+- **Top-level object:** the fixed member order above.
+- **Nested objects** (inside `claim`): members ordered by ascending Unicode
+  **code point** of the key — stated explicitly so the RFC 8785 UTF-16 question
+  never arises. Arrays keep their given order.
+- **Separators:** `,` and `:` with no whitespace.
+- **Duplicate keys** anywhere in the parsed input are rejected; the reader
+  refuses such an event rather than picking a winner.
+- `event_hash` and `signature_hex` are **not** part of the core and never
+  appear in the encoded bytes.
+
+Then: `event_hash = sha256(core canonical bytes)` (lowercase hex);
+`signature_hex` = Ed25519 over the **same** core canonical bytes by
+`author_pk_hex`; the stored event is the core plus those two fields;
+`e0.prev_event_hash = "00"*32`.
 
 ### 3.2 Replay rules
 
@@ -176,6 +200,30 @@ Passes iff:
 6. **Determinism.** Two runs from the same seed produce byte-identical journals.
 
 A green sequence alone is not acceptance: criteria 2–5 are the substance.
+
+## 6bis. Pre-registration (committed before the runner)
+
+`experiments/EXP-LIB-001/README.md` records these predictions in a commit that
+precedes `run.py`:
+
+- **Exact sequence.** Three events, indices `0,1,2`, continuous; `kind` fixed
+  per index: `0=CLAIM` (C1), `1=COUNTEREXAMPLE` (C2), `2=REFINE` (C3); each
+  `prev_event_hash` equals the previous `event_hash`.
+- **Honest loop = the specific expected PASS.** The loop succeeds only if the
+  recorded verdicts are C1 `PASS`, C2 `PASS`, C3 `PASS` **and** replay
+  reproduces each. A recorded `UNVERIFIED` that replay reproduces is a
+  faithfully-recorded refusal — it confirms replay integrity, **not** loop
+  success; it must not be reported as a passing loop.
+- **Linkage, not three independent claims.** Replay checks the relations among
+  the claims, over their payloads and the fixed order:
+  C2 targets the **same** `(reference, candidate) = (I, K I)` as C1, with a
+  witness input (`K`) **outside** C1's fixtures `{I, I I, I (I I)}`; C3 keeps
+  reference `I`, replaces the candidate with `S K K` (**not** `K I`), and audits
+  on C1's fixtures **plus** `K`. Three separately-valid claims with no such
+  relations do **not** satisfy the loop.
+- **Test keys are public fixtures.** The deterministic keys used for R1/CI are
+  committed public fixtures and must never sign a real release; a release is
+  signed by a key that is never committed.
 
 ## 7. Deliverables (after this protocol is accepted)
 
