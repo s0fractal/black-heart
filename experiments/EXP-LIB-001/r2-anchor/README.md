@@ -1,0 +1,117 @@
+# EXP-LIB-001 — frozen R2 anchoring package
+
+This directory freezes, **offline**, the exact reproduction package for the R2
+external anchor (profile: `docs/EXP-LIB-001-R2.md`). It is frozen **before**
+any `ots stamp` so the thing stamped is fixed and reviewable, and so the journal
+is **not regenerated** between the freeze and the stamp.
+
+## Files
+
+| file | what it is |
+|---|---|
+| `journal.pkg` | the saved journal bytes the R1 reader confirms (deterministic) |
+| `root.commitment` | **exactly the 32 raw bytes** of the root `event_hash` — the file to stamp |
+| `MANIFEST.json` | `source_commit`, `package_sha256`, full `root`/`tip`, leaf `SHA256(commitment)`, and the posture |
+| `verify_anchor_package.py` | offline verifier (no network, no OTS) — reproduces the bytes and checks every invariant |
+
+Frozen values (see `MANIFEST.json` for the authoritative copy):
+
+- source commit: `148eec969ed5b1fa546c2be2ad93e4cdf83957a1`
+- root  (stamp commitment): `2b921b388a132f6ce0457f70015fa610cad1e797941c74a0967a014d72d93121`
+- tip: `78db18f1b73719c8c7ea3fc9932e3c8fe44d0e32c71fcadef99edb9b6ff5b4ee`
+- `package_sha256`: `b08c11b6a03e36d1493d056c9565dbc351268f6905406a9cf030a7e4c5cfff09`
+- leaf the `.ots` will commit to (`SHA256` of the 32 bytes): `e71305f6ad4b3827d33d9f5651509fc2a7a1fd16fea630d47c2bca7cb987a6bf`
+
+## Verifying (two separate checks)
+
+```bash
+python3 experiments/EXP-LIB-001/r2-anchor/verify_anchor_package.py \
+  --expect-commit 148eec969ed5b1fa546c2be2ad93e4cdf83957a1
+```
+
+Each check reports **PASS / FAIL / NOT_PERFORMED**, and they are never merged:
+
+| check | what it establishes |
+|---|---|
+| **A. package reading** | byte facts (stdlib JSON only: `package_sha256`, the 32-byte commitment, its equality with the root **of the saved bytes**, the tip) **plus** a replay by the reader from this package's **own `source_commit`**, with regeneration forbidden (`build_journal` is made to raise) |
+| **B. source reproducibility** | the generator is run from a **full commit OID supplied by the caller** (`--expect-commit`) and its output compared with the frozen bytes |
+
+### The source must be a full commit OID
+
+A branch, tag or abbreviated sha is a **named refusal** — any of them can move,
+so they cannot pin history. The verifier requires a full 40-hex OID, checks the
+**object type is a commit**, and requires the resolved OID to equal the
+expectation exactly (so even an annotated tag that peels to the right commit is
+refused).
+
+### What A is, and is not
+
+By default A's root/tip come from **this same `MANIFEST.json`** and trust from
+the historical code's own `caller_trust()` fixture policy. Those are **not
+independent pins**, and A is named accordingly:
+
+> `A. historical replay under the fixture policy and the MANIFEST's own values
+> (these are not independent pins)`
+
+To make them genuine external pins, supply them:
+
+```bash
+... --expect-root <hex> --expect-tip <hex> --expect-author-pk <hex>
+```
+
+Only with all three does A rename itself to *independent reader confirmation*.
+A caller-supplied pin that disagrees with the manifest is a **FAIL** — that is
+precisely what an external pin is for.
+
+### Other rules that keep the labels honest
+
+- The expected commit comes from the **caller**, so the manifest cannot attest
+  to its own provenance. A manifest naming a different (or non-OID) source is a
+  **FAIL**, not a skip.
+- **No source available → `NOT_PERFORMED`, never `PASS`.** Exit codes: `0` all
+  passed, `1` something failed, `2` nothing failed but something was not
+  performed.
+- A is read with the **contemporaneous** reader, so later evolution of the
+  generator never forces this freeze to be rewritten; the package stays bound to
+  `148eec9`.
+- **A PASS is not current validity.** It records what the historical check
+  established. If today's in-tree reader refuses these bytes, that is reported
+  as an observation whose **cause is not diagnosed**: it may be a format
+  incompatibility **or** a defect the historical check missed. It needs review —
+  it must not be dismissed as "just compatibility".
+
+## Boundary (what a stamp of this would and would not mean)
+
+This is **experiment history signed with PUBLIC FIXTURE keys**
+(`AUTHOR_SK = bytes([1] * 32)`). A timestamp over `root.commitment` attests
+**existence-before-a-time of the commitment only** — **not** the owner's
+authorship, and **not** the authenticity of any future release. R2 is not R1
+(authorship, checked by signature) and not R3 (publication).
+
+## The stamp step (deliberate; not run here)
+
+The public `ots stamp` is an outward, irreversible action and is **not executed
+by this package**. When run, stamp exactly `root.commitment` (do not regenerate
+the journal):
+
+```bash
+ots stamp experiments/EXP-LIB-001/r2-anchor/root.commitment
+# -> writes root.commitment.ots (the detached proof), kept alongside as evidence
+```
+
+The reader is then `run.verify_external_anchor(commitment, ots_proof,
+accepted_source)`. Immediately after stamping the result is expected `PENDING`
+(calendar commitments only) until a Bitcoin attestation appears.
+
+## Bitcoin header source (named, unresolved dependency)
+
+`CONFIRMED` requires an independently accepted, reader-pinned Bitcoin header
+source (profile rev 5 §4/§7): the reader derives the Merkle root **and** the
+block time from a pinned 80-byte header.
+
+- **Preferred:** the owner's own synced Bitcoin Core.
+- **If external instead:** the exact headers used and the method of obtaining
+  them must be saved here and this dependency named explicitly.
+
+Until a real `.ots` proof is verified against such a source, **R2 is
+`NOT_DEMONSTRATED` and R3 is `NOT_RELEASED`.**
