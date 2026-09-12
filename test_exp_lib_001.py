@@ -10,9 +10,13 @@ controls failing closed, linkage, provenance separation) are the substance.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
+import subprocess
 import sys
 import tempfile
+import importlib.util
+from pathlib import Path
 import unittest
 from unittest import mock
 
@@ -662,6 +666,151 @@ class ExternalAnchorR2Test(unittest.TestCase):
         r = EXP.verify_external_anchor(_R2_COMMIT, proof, old_shape)
         self.assertNotEqual(r["state"], "CONFIRMED")
         self.assertEqual(r["accepted_source"], "none")
+
+
+def _load_anchor_verifier():
+    path = Path(_HERE) / "experiments" / "EXP-LIB-001" / "r2-anchor" / "verify_anchor_package.py"
+    spec = importlib.util.spec_from_file_location("_r2_anchor_verify", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+class FrozenAnchorPackageTest(unittest.TestCase):
+    """The frozen R2 anchoring package is historical evidence bound to its OWN
+    source commit. It is deliberately NOT required to equal what the current
+    runner produces, and is NOT read with today's reader: evolving the generator
+    must never invalidate an earlier freeze or force it to be rewritten. The
+    byte facts below use stdlib JSON only; the replay uses the reader from the
+    package's own commit; provenance is checked against an explicitly expected
+    commit supplied here, not taken from the manifest alone."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.V = _load_anchor_verifier()
+        cls.dir = Path(_HERE) / "experiments" / "EXP-LIB-001" / "r2-anchor"
+
+    def setUp(self):
+        self.man = json.loads((self.dir / "MANIFEST.json").read_text(encoding="utf-8"))
+        self.pkg = (self.dir / "journal.pkg").read_bytes()
+        self.commitment = (self.dir / "root.commitment").read_bytes()
+
+    # ---- A1: reader-independent byte facts (always runnable) -------------- #
+    def test_byte_facts_pass(self):
+        status, notes = self.V.byte_facts(self.dir)
+        self.assertEqual(status, self.V.PASS, notes)
+
+    def test_commitment_is_32_raw_bytes_equal_to_the_saved_package_root(self):
+        self.assertEqual(len(self.commitment), 32)
+        events = json.loads(self.pkg.decode("utf-8"))     # stdlib only
+        self.assertEqual(self.commitment.hex(), events[0]["event_hash"])
+        self.assertEqual(self.commitment.hex(), self.man["root_event_hash"])
+        self.assertEqual(events[-1]["event_hash"], self.man["tip_event_hash"])
+        self.assertEqual(hashlib.sha256(self.pkg).hexdigest(),
+                         self.man["package_sha256"])
+
+    def test_source_commit_is_recorded_as_a_full_sha(self):
+        # Format only. Deliberately NOT compared to the current HEAD: the
+        # package stays bound to the commit it was frozen from.
+        self.assertRegex(self.man["source_commit"], r"^[0-9a-f]{40}$")
+
+    # ---- dispositions: absent source is NOT_PERFORMED, never PASS --------- #
+    def test_reading_without_the_source_tree_is_not_performed(self):
+        status, notes = self.V.check_package_reading(self.dir, None)
+        self.assertEqual(status, self.V.NOT_PERFORMED, notes)
+        self.assertNotEqual(status, self.V.PASS)
+
+    def test_absent_expected_commit_is_not_performed_never_pass(self):
+        status, notes = self.V.check_source_reproducibility(self.dir, None)
+        self.assertEqual(status, self.V.NOT_PERFORMED, notes)
+        self.assertNotEqual(status, self.V.PASS)
+
+    def test_manifest_naming_another_commit_is_a_failure(self):
+        status, _notes = self.V.check_source_reproducibility(self.dir, "0" * 40)
+        self.assertEqual(status, self.V.FAIL)
+
+    # ---- the real checks, when this clone carries the source -------------- #
+    def _source(self, stack):
+        tmp = tempfile.TemporaryDirectory()
+        stack.append(tmp)
+        got = self.V.materialise_source(self.man["source_commit"], Path(tmp.name))
+        if not isinstance(got, Path):
+            self.skipTest(f"source commit unavailable here: {got}")
+        return got
+
+    def test_reading_with_the_contemporaneous_reader(self):
+        stack = []
+        self.addCleanup(lambda: [t.cleanup() for t in stack])
+        src = self._source(stack)
+        status, notes = self.V.check_package_reading(self.dir, src)
+        self.assertEqual(status, self.V.PASS, notes)
+
+    def test_source_reproducibility_from_the_named_commit(self):
+        stack = []
+        self.addCleanup(lambda: [t.cleanup() for t in stack])
+        src = self._source(stack)
+        status, notes = self.V.check_source_reproducibility(
+            self.dir, self.man["source_commit"], src)
+        self.assertEqual(status, self.V.PASS, notes)
+
+    # ---- the source must be a FULL COMMIT OID, never a movable ref ------- #
+    def test_branch_name_is_a_named_refusal(self):
+        oid, refusal = self.V.resolve_commit_oid("moving-source")
+        self.assertIsNone(oid)
+        self.assertIn("full 40-hex commit OID", refusal)
+
+    def test_short_sha_is_a_named_refusal(self):
+        oid, refusal = self.V.resolve_commit_oid(self.man["source_commit"][:7])
+        self.assertIsNone(oid)
+        self.assertIn("full 40-hex commit OID", refusal)
+
+    def test_empty_and_non_string_expectations_are_refused(self):
+        for bad in ["", None, 148, "g" * 40, " " + "a" * 39]:
+            oid, refusal = self.V.resolve_commit_oid(bad)
+            self.assertIsNone(oid, bad)
+            self.assertTrue(refusal)
+
+    def test_non_commit_object_of_full_oid_length_is_refused(self):
+        # A 40-hex OID that is a blob, not a commit. Skips where git/object absent.
+        proc = subprocess.run(["git", "-C", _HERE, "rev-parse",
+                               "HEAD:test_exp_lib_001.py"],
+                              capture_output=True, text=True)
+        if proc.returncode != 0:
+            self.skipTest("git object not resolvable here")
+        blob = proc.stdout.strip()
+        oid, refusal = self.V.resolve_commit_oid(blob)
+        if refusal and "not available here" in refusal:
+            self.skipTest("object not available (shallow clone)")
+        self.assertIsNone(oid)
+        self.assertIn("not a commit", refusal)
+
+    def test_branch_in_manifest_makes_source_check_fail(self):
+        status, notes = self.V.check_source_reproducibility(self.dir, "moving-source")
+        self.assertEqual(status, self.V.FAIL, notes)
+
+    # ---- A's name must match what was actually pinned --------------------- #
+    def test_a_title_does_not_claim_independent_pins_for_manifest_values(self):
+        title = self.V.a_title(None)
+        self.assertIn("MANIFEST", title)
+        self.assertIn("not independent pins", title)
+        self.assertNotIn("independent reader confirmation", title)
+
+    def test_a_title_claims_independence_only_with_all_caller_pins(self):
+        full = self.V.a_title({"root": "a", "tip": "b", "author_pk": "c"})
+        self.assertIn("independent reader confirmation", full)
+        partial = self.V.a_title({"root": "a"})
+        self.assertNotIn("independent reader confirmation", partial)
+        self.assertIn("caller-supplied: root", partial)
+
+    def test_caller_pinned_root_disagreeing_with_manifest_is_a_failure(self):
+        bad = "00" + self.man["root_event_hash"][2:]
+        status, notes = self.V.check_package_reading(self.dir, None, {"root": bad})
+        self.assertEqual(status, self.V.FAIL, notes)
+
+    def test_posture_is_not_demonstrated_until_a_real_anchor(self):
+        # The frozen package is only a stamp target; it is not an anchor.
+        self.assertEqual(self.man["r2_status"], "NOT_DEMONSTRATED")
+        self.assertEqual(self.man["r3_status"], "NOT_RELEASED")
 
 
 if __name__ == "__main__":
