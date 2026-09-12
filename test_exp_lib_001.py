@@ -337,6 +337,26 @@ class PackageReaderTest(unittest.TestCase):
         self.assertFalse(rep["accepted"])
         self.assertIn("parse", rep["boundary"])
 
+    def test_reader_rejects_non_list_top_level_by_name(self):
+        """Valid JSON that is not a list of events (scalar, bool, null, object)
+        is a named refusal, not a TypeError from traversal."""
+        for label, raw in [("number", b"1"), ("bool", b"true"), ("float", b"1.5"),
+                           ("string", b'"x"'), ("null", b"null"), ("object", b"{}")]:
+            with self.subTest(kind=label):
+                try:
+                    rep = EXP.verify_package(raw, EXP.caller_trust(),
+                                             self.meta["root"], self.meta["tip"])
+                except Exception as e:
+                    self.fail(f"{label} raised {type(e).__name__} instead of a named refusal")
+                self.assertFalse(rep["accepted"])
+                self.assertIn("not a list of events", rep["boundary"])
+
+    def test_reader_names_empty_journal_distinctly(self):
+        rep = EXP.verify_package(b"[]", EXP.caller_trust(),
+                                 self.meta["root"], self.meta["tip"])
+        self.assertFalse(rep["accepted"])
+        self.assertIn("empty journal", rep["boundary"])
+
     def test_written_package_is_deterministic(self):
         p2 = os.path.join(self._tmp.name, "journal2.pkg")
         EXP.write_package(p2)

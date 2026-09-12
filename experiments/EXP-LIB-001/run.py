@@ -305,9 +305,16 @@ def replay(journal: list, trust: TrustConfig, expected_root: str, expected_tip: 
     result = {"confirmed_through_index": -1, "boundary": None,
               "verdicts": [], "root_matches": None, "tip_matches": None,
               "chain_ok": True, "accepted": False, "root": None, "tip": None}
+    # Top-level type gate BEFORE any traversal: a valid JSON scalar, bool,
+    # null, or object is not a journal. Without this, `enumerate(journal)` /
+    # `journal[0]` raised instead of returning a named refusal.
+    if not isinstance(journal, list):
+        result["chain_ok"] = False
+        result["boundary"] = f"journal is not a list of events (got {type(journal).__name__})"
+        return result
     if not journal:
         result["chain_ok"] = False
-        result["boundary"] = "empty journal"
+        result["boundary"] = "empty journal (a list with no events)"
         return result
 
     # Structure and profile are validated for EVERY event before any field is
