@@ -10,6 +10,7 @@ controls failing closed, linkage, provenance separation) are the substance.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import sys
 import tempfile
@@ -662,6 +663,40 @@ class ExternalAnchorR2Test(unittest.TestCase):
         r = EXP.verify_external_anchor(_R2_COMMIT, proof, old_shape)
         self.assertNotEqual(r["state"], "CONFIRMED")
         self.assertEqual(r["accepted_source"], "none")
+
+
+class FrozenAnchorPackageTest(unittest.TestCase):
+    """The frozen R2 anchoring package (experiments/EXP-LIB-001/r2-anchor) stays
+    bound to the runner: if the journal changes, the frozen commitment no longer
+    corresponds to main and this fails. No OTS or network needed."""
+
+    def setUp(self):
+        self.dir = os.path.join(_HERE, "experiments", "EXP-LIB-001", "r2-anchor")
+        self.man = json.load(open(os.path.join(self.dir, "MANIFEST.json")))
+        self.pkg = open(os.path.join(self.dir, "journal.pkg"), "rb").read()
+        self.commitment = open(os.path.join(self.dir, "root.commitment"), "rb").read()
+
+    def test_current_runner_reproduces_the_frozen_package(self):
+        self.assertEqual(EXP.journal_to_bytes(EXP.build_journal()), self.pkg)
+        self.assertEqual(hashlib.sha256(self.pkg).hexdigest(),
+                         self.man["package_sha256"])
+
+    def test_commitment_is_32_raw_bytes_equal_to_the_package_root(self):
+        self.assertEqual(len(self.commitment), 32)
+        parsed = EXP.journal_from_bytes(self.pkg)
+        self.assertEqual(self.commitment.hex(), parsed[0]["event_hash"])
+        self.assertEqual(self.commitment.hex(), self.man["root_event_hash"])
+        self.assertEqual(parsed[-1]["event_hash"], self.man["tip_event_hash"])
+
+    def test_r1_reader_accepts_the_frozen_bytes(self):
+        rep = EXP.verify_package(self.pkg, EXP.caller_trust(),
+                                 self.man["root_event_hash"], self.man["tip_event_hash"])
+        self.assertTrue(rep["accepted"])
+
+    def test_posture_is_not_demonstrated_until_a_real_anchor(self):
+        # The frozen package is only a stamp target; it is not an anchor.
+        self.assertEqual(self.man["r2_status"], "NOT_DEMONSTRATED")
+        self.assertEqual(self.man["r3_status"], "NOT_RELEASED")
 
 
 if __name__ == "__main__":

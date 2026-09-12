@@ -1,0 +1,19 @@
+{
+  "bitcoin_header_source": "UNRESOLVED dependency. CONFIRMED requires an independently accepted, reader-pinned Bitcoin header source (profile rev 5 \u00a74/\u00a77). Preferred: the owner's own synced Bitcoin Core. If external, the exact headers and how they were obtained must be saved and this dependency named. Until then R2 is at most ANCHORED_UNVERIFIED.",
+  "boundary": "This is experiment history signed with PUBLIC FIXTURE keys (AUTHOR_SK = bytes([1]*32)). A timestamp over this commitment attests EXISTENCE-BEFORE-A-TIME of the commitment only -- NOT the owner's authorship and NOT the authenticity of any future release.",
+  "commitment_equals_package_root": true,
+  "commitment_file": "root.commitment",
+  "commitment_len_bytes": 32,
+  "leaf_sha256_of_commitment": "e71305f6ad4b3827d33d9f5651509fc2a7a1fd16fea630d47c2bca7cb987a6bf",
+  "package_bytes": 3978,
+  "package_file": "journal.pkg",
+  "package_sha256": "b08c11b6a03e36d1493d056c9565dbc351268f6905406a9cf030a7e4c5cfff09",
+  "profile": "black-heart.exp-lib-001.r2-anchor.v1",
+  "purpose": "Frozen reproduction package for the R2 external anchor. The file to stamp is root.commitment (the 32 raw bytes of the root event_hash). Stamp THIS file; do not regenerate the journal between this freeze and the stamp.",
+  "r1_reader_accepts_saved_package": true,
+  "r2_status": "NOT_DEMONSTRATED",
+  "r3_status": "NOT_RELEASED",
+  "root_event_hash": "2b921b388a132f6ce0457f70015fa610cad1e797941c74a0967a014d72d93121",
+  "source_commit": "148eec969ed5b1fa546c2be2ad93e4cdf83957a1",
+  "tip_event_hash": "78db18f1b73719c8c7ea3fc9932e3c8fe44d0e32c71fcadef99edb9b6ff5b4ee"
+}
