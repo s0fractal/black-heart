@@ -4,25 +4,40 @@
 TWO SEPARATE checks, never conflated, each reporting PASS / FAIL /
 NOT_PERFORMED. A missing source is NOT_PERFORMED -- never PASS.
 
-  A. package reading  -- the saved bytes are read with SEPARATELY pinned
-     trust/root/tip and are NOT regenerated. It has two parts:
-       A1 byte facts, reader-independent (stdlib JSON only): sha256, the 32-byte
-          commitment, and its equality with the root OF THE SAVED BYTES;
-       A2 replay under the pinned trust/root/tip using the reader from the
-          package's OWN source commit -- the reader contemporaneous with the
-          package, not today's working tree.
-  B. source reproducibility -- the generator is run from an exact, SEPARATELY
-     EXPECTED source commit and its output compared with the frozen bytes.
+  A. package reading -- two parts:
+       A1 byte facts, reader-independent (stdlib JSON only): package_sha256, the
+          32-byte commitment, its equality with the root OF THE SAVED BYTES,
+          and the tip;
+       A2 a replay by the reader from the package's OWN source commit -- the
+          reader contemporaneous with the bytes, not today's working tree.
+     By DEFAULT the root/tip used come from the package's own MANIFEST.json and
+     the trust root from the historical code's own caller_trust() fixture
+     policy. Those are NOT independent pins, and A names itself accordingly
+     ("historical replay under the fixture policy and the MANIFEST's own
+     values"). Pass --expect-root / --expect-tip / --expect-author-pk to supply
+     genuine external pins; only with all three does A rename itself to an
+     independent reader confirmation. A caller-supplied pin that disagrees with
+     the manifest is a FAIL -- that is what an external pin is for.
+  B. source reproducibility -- the generator is run from the expected source
+     commit and its output compared byte-for-byte with the frozen bytes.
+
+The source must be named by a FULL 40-hex COMMIT OID, supplied by the caller so
+that a manifest cannot attest to its own provenance. A branch, tag or
+abbreviated sha is a named refusal, because any of them can move; the object
+type is checked to be a commit, and the resolved OID must equal the expectation
+exactly (so even an annotated tag that peels to the right commit is refused). A
+manifest naming a different -- or non-OID -- source is a FAIL, not a skip.
 
 Why A2 uses the contemporaneous reader: this package is historical evidence
-bound to its own commit. Later evolution of the generator/reader must never
-make it "invalid" or force the freeze to be rewritten. How today's in-tree
-reader behaves on it is reported as a COMPATIBILITY observation only, and can
-never fail this verification.
+bound to its own commit. Later evolution of the generator or reader must never
+make it "invalid" or force the freeze to be rewritten.
 
-Check B (and A2) need the expected commit supplied by the caller, so the
-manifest cannot attest to its own provenance; a manifest naming a different
-commit is a FAIL, not a skip.
+What a PASS does NOT mean: it records what the HISTORICAL check established, not
+that the package is valid under today's rules. How today's in-tree reader
+behaves is reported as an observation that never changes the verdict -- but if
+that reader REFUSES these bytes, the cause is NOT diagnosed here: it may be a
+format incompatibility OR a defect the historical check missed. Such a refusal
+needs review and must not be dismissed as "just compatibility".
 
 Nothing here touches the network or OpenTimestamps. Verifying this package is
 NOT verifying an external anchor -- that is R2, which needs a real .ots proof
