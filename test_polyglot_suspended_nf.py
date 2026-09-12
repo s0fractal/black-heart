@@ -110,16 +110,21 @@ class SwarmRewardTest(unittest.TestCase):
     def test_B1_a_suspended_proposal_is_not_ratified_rewarded_or_canonized(self):
         swarm = self.swarm_of()
         before = swarm.organisms["org-0"].atp_reserve
+        stake = 50
         prop = SwarmAgoraCommons.table_proposal(
             swarm=swarm, author_id="org-0", expression=NONTERMINATING,
-            expected_normal_form=NONTERMINATING, evidence_grade="A", stake_atp=50)
+            expected_normal_form=NONTERMINATING, evidence_grade="A", stake_atp=stake)
         ratified, _ = SwarmAgoraCommons.vote_and_settle(swarm, prop)
         self.assertFalse(ratified, "a non-terminating theorem was ratified")
         self.assertEqual(prop.status, "REJECTED")
         self.assertFalse(any(a.expression == NONTERMINATING for a in swarm.canon),
                          "a non-terminating theorem entered the canon")
-        # not rewarded: never rose above the pre-stake balance
-        self.assertLess(swarm.organisms["org-0"].atp_reserve, before + 30)
+        # EXACT balance: the stake was taken at tabling and, on refused
+        # ratification, is not returned -- and NO reward of any size is paid.
+        # (An earlier `< before + 30` would have missed a smaller illegitimate
+        # reward; this pins the exact expected balance.) REJECTED here is refusal
+        # to ratify, not refutation, and the burnt-stake economics are unchanged.
+        self.assertEqual(swarm.organisms["org-0"].atp_reserve, before - stake)
 
     def test_B2_a_genuine_identity_still_ratifies_and_rewards(self):
         swarm = self.swarm_of()
