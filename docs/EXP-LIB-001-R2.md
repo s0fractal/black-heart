@@ -1,6 +1,6 @@
 # EXP-LIB-001 R2 — external-anchor profile
 
-Status: **proposed** (profile for review; no R2 run yet). Revision 4. Companion to
+Status: **proposed** (profile for review; no R2 run yet). Revision 5. Companion to
 `docs/EXP-LIB-001.md`. Defines what R2 is, before it is exercised. Until an
 actual proof is verified, R2 is `NOT_DEMONSTRATED` and R3 is `NOT_RELEASED`.
 
@@ -49,7 +49,7 @@ Bitcoin header source:
 | state | meaning |
 |---|---|
 | `NOT_DEMONSTRATED` | no proof supplied, or no OTS profile available |
-| `REFUSED` | a proof was supplied but is malformed or does not bind the commitment — a distinct failure, never folded into `NOT_DEMONSTRATED` or `PENDING` |
+| `REFUSED` | a proof was supplied but is malformed, declares a non-SHA-256 file-hash algorithm (§2), or does not bind the commitment — a distinct failure, never folded into `NOT_DEMONSTRATED` or `PENDING` |
 | `PENDING` | the proof binds the commitment but carries only calendar commitments; no Bitcoin attestation yet |
 | `ANCHORED_UNVERIFIED` | the proof carries a Bitcoin block attestation, but its chain time is **not** established against any accepted Bitcoin data source |
 | `CONFIRMED` | the block attestation's Merkle root matches an accepted, reader-pinned **block header** at that height; the verified time is that header's timestamp |
@@ -103,6 +103,14 @@ The R2 reader is given `(commitment, ots_proof, accepted_source=None)`:
   name, or a value that is not exactly an 80-byte header) is **not used** —
   reported as `accepted_source: none` and never confirming. Without a usable
   source, `CONFIRMED` is **unreachable**: at most `ANCHORED_UNVERIFIED`.
+
+The reader also enforces two format obligations before it will confirm: (a) the
+detached proof's declared **file-hash algorithm must be SHA-256** (§2) — any
+other op is `REFUSED`, a format mismatch, not a claim about SHA-256's strength;
+and (b) each pinned height is a **non-negative int or a canonical decimal
+string** (no `bool`, no float truncation such as `700000.9 -> 700000`, no
+leading zeros, and no two keys colliding to the same height after conversion).
+A source violating (b) is malformed and not used.
 
 It returns a structured result whose field names match §3/§4 exactly: `state`,
 `commitment_sha256`, `proof_sha256`, `pending_calendars`,
