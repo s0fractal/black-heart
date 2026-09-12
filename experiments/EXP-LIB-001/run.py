@@ -201,6 +201,38 @@ def journal_from_bytes(data: bytes) -> list:
 
 
 # --------------------------------------------------------------------------- #
+# Package for an independent reader: saved bytes, separately-pinned trust/root/
+# tip, replay WITHOUT regenerating the journal.
+# --------------------------------------------------------------------------- #
+def write_package(path: str) -> dict:
+    """Build the journal ONCE and write its bytes to `path`. The pins (root,
+    tip) and the trust root are returned to be delivered to the reader
+    SEPARATELY -- they are not inside the package bytes."""
+    journal = build_journal()
+    data = journal_to_bytes(journal)
+    with open(path, "wb") as f:
+        f.write(data)
+    return {"path": path, "root": journal[0]["event_hash"],
+            "tip": journal[-1]["event_hash"], "size": len(data)}
+
+
+def verify_package(journal_bytes: bytes, trust: TrustConfig,
+                   expected_root: str, expected_tip: str) -> dict:
+    """The independent reader's whole job: parse the saved bytes (rejecting
+    duplicate keys) and replay them under a separately-pinned trust root, root
+    and tip. It NEVER calls build_journal -- it confirms the package it was
+    given, not one it regenerated. A malformed package is a named refusal."""
+    try:
+        journal = journal_from_bytes(journal_bytes)
+    except Exception as e:
+        return {"accepted": False, "chain_ok": False,
+                "boundary": f"package did not parse: {type(e).__name__}: {e}",
+                "confirmed_through_index": -1, "verdicts": [],
+                "root_matches": None, "tip_matches": None, "root": None, "tip": None}
+    return replay(journal, trust, expected_root, expected_tip)
+
+
+# --------------------------------------------------------------------------- #
 # R1: replay to the oldest reachable confirmed ancestor
 # --------------------------------------------------------------------------- #
 _ALLOWED_KINDS = {"CLAIM", "COUNTEREXAMPLE", "REFINE"}

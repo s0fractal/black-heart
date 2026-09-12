@@ -12,7 +12,9 @@ from __future__ import annotations
 import hashlib
 import os
 import sys
+import tempfile
 import unittest
+from unittest import mock
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path[:1]:
@@ -288,6 +290,58 @@ class DeterminismTest(unittest.TestCase):
     def test_journal_from_bytes_rejects_duplicate_keys(self):
         with self.assertRaises(ValueError):
             EXP.journal_from_bytes(b'[{"a":1,"a":2}]')
+
+
+class PackageReaderTest(unittest.TestCase):
+    """The independent reader: saved journal BYTES + separately-pinned trust,
+    root and tip, replayed WITHOUT regenerating the journal. A specific set of
+    controls (not a claim about arbitrary input)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.pkg = os.path.join(self._tmp.name, "journal.pkg")
+        self.meta = EXP.write_package(self.pkg)
+        with open(self.pkg, "rb") as f:
+            self.data = f.read()
+
+    def test_reader_accepts_saved_package_without_regenerating(self):
+        # build_journal is broken: the reader must confirm the SAVED bytes, not
+        # a freshly generated journal.
+        with mock.patch.object(EXP, "build_journal",
+                               side_effect=RuntimeError("regeneration forbidden")):
+            rep = EXP.verify_package(self.data, EXP.caller_trust(),
+                                     self.meta["root"], self.meta["tip"])
+        self.assertTrue(rep["accepted"])
+
+    def test_reader_rejects_wrong_pinned_root(self):
+        rep = EXP.verify_package(self.data, EXP.caller_trust(), "00" * 32, self.meta["tip"])
+        self.assertFalse(rep["accepted"])
+
+    def test_reader_rejects_wrong_pinned_tip(self):
+        rep = EXP.verify_package(self.data, EXP.caller_trust(), self.meta["root"], "00" * 32)
+        self.assertFalse(rep["accepted"])
+
+    def test_reader_rejects_tampered_bytes_by_name(self):
+        tam = bytearray(self.data)
+        i = self.data.index(b'"event_hash"')
+        tam[i + 20] ^= 0x01
+        rep = EXP.verify_package(bytes(tam), EXP.caller_trust(),
+                                 self.meta["root"], self.meta["tip"])
+        self.assertFalse(rep["accepted"])
+        self.assertIsNotNone(rep["boundary"])
+
+    def test_reader_rejects_duplicate_keys_in_package(self):
+        rep = EXP.verify_package(b'[{"a":1,"a":2}]', EXP.caller_trust(),
+                                 self.meta["root"], self.meta["tip"])
+        self.assertFalse(rep["accepted"])
+        self.assertIn("parse", rep["boundary"])
+
+    def test_written_package_is_deterministic(self):
+        p2 = os.path.join(self._tmp.name, "journal2.pkg")
+        EXP.write_package(p2)
+        with open(p2, "rb") as f:
+            self.assertEqual(f.read(), self.data)
 
 
 if __name__ == "__main__":
