@@ -59,6 +59,14 @@ class PolyglotAuditReport:
     failed_claim_count: int = 0         # claim did not settle/match
     audit_error_count: int = 0          # parse/verify exceptions (never swallowed)
 
+    def scope_summary(self) -> str:
+        """What the verdict actually covers. A verified signature attests only
+        its own signed payload, and a settled claim only that claim -- never the
+        whole document. Header presence is not ISO 32000 compliance."""
+        return (f"scope: {self.verified_seal_count} signature(s) and "
+                f"{self.passed_claim_count} claim(s) positively verified among the "
+                f"recognized elements -- NOT the whole document")
+
     def is_sound(self) -> bool:
         # SOUND requires: valid container; at least one thing POSITIVELY
         # verified (a signature or a hermetic claim); and nothing that failed,
@@ -214,6 +222,12 @@ def audit_polyglot_hermetic(file_path: str) -> PolyglotAuditReport:
                     else:
                         failed_claims += 1
                         notes.append(f"[✗] Claim failed settlement: {claim_id} (got {res.term}, expected {expected})")
+                else:
+                    # The line announces a claim but does not parse. Silently
+                    # skipping it (as this branch used to) let a document pair a
+                    # valid signature with a malformed CLAIM and still read SOUND.
+                    audit_errors += 1
+                    notes.append("[!] Malformed %🖤 CLAIM line could not be parsed; counted as an error.")
             except Exception as ex:
                 audit_errors += 1
                 notes.append(f"[!] Hermetic combinator execution error: {ex}")
@@ -265,7 +279,8 @@ def main():
 
     print(f"[*] File Size:            {report.file_size_bytes} bytes")
     print(f"[*] SHA-256 Digest:       {report.sha256_digest}")
-    print(f"[*] ISO 32000 Compliant:  {'Yes' if report.is_valid_iso32000 else 'No'}")
+    print(f"[*] PDF header present:    {'Yes' if report.is_valid_iso32000 else 'No'} "
+          f"(header presence only, not full ISO 32000 compliance)")
     print(f"[*] Incremental Updates:  {report.incremental_updates_count}")
     print(f"[*] Detected Manifests:   {', '.join(report.detected_manifest_types) or 'None'}")
     print("\n--- AUDIT LOG ---")
@@ -274,7 +289,8 @@ def main():
 
     print("\n" + "=" * 70)
     if report.is_sound():
-        print("\033[1;32m[✓ SOUND] Document verified statically without executing host Python.\033[0m")
+        print("\033[1;32m[✓ SOUND] Recognized elements verified statically without executing host Python.\033[0m")
+        print(f"          {report.scope_summary()}")
         sys.exit(0)
     else:
         print("\033[1;31m[✗ UNSOUND] Document failed static hermetic verification.\033[0m")

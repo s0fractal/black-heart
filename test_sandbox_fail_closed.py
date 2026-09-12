@@ -56,10 +56,13 @@ class _Audit(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
 
     def sound(self, blob: bytes) -> bool:
+        return self.report(blob).is_sound()
+
+    def report(self, blob: bytes):
         path = os.path.join(self._tmp.name, "doc.pdf")
         with open(path, "wb") as f:
             f.write(blob)
-        return audit_polyglot_hermetic(path).is_sound()
+        return audit_polyglot_hermetic(path)
 
     def signed_line(self, payload="hello world"):
         """A single CONTRACT manifest line carrying a genuinely valid signature."""
@@ -101,6 +104,11 @@ class HonestSoundTest(_Audit):
 
     def test_B1_a_verified_signature_is_sound(self):
         self.assertTrue(self.sound(self.signed_contract()))
+
+    def test_B3_the_scope_is_reported_as_recognized_elements_not_the_document(self):
+        r = self.report(self.signed_contract())
+        self.assertEqual(r.verified_seal_count, 1)
+        self.assertIn("NOT the whole document", r.scope_summary())
 
     def test_B2_a_settled_claim_is_sound(self):
         settled = glyph.evaluate(glyph.parse("🤍 (🖤 🤍)")).term
@@ -162,6 +170,13 @@ class MixedEvidenceTest(_Audit):
     def test_D5_two_verified_seals_are_still_sound(self):
         """Control: the mixed-doc machinery itself does not make a clean doc fail."""
         self.assertTrue(self.sound(self.doc(self.signed_line("one"), self.signed_line("two"))))
+
+    def test_D6_verified_plus_malformed_claim_is_not_sound(self):
+        """A line that announces a CLAIM but does not parse must count as an
+        error, not be silently skipped -- otherwise a good signature paired with
+        a malformed claim reads SOUND."""
+        bad = "%🖤 CLAIM: this does not match the regex".encode("utf-8")
+        self.assertFalse(self.sound(self.doc(self.signed_line(), bad)))
 
 
 if __name__ == "__main__":
