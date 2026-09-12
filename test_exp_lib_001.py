@@ -406,15 +406,41 @@ def _pending_proof(commitment=_R2_COMMIT):
 
 def _bitcoin_proof(commitment=_R2_COMMIT, height=700000):
     """A detached proof carrying a Bitcoin block attestation. Returns
-    (proof_bytes, height, attested_root_hex). The attested bytes are whatever
-    the attestation commits to; the reader matches its hex on both sides, so
-    the fixture is self-consistent offline."""
+    (proof_bytes, height, merkle_root_hex). An OpSHA256 transforms the 32-byte
+    leaf into a distinct 32-byte value -- a correctly-sized synthetic 'Merkle
+    root' -- which the attestation then commits to. (A real proof reaches the
+    block Merkle root through many ops; the size is what the reader checks.)"""
     leaf = hashlib.sha256(commitment).digest()
     ts = _OTS["Timestamp"](leaf)
-    child = ts.ops.add(_OTS["OpAppend"](b"\x00"))
-    root_hex = child.msg.hex()
+    child = ts.ops.add(_OTS["OpSHA256"]())         # stays 32 bytes, unlike OpAppend
+    merkle_root_hex = child.msg.hex()
+    assert len(child.msg) == 32
     child.attestations.add(_OTS["BitcoinBlockHeaderAttestation"](height))
-    return _serialize(_OTS["DetachedTimestampFile"](_OTS["OpSHA256"](), ts)), height, root_hex
+    return (_serialize(_OTS["DetachedTimestampFile"](_OTS["OpSHA256"](), ts)),
+            height, merkle_root_hex)
+
+
+_SYNTH_TIME = 1600000000                            # explicitly synthetic nTime
+
+
+def _synthetic_header(merkle_root, time_int=_SYNTH_TIME):
+    """An explicitly SYNTHETIC 80-byte Bitcoin block header carrying the given
+    32-byte Merkle root and nTime. Not a real block; the reader derives Merkle
+    root and time from it and does not check proof-of-work."""
+    assert len(merkle_root) == 32
+    version = (1).to_bytes(4, "little")
+    prev_block = b"\x11" * 32
+    ntime = int(time_int).to_bytes(4, "little")
+    bits = b"\xff\xff\x00\x1d"
+    nonce = b"\x00\x00\x00\x00"
+    header = version + prev_block + bytes(merkle_root) + ntime + bits + nonce
+    assert len(header) == 80
+    return header
+
+
+def _header_source(name, height, merkle_root_hex, time_int=_SYNTH_TIME):
+    hdr = _synthetic_header(bytes.fromhex(merkle_root_hex), time_int)
+    return {"name": name, "block_headers": {height: hdr.hex()}}
 
 
 class ExternalAnchorNoLibTest(unittest.TestCase):
@@ -433,11 +459,15 @@ class ExternalAnchorNoLibTest(unittest.TestCase):
             r = EXP.verify_external_anchor(commit, proof)
             for field in ("state", "commitment_sha256", "proof_sha256",
                           "pending_calendars", "bitcoin_attestations",
-                          "time_verified", "calendar_authenticity_verified",
+                          "time_verified", "attested_time", "block_id",
+                          "calendar_authenticity_verified",
                           "accepted_source", "network_calls"):
                 self.assertIn(field, r)
             self.assertIn(r["state"], EXP._R2_STATES)
             self.assertEqual(r["network_calls"], 0)
+            # a non-CONFIRMED result never carries a verified time
+            self.assertFalse(r["time_verified"])
+            self.assertIsNone(r["attested_time"])
 
     def test_commitment_file_is_exactly_32_raw_bytes(self):
         # profile §2/§9: the stamped file is exactly the 32 raw bytes, no hex,
@@ -453,6 +483,31 @@ class ExternalAnchorNoLibTest(unittest.TestCase):
         self.assertEqual(len(raw), 32)
         self.assertEqual(raw, commitment)
         self.assertEqual(raw.hex(), root_hex)
+
+    def test_block_header_parser_derives_root_time_and_id(self):
+        # No OTS needed: the header contract is what makes time verifiable.
+        mroot = bytes(range(100, 132))
+        hdr = _synthetic_header(mroot, 1712345678)
+        got = EXP._parse_block_header(hdr)
+        self.assertIsNotNone(got)
+        merkle_root, time_int, block_id = got
+        self.assertEqual(merkle_root, mroot)
+        self.assertEqual(time_int, 1712345678)
+        self.assertEqual(len(bytes.fromhex(block_id)), 32)
+        self.assertIsNone(EXP._parse_block_header(hdr[:-1]))   # not 80 bytes
+
+    def test_validate_source_rejects_malformed_before_matching(self):
+        good = _header_source("s", 700000, "ab" * 32)
+        self.assertIsNotNone(EXP._validate_source(good))
+        for bad in [
+            None, {}, {"block_headers": {700000: "ab" * 40 + ".."}},   # no name
+            {"name": "", "block_headers": {700000: ("00" * 80)}},      # empty name
+            {"name": "s", "block_headers": {}},                        # empty headers
+            {"name": "s", "block_headers": {700000: "ab" * 32}},       # 32 != 80 bytes
+            {"name": "s", "block_headers": {700000: "zz" * 80}},       # not hex
+            {"name": "s", "block_merkle_roots": {700000: "ab" * 32}},  # old shape
+        ]:
+            self.assertIsNone(EXP._validate_source(bad), bad)
 
 
 @unittest.skipUnless(_OTS is not None,
@@ -486,21 +541,29 @@ class ExternalAnchorR2Test(unittest.TestCase):
         self.assertEqual(r["pending_calendars"], ["https://calendar.example/"])
         self.assertFalse(r["time_verified"])
 
+    def test_bitcoin_attestation_merkle_root_is_32_bytes(self):
+        _proof, _height, root_hex = _bitcoin_proof()
+        self.assertEqual(len(bytes.fromhex(root_hex)), 32)   # not 33 (no OpAppend)
+
     def test_anchored_unverified_when_bitcoin_present_no_source(self):
         proof, height, _root = _bitcoin_proof()
         r = EXP.verify_external_anchor(_R2_COMMIT, proof)
         self.assertEqual(r["state"], "ANCHORED_UNVERIFIED")
         self.assertEqual([b["height"] for b in r["bitcoin_attestations"]], [height])
         self.assertFalse(r["time_verified"])
+        self.assertIsNone(r["attested_time"])
         self.assertEqual(r["accepted_source"], "none")
 
     def test_confirmed_against_accepted_pinned_source_offline(self):
         proof, height, root_hex = _bitcoin_proof()
-        source = {"name": "pinned-headers-fixture",
-                  "block_merkle_roots": {height: root_hex}}
+        source = _header_source("pinned-headers-fixture", height, root_hex,
+                                time_int=_SYNTH_TIME)
         r = EXP.verify_external_anchor(_R2_COMMIT, proof, source)
         self.assertEqual(r["state"], "CONFIRMED")
         self.assertTrue(r["time_verified"])
+        # the reported time is DERIVED from the pinned header, not invented
+        self.assertEqual(r["attested_time"], _SYNTH_TIME)
+        self.assertEqual(len(bytes.fromhex(r["block_id"])), 32)
         self.assertEqual(r["network_calls"], 0)          # offline confirmation
         self.assertFalse(r["calendar_authenticity_verified"])
         self.assertEqual(r["accepted_source"], "pinned-headers-fixture")
@@ -508,23 +571,45 @@ class ExternalAnchorR2Test(unittest.TestCase):
     # ---- the REQUIRED adjacent negative (profile §7 / Codex) -------------- #
     def test_same_accepted_source_but_mismatched_attestation_is_not_confirmed(self):
         proof, height, _root = _bitcoin_proof()
-        # SAME accepted source object shape, SAME height, but a root that does
-        # not match the attestation. Passing a source must not, by itself,
-        # confirm: this must NOT be CONFIRMED.
-        source = {"name": "pinned-headers-fixture",
-                  "block_merkle_roots": {height: "00" * 32}}
+        # SAME well-formed source shape and height, but the pinned header holds
+        # a DIFFERENT Merkle root. Passing a source must not, by itself,
+        # confirm: this must NOT be CONFIRMED, and no time is reported.
+        source = _header_source("pinned-headers-fixture", height, "00" * 32)
         r = EXP.verify_external_anchor(_R2_COMMIT, proof, source)
         self.assertNotEqual(r["state"], "CONFIRMED")
         self.assertEqual(r["state"], "ANCHORED_UNVERIFIED")
         self.assertFalse(r["time_verified"])
+        self.assertIsNone(r["attested_time"])
         self.assertEqual(r["accepted_source"], "pinned-headers-fixture")
 
     def test_accepted_source_with_missing_height_is_not_confirmed(self):
         proof, height, root_hex = _bitcoin_proof()
-        source = {"name": "pinned-headers-fixture",
-                  "block_merkle_roots": {height + 1: root_hex}}
+        source = _header_source("pinned-headers-fixture", height + 1, root_hex)
         r = EXP.verify_external_anchor(_R2_COMMIT, proof, source)
         self.assertEqual(r["state"], "ANCHORED_UNVERIFIED")
+
+    def test_malformed_source_never_confirms_even_with_matching_data(self):
+        # Codex blocker 2: a source WITHOUT a name must not earn CONFIRMED, even
+        # when it carries a header whose Merkle root matches the attestation.
+        proof, height, root_hex = _bitcoin_proof()
+        hdr = _synthetic_header(bytes.fromhex(root_hex))
+        no_name = {"block_headers": {height: hdr.hex()}}          # name removed
+        r = EXP.verify_external_anchor(_R2_COMMIT, proof, no_name)
+        self.assertNotEqual(r["state"], "CONFIRMED")
+        self.assertEqual(r["state"], "ANCHORED_UNVERIFIED")
+        self.assertFalse(r["time_verified"])
+        self.assertEqual(r["accepted_source"], "none")           # not "unnamed-source"
+
+    def test_old_merkle_root_only_source_shape_never_confirms(self):
+        # The bare {height: merkle_root_hex} shape carries no time and must not
+        # confirm -- the very shape the earlier revision wrongly accepted.
+        proof, height, root_hex = _bitcoin_proof()
+        old_shape = {"name": "roots-only",
+                     "block_merkle_roots": {height: root_hex}}
+        r = EXP.verify_external_anchor(_R2_COMMIT, proof, old_shape)
+        self.assertNotEqual(r["state"], "CONFIRMED")
+        self.assertEqual(r["accepted_source"], "none")
+
 
 if __name__ == "__main__":
     unittest.main()

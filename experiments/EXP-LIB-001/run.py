@@ -511,10 +511,22 @@ def loop_success(recorded: list, rep: dict) -> bool:
 _R2_STATES = ("NOT_DEMONSTRATED", "REFUSED", "PENDING",
               "ANCHORED_UNVERIFIED", "CONFIRMED")
 
+# A reader-accepted Bitcoin data source pins, per block height, that block's
+# 80-byte header. The reader DERIVES the Merkle root (header[36:68]) and the
+# block time (header[68:72], little-endian) from the pinned header: a bare
+# {height: merkle_root_hex} map carries no time and can never establish one, so
+# a dictionary match alone must not read as verified time. Accepting a header
+# set is the reader's own external decision (profile §4). This module does not
+# fetch anything and does NOT validate proof-of-work or that a header is a real
+# Bitcoin block; it binds the OTS Bitcoin attestation's Merkle root to the
+# reader-pinned header at that height and reports that header's timestamp.
+_BLOCK_HEADER_LEN = 80
+
 
 def _r2_result(state, *, commitment_sha256=None, proof_sha256=None,
                pending_calendars=None, bitcoin_attestations=None,
-               time_verified=False, calendar_authenticity_verified=False,
+               time_verified=False, attested_time=None, block_id=None,
+               calendar_authenticity_verified=False,
                accepted_source="none", network_calls=0, reason=None):
     assert state in _R2_STATES, state
     return {
@@ -524,6 +536,8 @@ def _r2_result(state, *, commitment_sha256=None, proof_sha256=None,
         "pending_calendars": pending_calendars or [],
         "bitcoin_attestations": bitcoin_attestations or [],
         "time_verified": time_verified,
+        "attested_time": attested_time,           # verified block time, or None
+        "block_id": block_id,                     # derived from the header, or None
         "calendar_authenticity_verified": calendar_authenticity_verified,
         "accepted_source": accepted_source,
         "network_calls": network_calls,
@@ -531,21 +545,54 @@ def _r2_result(state, *, commitment_sha256=None, proof_sha256=None,
     }
 
 
-def _source_name(accepted_source):
-    """The report's `accepted_source` field is a NAME (profile §4/§7), or 'none'.
-    None -> 'none'; a well-formed source names itself; a malformed one is named
-    but yields no confirmation (its roots are simply never matched)."""
-    if accepted_source is None:
-        return "none"
-    if isinstance(accepted_source, dict):
-        name = accepted_source.get("name")
-        if isinstance(name, str) and name:
-            return name
-    return "unnamed-source"
+def _parse_block_header(header):
+    """Derive (merkle_root_bytes, time_int, block_id_hex) from an 80-byte
+    Bitcoin block header. block_id is the conventional big-endian double-SHA256
+    of the header. Returns None if it is not exactly 80 bytes."""
+    if not isinstance(header, (bytes, bytearray)) or len(header) != _BLOCK_HEADER_LEN:
+        return None
+    header = bytes(header)
+    merkle_root = header[36:68]                    # 32 bytes
+    time_int = int.from_bytes(header[68:72], "little")
+    block_id = hashlib.sha256(hashlib.sha256(header).digest()).digest()[::-1].hex()
+    return merkle_root, time_int, block_id
+
+
+def _validate_source(accepted_source):
+    """Return (name, {int height: 80-byte header bytes}) for a WELL-FORMED
+    reader source, else None. Well-formed requires a non-empty string `name`
+    AND a non-empty `block_headers` map whose every value is a hex string
+    decoding to exactly 80 bytes. A malformed source is not 'used': it can never
+    confirm and is reported as accepted_source 'none'. Format is checked BEFORE
+    any matching, so no partial/ill-formed source earns a confirmation."""
+    if not isinstance(accepted_source, dict):
+        return None
+    name = accepted_source.get("name")
+    if not (isinstance(name, str) and name):
+        return None
+    headers = accepted_source.get("block_headers")
+    if not (isinstance(headers, dict) and headers):
+        return None
+    parsed = {}
+    for height, hexhdr in headers.items():
+        try:
+            h = int(height)
+        except (TypeError, ValueError):
+            return None
+        if not isinstance(hexhdr, str):
+            return None
+        try:
+            raw = bytes.fromhex(hexhdr)
+        except ValueError:
+            return None
+        if len(raw) != _BLOCK_HEADER_LEN:
+            return None
+        parsed[h] = raw
+    return name, parsed
 
 
 def verify_external_anchor(commitment, ots_proof, accepted_source=None):
-    """R2 reader (docs/EXP-LIB-001-R2.md rev 3). Fully OFFLINE: zero network
+    """R2 reader (docs/EXP-LIB-001-R2.md rev 4). Fully OFFLINE: zero network
     calls, always. Given the pinned root `commitment` (exactly 32 raw bytes),
     the detached `ots_proof` bytes, and an OPTIONAL reader-pinned
     `accepted_source`, return the §3 state and §4 flags. It NEVER raises on
@@ -554,13 +601,20 @@ def verify_external_anchor(commitment, ots_proof, accepted_source=None):
 
     accepted_source, when given, is the reader's own pinned Bitcoin data source
     (§7):
-        {"name": <str>, "block_merkle_roots": {<int height>: <hex str>}}
-    where each hex value is the exact bytes the OTS Bitcoin attestation commits
-    to (i.e. `msg.hex()`). Without it CONFIRMED is unreachable: at most
-    ANCHORED_UNVERIFIED. Supplying it is never by itself a confirmation -- an
-    attestation must actually match a pinned (height, root).
+        {"name": <non-empty str>,
+         "block_headers": {<int height>: <80-byte block-header hex>}}
+    The reader derives the Merkle root and block time from each pinned header;
+    a bare Merkle-root string is NOT accepted, because it carries no time.
+    CONFIRMED requires (a) a well-formed source (format checked first) and
+    (b) an OTS Bitcoin attestation whose Merkle root equals the pinned header's
+    Merkle root at that height; the verified time reported is that header's
+    timestamp. Without a source, CONFIRMED is unreachable (at most
+    ANCHORED_UNVERIFIED); supplying one is never itself a confirmation, and a
+    malformed one (e.g. no name) never confirms. PoW is not checked: accepting
+    the header set is the reader's external decision.
     """
-    src_name = _source_name(accepted_source)
+    validated = _validate_source(accepted_source)
+    src_name = validated[0] if validated is not None else "none"
     commit_ok = isinstance(commitment, (bytes, bytearray)) and len(commitment) == 32
     commitment_sha256 = (hashlib.sha256(bytes(commitment)).hexdigest()
                          if commit_ok else None)
@@ -570,8 +624,7 @@ def verify_external_anchor(commitment, ots_proof, accepted_source=None):
     # 1. No proof at all -> NOT_DEMONSTRATED (never REFUSED, never PENDING).
     if ots_proof is None:
         return _r2_result("NOT_DEMONSTRATED", commitment_sha256=commitment_sha256,
-                          accepted_source=src_name,
-                          reason="no proof supplied")
+                          accepted_source=src_name, reason="no proof supplied")
 
     # 2. No OTS profile available on this host -> NOT_DEMONSTRATED (§3).
     try:
@@ -591,8 +644,7 @@ def verify_external_anchor(commitment, ots_proof, accepted_source=None):
                           reason="commitment is not exactly 32 raw bytes")
     if not isinstance(ots_proof, (bytes, bytearray)):
         return _r2_result("REFUSED", commitment_sha256=commitment_sha256,
-                          accepted_source=src_name,
-                          reason="proof is not raw bytes")
+                          accepted_source=src_name, reason="proof is not raw bytes")
     try:
         detached = DetachedTimestampFile.deserialize(
             BytesDeserializationContext(bytes(ots_proof)))
@@ -611,7 +663,8 @@ def verify_external_anchor(commitment, ots_proof, accepted_source=None):
                           reason="proof does not bind the commitment "
                                  "(leaf != SHA256 of the 32 root bytes)")
 
-    # 5. Classify the attestations the (now bound) proof carries.
+    # 5. Classify the attestations the (now bound) proof carries. A Bitcoin
+    #    attestation's message is that block's 32-byte Merkle root.
     pending = []
     bitcoin = []
     for msg, att in detached.timestamp.all_attestations():
@@ -641,40 +694,53 @@ def verify_external_anchor(commitment, ots_proof, accepted_source=None):
                           accepted_source=src_name,
                           reason="calendar commitments only; no Bitcoin attestation yet")
 
-    # 7. Bitcoin attestation present. Confirmation requires an accepted source
-    #    (§4): a present attestation is NEVER reported CONFIRMED on its own.
-    matched = False
-    if isinstance(accepted_source, dict):
-        roots = accepted_source.get("block_merkle_roots")
-        if isinstance(roots, dict):
-            for b in bitcoin:
-                pinned = roots.get(b["height"])
-                if pinned is None:
-                    # tolerate string-keyed maps from e.g. JSON
-                    pinned = roots.get(str(b["height"]))
-                if isinstance(pinned, str) and pinned.lower() == b["merkle_root"]:
-                    matched = True
-                    break
+    # 7. Bitcoin attestation present. CONFIRMED requires a WELL-FORMED, reader-
+    #    accepted source (validated above, before any matching) AND a Merkle-root
+    #    match against the pinned block header -- which is also what yields the
+    #    verified block time. A present attestation is NEVER CONFIRMED on its
+    #    own; a malformed source (e.g. no name) never confirms.
+    confirmed = None
+    if validated is not None:
+        _name, headers = validated
+        for b in bitcoin:
+            hdr = headers.get(b["height"])
+            if hdr is None:
+                continue
+            parsed = _parse_block_header(hdr)
+            if parsed is None:                     # unreachable: validated => 80 bytes
+                continue
+            merkle_root, time_int, block_id = parsed
+            if merkle_root.hex() == b["merkle_root"]:
+                confirmed = {"attested_time": time_int, "block_id": block_id}
+                break
 
-    if matched:
+    if confirmed is not None:
         return _r2_result("CONFIRMED", commitment_sha256=commitment_sha256,
                           proof_sha256=proof_sha256, pending_calendars=pending,
                           bitcoin_attestations=bitcoin, time_verified=True,
+                          attested_time=confirmed["attested_time"],
+                          block_id=confirmed["block_id"],
                           calendar_authenticity_verified=False,
                           accepted_source=src_name, network_calls=0,
-                          reason="Bitcoin attestation verified against the accepted, "
-                                 "reader-pinned source (offline)")
+                          reason="Bitcoin attestation Merkle root matches the "
+                                 "reader-pinned block header; verified time is "
+                                 "that header's timestamp (offline; PoW not checked)")
 
-    # 8. Attestation present but not verified against an accepted source: the
-    #    adjacent negative (source given but no match) lands here too.
+    # 8. Attestation present but not confirmed: no source, a MALFORMED source,
+    #    or a well-formed source that matched no attestation (adjacent
+    #    negative). time_verified stays False; no time is invented.
+    if accepted_source is None:
+        why = "no accepted source pinned; chain time not established"
+    elif validated is None:
+        why = ("accepted source is malformed and was not used "
+               "(needs a name and 80-byte block_headers)")
+    else:
+        why = "accepted source did not match any Bitcoin attestation's Merkle root"
     return _r2_result("ANCHORED_UNVERIFIED", commitment_sha256=commitment_sha256,
                       proof_sha256=proof_sha256, pending_calendars=pending,
                       bitcoin_attestations=bitcoin, time_verified=False,
                       calendar_authenticity_verified=False,
-                      accepted_source=src_name, network_calls=0,
-                      reason=("no accepted source pinned; chain time not established"
-                              if accepted_source is None else
-                              "accepted source did not match any Bitcoin attestation"))
+                      accepted_source=src_name, network_calls=0, reason=why)
 
 
 def run_experiment() -> dict:
