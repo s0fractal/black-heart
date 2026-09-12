@@ -1874,21 +1874,57 @@ def cmd_warrant_kernel(args):
         line_end = data.find(b"\n", idx)
         raw_json = data[idx + len(marker):line_end].decode("utf-8")
         manifest = json.loads(raw_json)
-        tc = TrustConfig.from_dict(manifest.get("trust_config", {}))
+
+        # The trust ROOT is the operator's, never the audited document's. Reading
+        # `manifest["trust_config"]` here (as this path used to) let a supplied
+        # document name its own author as trusted -- or set trusted_author_pks to
+        # null / {} for trust-all -- so an unsigned or unauthorized claim audited
+        # as verified. TrustConfig's own contract says the root "comes from
+        # configuration, never from inside the record." The embedded policy is
+        # descriptive only and is shown, not used.
+        if getattr(args, "trust_config", None):
+            tc = TrustConfig.load_from_file(args.trust_config)
+            trust_source = f"operator TrustConfig file {args.trust_config}"
+        elif getattr(args, "trusted_author_pks", None):
+            tc = TrustConfig(trusted_author_pks=set(args.trusted_author_pks))
+            trust_source = f"{len(tc.trusted_author_pks)} operator-supplied author key(s)"
+        else:
+            # Fail closed: trust NO author unless the operator names one. Math
+            # verdicts still run; author authorization is withheld (UNVERIFIED),
+            # never granted by the document itself. An empty set is kept in memory
+            # and passed directly (not serialized), so it stays "trust none".
+            tc = TrustConfig(trusted_author_pks=set())
+            trust_source = "no operator trust root supplied -- every author is untrusted"
+
+        embedded = manifest.get("trust_config")
         verifier = WarrantVerifier(tc)
         claims = [EdgeClaim.from_dict(c) for c in manifest.get("claims", [])]
         print("\033[1;36m=================================================================\033[0m")
         print(f"  %🖤 AUDITING WARRANT LEDGER: {args.file}")
-        print("\033[1;36m=================================================================\033[0m\n")
-        all_ok = True
+        print("\033[1;36m=================================================================\033[0m")
+        print(f"  Trust root: {trust_source}")
+        if embedded is not None:
+            print("  \033[1;33m[i] The document carries an embedded trust_config; it is DESCRIPTIVE "
+                  "only and is NOT used as the verification policy.\033[0m")
+        print()
+        passed = failed = unverified = 0
         for c in claims:
             v = verifier.audit_claim(c)
             col = "\033[1;32m" if v.status == VerificationStatus.PASS else ("\033[1;31m" if v.status == VerificationStatus.FAIL else "\033[1;33m")
             print(f"  {col}{v.human_badge()}\033[0m")
-            if v.status == VerificationStatus.FAIL:
-                all_ok = False
+            if v.status == VerificationStatus.PASS:
+                passed += 1
+            elif v.status == VerificationStatus.FAIL:
+                failed += 1
+            else:
+                unverified += 1
         print("\033[1;36m=================================================================\033[0m")
-        sys.exit(0 if all_ok else 1)
+        print(f"  {passed} verified, {failed} rejected, {unverified} unverified (refused)")
+        # Success is every claim VERIFIED under the operator's trust root. An
+        # UNVERIFIED claim is a refusal, not a pass -- exiting 0 on it would tell
+        # a scripted operator "all good" when nothing was actually authorized.
+        all_verified = (failed == 0 and unverified == 0 and passed == len(claims))
+        sys.exit(0 if all_verified else 1)
 
     elif args.action == "promote":
         rule = args.rule
@@ -4290,8 +4326,15 @@ def main():
     p_wk_compile = wk_subs.add_parser("compile", help="Compile sample Epistemic Warrant Ledger PDF polyglot")
     p_wk_compile.add_argument("-o", "--output", default="warrant_ledger.pdf", help="Output PDF path")
 
-    p_wk_audit = wk_subs.add_parser("audit", help="Audit warrant ledger PDF or JSON against TrustConfig")
+    p_wk_audit = wk_subs.add_parser("audit", help="Audit warrant ledger PDF or JSON against a CALLER-supplied TrustConfig")
     p_wk_audit.add_argument("file", help="Target warrant ledger file")
+    p_wk_audit.add_argument("--trust-config", default=None,
+                            help="Path to the operator's TrustConfig JSON. The trust root is the "
+                                 "operator's, never the audited document's.")
+    p_wk_audit.add_argument("--trusted-author-pk", action="append", default=None,
+                            dest="trusted_author_pks", metavar="PK_HEX",
+                            help="Trust claims signed by this author public key (repeatable). "
+                                 "Without this or --trust-config, no author is trusted.")
 
     p_wk_promote = wk_subs.add_parser("promote", help="Promote empirical hypothesis to axiomatic identity")
     p_wk_promote.add_argument("rule", help="Target algebraic rewrite rule (e.g. 'I x -> x')")
