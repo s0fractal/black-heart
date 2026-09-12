@@ -499,6 +499,184 @@ def loop_success(recorded: list, rep: dict) -> bool:
             and rep.get("confirmed_through_index") == 2)
 
 
+# --------------------------------------------------------------------------- #
+# R2: external-anchor reader (docs/EXP-LIB-001-R2.md rev 3)
+# --------------------------------------------------------------------------- #
+# opentimestamps is an OPTIONAL, offline-only dependency: it is imported lazily
+# INSIDE verify_external_anchor so the module (and the zero-dependency CI) never
+# require it. When it is absent the reader reports NOT_DEMONSTRATED, exactly as
+# the profile §3 allows ("no OTS profile available"). R2 tests skip when it is
+# not importable; R1/loop/linkage/controls/determinism do not depend on it.
+
+_R2_STATES = ("NOT_DEMONSTRATED", "REFUSED", "PENDING",
+              "ANCHORED_UNVERIFIED", "CONFIRMED")
+
+
+def _r2_result(state, *, commitment_sha256=None, proof_sha256=None,
+               pending_calendars=None, bitcoin_attestations=None,
+               time_verified=False, calendar_authenticity_verified=False,
+               accepted_source="none", network_calls=0, reason=None):
+    assert state in _R2_STATES, state
+    return {
+        "state": state,
+        "commitment_sha256": commitment_sha256,
+        "proof_sha256": proof_sha256,
+        "pending_calendars": pending_calendars or [],
+        "bitcoin_attestations": bitcoin_attestations or [],
+        "time_verified": time_verified,
+        "calendar_authenticity_verified": calendar_authenticity_verified,
+        "accepted_source": accepted_source,
+        "network_calls": network_calls,
+        "reason": reason,
+    }
+
+
+def _source_name(accepted_source):
+    """The report's `accepted_source` field is a NAME (profile §4/§7), or 'none'.
+    None -> 'none'; a well-formed source names itself; a malformed one is named
+    but yields no confirmation (its roots are simply never matched)."""
+    if accepted_source is None:
+        return "none"
+    if isinstance(accepted_source, dict):
+        name = accepted_source.get("name")
+        if isinstance(name, str) and name:
+            return name
+    return "unnamed-source"
+
+
+def verify_external_anchor(commitment, ots_proof, accepted_source=None):
+    """R2 reader (docs/EXP-LIB-001-R2.md rev 3). Fully OFFLINE: zero network
+    calls, always. Given the pinned root `commitment` (exactly 32 raw bytes),
+    the detached `ots_proof` bytes, and an OPTIONAL reader-pinned
+    `accepted_source`, return the §3 state and §4 flags. It NEVER raises on
+    adversarial input -- a malformed or non-binding proof is the named result
+    REFUSED, distinct from absent (NOT_DEMONSTRATED) and from PENDING.
+
+    accepted_source, when given, is the reader's own pinned Bitcoin data source
+    (§7):
+        {"name": <str>, "block_merkle_roots": {<int height>: <hex str>}}
+    where each hex value is the exact bytes the OTS Bitcoin attestation commits
+    to (i.e. `msg.hex()`). Without it CONFIRMED is unreachable: at most
+    ANCHORED_UNVERIFIED. Supplying it is never by itself a confirmation -- an
+    attestation must actually match a pinned (height, root).
+    """
+    src_name = _source_name(accepted_source)
+    commit_ok = isinstance(commitment, (bytes, bytearray)) and len(commitment) == 32
+    commitment_sha256 = (hashlib.sha256(bytes(commitment)).hexdigest()
+                         if commit_ok else None)
+    proof_sha256 = (hashlib.sha256(ots_proof).hexdigest()
+                    if isinstance(ots_proof, (bytes, bytearray)) else None)
+
+    # 1. No proof at all -> NOT_DEMONSTRATED (never REFUSED, never PENDING).
+    if ots_proof is None:
+        return _r2_result("NOT_DEMONSTRATED", commitment_sha256=commitment_sha256,
+                          accepted_source=src_name,
+                          reason="no proof supplied")
+
+    # 2. No OTS profile available on this host -> NOT_DEMONSTRATED (§3).
+    try:
+        from opentimestamps.core.timestamp import DetachedTimestampFile
+        from opentimestamps.core.serialize import BytesDeserializationContext
+        from opentimestamps.core.notary import (PendingAttestation,
+                                                 BitcoinBlockHeaderAttestation)
+    except Exception:
+        return _r2_result("NOT_DEMONSTRATED", commitment_sha256=commitment_sha256,
+                          proof_sha256=proof_sha256, accepted_source=src_name,
+                          reason="no OTS profile available (opentimestamps not importable)")
+
+    # 3. A proof was supplied: from here a failure is REFUSED, not absent.
+    if not commit_ok:
+        return _r2_result("REFUSED", proof_sha256=proof_sha256,
+                          accepted_source=src_name,
+                          reason="commitment is not exactly 32 raw bytes")
+    if not isinstance(ots_proof, (bytes, bytearray)):
+        return _r2_result("REFUSED", commitment_sha256=commitment_sha256,
+                          accepted_source=src_name,
+                          reason="proof is not raw bytes")
+    try:
+        detached = DetachedTimestampFile.deserialize(
+            BytesDeserializationContext(bytes(ots_proof)))
+    except Exception as e:
+        return _r2_result("REFUSED", commitment_sha256=commitment_sha256,
+                          proof_sha256=proof_sha256, accepted_source=src_name,
+                          reason=f"proof did not parse: {type(e).__name__}")
+
+    # 4. Binding: the proof must commit to SHA256(our 32 raw bytes) (§2). A
+    #    proof over any other bytes -- or double-hashed, or a different file --
+    #    does not bind THIS commitment and is REFUSED, not silently accepted.
+    expected_leaf = hashlib.sha256(bytes(commitment)).digest()
+    if detached.timestamp.msg != expected_leaf:
+        return _r2_result("REFUSED", commitment_sha256=commitment_sha256,
+                          proof_sha256=proof_sha256, accepted_source=src_name,
+                          reason="proof does not bind the commitment "
+                                 "(leaf != SHA256 of the 32 root bytes)")
+
+    # 5. Classify the attestations the (now bound) proof carries.
+    pending = []
+    bitcoin = []
+    for msg, att in detached.timestamp.all_attestations():
+        if isinstance(att, PendingAttestation):
+            uri = att.uri
+            if isinstance(uri, bytes):
+                uri = uri.decode("utf-8", "replace")
+            pending.append(uri)
+        elif isinstance(att, BitcoinBlockHeaderAttestation):
+            bitcoin.append({"height": att.height, "merkle_root": msg.hex()})
+    pending = sorted(pending)
+    bitcoin = sorted(bitcoin, key=lambda b: (b["height"], b["merkle_root"]))
+
+    # Defensive: a bound proof carrying NO attestation evidences no time.
+    # The OTS serializer refuses to emit an attestation-less timestamp, so this
+    # is unreachable from standard .ots bytes -- kept as a fail-closed guard,
+    # not claimed as a tested state (never PENDING, which needs a calendar).
+    if not pending and not bitcoin:
+        return _r2_result("REFUSED", commitment_sha256=commitment_sha256,
+                          proof_sha256=proof_sha256, accepted_source=src_name,
+                          reason="proof binds the commitment but carries no attestations")
+
+    # 6. No Bitcoin attestation yet -> PENDING (calendar commitments only).
+    if not bitcoin:
+        return _r2_result("PENDING", commitment_sha256=commitment_sha256,
+                          proof_sha256=proof_sha256, pending_calendars=pending,
+                          accepted_source=src_name,
+                          reason="calendar commitments only; no Bitcoin attestation yet")
+
+    # 7. Bitcoin attestation present. Confirmation requires an accepted source
+    #    (§4): a present attestation is NEVER reported CONFIRMED on its own.
+    matched = False
+    if isinstance(accepted_source, dict):
+        roots = accepted_source.get("block_merkle_roots")
+        if isinstance(roots, dict):
+            for b in bitcoin:
+                pinned = roots.get(b["height"])
+                if pinned is None:
+                    # tolerate string-keyed maps from e.g. JSON
+                    pinned = roots.get(str(b["height"]))
+                if isinstance(pinned, str) and pinned.lower() == b["merkle_root"]:
+                    matched = True
+                    break
+
+    if matched:
+        return _r2_result("CONFIRMED", commitment_sha256=commitment_sha256,
+                          proof_sha256=proof_sha256, pending_calendars=pending,
+                          bitcoin_attestations=bitcoin, time_verified=True,
+                          calendar_authenticity_verified=False,
+                          accepted_source=src_name, network_calls=0,
+                          reason="Bitcoin attestation verified against the accepted, "
+                                 "reader-pinned source (offline)")
+
+    # 8. Attestation present but not verified against an accepted source: the
+    #    adjacent negative (source given but no match) lands here too.
+    return _r2_result("ANCHORED_UNVERIFIED", commitment_sha256=commitment_sha256,
+                      proof_sha256=proof_sha256, pending_calendars=pending,
+                      bitcoin_attestations=bitcoin, time_verified=False,
+                      calendar_authenticity_verified=False,
+                      accepted_source=src_name, network_calls=0,
+                      reason=("no accepted source pinned; chain time not established"
+                              if accepted_source is None else
+                              "accepted source did not match any Bitcoin attestation"))
+
+
 def run_experiment() -> dict:
     journal = build_journal()
     root, tip = journal[0]["event_hash"], journal[-1]["event_hash"]
@@ -524,7 +702,9 @@ def run_experiment() -> dict:
         "linkage": links,
         "controls": controls,
         "R2_external_anchor": {"status": "NOT_DEMONSTRATED",
-                               "reason": "no OTS profile available in this run"},
+                               "reason": "no proof supplied to this run; the "
+                                         "reader is verify_external_anchor "
+                                         "(docs/EXP-LIB-001-R2.md)"},
         "R3_publication": {"status": "NOT_RELEASED",
                            "note": "DOI is publication only, not provenance; gated on §9"},
         "determinism_ok": determinism_ok,

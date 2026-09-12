@@ -364,5 +364,167 @@ class PackageReaderTest(unittest.TestCase):
             self.assertEqual(f.read(), self.data)
 
 
+# --------------------------------------------------------------------------- #
+# R2 external-anchor reader (docs/EXP-LIB-001-R2.md rev 3)
+# --------------------------------------------------------------------------- #
+# opentimestamps is optional and offline-only. The state tests that need real
+# .ots bytes are skipped where it is absent (as CI is, being zero-dependency),
+# exactly like a shallow-clone git test skip -- never silently passed. The
+# no-proof and file-shape checks below need no library and always run.
+
+def _ots_modules():
+    try:
+        from opentimestamps.core.timestamp import (Timestamp, DetachedTimestampFile,
+                                                    OpSHA256, OpAppend)
+        from opentimestamps.core.notary import (PendingAttestation,
+                                                 BitcoinBlockHeaderAttestation)
+        from opentimestamps.core.serialize import BytesSerializationContext
+        return dict(Timestamp=Timestamp, DetachedTimestampFile=DetachedTimestampFile,
+                    OpSHA256=OpSHA256, OpAppend=OpAppend,
+                    PendingAttestation=PendingAttestation,
+                    BitcoinBlockHeaderAttestation=BitcoinBlockHeaderAttestation,
+                    BytesSerializationContext=BytesSerializationContext)
+    except Exception:
+        return None
+
+
+_OTS = _ots_modules()
+_R2_COMMIT = bytes(range(32))          # a plausible 32-byte root event_hash
+
+
+def _serialize(detached):
+    ctx = _OTS["BytesSerializationContext"](); detached.serialize(ctx)
+    return ctx.getbytes()
+
+
+def _pending_proof(commitment=_R2_COMMIT):
+    leaf = hashlib.sha256(commitment).digest()
+    ts = _OTS["Timestamp"](leaf)
+    ts.attestations.add(_OTS["PendingAttestation"]("https://calendar.example/"))
+    return _serialize(_OTS["DetachedTimestampFile"](_OTS["OpSHA256"](), ts))
+
+
+def _bitcoin_proof(commitment=_R2_COMMIT, height=700000):
+    """A detached proof carrying a Bitcoin block attestation. Returns
+    (proof_bytes, height, attested_root_hex). The attested bytes are whatever
+    the attestation commits to; the reader matches its hex on both sides, so
+    the fixture is self-consistent offline."""
+    leaf = hashlib.sha256(commitment).digest()
+    ts = _OTS["Timestamp"](leaf)
+    child = ts.ops.add(_OTS["OpAppend"](b"\x00"))
+    root_hex = child.msg.hex()
+    child.attestations.add(_OTS["BitcoinBlockHeaderAttestation"](height))
+    return _serialize(_OTS["DetachedTimestampFile"](_OTS["OpSHA256"](), ts)), height, root_hex
+
+
+class ExternalAnchorNoLibTest(unittest.TestCase):
+    """Reader contract that needs no OTS library (always runs)."""
+
+    def test_no_proof_is_not_demonstrated(self):
+        r = EXP.verify_external_anchor(_R2_COMMIT, None)
+        self.assertEqual(r["state"], "NOT_DEMONSTRATED")
+        self.assertEqual(r["commitment_sha256"],
+                         hashlib.sha256(_R2_COMMIT).hexdigest())
+        self.assertEqual(r["accepted_source"], "none")
+
+    def test_result_never_raises_and_always_has_the_reported_fields(self):
+        for commit, proof in [(_R2_COMMIT, None), (b"x", b"junk"),
+                              (None, None), (_R2_COMMIT, b"")]:
+            r = EXP.verify_external_anchor(commit, proof)
+            for field in ("state", "commitment_sha256", "proof_sha256",
+                          "pending_calendars", "bitcoin_attestations",
+                          "time_verified", "calendar_authenticity_verified",
+                          "accepted_source", "network_calls"):
+                self.assertIn(field, r)
+            self.assertIn(r["state"], EXP._R2_STATES)
+            self.assertEqual(r["network_calls"], 0)
+
+    def test_commitment_file_is_exactly_32_raw_bytes(self):
+        # profile §2/§9: the stamped file is exactly the 32 raw bytes, no hex,
+        # no newline, and equals the pinned root.
+        root_hex = "ab" * 32
+        commitment = bytes.fromhex(root_hex)
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "root.commit")
+            with open(p, "wb") as f:
+                f.write(commitment)
+            with open(p, "rb") as f:
+                raw = f.read()
+        self.assertEqual(len(raw), 32)
+        self.assertEqual(raw, commitment)
+        self.assertEqual(raw.hex(), root_hex)
+
+
+@unittest.skipUnless(_OTS is not None,
+                     "opentimestamps not importable (offline optional dep)")
+class ExternalAnchorR2Test(unittest.TestCase):
+    """The five OTS-backed states, each against a real detached proof."""
+
+    def test_refused_for_malformed_proof(self):
+        r = EXP.verify_external_anchor(_R2_COMMIT, b"not an ots proof at all")
+        self.assertEqual(r["state"], "REFUSED")
+
+    def test_refused_when_proof_binds_a_different_commitment(self):
+        # A well-formed proof over OTHER bytes must not be accepted for ours:
+        # non-binding is REFUSED, distinct from absent/PENDING.
+        proof = _pending_proof(commitment=bytes([7]) * 32)
+        r = EXP.verify_external_anchor(_R2_COMMIT, proof)
+        self.assertEqual(r["state"], "REFUSED")
+        self.assertIn("bind", r["reason"])
+
+    def test_refused_for_non_32_byte_commitment(self):
+        # Bind the proof to the SHORT commitment, so the binding check would
+        # accept it -- only the explicit 32-byte length gate can refuse it.
+        short = b"short"
+        r = EXP.verify_external_anchor(short, _pending_proof(commitment=short))
+        self.assertEqual(r["state"], "REFUSED")
+        self.assertIn("32 raw bytes", r["reason"])
+
+    def test_pending_for_calendar_only_proof(self):
+        r = EXP.verify_external_anchor(_R2_COMMIT, _pending_proof())
+        self.assertEqual(r["state"], "PENDING")
+        self.assertEqual(r["pending_calendars"], ["https://calendar.example/"])
+        self.assertFalse(r["time_verified"])
+
+    def test_anchored_unverified_when_bitcoin_present_no_source(self):
+        proof, height, _root = _bitcoin_proof()
+        r = EXP.verify_external_anchor(_R2_COMMIT, proof)
+        self.assertEqual(r["state"], "ANCHORED_UNVERIFIED")
+        self.assertEqual([b["height"] for b in r["bitcoin_attestations"]], [height])
+        self.assertFalse(r["time_verified"])
+        self.assertEqual(r["accepted_source"], "none")
+
+    def test_confirmed_against_accepted_pinned_source_offline(self):
+        proof, height, root_hex = _bitcoin_proof()
+        source = {"name": "pinned-headers-fixture",
+                  "block_merkle_roots": {height: root_hex}}
+        r = EXP.verify_external_anchor(_R2_COMMIT, proof, source)
+        self.assertEqual(r["state"], "CONFIRMED")
+        self.assertTrue(r["time_verified"])
+        self.assertEqual(r["network_calls"], 0)          # offline confirmation
+        self.assertFalse(r["calendar_authenticity_verified"])
+        self.assertEqual(r["accepted_source"], "pinned-headers-fixture")
+
+    # ---- the REQUIRED adjacent negative (profile §7 / Codex) -------------- #
+    def test_same_accepted_source_but_mismatched_attestation_is_not_confirmed(self):
+        proof, height, _root = _bitcoin_proof()
+        # SAME accepted source object shape, SAME height, but a root that does
+        # not match the attestation. Passing a source must not, by itself,
+        # confirm: this must NOT be CONFIRMED.
+        source = {"name": "pinned-headers-fixture",
+                  "block_merkle_roots": {height: "00" * 32}}
+        r = EXP.verify_external_anchor(_R2_COMMIT, proof, source)
+        self.assertNotEqual(r["state"], "CONFIRMED")
+        self.assertEqual(r["state"], "ANCHORED_UNVERIFIED")
+        self.assertFalse(r["time_verified"])
+        self.assertEqual(r["accepted_source"], "pinned-headers-fixture")
+
+    def test_accepted_source_with_missing_height_is_not_confirmed(self):
+        proof, height, root_hex = _bitcoin_proof()
+        source = {"name": "pinned-headers-fixture",
+                  "block_merkle_roots": {height + 1: root_hex}}
+        r = EXP.verify_external_anchor(_R2_COMMIT, proof, source)
+        self.assertEqual(r["state"], "ANCHORED_UNVERIFIED")
+
 if __name__ == "__main__":
     unittest.main()
