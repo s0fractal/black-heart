@@ -152,6 +152,71 @@ class ReplayTest(unittest.TestCase):
         self.assertIn("verdict", rep["boundary"])
 
 
+class StructureTest(unittest.TestCase):
+    """The complete format check: exact field set, correct type of every field
+    (incl. nested claim), each a NAMED refusal and never an exception."""
+
+    def _refused(self, ev_list, needle):
+        """replay must refuse with a boundary mentioning `needle`, not raise."""
+        try:
+            rep = EXP.replay(ev_list, EXP.caller_trust(),
+                             ev_list[0].get("event_hash", "x") if ev_list else "x",
+                             ev_list[-1].get("event_hash", "y") if ev_list else "y")
+        except Exception as e:
+            self.fail(f"replay raised {type(e).__name__} instead of a named refusal: {e}")
+        self.assertFalse(rep["chain_ok"])
+        self.assertFalse(rep["accepted"])
+        self.assertIsNotNone(rep["boundary"])
+        self.assertIn(needle, rep["boundary"])
+
+    def _mutate_event0(self, mutate, resign=True):
+        j = EXP.build_journal()
+        ev = [dict(e) for e in j]
+        ev[0] = dict(ev[0]); mutate(ev[0])
+        if resign:
+            try:
+                ev[0] = EXP._resign_event(ev[0])
+            except Exception:
+                pass  # a core too malformed to re-sign is used as-is
+        return ev
+
+    def test_S_honest_event_is_accepted(self):
+        j = EXP.build_journal()
+        rep = EXP.replay(j, EXP.caller_trust(), j[0]["event_hash"], j[-1]["event_hash"])
+        self.assertTrue(rep["accepted"])
+
+    def test_S_wrong_types_each_field_are_named_refusals(self):
+        cases = [
+            (lambda e: e.__setitem__("profile", 123), "profile"),
+            (lambda e: e.__setitem__("index", []), "int"),
+            (lambda e: e.__setitem__("index", False), "int"),
+            (lambda e: e.__setitem__("kind", []), "kind"),
+            (lambda e: e.__setitem__("kind", "NOPE"), "kind"),
+            (lambda e: e.__setitem__("expected_verdict", {}), "expected_verdict"),
+            (lambda e: e.__setitem__("author_pk_hex", 123), "author_pk_hex"),
+            (lambda e: e.__setitem__("claim", None), "claim is not an object"),
+            (lambda e: e.__setitem__("claim", {**e["claim"], "body": None}), "malformed claim"),
+            (lambda e: e.__setitem__("claim", {**e["claim"], "body": {}}), "malformed claim"),
+        ]
+        for mutate, needle in cases:
+            with self.subTest(needle=needle):
+                self._refused(self._mutate_event0(mutate), needle)
+
+    def test_S_prev_event_hash_wrong_type_refused(self):
+        j = EXP.build_journal()
+        ev = [dict(e) for e in j]
+        ev[1] = dict(ev[1]); ev[1]["prev_event_hash"] = 123     # not re-signed
+        self._refused(ev, "prev_event_hash")
+
+    def test_S_extra_field_refused(self):
+        self._refused(self._mutate_event0(lambda e: e.__setitem__("junk", 1), resign=False),
+                      "unexpected field")
+
+    def test_S_missing_field_refused(self):
+        ev = self._mutate_event0(lambda e: e.pop("event_hash"), resign=False)
+        self._refused(ev, "missing field")
+
+
 class ControlsTest(unittest.TestCase):
     """Criterion 3 — each control fails closed, asserted individually."""
 

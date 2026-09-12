@@ -205,27 +205,63 @@ def journal_from_bytes(data: bytes) -> list:
 # --------------------------------------------------------------------------- #
 _ALLOWED_KINDS = {"CLAIM", "COUNTEREXAMPLE", "REFINE"}
 _ALLOWED_VERDICTS = {"PASS", "FAIL", "UNVERIFIED"}
+_TOP_FIELDS = set(_CORE_ORDER) | {"event_hash", "signature_hex"}
 
 
-def _structure_reason(ev: dict, index: int):
-    """Named reason an event is not a supported, well-formed event, or None."""
+def _is_hex(value, length=None) -> bool:
+    if not isinstance(value, str):
+        return False
+    if length is not None and len(value) != length:
+        return False
+    return len(value) > 0 and all(c in "0123456789abcdef" for c in value)
+
+
+def _structure_reason(ev, index: int):
+    """The one complete format check: exact field set, the correct TYPE of
+    every field checked BEFORE any operation on it, and the nested claim parsed.
+    Returns a named reason, or None. Never raises on adversarial input -- an
+    exception here would break the promised structured-refusal contract.
+    """
     if not isinstance(ev, dict):
         return "event is not an object"
-    for f in _CORE_ORDER + ["event_hash", "signature_hex"]:
-        if f not in ev:
-            return f"missing field {f!r}"
-    if ev["profile"] != EVENT_PROFILE:
-        return f"unsupported profile {ev['profile']!r} (expected {EVENT_PROFILE!r})"
+    keys = set(ev.keys())
+    if keys != _TOP_FIELDS:
+        missing = sorted(_TOP_FIELDS - keys)
+        extra = sorted(keys - _TOP_FIELDS)
+        if missing:
+            return f"missing field(s) {missing}"
+        return f"unexpected field(s) {extra}"
+    # profile
+    if not isinstance(ev["profile"], str) or ev["profile"] != EVENT_PROFILE:
+        return f"unsupported or non-string profile {ev['profile']!r}"
+    # index: type before value; `type() is int` also rejects bool
     if type(ev["index"]) is not int:
-        return f"index field {ev['index']!r} is not an int"
+        return f"index {ev['index']!r} is not an int"
     if ev["index"] != index:
-        return f"index field {ev['index']!r} != position {index}"
-    if ev["kind"] not in _ALLOWED_KINDS:
+        return f"index {ev['index']} != position {index}"
+    # prev_event_hash
+    if not _is_hex(ev["prev_event_hash"], 64):
+        return "prev_event_hash is not 64 lowercase hex"
+    # kind / expected_verdict: str BEFORE set membership (else [] / {} raise)
+    if not isinstance(ev["kind"], str) or ev["kind"] not in _ALLOWED_KINDS:
         return f"unsupported kind {ev['kind']!r}"
-    if ev["expected_verdict"] not in _ALLOWED_VERDICTS:
+    if not isinstance(ev["expected_verdict"], str) or ev["expected_verdict"] not in _ALLOWED_VERDICTS:
         return f"unsupported expected_verdict {ev['expected_verdict']!r}"
-    if not isinstance(ev.get("claim"), dict) or "body" not in ev["claim"]:
-        return "claim is not a well-formed EdgeClaim document"
+    # author_pk_hex / event_hash / signature_hex
+    if not _is_hex(ev["author_pk_hex"], 64):
+        return "author_pk_hex is not 64 lowercase hex"
+    if not _is_hex(ev["event_hash"], 64):
+        return "event_hash is not 64 lowercase hex"
+    if not (isinstance(ev["signature_hex"], str) and _is_hex(ev["signature_hex"])):
+        return "signature_hex is not hex"
+    # nested claim: must parse as an EdgeClaim; a parse error is a named
+    # refusal, not a TypeError leaking out of replay.
+    if not isinstance(ev["claim"], dict):
+        return "claim is not an object"
+    try:
+        EdgeClaim.from_dict(ev["claim"])
+    except Exception as e:
+        return f"malformed claim: {type(e).__name__}: {e}"
     return None
 
 
@@ -277,9 +313,16 @@ def replay(journal: list, trust: TrustConfig, expected_root: str, expected_tip: 
             ok_sig = False
         if not ok_sig:
             result["chain_ok"] = False; result["boundary"] = f"index {i}: bad signature"; break
-        # re-audit the CONTENT (not just APPLY): CLAIM, COUNTEREXAMPLE, REFINE
-        claim = EdgeClaim.from_dict(ev["claim"])
-        got = verifier.audit_claim(claim).status.value.upper()
+        # re-audit the CONTENT (not just APPLY): CLAIM, COUNTEREXAMPLE, REFINE.
+        # Structure was validated in the pre-pass; guard anyway so no exception
+        # can escape the structured-refusal contract.
+        try:
+            claim = EdgeClaim.from_dict(ev["claim"])
+            got = verifier.audit_claim(claim).status.value.upper()
+        except Exception as e:
+            result["chain_ok"] = False
+            result["boundary"] = f"index {i}: audit raised {type(e).__name__}: {e}"
+            break
         result["verdicts"].append(got)
         if got != ev["expected_verdict"]:
             result["chain_ok"] = False
