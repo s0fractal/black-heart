@@ -558,6 +558,25 @@ def _parse_block_header(header):
     return merkle_root, time_int, block_id
 
 
+def _coerce_height(height):
+    """Return a non-negative int block height from an int or a CANONICAL
+    base-10 string, else None. bool is rejected (True/False are not heights);
+    floats are rejected -- int(700000.9) would silently truncate and change the
+    reader's pinned meaning; strings must be ASCII digits with no sign,
+    whitespace, fractional part, or leading zero (except '0' itself)."""
+    if isinstance(height, bool):
+        return None
+    if isinstance(height, int):
+        return height if height >= 0 else None
+    if isinstance(height, str):
+        if not (height.isascii() and height.isdigit()):
+            return None
+        if len(height) > 1 and height[0] == "0":
+            return None
+        return int(height)
+    return None
+
+
 def _validate_source(accepted_source):
     """Return (name, {int height: 80-byte header bytes}) for a WELL-FORMED
     reader source, else None. Well-formed requires a non-empty string `name`
@@ -575,10 +594,11 @@ def _validate_source(accepted_source):
         return None
     parsed = {}
     for height, hexhdr in headers.items():
-        try:
-            h = int(height)
-        except (TypeError, ValueError):
+        h = _coerce_height(height)
+        if h is None:
             return None
+        if h in parsed:
+            return None                     # collision after coercion: ambiguous pin
         if not isinstance(hexhdr, str):
             return None
         try:
@@ -592,7 +612,7 @@ def _validate_source(accepted_source):
 
 
 def verify_external_anchor(commitment, ots_proof, accepted_source=None):
-    """R2 reader (docs/EXP-LIB-001-R2.md rev 4). Fully OFFLINE: zero network
+    """R2 reader (docs/EXP-LIB-001-R2.md rev 5). Fully OFFLINE: zero network
     calls, always. Given the pinned root `commitment` (exactly 32 raw bytes),
     the detached `ots_proof` bytes, and an OPTIONAL reader-pinned
     `accepted_source`, return the §3 state and §4 flags. It NEVER raises on
@@ -604,7 +624,10 @@ def verify_external_anchor(commitment, ots_proof, accepted_source=None):
         {"name": <non-empty str>,
          "block_headers": {<int height>: <80-byte block-header hex>}}
     The reader derives the Merkle root and block time from each pinned header;
-    a bare Merkle-root string is NOT accepted, because it carries no time.
+    a bare Merkle-root string is NOT accepted, because it carries no time. Each
+    height must be a non-negative int or a canonical decimal string (no bool, no
+    float truncation, no post-coercion collision). The proof's declared file-
+    hash algorithm must be SHA-256 (§2); any other op is REFUSED.
     CONFIRMED requires (a) a well-formed source (format checked first) and
     (b) an OTS Bitcoin attestation whose Merkle root equals the pinned header's
     Merkle root at that height; the verified time reported is that header's
@@ -629,6 +652,7 @@ def verify_external_anchor(commitment, ots_proof, accepted_source=None):
     # 2. No OTS profile available on this host -> NOT_DEMONSTRATED (§3).
     try:
         from opentimestamps.core.timestamp import DetachedTimestampFile
+        from opentimestamps.core.op import OpSHA256
         from opentimestamps.core.serialize import BytesDeserializationContext
         from opentimestamps.core.notary import (PendingAttestation,
                                                  BitcoinBlockHeaderAttestation)
@@ -652,6 +676,16 @@ def verify_external_anchor(commitment, ots_proof, accepted_source=None):
         return _r2_result("REFUSED", commitment_sha256=commitment_sha256,
                           proof_sha256=proof_sha256, accepted_source=src_name,
                           reason=f"proof did not parse: {type(e).__name__}")
+
+    # 3b. Algorithm: the standard `ots stamp` path hashes the file with SHA-256
+    #     (§2). A proof declaring any other file-hash op is a format mismatch --
+    #     even if its leaf bytes happen to equal our SHA-256 leaf -- and is
+    #     REFUSED. This checks the declared algorithm, not the strength of SHA-256.
+    if not isinstance(detached.file_hash_op, OpSHA256):
+        return _r2_result("REFUSED", commitment_sha256=commitment_sha256,
+                          proof_sha256=proof_sha256, accepted_source=src_name,
+                          reason=("proof file-hash algorithm is not SHA-256 "
+                                  f"(is {type(detached.file_hash_op).__name__}; profile §2)"))
 
     # 4. Binding: the proof must commit to SHA256(our 32 raw bytes) (§2). A
     #    proof over any other bytes -- or double-hashed, or a different file --

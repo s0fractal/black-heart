@@ -376,11 +376,12 @@ def _ots_modules():
     try:
         from opentimestamps.core.timestamp import (Timestamp, DetachedTimestampFile,
                                                     OpSHA256, OpAppend)
+        from opentimestamps.core.op import OpKECCAK256
         from opentimestamps.core.notary import (PendingAttestation,
                                                  BitcoinBlockHeaderAttestation)
         from opentimestamps.core.serialize import BytesSerializationContext
         return dict(Timestamp=Timestamp, DetachedTimestampFile=DetachedTimestampFile,
-                    OpSHA256=OpSHA256, OpAppend=OpAppend,
+                    OpSHA256=OpSHA256, OpAppend=OpAppend, OpKECCAK256=OpKECCAK256,
                     PendingAttestation=PendingAttestation,
                     BitcoinBlockHeaderAttestation=BitcoinBlockHeaderAttestation,
                     BytesSerializationContext=BytesSerializationContext)
@@ -404,7 +405,7 @@ def _pending_proof(commitment=_R2_COMMIT):
     return _serialize(_OTS["DetachedTimestampFile"](_OTS["OpSHA256"](), ts))
 
 
-def _bitcoin_proof(commitment=_R2_COMMIT, height=700000):
+def _bitcoin_proof(commitment=_R2_COMMIT, height=700000, file_hash_op=None):
     """A detached proof carrying a Bitcoin block attestation. Returns
     (proof_bytes, height, merkle_root_hex). An OpSHA256 transforms the 32-byte
     leaf into a distinct 32-byte value -- a correctly-sized synthetic 'Merkle
@@ -416,7 +417,8 @@ def _bitcoin_proof(commitment=_R2_COMMIT, height=700000):
     merkle_root_hex = child.msg.hex()
     assert len(child.msg) == 32
     child.attestations.add(_OTS["BitcoinBlockHeaderAttestation"](height))
-    return (_serialize(_OTS["DetachedTimestampFile"](_OTS["OpSHA256"](), ts)),
+    op = file_hash_op if file_hash_op is not None else _OTS["OpSHA256"]()
+    return (_serialize(_OTS["DetachedTimestampFile"](op, ts)),
             height, merkle_root_hex)
 
 
@@ -506,8 +508,26 @@ class ExternalAnchorNoLibTest(unittest.TestCase):
             {"name": "s", "block_headers": {700000: "ab" * 32}},       # 32 != 80 bytes
             {"name": "s", "block_headers": {700000: "zz" * 80}},       # not hex
             {"name": "s", "block_merkle_roots": {700000: "ab" * 32}},  # old shape
+            {"name": "s", "block_headers": {700000.9: ("00" * 80)}},   # float height
+            {"name": "s", "block_headers": {True: ("00" * 80)}},       # bool height
+            {"name": "s", "block_headers": {"0700000": ("00" * 80)}},  # leading zero
+            {"name": "s", "block_headers": {-1: ("00" * 80)}},         # negative
+            {"name": "s", "block_headers": {700000: ("00" * 80),
+                                            "700000": ("00" * 80)}},   # collision
         ]:
             self.assertIsNone(EXP._validate_source(bad), bad)
+        # a canonical decimal STRING height is accepted (equals the int form)
+        self.assertIsNotNone(EXP._validate_source(
+            {"name": "s", "block_headers": {"700000": ("00" * 80)}}))
+
+    def test_coerce_height_is_strict(self):
+        self.assertEqual(EXP._coerce_height(700000), 700000)
+        self.assertEqual(EXP._coerce_height("700000"), 700000)
+        self.assertEqual(EXP._coerce_height("0"), 0)
+        self.assertEqual(EXP._coerce_height(0), 0)
+        for bad in [True, False, 700000.9, -1, "0700", "700000.9", "+5", " 5",
+                    "5 ", "0x10", "", None, b"5"]:
+            self.assertIsNone(EXP._coerce_height(bad), bad)
 
 
 @unittest.skipUnless(_OTS is not None,
@@ -599,6 +619,39 @@ class ExternalAnchorR2Test(unittest.TestCase):
         self.assertEqual(r["state"], "ANCHORED_UNVERIFIED")
         self.assertFalse(r["time_verified"])
         self.assertEqual(r["accepted_source"], "none")           # not "unnamed-source"
+
+    def test_non_sha256_file_hash_op_is_refused(self):
+        # Codex R2 blocker 1: a proof declaring a non-SHA-256 file-hash op is a
+        # format mismatch (profile §2), even if its leaf bytes equal our SHA-256
+        # leaf. It must be REFUSED, never CONFIRMED. (Not a break of SHA-256.)
+        proof, height, root_hex = _bitcoin_proof(file_hash_op=_OTS["OpKECCAK256"]())
+        source = _header_source("pinned-headers-fixture", height, root_hex)
+        r = EXP.verify_external_anchor(_R2_COMMIT, proof, source)
+        self.assertEqual(r["state"], "REFUSED")
+        self.assertIn("SHA-256", r["reason"])
+        self.assertFalse(r["time_verified"])
+
+    def test_fractional_height_in_source_never_confirms(self):
+        # Codex R2 blocker 2: a fractional height must not be truncated to match
+        # an integer attestation height -- that would silently change the pin.
+        proof, height, root_hex = _bitcoin_proof()
+        hdr = _synthetic_header(bytes.fromhex(root_hex))
+        source = {"name": "pinned-headers-fixture",
+                  "block_headers": {height + 0.9: hdr.hex()}}
+        r = EXP.verify_external_anchor(_R2_COMMIT, proof, source)
+        self.assertNotEqual(r["state"], "CONFIRMED")
+        self.assertEqual(r["state"], "ANCHORED_UNVERIFIED")
+        self.assertEqual(r["accepted_source"], "none")   # malformed source: not used
+
+    def test_canonical_string_height_confirms(self):
+        # The accepted form (canonical decimal string) still reaches CONFIRMED.
+        proof, height, root_hex = _bitcoin_proof()
+        hdr = _synthetic_header(bytes.fromhex(root_hex))
+        source = {"name": "pinned-headers-fixture",
+                  "block_headers": {str(height): hdr.hex()}}
+        r = EXP.verify_external_anchor(_R2_COMMIT, proof, source)
+        self.assertEqual(r["state"], "CONFIRMED")
+        self.assertEqual(r["attested_time"], _SYNTH_TIME)
 
     def test_old_merkle_root_only_source_shape_never_confirms(self):
         # The bare {height: merkle_root_hex} shape carries no time and must not
