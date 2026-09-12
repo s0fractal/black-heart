@@ -1,6 +1,6 @@
 # EXP-LIB-001 R2 — external-anchor profile
 
-Status: **proposed** (profile for review; no R2 run yet). Revision 2. Companion to
+Status: **proposed** (profile for review; no R2 run yet). Revision 3. Companion to
 `docs/EXP-LIB-001.md`. Defines what R2 is, before it is exercised. Until an
 actual proof is verified, R2 is `NOT_DEMONSTRATED` and R3 is `NOT_RELEASED`.
 
