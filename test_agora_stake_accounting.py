@@ -48,6 +48,7 @@ import os
 import shutil
 import sys
 import tempfile
+import threading
 import unittest
 from unittest import mock
 
@@ -63,7 +64,7 @@ for _name, _mod in list(sys.modules.items()):
         del sys.modules[_name]
 
 import morpho_autopoiesis as M
-from agora import initialize_agora_assembly, audit_agora_parliament
+from agora import initialize_agora_assembly, audit_agora_parliament, AGORA_MANIFEST_PREFIX
 from keystore import PRIVATE_KEY_SUFFIX
 
 if os.path.dirname(os.path.abspath(M.__file__)) != _HERE:
@@ -258,6 +259,71 @@ class FailureControlTest(_Floor):
         self.assertIn("refunding is unsafe", msg)
         self.assertEqual(self.reserve(), reserve, "the refusal debited again")
         self.assertEqual(len(M._agora_records(elsewhere)), 1, "nothing was published elsewhere")
+
+
+    def test_B6_a_floor_impersonating_another_founder_is_refused_before_any_write(self):
+        """Security scan of e549de3, `improper-authentication.agora-genesis-identity`,
+        reproduced: a second floor whose genesis `author_public_key` is changed
+        to the victim floor's -- and NOTHING else -- still passes
+        `audit_agora_parliament`, because the settlement hash does not cover the
+        proposal author and that audit skips the genesis signature. It then
+        derived the victim's identity, and the stake already published on the
+        victim was re-published on it with NO second debit (measured: balance
+        1080 -> 1080). The founder key is now authenticated against the genesis
+        signature before it can stand for a floor."""
+        _, pid = self.table()
+        balance, records = self.reserve(), self.records()
+        before = self.snapshot()
+
+        impostor = os.path.join(self.d, "impostor.pdf")
+        initialize_agora_assembly(impostor)
+        victim_founder = M._agora_records(self.agora_pdf)[0]["proposal"]["author_public_key"]
+        raw = read_bytes(impostor)
+        pre = AGORA_MANIFEST_PREFIX.encode("utf-8")
+        idx = raw.rfind(pre); end = raw.index(b"\n", idx)
+        recs = json.loads(raw[idx + len(pre):end].decode("utf-8"))
+        recs[0]["proposal"]["author_public_key"] = victim_founder
+        with open(impostor, "wb") as f:
+            f.write(raw[:idx] + pre + json.dumps(recs).encode("utf-8") + raw[end:])
+
+        self.assertTrue(audit_agora_parliament(impostor),
+                        "the impostor must still pass agora's own audit -- that is the point")
+        with self.assertRaises(ValueError) as caught:
+            M.table_to_agora(self.org_pdf, impostor, secret_key_hex=self.sk, stake_atp=STAKE)
+        self.assertIn("not authenticated", str(caught.exception))
+        self.assertEqual(self.snapshot(), before, "the refusal wrote something")
+        self.assertEqual(self.reserve(), balance)
+        self.assertEqual(self.records(), records)
+        self.assertEqual(len(M._agora_records(impostor)), 1, "nothing was published on the impostor")
+
+    def test_B7_concurrent_submissions_debit_once_and_publish_once(self):
+        """Security scan of e549de3, `race-condition.agora-stake-publication`:
+        two calls that both read before either writes would each append a
+        successor (last-manifest-wins hiding one debit) and each publish,
+        leaving two records for one debit. The critical section is now
+        serialized, so exactly one submission lands."""
+        before_reserve, before_records = self.reserve(), self.records()
+        start = threading.Barrier(2)
+        outcomes = []
+
+        def submit():
+            start.wait()
+            try:
+                outcomes.append(("ok", self.table()[1]))
+            except Exception as exc:                     # noqa: BLE001 - recorded, not swallowed
+                outcomes.append(("refused", f"{type(exc).__name__}: {exc}"))
+
+        threads = [threading.Thread(target=submit) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=120)
+
+        kinds = sorted(k for k, _ in outcomes)
+        self.assertEqual(kinds, ["ok", "refused"], f"expected one of each, got {outcomes}")
+        self.assertEqual(self.reserve(), before_reserve - STAKE, "the stake was debited more than once")
+        self.assertEqual(self.records(), before_records + 1, "the proposal was published more than once")
+        self.assertSound()
 
 
 class PreconditionTest(_Floor):

@@ -26,7 +26,12 @@ from __future__ import annotations
 import os
 import sys
 import json
+try:
+    import fcntl
+except ImportError:  # non-POSIX: refused by name at use site
+    fcntl = None
 import time
+import contextlib
 import math
 import hashlib
 from enum import Enum
@@ -198,10 +203,38 @@ def _agora_identity(agora_pdf_path: str) -> str:
     records = _agora_records(agora_pdf_path)
     if not records:
         raise ValueError(f"Agora document has no records: {agora_pdf_path}")
-    founder = records[0].get("proposal", {}).get("author_public_key", "")
+    genesis = records[0].get("proposal") or {}
+    founder = str(genesis.get("author_public_key", ""))
     if not founder:
         raise ValueError(f"Agora genesis names no founder key: {agora_pdf_path}")
-    return str(founder)
+
+    # The founder key arrives from the document being judged, so it must be
+    # AUTHENTICATED before it can stand for the floor's identity. Measured on
+    # e549de3: substituting only this field into another floor left
+    # audit_agora_parliament True -- the settlement hash does not cover the
+    # proposal author, and that audit skips the genesis signature entirely
+    # (agora.py: `if r.generation > 0 and not r.proposal.verify_signature()`).
+    # The impersonating floor then derived the victim's identity, and a stake
+    # already published there was re-published on it WITHOUT a second debit.
+    #
+    # `AgoraProposal.verify_signature()` cannot be used as-is: it refuses any
+    # stake <= 0 as a tabling-domain rule, and the genesis constitution stakes
+    # nothing. So verify the Ed25519 signature directly over the proposal's own
+    # canonical bytes -- the domain rule is about tabling, not about identity.
+    proposal = AgoraProposal.from_dict(genesis)
+    if not is_valid_public_key(proposal.author_public_key):
+        raise ValueError(f"Agora genesis founder key is malformed: {agora_pdf_path}")
+    try:
+        signed = verify_bytes(bytes.fromhex(proposal.author_public_key),
+                              proposal.canonical_bytes_for_signing(),
+                              bytes.fromhex(proposal.signature_hex))
+    except Exception:
+        signed = False
+    if not signed:
+        raise ValueError(
+            f"Agora genesis founder key is not authenticated by the genesis signature: "
+            f"{agora_pdf_path}. Refusing to treat this document as a floor identity.")
+    return founder
 
 
 def _agora_records(agora_pdf_path: str):
@@ -1426,6 +1459,38 @@ def _publish_to_agora(proposal, org, agora_pdf_path: str, reserve_before: int,
     grow_agora_page(agora_pdf_path, engine.evaluate_and_settle(proposal.proposal_id))
 
 
+@contextlib.contextmanager
+def _submission_locks(*paths):
+    """Serialize the whole read -> debit -> publish section across processes.
+
+    Without it two concurrent calls both read the same balance and the same
+    published-id set before either writes: each appends a successor manifest
+    (last-manifest-wins hides one debit) and each publishes, leaving two
+    records for one debit, which both audits accept. Locks are taken in sorted
+    path order, so two calls naming the same pair cannot deadlock.
+
+    There is no lock-free fallback: running without `fcntl` would silently
+    reintroduce the race, so it is refused by name instead.
+    """
+    if fcntl is None:
+        raise ValueError(
+            "Serialized submission needs fcntl (POSIX); refusing to stake without it, "
+            "because an unserialized submission can publish twice for one debit.")
+    handles = []
+    try:
+        for target in sorted({os.path.abspath(p) for p in paths}):
+            handle = open(target + ".lock", "a+")
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            handles.append(handle)
+        yield
+    finally:
+        for handle in reversed(handles):
+            try:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            finally:
+                handle.close()
+
+
 def table_to_agora(
     organism_pdf_path: str,
     agora_pdf_path: str,
@@ -1460,6 +1525,21 @@ def table_to_agora(
     for path in (organism_pdf_path, agora_pdf_path):
         if not os.path.exists(path):
             raise ValueError(f"Not found: {path}")
+    # Everything from here reads shared state and then writes it, so it runs
+    # under the lock and re-reads inside: a check made before acquiring would
+    # be a check made against state another caller can still change.
+    with _submission_locks(organism_pdf_path, agora_pdf_path):
+        return _table_to_agora_locked(organism_pdf_path, agora_pdf_path,
+                                      secret_key_hex, stake_atp)
+
+
+def _table_to_agora_locked(
+    organism_pdf_path: str,
+    agora_pdf_path: str,
+    secret_key_hex: Optional[str],
+    stake_atp: int
+) -> Tuple[AgoraProposal, str]:
+    """The critical section. Callers must hold `_submission_locks`."""
     legacy = unsupported_history_reason(organism_pdf_path)
     if legacy is not None:
         raise ValueError(f"Cannot table from {organism_pdf_path}: {legacy}")
