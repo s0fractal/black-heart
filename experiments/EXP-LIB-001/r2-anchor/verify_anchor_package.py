@@ -59,7 +59,13 @@ def _forbidden(*a, **k):
     raise RuntimeError("the reading path must not regenerate the journal")
 run.build_journal = _forbidden
 pkg = pathlib.Path(sys.argv[2]).read_bytes()
-rep = run.verify_package(pkg, run.caller_trust(), sys.argv[3], sys.argv[4])
+author_pk = sys.argv[5] if len(sys.argv) > 5 else ""
+if author_pk:
+    from warrant_kernel import TrustConfig
+    trust = TrustConfig(trusted_author_pks={author_pk})
+else:
+    trust = run.caller_trust()
+rep = run.verify_package(pkg, trust, sys.argv[3], sys.argv[4])
 print(json.dumps({"accepted": bool(rep["accepted"]),
                   "root_matches": rep["root_matches"],
                   "tip_matches": rep["tip_matches"],
@@ -81,22 +87,61 @@ def load_package(pkg_dir: Path):
     return manifest, package, commitment
 
 
-def materialise_source(commit: str, dest: Path):
-    """Extract the repo tree at `commit` into `dest`. Returns the path to that
-    commit's experiments/EXP-LIB-001, or a reason string if unavailable."""
-    if not commit:
-        return "no expected source commit supplied"
+_OID = "0123456789abcdef"
+
+
+def resolve_commit_oid(expect):
+    """The source must be named by a FULL 40-hex commit OID -- not a branch, tag
+    or abbreviated sha, any of which can move or be ambiguous. Returns
+    (oid, None) or (None, named_refusal)."""
+    if not isinstance(expect, str) or not expect:
+        return None, "no expected source commit supplied"
+    e = expect.strip()
+    if len(e) != 40 or not all(c in _OID for c in e.lower()):
+        return None, (f"{expect!r} is not a full 40-hex commit OID -- a branch, "
+                      "tag or abbreviated sha is refused (it can move)")
+    oid = e.lower()
+    try:
+        kind = subprocess.run(["git", "-C", str(_REPO), "cat-file", "-t", oid],
+                              capture_output=True, timeout=60)
+    except FileNotFoundError:
+        return None, "git is not available on this host"
+    except subprocess.TimeoutExpired:
+        return None, "git cat-file timed out"
+    if kind.returncode != 0:
+        return None, (f"object {oid[:12]} is not available here "
+                      "(shallow clone or missing object)")
+    kind_s = kind.stdout.decode().strip()
+    if kind_s != "commit":
+        return None, f"object {oid[:12]} is a {kind_s!r}, not a commit"
+    got = subprocess.run(["git", "-C", str(_REPO), "rev-parse", "--verify",
+                          oid + "^{commit}"], capture_output=True, timeout=60)
+    if got.returncode != 0:
+        return None, f"{oid[:12]} did not resolve to a commit"
+    resolved = got.stdout.decode().strip()
+    if resolved.lower() != oid:
+        return None, (f"{oid[:12]} resolved to a different object {resolved[:12]} "
+                      "-- expectation and resolved OID must be identical")
+    return oid, None
+
+
+def materialise_source(commit, dest: Path):
+    """Extract the repo tree at the FULL COMMIT OID `commit` into `dest`.
+    Returns the path to that commit's experiments/EXP-LIB-001, or a reason
+    string when the source cannot be used."""
+    oid, refusal = resolve_commit_oid(commit)
+    if refusal:
+        return refusal
     try:
         proc = subprocess.run(["git", "-C", str(_REPO), "archive",
-                               "--format=tar", commit],
+                               "--format=tar", oid],
                               capture_output=True, timeout=120)
     except FileNotFoundError:
         return "git is not available on this host"
     except subprocess.TimeoutExpired:
         return "git archive timed out"
     if proc.returncode != 0:
-        return (f"commit {commit[:12]} is not available here "
-                "(shallow clone or missing object)")
+        return f"git archive failed for {oid[:12]}"
     tar_path = dest / "tree.tar"
     tar_path.write_bytes(proc.stdout)
     with tarfile.open(tar_path) as tf:
@@ -104,13 +149,13 @@ def materialise_source(commit: str, dest: Path):
     tar_path.unlink()
     gen = dest / "experiments" / "EXP-LIB-001"
     if not (gen / "run.py").is_file():
-        return f"commit {commit[:12]} has no experiments/EXP-LIB-001/run.py"
+        return f"commit {oid[:12]} has no experiments/EXP-LIB-001/run.py"
     return gen
 
 
-def _replay_with(gen_dir: Path, pkg_path: Path, root: str, tip: str):
+def _replay_with(gen_dir: Path, pkg_path: Path, root: str, tip: str, author_pk=""):
     proc = subprocess.run([sys.executable, "-B", "-c", _REPLAY, str(gen_dir),
-                           str(pkg_path), root, tip],
+                           str(pkg_path), root, tip, author_pk or ""],
                           capture_output=True, timeout=300)
     if proc.returncode != 0:
         tail = proc.stderr.decode("utf-8", "replace").strip().splitlines()[-2:]
@@ -157,48 +202,83 @@ def byte_facts(pkg_dir: Path):
     return PASS, notes
 
 
-def current_reader_compatibility(pkg_dir: Path):
-    """Informational only: does TODAY's in-tree reader still accept the frozen
-    package? A 'no' is a compatibility note, never an invalidation."""
+def current_reader_observation(pkg_dir: Path):
+    """Observation only, never a verdict. IMPORTANT: a refusal by today's reader
+    is NOT diagnosed here. It may be a format incompatibility OR a real defect
+    that the historical check missed. Equally, a historical replay that passed
+    does NOT establish that the package is valid under today's rules."""
     try:
-        manifest, package, _c = load_package(pkg_dir)
-        gen_dir = _EXP
-        rep, err = _replay_with(gen_dir, pkg_dir / "journal.pkg",
+        manifest, _package, _c = load_package(pkg_dir)
+        rep, err = _replay_with(_EXP, pkg_dir / "journal.pkg",
                                 manifest["root_event_hash"], manifest["tip_event_hash"])
         if err:
             return f"current in-tree reader could not run: {err}"
         if rep["accepted"]:
-            return "current in-tree reader also accepts the frozen package"
-        return ("current in-tree reader no longer accepts it "
-                f"({rep['boundary']}) -- a compatibility note, NOT an invalidation")
+            return ("observation: today's in-tree reader also accepts these bytes "
+                    "(not a statement of current validity)")
+        return ("observation: today's in-tree reader REFUSES these bytes "
+                f"({rep['boundary']}). Cause NOT diagnosed here -- this may be a "
+                "format incompatibility OR a defect the historical check missed; "
+                "it needs review, and must not be dismissed as 'just compatibility'")
     except Exception as e:                                   # noqa: BLE001
-        return f"compatibility check could not run: {type(e).__name__}: {e}"
+        return f"current-reader observation could not run: {type(e).__name__}: {e}"
 
 
-def check_package_reading(pkg_dir: Path, source_dir=None):
-    """A: A1 byte facts (always) + A2 replay with the package's CONTEMPORANEOUS
-    reader (needs the source tree). Without that source, A2 -- and therefore A --
-    is NOT_PERFORMED, never PASS."""
+def a_title(pins):
+    """A's name must state exactly what it is. Manifest values are NOT
+    independent pins; only values supplied by the caller are."""
+    pins = pins or {}
+    supplied = [k for k in ("root", "tip", "author_pk") if pins.get(k)]
+    if len(supplied) == 3:
+        return ("A. independent reader confirmation "
+                "(caller-supplied trust/root/tip, no regeneration)")
+    base = ("A. historical replay under the fixture policy and the MANIFEST's own "
+            "values (these are not independent pins")
+    if supplied:
+        return base + f"; caller-supplied: {', '.join(supplied)})"
+    return base + ")"
+
+
+def check_package_reading(pkg_dir: Path, source_dir=None, pins=None):
+    """A: byte facts (always) + a replay by the reader from the package's OWN
+    commit. Values come from the MANIFEST unless the caller supplies them, in
+    which case they are genuine external pins and the title says so. Without the
+    source tree, A is NOT_PERFORMED -- never PASS."""
+    pins = pins or {}
     status, notes = byte_facts(pkg_dir)
     if status != PASS:
         return FAIL, notes
 
+    manifest, _pkg, _c = load_package(pkg_dir)
+    # A caller-supplied pin that disagrees with the manifest is a named failure:
+    # that is exactly what an external pin is for.
+    for key, field in (("root", "root_event_hash"), ("tip", "tip_event_hash")):
+        if pins.get(key) and pins[key].lower() != manifest[field].lower():
+            return FAIL, notes + [f"caller-pinned {key} {pins[key]!r} disagrees "
+                                  f"with MANIFEST.{field} {manifest[field]!r}"]
+    root = pins.get("root") or manifest["root_event_hash"]
+    tip = pins.get("tip") or manifest["tip_event_hash"]
+    author_pk = pins.get("author_pk") or ""
+    notes.append("root/tip used: " + ("caller-supplied" if pins.get("root") and
+                 pins.get("tip") else "from the MANIFEST (not independent pins)"))
+    notes.append("trust root: " + ("caller-supplied author pk" if author_pk else
+                 "the historical code's own caller_trust() fixture policy "
+                 "(not an independent pin)"))
+
     if not isinstance(source_dir, Path):
         reason = source_dir if isinstance(source_dir, str) else "no source tree supplied"
-        notes.append(f"A2 replay NOT PERFORMED: {reason}")
-        notes.append(current_reader_compatibility(pkg_dir))
+        notes.append(f"replay NOT PERFORMED: {reason}")
+        notes.append(current_reader_observation(pkg_dir))
         return NOT_PERFORMED, notes
 
-    manifest, _pkg, _c = load_package(pkg_dir)
-    rep, err = _replay_with(source_dir, pkg_dir / "journal.pkg",
-                            manifest["root_event_hash"], manifest["tip_event_hash"])
+    rep, err = _replay_with(source_dir, pkg_dir / "journal.pkg", root, tip, author_pk)
     if err:
         return FAIL, notes + [f"contemporaneous reader: {err}"]
     if not (rep["accepted"] and rep["root_matches"] and rep["tip_matches"]):
         return FAIL, notes + [f"contemporaneous reader did not accept: {rep}"]
-    notes.append("replayed under the pinned trust/root/tip by the reader from the "
-                 "package's own commit (regeneration forbidden: build_journal raises)")
-    notes.append(current_reader_compatibility(pkg_dir))
+    notes.append("replayed by the reader from the package's own commit "
+                 "(regeneration forbidden: build_journal raises)")
+    notes.append(current_reader_observation(pkg_dir))
     return PASS, notes
 
 
@@ -216,7 +296,13 @@ def check_source_reproducibility(pkg_dir: Path, expect_commit, source_dir=None):
             "commit was NOT checked (a manifest may not attest to its own source)"]
 
     named = manifest.get("source_commit", "")
-    if not (isinstance(named, str) and named.lower() == str(expect_commit).lower()):
+    named_oid, named_refusal = resolve_commit_oid(named)
+    if named_refusal and "not available here" not in named_refusal:
+        return FAIL, [f"MANIFEST.source_commit is unusable: {named_refusal}"]
+    expect_oid, expect_refusal = resolve_commit_oid(expect_commit)
+    if expect_refusal and "not available here" not in expect_refusal:
+        return FAIL, [f"expected source commit is unusable: {expect_refusal}"]
+    if str(named).strip().lower() != str(expect_commit).strip().lower():
         return FAIL, [f"MANIFEST.source_commit is {named!r}, expected {expect_commit!r}"]
 
     if not isinstance(source_dir, Path):
@@ -241,18 +327,27 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--expect-commit", default=os.environ.get("R2_EXPECT_COMMIT"),
-                    help="the exact source commit the frozen package must come "
-                         "from; without it A2 and B are NOT_PERFORMED")
+                    help="FULL 40-hex commit OID the frozen package must come "
+                         "from. A branch, tag or short sha is refused by name. "
+                         "Without it, A's replay and B are NOT_PERFORMED")
+    ap.add_argument("--expect-root", help="caller-pinned root event_hash (hex). "
+                                          "Without it, A uses the MANIFEST value, "
+                                          "which is not an independent pin")
+    ap.add_argument("--expect-tip", help="caller-pinned tip event_hash (hex)")
+    ap.add_argument("--expect-author-pk", help="caller-pinned trusted author "
+                                               "public key (hex); without it the "
+                                               "historical fixture policy is used")
     ap.add_argument("--package-dir", default=str(_HERE))
     args = ap.parse_args(argv)
     pkg_dir = Path(args.package_dir).resolve()
+    pins = {"root": args.expect_root, "tip": args.expect_tip,
+            "author_pk": args.expect_author_pk}
 
     with tempfile.TemporaryDirectory() as tmp:
         source = materialise_source(args.expect_commit, Path(tmp))
         results = [
-            ("A. package reading (saved bytes, pinned trust/root/tip, no regeneration)",
-             check_package_reading(pkg_dir, source)),
-            ("B. source reproducibility (generator run from the expected commit)",
+            (a_title(pins), check_package_reading(pkg_dir, source, pins)),
+            ("B. source reproducibility (generator run from the expected commit OID)",
              check_source_reproducibility(pkg_dir, args.expect_commit, source)),
         ]
 
@@ -265,7 +360,7 @@ def main(argv=None):
 
     manifest = json.loads((pkg_dir / "MANIFEST.json").read_text(encoding="utf-8"))
     print(f"\n  manifest source_commit : {manifest.get('source_commit')!r} "
-          "(claimed; checked only against an expectation supplied by the caller)")
+          "(claimed; checked only against a full OID supplied by the caller)")
     print("  stamp target           : root.commitment (32 raw bytes)")
     print(f"  R2 status              : {manifest.get('r2_status')} "
           f"| R3: {manifest.get('r3_status')}")
@@ -277,10 +372,13 @@ def main(argv=None):
         print("\nRESULT: not fully verified -- something was NOT PERFORMED "
               "(this is not a pass).")
         return 2
-    print("\nRESULT: both checks PASSED -- the frozen bytes are consistent, read "
-          "by their contemporaneous reader, AND reproduced by the generator at "
-          "the expected commit.\n        (This is not an external anchor: R2 "
-          f"remains {manifest.get('r2_status')}.)")
+    print("\nRESULT: both checks PASSED -- the frozen bytes are consistent, were "
+          "accepted by the reader contemporaneous with them, and are reproduced "
+          "by the generator at the expected commit OID.\n"
+          "        This records what the HISTORICAL check established; it is not "
+          "a statement that the package is valid under today's rules, and it is "
+          "not an external anchor (R2 remains "
+          f"{manifest.get('r2_status')}).")
     return 0
 
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import importlib.util
@@ -751,6 +752,60 @@ class FrozenAnchorPackageTest(unittest.TestCase):
         status, notes = self.V.check_source_reproducibility(
             self.dir, self.man["source_commit"], src)
         self.assertEqual(status, self.V.PASS, notes)
+
+    # ---- the source must be a FULL COMMIT OID, never a movable ref ------- #
+    def test_branch_name_is_a_named_refusal(self):
+        oid, refusal = self.V.resolve_commit_oid("moving-source")
+        self.assertIsNone(oid)
+        self.assertIn("full 40-hex commit OID", refusal)
+
+    def test_short_sha_is_a_named_refusal(self):
+        oid, refusal = self.V.resolve_commit_oid(self.man["source_commit"][:7])
+        self.assertIsNone(oid)
+        self.assertIn("full 40-hex commit OID", refusal)
+
+    def test_empty_and_non_string_expectations_are_refused(self):
+        for bad in ["", None, 148, "g" * 40, " " + "a" * 39]:
+            oid, refusal = self.V.resolve_commit_oid(bad)
+            self.assertIsNone(oid, bad)
+            self.assertTrue(refusal)
+
+    def test_non_commit_object_of_full_oid_length_is_refused(self):
+        # A 40-hex OID that is a blob, not a commit. Skips where git/object absent.
+        proc = subprocess.run(["git", "-C", _HERE, "rev-parse",
+                               "HEAD:test_exp_lib_001.py"],
+                              capture_output=True, text=True)
+        if proc.returncode != 0:
+            self.skipTest("git object not resolvable here")
+        blob = proc.stdout.strip()
+        oid, refusal = self.V.resolve_commit_oid(blob)
+        if refusal and "not available here" in refusal:
+            self.skipTest("object not available (shallow clone)")
+        self.assertIsNone(oid)
+        self.assertIn("not a commit", refusal)
+
+    def test_branch_in_manifest_makes_source_check_fail(self):
+        status, notes = self.V.check_source_reproducibility(self.dir, "moving-source")
+        self.assertEqual(status, self.V.FAIL, notes)
+
+    # ---- A's name must match what was actually pinned --------------------- #
+    def test_a_title_does_not_claim_independent_pins_for_manifest_values(self):
+        title = self.V.a_title(None)
+        self.assertIn("MANIFEST", title)
+        self.assertIn("not independent pins", title)
+        self.assertNotIn("independent reader confirmation", title)
+
+    def test_a_title_claims_independence_only_with_all_caller_pins(self):
+        full = self.V.a_title({"root": "a", "tip": "b", "author_pk": "c"})
+        self.assertIn("independent reader confirmation", full)
+        partial = self.V.a_title({"root": "a"})
+        self.assertNotIn("independent reader confirmation", partial)
+        self.assertIn("caller-supplied: root", partial)
+
+    def test_caller_pinned_root_disagreeing_with_manifest_is_a_failure(self):
+        bad = "00" + self.man["root_event_hash"][2:]
+        status, notes = self.V.check_package_reading(self.dir, None, {"root": bad})
+        self.assertEqual(status, self.V.FAIL, notes)
 
     def test_posture_is_not_demonstrated_until_a_real_anchor(self):
         # The frozen package is only a stamp target; it is not an anchor.

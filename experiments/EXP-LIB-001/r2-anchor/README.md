@@ -33,22 +33,52 @@ Each check reports **PASS / FAIL / NOT_PERFORMED**, and they are never merged:
 
 | check | what it establishes |
 |---|---|
-| **A. package reading** | byte facts (stdlib JSON only: `package_sha256`, the 32-byte commitment, its equality with the root **of the saved bytes**, the tip) **plus** a replay under separately pinned trust/root/tip by the reader from **this package's own `source_commit`** — with regeneration forbidden (`build_journal` is made to raise) |
-| **B. source reproducibility** | the generator is run from an **exact commit supplied by the caller** (`--expect-commit`) and its output compared with the frozen bytes |
+| **A. package reading** | byte facts (stdlib JSON only: `package_sha256`, the 32-byte commitment, its equality with the root **of the saved bytes**, the tip) **plus** a replay by the reader from this package's **own `source_commit`**, with regeneration forbidden (`build_journal` is made to raise) |
+| **B. source reproducibility** | the generator is run from a **full commit OID supplied by the caller** (`--expect-commit`) and its output compared with the frozen bytes |
 
-Rules that keep the labels honest:
+### The source must be a full commit OID
+
+A branch, tag or abbreviated sha is a **named refusal** — any of them can move,
+so they cannot pin history. The verifier requires a full 40-hex OID, checks the
+**object type is a commit**, and requires the resolved OID to equal the
+expectation exactly (so even an annotated tag that peels to the right commit is
+refused).
+
+### What A is, and is not
+
+By default A's root/tip come from **this same `MANIFEST.json`** and trust from
+the historical code's own `caller_trust()` fixture policy. Those are **not
+independent pins**, and A is named accordingly:
+
+> `A. historical replay under the fixture policy and the MANIFEST's own values
+> (these are not independent pins)`
+
+To make them genuine external pins, supply them:
+
+```bash
+... --expect-root <hex> --expect-tip <hex> --expect-author-pk <hex>
+```
+
+Only with all three does A rename itself to *independent reader confirmation*.
+A caller-supplied pin that disagrees with the manifest is a **FAIL** — that is
+precisely what an external pin is for.
+
+### Other rules that keep the labels honest
 
 - The expected commit comes from the **caller**, so the manifest cannot attest
-  to its own provenance. A manifest naming a different commit is a **FAIL**,
-  not a skip.
+  to its own provenance. A manifest naming a different (or non-OID) source is a
+  **FAIL**, not a skip.
 - **No source available → `NOT_PERFORMED`, never `PASS`.** Exit codes: `0` all
   passed, `1` something failed, `2` nothing failed but something was not
   performed.
-- A is read with the **contemporaneous** reader, not today's working tree.
-  Later evolution of the generator or reader is reported only as a
-  **compatibility observation** — it never invalidates this frozen package and
-  never requires rewriting the freeze. The package stays bound to
+- A is read with the **contemporaneous** reader, so later evolution of the
+  generator never forces this freeze to be rewritten; the package stays bound to
   `148eec9`.
+- **A PASS is not current validity.** It records what the historical check
+  established. If today's in-tree reader refuses these bytes, that is reported
+  as an observation whose **cause is not diagnosed**: it may be a format
+  incompatibility **or** a defect the historical check missed. It needs review —
+  it must not be dismissed as "just compatibility".
 
 ## Boundary (what a stamp of this would and would not mean)
 
