@@ -598,6 +598,22 @@ class WarrantVerifier:
             try:
                 term = glyph.parse(w.term_expr)
                 res = glyph.evaluate(term, max_atp=w.atp_budget)
+                # The reduction must actually SETTLE (reach a normal form) within
+                # the budget. A budget-suspended result is an incomplete
+                # computation, not a proof: comparing only res.hash let an
+                # attacker pin expected_hash to a suspended intermediate of a
+                # non-terminating term and collect a Grade-G PASS. Budget
+                # exhaustion is a refusal, not a verdict.
+                if not res.is_settled():
+                    return Verdict(
+                        status=VerificationStatus.UNVERIFIED,
+                        grade=EvidenceGrade.GROUNDED,
+                        reason=f"Reduction did not settle within {w.atp_budget} ATP "
+                               f"(status {res.status.value}); an unsettled computation is not a proof. "
+                               f"A refusal is not a verdict.",
+                        delta_atp=res.atp_spent,
+                        details={"status": res.status.value, "atp_spent": res.atp_spent}
+                    )
                 if res.hash != w.expected_hash:
                     return Verdict(
                         status=VerificationStatus.FAIL,
