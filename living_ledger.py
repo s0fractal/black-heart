@@ -216,7 +216,7 @@ class LivingLedger:
             # Subheader
             stream_lines.append(
                 f"BT /F3 9 Tf 0.3 0.35 0.45 rg {margin} {y} Td "
-                f"(ISO 32000 Polyglot Ledger | Block Height #{block.height:04d} | {block.action_type}) Tj 0 g ET"
+                f"(ISO 32000 Polyglot Ledger | Block Height #{block.height:04d} | {_escape_pdf(block.action_type)}) Tj 0 g ET"
             )
             y -= 14
 
@@ -232,13 +232,13 @@ class LivingLedger:
 
             stream_lines.append(f"BT /F1 11 Tf 0.1 0.25 0.5 rg {margin + 12} {y - 4} Td (Block #{block.height}: {_escape_pdf(block.description)}) Tj 0 g ET")
             y -= 18
-            stream_lines.append(f"BT /F4 8 Tf 0.2 0.2 0.2 rg {margin + 12} {y} Td (Timestamp UTC: {block.timestamp_utc} | Prev Hash: {block.prev_hash[:24]}...) Tj 0 g ET")
+            stream_lines.append(f"BT /F4 8 Tf 0.2 0.2 0.2 rg {margin + 12} {y} Td (Timestamp UTC: {_escape_pdf(block.timestamp_utc)} | Prev Hash: {_escape_pdf(block.prev_hash[:24])}...) Tj 0 g ET")
             y -= 13
-            stream_lines.append(f"BT /F4 8 Tf 0.2 0.2 0.2 rg {margin + 12} {y} Td (Signer: {block.signer_name} [{block.signer_role}] | Ed25519 PK: {block.public_key_hex[:24]}...) Tj 0 g ET")
+            stream_lines.append(f"BT /F4 8 Tf 0.2 0.2 0.2 rg {margin + 12} {y} Td (Signer: {_escape_pdf(block.signer_name)} [{_escape_pdf(block.signer_role)}] | Ed25519 PK: {_escape_pdf(block.public_key_hex[:24])}...) Tj 0 g ET")
             y -= 13
-            stream_lines.append(f"BT /F4 8 Tf 0.1 0.45 0.2 rg {margin + 12} {y} Td (Signature: {block.signature_hex[:32]}... [RFC 8032 VERIFIED]) Tj 0 g ET")
+            stream_lines.append(f"BT /F4 8 Tf 0.1 0.45 0.2 rg {margin + 12} {y} Td (Signature: {_escape_pdf(block.signature_hex[:32])}... [RFC 8032 VERIFIED]) Tj 0 g ET")
             y -= 13
-            stream_lines.append(f"BT /F1 9 Tf 0.6 0.2 0.1 rg {margin + 12} {y} Td (Block Digest: {block.block_hash}) Tj 0 g ET")
+            stream_lines.append(f"BT /F1 9 Tf 0.6 0.2 0.1 rg {margin + 12} {y} Td (Block Digest: {_escape_pdf(block.block_hash)}) Tj 0 g ET")
             y -= 38
 
             # Render Vector Proof Net if combinator claim is present
@@ -369,6 +369,20 @@ class LivingLedger:
             f"trailer\n<</Size {len(objs)+1} /Root 1 0 R>>\nstartxref\n{xstart}\n%%EOF\n\"\"\"\n".encode("latin1")
         )
 
+        # The entire PDF body above lives inside the raw-string docstring
+        # opened in pdf_header. If any dynamic field reached it carrying the
+        # docstring terminator, the peer bytes would become executable Python.
+        # Every field is sanitized by _escape_pdf; this is the choke point that
+        # guarantees the invariant regardless of any missed field.
+        # The body legitimately holds exactly two triple-quote runs: the raw
+        # docstring opener in pdf_header and its closer in the trailer. Any
+        # further run can only come from a dynamic field and would let embedded
+        # content execute as Python, so refuse it.
+        if body.count(b'"""') != 2:
+            raise ValueError(
+                "Refusing to emit ledger: assembled document body contains an unexpected "
+                "Python docstring terminator, which would let embedded content execute as code.")
+
         runner_code = _generate_ledger_runner()
         body.extend(runner_code.encode("utf-8"))
 
@@ -399,7 +413,25 @@ class LivingLedger:
 
 
 def _escape_pdf(text: str) -> str:
-    return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+    # Sanitize dynamic text before it is interpolated into the PDF body.
+    #
+    # The PDF body is emitted INSIDE a Python raw-string docstring wrapper
+    # (see compile()). Peer-controlled block fields (signer_name, description,
+    # action_type, ...) flow here, so this must neutralize BOTH:
+    #   - PDF string syntax: backslash and unbalanced parentheses; and
+    #   - the Python-docstring breakout: every double-quote (so a triple-quote
+    #     terminator cannot form) and every newline/CR/control char (so no
+    #     injected line can become code even if a terminator were rebuilt).
+    # Before this, a peer signer_name that embedded a docstring terminator
+    # followed by Python closed the wrapper and ran arbitrary code when the
+    # operator executed the compiled ledger. compile() additionally refuses to
+    # emit any body still containing a terminator, as a choke-point guarantee.
+    text = str(text)
+    text = text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+    text = text.replace('"', "'")
+    # Any C0 control char (newlines, CR, tabs, NUL, ...) becomes a space; a PDF
+    # text line is single-line by construction.
+    return "".join(" " if ord(c) < 0x20 else c for c in text)
 
 def _generate_ledger_runner() -> str:
     return r'''

@@ -92,6 +92,7 @@ SUITES = [
     ("Church Numerals, REPL & Polyglot Runner", "test_church_and_repl"),
     ("Literate Polyglot Monad", "test_monad"),
     ("Living Polyglot Ledger", "test_living_ledger"),
+    ("Ledger Peer Injection: No Code From Peer Block Fields", "test_ledger_peer_injection"),
     ("Interaction Combinators", "test_interaction"),
     ("Autonomous Organisms", "test_organism"),
     ("Bilateral Cross-Proofs & Vaults", "test_cross_proof"),
