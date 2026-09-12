@@ -499,6 +499,284 @@ def loop_success(recorded: list, rep: dict) -> bool:
             and rep.get("confirmed_through_index") == 2)
 
 
+# --------------------------------------------------------------------------- #
+# R2: external-anchor reader (docs/EXP-LIB-001-R2.md rev 3)
+# --------------------------------------------------------------------------- #
+# opentimestamps is an OPTIONAL, offline-only dependency: it is imported lazily
+# INSIDE verify_external_anchor so the module (and the zero-dependency CI) never
+# require it. When it is absent the reader reports NOT_DEMONSTRATED, exactly as
+# the profile §3 allows ("no OTS profile available"). R2 tests skip when it is
+# not importable; R1/loop/linkage/controls/determinism do not depend on it.
+
+_R2_STATES = ("NOT_DEMONSTRATED", "REFUSED", "PENDING",
+              "ANCHORED_UNVERIFIED", "CONFIRMED")
+
+# A reader-accepted Bitcoin data source pins, per block height, that block's
+# 80-byte header. The reader DERIVES the Merkle root (header[36:68]) and the
+# block time (header[68:72], little-endian) from the pinned header: a bare
+# {height: merkle_root_hex} map carries no time and can never establish one, so
+# a dictionary match alone must not read as verified time. Accepting a header
+# set is the reader's own external decision (profile §4). This module does not
+# fetch anything and does NOT validate proof-of-work or that a header is a real
+# Bitcoin block; it binds the OTS Bitcoin attestation's Merkle root to the
+# reader-pinned header at that height and reports that header's timestamp.
+_BLOCK_HEADER_LEN = 80
+
+
+def _r2_result(state, *, commitment_sha256=None, proof_sha256=None,
+               pending_calendars=None, bitcoin_attestations=None,
+               time_verified=False, attested_time=None, block_id=None,
+               calendar_authenticity_verified=False,
+               accepted_source="none", network_calls=0, reason=None):
+    assert state in _R2_STATES, state
+    return {
+        "state": state,
+        "commitment_sha256": commitment_sha256,
+        "proof_sha256": proof_sha256,
+        "pending_calendars": pending_calendars or [],
+        "bitcoin_attestations": bitcoin_attestations or [],
+        "time_verified": time_verified,
+        "attested_time": attested_time,           # verified block time, or None
+        "block_id": block_id,                     # derived from the header, or None
+        "calendar_authenticity_verified": calendar_authenticity_verified,
+        "accepted_source": accepted_source,
+        "network_calls": network_calls,
+        "reason": reason,
+    }
+
+
+def _parse_block_header(header):
+    """Derive (merkle_root_bytes, time_int, block_id_hex) from an 80-byte
+    Bitcoin block header. block_id is the conventional big-endian double-SHA256
+    of the header. Returns None if it is not exactly 80 bytes."""
+    if not isinstance(header, (bytes, bytearray)) or len(header) != _BLOCK_HEADER_LEN:
+        return None
+    header = bytes(header)
+    merkle_root = header[36:68]                    # 32 bytes
+    time_int = int.from_bytes(header[68:72], "little")
+    block_id = hashlib.sha256(hashlib.sha256(header).digest()).digest()[::-1].hex()
+    return merkle_root, time_int, block_id
+
+
+def _coerce_height(height):
+    """Return a non-negative int block height from an int or a CANONICAL
+    base-10 string, else None. bool is rejected (True/False are not heights);
+    floats are rejected -- int(700000.9) would silently truncate and change the
+    reader's pinned meaning; strings must be ASCII digits with no sign,
+    whitespace, fractional part, or leading zero (except '0' itself)."""
+    if isinstance(height, bool):
+        return None
+    if isinstance(height, int):
+        return height if height >= 0 else None
+    if isinstance(height, str):
+        if not (height.isascii() and height.isdigit()):
+            return None
+        if len(height) > 1 and height[0] == "0":
+            return None
+        return int(height)
+    return None
+
+
+def _validate_source(accepted_source):
+    """Return (name, {int height: 80-byte header bytes}) for a WELL-FORMED
+    reader source, else None. Well-formed requires a non-empty string `name`
+    AND a non-empty `block_headers` map whose every value is a hex string
+    decoding to exactly 80 bytes. A malformed source is not 'used': it can never
+    confirm and is reported as accepted_source 'none'. Format is checked BEFORE
+    any matching, so no partial/ill-formed source earns a confirmation."""
+    if not isinstance(accepted_source, dict):
+        return None
+    name = accepted_source.get("name")
+    if not (isinstance(name, str) and name):
+        return None
+    headers = accepted_source.get("block_headers")
+    if not (isinstance(headers, dict) and headers):
+        return None
+    parsed = {}
+    for height, hexhdr in headers.items():
+        h = _coerce_height(height)
+        if h is None:
+            return None
+        if h in parsed:
+            return None                     # collision after coercion: ambiguous pin
+        if not isinstance(hexhdr, str):
+            return None
+        try:
+            raw = bytes.fromhex(hexhdr)
+        except ValueError:
+            return None
+        if len(raw) != _BLOCK_HEADER_LEN:
+            return None
+        parsed[h] = raw
+    return name, parsed
+
+
+def verify_external_anchor(commitment, ots_proof, accepted_source=None):
+    """R2 reader (docs/EXP-LIB-001-R2.md rev 5). Fully OFFLINE: zero network
+    calls, always. Given the pinned root `commitment` (exactly 32 raw bytes),
+    the detached `ots_proof` bytes, and an OPTIONAL reader-pinned
+    `accepted_source`, return the §3 state and §4 flags. It NEVER raises on
+    adversarial input -- a malformed or non-binding proof is the named result
+    REFUSED, distinct from absent (NOT_DEMONSTRATED) and from PENDING.
+
+    accepted_source, when given, is the reader's own pinned Bitcoin data source
+    (§7):
+        {"name": <non-empty str>,
+         "block_headers": {<int height>: <80-byte block-header hex>}}
+    The reader derives the Merkle root and block time from each pinned header;
+    a bare Merkle-root string is NOT accepted, because it carries no time. Each
+    height must be a non-negative int or a canonical decimal string (no bool, no
+    float truncation, no post-coercion collision). The proof's declared file-
+    hash algorithm must be SHA-256 (§2); any other op is REFUSED.
+    CONFIRMED requires (a) a well-formed source (format checked first) and
+    (b) an OTS Bitcoin attestation whose Merkle root equals the pinned header's
+    Merkle root at that height; the verified time reported is that header's
+    timestamp. Without a source, CONFIRMED is unreachable (at most
+    ANCHORED_UNVERIFIED); supplying one is never itself a confirmation, and a
+    malformed one (e.g. no name) never confirms. PoW is not checked: accepting
+    the header set is the reader's external decision.
+    """
+    validated = _validate_source(accepted_source)
+    src_name = validated[0] if validated is not None else "none"
+    commit_ok = isinstance(commitment, (bytes, bytearray)) and len(commitment) == 32
+    commitment_sha256 = (hashlib.sha256(bytes(commitment)).hexdigest()
+                         if commit_ok else None)
+    proof_sha256 = (hashlib.sha256(ots_proof).hexdigest()
+                    if isinstance(ots_proof, (bytes, bytearray)) else None)
+
+    # 1. No proof at all -> NOT_DEMONSTRATED (never REFUSED, never PENDING).
+    if ots_proof is None:
+        return _r2_result("NOT_DEMONSTRATED", commitment_sha256=commitment_sha256,
+                          accepted_source=src_name, reason="no proof supplied")
+
+    # 2. No OTS profile available on this host -> NOT_DEMONSTRATED (§3).
+    try:
+        from opentimestamps.core.timestamp import DetachedTimestampFile
+        from opentimestamps.core.op import OpSHA256
+        from opentimestamps.core.serialize import BytesDeserializationContext
+        from opentimestamps.core.notary import (PendingAttestation,
+                                                 BitcoinBlockHeaderAttestation)
+    except Exception:
+        return _r2_result("NOT_DEMONSTRATED", commitment_sha256=commitment_sha256,
+                          proof_sha256=proof_sha256, accepted_source=src_name,
+                          reason="no OTS profile available (opentimestamps not importable)")
+
+    # 3. A proof was supplied: from here a failure is REFUSED, not absent.
+    if not commit_ok:
+        return _r2_result("REFUSED", proof_sha256=proof_sha256,
+                          accepted_source=src_name,
+                          reason="commitment is not exactly 32 raw bytes")
+    if not isinstance(ots_proof, (bytes, bytearray)):
+        return _r2_result("REFUSED", commitment_sha256=commitment_sha256,
+                          accepted_source=src_name, reason="proof is not raw bytes")
+    try:
+        detached = DetachedTimestampFile.deserialize(
+            BytesDeserializationContext(bytes(ots_proof)))
+    except Exception as e:
+        return _r2_result("REFUSED", commitment_sha256=commitment_sha256,
+                          proof_sha256=proof_sha256, accepted_source=src_name,
+                          reason=f"proof did not parse: {type(e).__name__}")
+
+    # 3b. Algorithm: the standard `ots stamp` path hashes the file with SHA-256
+    #     (§2). A proof declaring any other file-hash op is a format mismatch --
+    #     even if its leaf bytes happen to equal our SHA-256 leaf -- and is
+    #     REFUSED. This checks the declared algorithm, not the strength of SHA-256.
+    if not isinstance(detached.file_hash_op, OpSHA256):
+        return _r2_result("REFUSED", commitment_sha256=commitment_sha256,
+                          proof_sha256=proof_sha256, accepted_source=src_name,
+                          reason=("proof file-hash algorithm is not SHA-256 "
+                                  f"(is {type(detached.file_hash_op).__name__}; profile §2)"))
+
+    # 4. Binding: the proof must commit to SHA256(our 32 raw bytes) (§2). A
+    #    proof over any other bytes -- or double-hashed, or a different file --
+    #    does not bind THIS commitment and is REFUSED, not silently accepted.
+    expected_leaf = hashlib.sha256(bytes(commitment)).digest()
+    if detached.timestamp.msg != expected_leaf:
+        return _r2_result("REFUSED", commitment_sha256=commitment_sha256,
+                          proof_sha256=proof_sha256, accepted_source=src_name,
+                          reason="proof does not bind the commitment "
+                                 "(leaf != SHA256 of the 32 root bytes)")
+
+    # 5. Classify the attestations the (now bound) proof carries. A Bitcoin
+    #    attestation's message is that block's 32-byte Merkle root.
+    pending = []
+    bitcoin = []
+    for msg, att in detached.timestamp.all_attestations():
+        if isinstance(att, PendingAttestation):
+            uri = att.uri
+            if isinstance(uri, bytes):
+                uri = uri.decode("utf-8", "replace")
+            pending.append(uri)
+        elif isinstance(att, BitcoinBlockHeaderAttestation):
+            bitcoin.append({"height": att.height, "merkle_root": msg.hex()})
+    pending = sorted(pending)
+    bitcoin = sorted(bitcoin, key=lambda b: (b["height"], b["merkle_root"]))
+
+    # Defensive: a bound proof carrying NO attestation evidences no time.
+    # The OTS serializer refuses to emit an attestation-less timestamp, so this
+    # is unreachable from standard .ots bytes -- kept as a fail-closed guard,
+    # not claimed as a tested state (never PENDING, which needs a calendar).
+    if not pending and not bitcoin:
+        return _r2_result("REFUSED", commitment_sha256=commitment_sha256,
+                          proof_sha256=proof_sha256, accepted_source=src_name,
+                          reason="proof binds the commitment but carries no attestations")
+
+    # 6. No Bitcoin attestation yet -> PENDING (calendar commitments only).
+    if not bitcoin:
+        return _r2_result("PENDING", commitment_sha256=commitment_sha256,
+                          proof_sha256=proof_sha256, pending_calendars=pending,
+                          accepted_source=src_name,
+                          reason="calendar commitments only; no Bitcoin attestation yet")
+
+    # 7. Bitcoin attestation present. CONFIRMED requires a WELL-FORMED, reader-
+    #    accepted source (validated above, before any matching) AND a Merkle-root
+    #    match against the pinned block header -- which is also what yields the
+    #    verified block time. A present attestation is NEVER CONFIRMED on its
+    #    own; a malformed source (e.g. no name) never confirms.
+    confirmed = None
+    if validated is not None:
+        _name, headers = validated
+        for b in bitcoin:
+            hdr = headers.get(b["height"])
+            if hdr is None:
+                continue
+            parsed = _parse_block_header(hdr)
+            if parsed is None:                     # unreachable: validated => 80 bytes
+                continue
+            merkle_root, time_int, block_id = parsed
+            if merkle_root.hex() == b["merkle_root"]:
+                confirmed = {"attested_time": time_int, "block_id": block_id}
+                break
+
+    if confirmed is not None:
+        return _r2_result("CONFIRMED", commitment_sha256=commitment_sha256,
+                          proof_sha256=proof_sha256, pending_calendars=pending,
+                          bitcoin_attestations=bitcoin, time_verified=True,
+                          attested_time=confirmed["attested_time"],
+                          block_id=confirmed["block_id"],
+                          calendar_authenticity_verified=False,
+                          accepted_source=src_name, network_calls=0,
+                          reason="Bitcoin attestation Merkle root matches the "
+                                 "reader-pinned block header; verified time is "
+                                 "that header's timestamp (offline; PoW not checked)")
+
+    # 8. Attestation present but not confirmed: no source, a MALFORMED source,
+    #    or a well-formed source that matched no attestation (adjacent
+    #    negative). time_verified stays False; no time is invented.
+    if accepted_source is None:
+        why = "no accepted source pinned; chain time not established"
+    elif validated is None:
+        why = ("accepted source is malformed and was not used "
+               "(needs a name and 80-byte block_headers)")
+    else:
+        why = "accepted source did not match any Bitcoin attestation's Merkle root"
+    return _r2_result("ANCHORED_UNVERIFIED", commitment_sha256=commitment_sha256,
+                      proof_sha256=proof_sha256, pending_calendars=pending,
+                      bitcoin_attestations=bitcoin, time_verified=False,
+                      calendar_authenticity_verified=False,
+                      accepted_source=src_name, network_calls=0, reason=why)
+
+
 def run_experiment() -> dict:
     journal = build_journal()
     root, tip = journal[0]["event_hash"], journal[-1]["event_hash"]
@@ -524,7 +802,9 @@ def run_experiment() -> dict:
         "linkage": links,
         "controls": controls,
         "R2_external_anchor": {"status": "NOT_DEMONSTRATED",
-                               "reason": "no OTS profile available in this run"},
+                               "reason": "no proof supplied to this run; the "
+                                         "reader is verify_external_anchor "
+                                         "(docs/EXP-LIB-001-R2.md)"},
         "R3_publication": {"status": "NOT_RELEASED",
                            "note": "DOI is publication only, not provenance; gated on §9"},
         "determinism_ok": determinism_ok,
