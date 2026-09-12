@@ -1,5 +1,10 @@
 # Remediation ledger — S0
 
+> Direction update, 2026-09-13: [LI-1–LI-3](LIVING-LIBRARY-INTERACTION.md)
+> select the next feature work: proposal intake, caller-policy evaluation, then
+> immutable PDF successors. Publication/stamping are deferred. This scheduling
+> note closes no finding and does not refresh the historical audit coverage below.
+
 Base: `origin/main` = `1d1908f`. Probe rerun here: `python3 -B ../black-heart-remediation-2026-09-11/baseline_probe.py .`
 reproduces Codex's three observations at this HEAD (they were first recorded at `ce05d3e`).
 
