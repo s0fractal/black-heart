@@ -680,7 +680,13 @@ class SwarmAgoraCommons:
                 res = glyph.evaluate(t, max_atp=100)
                 expected_t = glyph.parse(proposal.expected_normal_form)
                 expected_res = glyph.evaluate(expected_t, max_atp=100)
-                if glyph.canonical_bytes(res.normal_form) == glyph.canonical_bytes(expected_res.normal_form):
+                # Both reductions must SETTLE within budget. Without this, a
+                # non-terminating proposal whose suspended form matched the
+                # (also-suspended) expected was voted sound, RATIFIED, rewarded
+                # its author, and canonized -- reproduced end to end.
+                if (res.is_settled() and expected_res.is_settled()
+                        and glyph.canonical_bytes(res.normal_form)
+                        == glyph.canonical_bytes(expected_res.normal_form)):
                     is_sound = True
             except Exception:
                 is_sound = False

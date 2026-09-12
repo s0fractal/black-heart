@@ -237,13 +237,18 @@ def audit_polyglot_claims(target_path: str) -> bool:
         try:
             t = parse(expr_str)
             result = evaluate(t, max_atp=max_atp)
-            norm, atp = result.term, result.atp_spent
-            total_atp += atp
-            norm_str = str(norm)
+            total_atp += result.atp_spent
+            # A budget-suspended reduction is not a normal form. Comparing
+            # result.term without this let a non-terminating claim whose
+            # suspended intermediate equalled the (also-evaluated) expected pass
+            # as verified -- reproduced at max_atp=100000. Both sides must settle.
+            if not result.is_settled():
+                return False
             exp_t = parse(exp_str)
-            exp_norm = evaluate(exp_t).term
-            exp_norm_str = str(exp_norm)
-            if norm_str == exp_norm_str:
+            exp_result = evaluate(exp_t)
+            if not exp_result.is_settled():
+                return False
+            if str(result.term) == str(exp_result.term):
                 passed += 1
             else:
                 return False

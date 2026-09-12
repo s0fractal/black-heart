@@ -134,6 +134,7 @@ SUITES = [
     ("Autonomic Epistemic Immune System", "test_epistemic_immune"),
     ("Counterexample Producer: Audit Before Effects", "test_counterexample_producer"),
     ("Epistemic Swarm Membrane & Quine Symbiosis", "test_epistemic_swarm"),
+    ("Suspended Normal Form: Not A Verified Reduction", "test_polyglot_suspended_nf"),
     ("Epistemic E-Graph Kernel & Equality Saturation", "test_egraph_kernel"),
     ("E-Graph Explanations: Only Steps That Replay", "test_egraph_explanation"),
     ("Sovereign SMT Kernel & First-Order DPLL(T) Verifier", "test_smt_kernel"),
