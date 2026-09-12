@@ -459,7 +459,13 @@ class TrustConfig:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "trusted_author_pks": list(self.trusted_author_pks) if self.trusted_author_pks else None,
+            # `is not None`, not truthiness: an EMPTY set is deny-all (nobody
+            # trusted) and must serialize to [], not None. None means "no
+            # allowlist" -> trust-all (is_author_trusted returns True). Using
+            # truthiness here turned a persisted deny-all policy into trust-all
+            # on the next load.
+            "trusted_author_pks": (sorted(self.trusted_author_pks)
+                                   if self.trusted_author_pks is not None else None),
             "admitted_grades": [g.value for g in self.admitted_grades],
             "max_atp_budget": self.max_atp_budget,
             "require_bound_signature": self.require_bound_signature
