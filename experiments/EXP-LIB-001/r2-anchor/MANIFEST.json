@@ -15,5 +15,11 @@
   "r3_status": "NOT_RELEASED",
   "root_event_hash": "2b921b388a132f6ce0457f70015fa610cad1e797941c74a0967a014d72d93121",
   "source_commit": "148eec969ed5b1fa546c2be2ad93e4cdf83957a1",
-  "tip_event_hash": "78db18f1b73719c8c7ea3fc9932e3c8fe44d0e32c71fcadef99edb9b6ff5b4ee"
+  "tip_event_hash": "78db18f1b73719c8c7ea3fc9932e3c8fe44d0e32c71fcadef99edb9b6ff5b4ee",
+  "verification": {
+    "A_package_reading": "Byte facts (stdlib JSON only: package_sha256, the 32-byte commitment, its equality with the root of the SAVED bytes, tip) plus a replay under separately pinned trust/root/tip by the reader from THIS package's own source_commit. Without that source tree the replay is NOT_PERFORMED, never PASS.",
+    "B_source_reproducibility": "Runs the generator from an exact source commit supplied by the caller (--expect-commit) and compares its output with the frozen bytes. No expectation, or no such source here -> NOT_PERFORMED, never PASS. A manifest naming a different commit is a FAIL.",
+    "command": "python3 experiments/EXP-LIB-001/r2-anchor/verify_anchor_package.py --expect-commit <sha>",
+    "not_established": "Neither check is an external anchor. How TODAY's in-tree reader behaves on this package is reported as a compatibility observation only: later evolution of the generator or reader never invalidates this frozen package and never requires rewriting it."
+  }
 }

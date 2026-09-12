@@ -14,6 +14,8 @@ import json
 import os
 import sys
 import tempfile
+import importlib.util
+from pathlib import Path
 import unittest
 from unittest import mock
 
@@ -665,33 +667,90 @@ class ExternalAnchorR2Test(unittest.TestCase):
         self.assertEqual(r["accepted_source"], "none")
 
 
+def _load_anchor_verifier():
+    path = Path(_HERE) / "experiments" / "EXP-LIB-001" / "r2-anchor" / "verify_anchor_package.py"
+    spec = importlib.util.spec_from_file_location("_r2_anchor_verify", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 class FrozenAnchorPackageTest(unittest.TestCase):
-    """The frozen R2 anchoring package (experiments/EXP-LIB-001/r2-anchor) stays
-    bound to the runner: if the journal changes, the frozen commitment no longer
-    corresponds to main and this fails. No OTS or network needed."""
+    """The frozen R2 anchoring package is historical evidence bound to its OWN
+    source commit. It is deliberately NOT required to equal what the current
+    runner produces, and is NOT read with today's reader: evolving the generator
+    must never invalidate an earlier freeze or force it to be rewritten. The
+    byte facts below use stdlib JSON only; the replay uses the reader from the
+    package's own commit; provenance is checked against an explicitly expected
+    commit supplied here, not taken from the manifest alone."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.V = _load_anchor_verifier()
+        cls.dir = Path(_HERE) / "experiments" / "EXP-LIB-001" / "r2-anchor"
 
     def setUp(self):
-        self.dir = os.path.join(_HERE, "experiments", "EXP-LIB-001", "r2-anchor")
-        self.man = json.load(open(os.path.join(self.dir, "MANIFEST.json")))
-        self.pkg = open(os.path.join(self.dir, "journal.pkg"), "rb").read()
-        self.commitment = open(os.path.join(self.dir, "root.commitment"), "rb").read()
+        self.man = json.loads((self.dir / "MANIFEST.json").read_text(encoding="utf-8"))
+        self.pkg = (self.dir / "journal.pkg").read_bytes()
+        self.commitment = (self.dir / "root.commitment").read_bytes()
 
-    def test_current_runner_reproduces_the_frozen_package(self):
-        self.assertEqual(EXP.journal_to_bytes(EXP.build_journal()), self.pkg)
+    # ---- A1: reader-independent byte facts (always runnable) -------------- #
+    def test_byte_facts_pass(self):
+        status, notes = self.V.byte_facts(self.dir)
+        self.assertEqual(status, self.V.PASS, notes)
+
+    def test_commitment_is_32_raw_bytes_equal_to_the_saved_package_root(self):
+        self.assertEqual(len(self.commitment), 32)
+        events = json.loads(self.pkg.decode("utf-8"))     # stdlib only
+        self.assertEqual(self.commitment.hex(), events[0]["event_hash"])
+        self.assertEqual(self.commitment.hex(), self.man["root_event_hash"])
+        self.assertEqual(events[-1]["event_hash"], self.man["tip_event_hash"])
         self.assertEqual(hashlib.sha256(self.pkg).hexdigest(),
                          self.man["package_sha256"])
 
-    def test_commitment_is_32_raw_bytes_equal_to_the_package_root(self):
-        self.assertEqual(len(self.commitment), 32)
-        parsed = EXP.journal_from_bytes(self.pkg)
-        self.assertEqual(self.commitment.hex(), parsed[0]["event_hash"])
-        self.assertEqual(self.commitment.hex(), self.man["root_event_hash"])
-        self.assertEqual(parsed[-1]["event_hash"], self.man["tip_event_hash"])
+    def test_source_commit_is_recorded_as_a_full_sha(self):
+        # Format only. Deliberately NOT compared to the current HEAD: the
+        # package stays bound to the commit it was frozen from.
+        self.assertRegex(self.man["source_commit"], r"^[0-9a-f]{40}$")
 
-    def test_r1_reader_accepts_the_frozen_bytes(self):
-        rep = EXP.verify_package(self.pkg, EXP.caller_trust(),
-                                 self.man["root_event_hash"], self.man["tip_event_hash"])
-        self.assertTrue(rep["accepted"])
+    # ---- dispositions: absent source is NOT_PERFORMED, never PASS --------- #
+    def test_reading_without_the_source_tree_is_not_performed(self):
+        status, notes = self.V.check_package_reading(self.dir, None)
+        self.assertEqual(status, self.V.NOT_PERFORMED, notes)
+        self.assertNotEqual(status, self.V.PASS)
+
+    def test_absent_expected_commit_is_not_performed_never_pass(self):
+        status, notes = self.V.check_source_reproducibility(self.dir, None)
+        self.assertEqual(status, self.V.NOT_PERFORMED, notes)
+        self.assertNotEqual(status, self.V.PASS)
+
+    def test_manifest_naming_another_commit_is_a_failure(self):
+        status, _notes = self.V.check_source_reproducibility(self.dir, "0" * 40)
+        self.assertEqual(status, self.V.FAIL)
+
+    # ---- the real checks, when this clone carries the source -------------- #
+    def _source(self, stack):
+        tmp = tempfile.TemporaryDirectory()
+        stack.append(tmp)
+        got = self.V.materialise_source(self.man["source_commit"], Path(tmp.name))
+        if not isinstance(got, Path):
+            self.skipTest(f"source commit unavailable here: {got}")
+        return got
+
+    def test_reading_with_the_contemporaneous_reader(self):
+        stack = []
+        self.addCleanup(lambda: [t.cleanup() for t in stack])
+        src = self._source(stack)
+        status, notes = self.V.check_package_reading(self.dir, src)
+        self.assertEqual(status, self.V.PASS, notes)
+
+    def test_source_reproducibility_from_the_named_commit(self):
+        stack = []
+        self.addCleanup(lambda: [t.cleanup() for t in stack])
+        src = self._source(stack)
+        status, notes = self.V.check_source_reproducibility(
+            self.dir, self.man["source_commit"], src)
+        self.assertEqual(status, self.V.PASS, notes)
 
     def test_posture_is_not_demonstrated_until_a_real_anchor(self):
         # The frozen package is only a stamp target; it is not an anchor.

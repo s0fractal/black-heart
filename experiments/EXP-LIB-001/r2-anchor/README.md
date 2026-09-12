@@ -22,11 +22,33 @@ Frozen values (see `MANIFEST.json` for the authoritative copy):
 - `package_sha256`: `b08c11b6a03e36d1493d056c9565dbc351268f6905406a9cf030a7e4c5cfff09`
 - leaf the `.ots` will commit to (`SHA256` of the 32 bytes): `e71305f6ad4b3827d33d9f5651509fc2a7a1fd16fea630d47c2bca7cb987a6bf`
 
-Verify offline:
+## Verifying (two separate checks)
 
 ```bash
-python3 experiments/EXP-LIB-001/r2-anchor/verify_anchor_package.py
+python3 experiments/EXP-LIB-001/r2-anchor/verify_anchor_package.py \
+  --expect-commit 148eec969ed5b1fa546c2be2ad93e4cdf83957a1
 ```
+
+Each check reports **PASS / FAIL / NOT_PERFORMED**, and they are never merged:
+
+| check | what it establishes |
+|---|---|
+| **A. package reading** | byte facts (stdlib JSON only: `package_sha256`, the 32-byte commitment, its equality with the root **of the saved bytes**, the tip) **plus** a replay under separately pinned trust/root/tip by the reader from **this package's own `source_commit`** — with regeneration forbidden (`build_journal` is made to raise) |
+| **B. source reproducibility** | the generator is run from an **exact commit supplied by the caller** (`--expect-commit`) and its output compared with the frozen bytes |
+
+Rules that keep the labels honest:
+
+- The expected commit comes from the **caller**, so the manifest cannot attest
+  to its own provenance. A manifest naming a different commit is a **FAIL**,
+  not a skip.
+- **No source available → `NOT_PERFORMED`, never `PASS`.** Exit codes: `0` all
+  passed, `1` something failed, `2` nothing failed but something was not
+  performed.
+- A is read with the **contemporaneous** reader, not today's working tree.
+  Later evolution of the generator or reader is reported only as a
+  **compatibility observation** — it never invalidates this frozen package and
+  never requires rewriting the freeze. The package stays bound to
+  `148eec9`.
 
 ## Boundary (what a stamp of this would and would not mean)
 
