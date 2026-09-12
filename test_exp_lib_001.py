@@ -807,6 +807,25 @@ class FrozenAnchorPackageTest(unittest.TestCase):
         status, notes = self.V.check_package_reading(self.dir, None, {"root": bad})
         self.assertEqual(status, self.V.FAIL, notes)
 
+    # ---- the verifier's own prose must not outrun what it checks --------- #
+    def test_docstring_does_not_restate_retracted_overclaims(self):
+        """Guards a class of defect that has now recurred: a stated label wider
+        than the predicate. Each phrase below was an actual overclaim that was
+        corrected in the code and report; the module docstring must not carry it
+        back. This is a wording guard, not a behaviour test."""
+        doc = self.V.__doc__ or ""
+        for retracted in ("SEPARATELY pinned trust/root/tip",
+                          "COMPATIBILITY observation only",
+                          "can never fail this verification"):
+            self.assertNotIn(retracted, doc,
+                             f"retracted overclaim is back in the docstring: {retracted!r}")
+
+    def test_docstring_states_the_contract_it_enforces(self):
+        doc = self.V.__doc__ or ""
+        self.assertIn("FULL 40-hex COMMIT OID", doc)       # the source contract
+        self.assertIn("NOT independent pins", doc)         # A's default honesty
+        self.assertIn("NOT diagnosed", doc)                # refusal cause undiagnosed
+
     def test_posture_is_not_demonstrated_until_a_real_anchor(self):
         # The frozen package is only a stamp target; it is not an anchor.
         self.assertEqual(self.man["r2_status"], "NOT_DEMONSTRATED")
