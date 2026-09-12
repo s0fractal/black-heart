@@ -127,6 +127,7 @@ SUITES = [
     ("Warrant Audit: Trust Root From Caller, Not Document", "test_warrant_document_trust"),
     ("Warrant Trust: Deny-All Survives Serialization", "test_warrant_empty_allowlist"),
     ("Warrant Grounded: Suspended Computation Is Not A Proof", "test_warrant_grounded_suspension"),
+    ("Sandbox Auditor: SOUND Requires Positive Confirmation", "test_sandbox_fail_closed"),
     ("Counterexample Evidence: Replay Must Match the Witness", "test_counterexample_evidence"),
     ("Controlled Forgetting & Epistemic Retirement", "test_controlled_forgetting"),
     ("Retirement / Re-adoption Body Binding", "test_retirement_binding"),

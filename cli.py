@@ -241,7 +241,8 @@ def cmd_sandbox(args):
 
     print(f"[*] File Size:            {report.file_size_bytes} bytes")
     print(f"[*] SHA-256 Digest:       {report.sha256_digest}")
-    print(f"[*] ISO 32000 Compliant:  {'Yes' if report.is_valid_iso32000 else 'No'}")
+    print(f"[*] PDF header present:    {'Yes' if report.is_valid_iso32000 else 'No'} "
+          f"(header presence only, not full ISO 32000 compliance)")
     print(f"[*] Incremental Updates:  {report.incremental_updates_count}")
     print(f"[*] Detected Manifests:   {', '.join(report.detected_manifest_types) or 'None'}")
     print("\n--- AUDIT LOG ---")
@@ -250,7 +251,8 @@ def cmd_sandbox(args):
 
     print("\n" + "=" * 70)
     if report.is_sound():
-        print("\033[1;32m[✓ SOUND] Document verified statically without executing host Python.\033[0m")
+        print("\033[1;32m[✓ SOUND] Recognized elements verified statically without executing host Python.\033[0m")
+        print(f"          {report.scope_summary()}")
     else:
         print("\033[1;31m[✗ UNSOUND] Document failed static hermetic verification.\033[0m")
         sys.exit(1)
