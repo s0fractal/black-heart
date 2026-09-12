@@ -203,6 +203,30 @@ def journal_from_bytes(data: bytes) -> list:
 # --------------------------------------------------------------------------- #
 # R1: replay to the oldest reachable confirmed ancestor
 # --------------------------------------------------------------------------- #
+_ALLOWED_KINDS = {"CLAIM", "COUNTEREXAMPLE", "REFINE"}
+_ALLOWED_VERDICTS = {"PASS", "FAIL", "UNVERIFIED"}
+
+
+def _structure_reason(ev: dict, index: int):
+    """Named reason an event is not a supported, well-formed event, or None."""
+    if not isinstance(ev, dict):
+        return "event is not an object"
+    for f in _CORE_ORDER + ["event_hash", "signature_hex"]:
+        if f not in ev:
+            return f"missing field {f!r}"
+    if ev["profile"] != EVENT_PROFILE:
+        return f"unsupported profile {ev['profile']!r} (expected {EVENT_PROFILE!r})"
+    if ev["index"] != index:
+        return f"index field {ev['index']!r} != position {index}"
+    if ev["kind"] not in _ALLOWED_KINDS:
+        return f"unsupported kind {ev['kind']!r}"
+    if ev["expected_verdict"] not in _ALLOWED_VERDICTS:
+        return f"unsupported expected_verdict {ev['expected_verdict']!r}"
+    if not isinstance(ev.get("claim"), dict) or "body" not in ev["claim"]:
+        return "claim is not a well-formed EdgeClaim document"
+    return None
+
+
 def replay(journal: list, trust: TrustConfig, expected_root: str, expected_tip: str) -> dict:
     """Confirm the chain from the tip back to index 0, re-auditing every claim's
     content. Returns a structured result; the confirmed region is reported, not
@@ -210,7 +234,7 @@ def replay(journal: list, trust: TrustConfig, expected_root: str, expected_tip: 
     verifier = WarrantVerifier(trust)
     result = {"confirmed_through_index": -1, "boundary": None,
               "verdicts": [], "root_matches": None, "tip_matches": None,
-              "chain_ok": True, "root": None, "tip": None}
+              "chain_ok": True, "accepted": False, "root": None, "tip": None}
     if not journal:
         result["chain_ok"] = False
         result["boundary"] = "empty journal"
@@ -223,6 +247,12 @@ def replay(journal: list, trust: TrustConfig, expected_root: str, expected_tip: 
 
     prev = GENESIS_PREV
     for i, ev in enumerate(journal):
+        # Structure and profile are checked BEFORE the event is interpreted, so
+        # an unsupported or malformed event is refused by name -- a signature
+        # over an unsupported format is not acceptance.
+        struct = _structure_reason(ev, i)
+        if struct is not None:
+            result["chain_ok"] = False; result["boundary"] = f"index {i}: {struct}"; break
         core = {k: ev[k] for k in _CORE_ORDER}
         try:
             cb = canonical_core_bytes(core)
@@ -249,6 +279,12 @@ def replay(journal: list, trust: TrustConfig, expected_root: str, expected_tip: 
             break
         result["confirmed_through_index"] = i
         prev = ev["event_hash"]
+    # Acceptance is not internal consistency alone: the reader must have
+    # SELECTED this history (root) and be seeing it COMPLETE (tip). Either pin
+    # wrong => not accepted, even if the chain is internally sound.
+    result["accepted"] = bool(result["chain_ok"]
+                              and result["root_matches"]
+                              and result["tip_matches"])
     return result
 
 
@@ -276,6 +312,16 @@ def linkage_ok(journal: list) -> dict:
 # --------------------------------------------------------------------------- #
 # Controls (§4) -- each must fail closed
 # --------------------------------------------------------------------------- #
+def _resign_event(core_plus: dict) -> dict:
+    """Rebuild event_hash + signature for a mutated core (honest re-signing with
+    the fixture author key). Used only to build adversarial fixtures whose bytes
+    are internally consistent, so the refusal must come from a real check."""
+    core = {k: core_plus[k] for k in _CORE_ORDER}
+    cb = canonical_core_bytes(core)
+    return {**core, "event_hash": hashlib.sha256(cb).hexdigest(),
+            "signature_hex": crypto.sign_bytes(AUTHOR_SK, cb).hex()}
+
+
 def run_controls() -> dict:
     trust = caller_trust()
     verifier = WarrantVerifier(trust)
@@ -320,6 +366,31 @@ def run_controls() -> dict:
     rep = replay(tampered, trust, journal[0]["event_hash"], journal[-1]["event_hash"])
     out["tamper_breaks_replay"] = (rep["confirmed_through_index"] < 0 and not rep["chain_ok"])
 
+    # broken prev-link, RE-SIGNED: re-point event 1's prev to genesis and
+    # recompute its hash+signature so only the chain link is wrong. The
+    # event_hash attests the recorded prev value, not that it matches the real
+    # predecessor, so this must still be refused as a chain break.
+    relinked = [dict(ev) for ev in journal]
+    relinked[1] = _resign_event({**journal[1], "prev_event_hash": GENESIS_PREV})
+    rep_l = replay(relinked, trust, journal[0]["event_hash"], relinked[-1]["event_hash"])
+    out["broken_prev_link_refused"] = (rep_l["confirmed_through_index"] == 0
+                                       and "prev" in (rep_l["boundary"] or ""))
+
+    # unsupported profile, RE-SIGNED across all events with matching root/tip:
+    # a valid signature over an unsupported format is not acceptance.
+    reprofiled = []
+    prev = GENESIS_PREV
+    for ev in journal:
+        r = _resign_event({**ev, "profile": "unsupported.v99", "prev_event_hash": prev})
+        reprofiled.append(r); prev = r["event_hash"]
+    rep_p = replay(reprofiled, trust, reprofiled[0]["event_hash"], reprofiled[-1]["event_hash"])
+    out["unsupported_profile_refused"] = (not rep_p["chain_ok"]
+                                          and "profile" in (rep_p["boundary"] or ""))
+
+    # pinned root/tip gate acceptance: a foreign expected root is NOT accepted
+    rep_root = replay(journal, trust, "00" * 32, journal[-1]["event_hash"])
+    out["wrong_root_not_accepted"] = (rep_root["chain_ok"] and not rep_root["accepted"])
+
     out["all"] = all(out.values())
     return out
 
@@ -354,6 +425,7 @@ def run_experiment() -> dict:
     return {
         "loop": {"recorded": recorded, "replayed": rep["verdicts"], "ok": loop_ok},
         "R1_local_replay": {
+            "accepted": rep["accepted"],
             "chain_ok": rep["chain_ok"],
             "confirmed_through_index": rep["confirmed_through_index"],
             "oldest_confirmed_ancestor_index": 0 if rep["chain_ok"] else None,
@@ -374,7 +446,7 @@ def main():
     report = run_experiment()
     print("%🖤 EXP-LIB-001 — living-library experiment report\n")
     pprint.pprint(report, sort_dicts=False, width=100)
-    ok = (report["loop"]["ok"] and report["R1_local_replay"]["chain_ok"]
+    ok = (report["loop"]["ok"] and report["R1_local_replay"]["accepted"]
           and report["linkage"]["all"] and report["controls"]["all"]
           and report["determinism_ok"])
     print("\nR1 (replay), loop, linkage, controls, determinism:",

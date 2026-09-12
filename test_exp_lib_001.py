@@ -70,10 +70,42 @@ class ReplayTest(unittest.TestCase):
         self.assertEqual(rep["confirmed_through_index"], 2)
         self.assertTrue(rep["root_matches"] and rep["tip_matches"])
 
-    def test_2b_wrong_expected_root_is_reported_not_silently_passed(self):
+    def test_2b_wrong_root_or_tip_is_not_accepted(self):
+        """Pins gate acceptance, not just a reported flag: a reader must not see
+        a successful loop for a history they did not select (root) or an
+        incomplete one (tip). chain_ok (internal consistency) is separate."""
         j = EXP.build_journal()
-        rep = EXP.replay(j, EXP.caller_trust(), "00" * 32, j[-1]["event_hash"])
-        self.assertFalse(rep["root_matches"])
+        for root, tip in (("00" * 32, j[-1]["event_hash"]),
+                          (j[0]["event_hash"], "00" * 32)):
+            rep = EXP.replay(j, EXP.caller_trust(), root, tip)
+            self.assertTrue(rep["chain_ok"], "chain is internally consistent")
+            self.assertFalse(rep["accepted"], "wrong pin was accepted")
+
+    def test_2d_unsupported_profile_is_refused_by_name(self):
+        """A signature over an unsupported format is not acceptance."""
+        j = EXP.build_journal()
+        prev = EXP.GENESIS_PREV
+        reprofiled = []
+        for ev in j:
+            reprofiled.append(EXP._resign_event({**ev, "profile": "unsupported.v99",
+                                                 "prev_event_hash": prev}))
+            prev = reprofiled[-1]["event_hash"]
+        rep = EXP.replay(reprofiled, EXP.caller_trust(),
+                         reprofiled[0]["event_hash"], reprofiled[-1]["event_hash"])
+        self.assertFalse(rep["chain_ok"])
+        self.assertIn("profile", rep["boundary"])
+
+    def test_2e_resigned_broken_prev_link_is_refused(self):
+        """The event_hash attests the recorded prev value, not that it matches
+        the real predecessor -- re-pointing prev and re-signing must still be
+        refused as a chain break."""
+        j = EXP.build_journal()
+        relinked = [dict(ev) for ev in j]
+        relinked[1] = EXP._resign_event({**j[1], "prev_event_hash": EXP.GENESIS_PREV})
+        rep = EXP.replay(relinked, EXP.caller_trust(),
+                         j[0]["event_hash"], relinked[-1]["event_hash"])
+        self.assertEqual(rep["confirmed_through_index"], 0)
+        self.assertIn("prev", rep["boundary"])
 
     def test_2c_replay_reaudits_content_not_just_hash_and_signature(self):
         """A properly re-signed event whose recorded verdict contradicts a fresh
@@ -111,6 +143,15 @@ class ControlsTest(unittest.TestCase):
     def test_3d_history_tamper_breaks_replay(self):
         self.assertTrue(self.c["tamper_breaks_replay"])
 
+    def test_3e_resigned_broken_prev_link_refused(self):
+        self.assertTrue(self.c["broken_prev_link_refused"])
+
+    def test_3f_unsupported_profile_refused(self):
+        self.assertTrue(self.c["unsupported_profile_refused"])
+
+    def test_3g_wrong_root_not_accepted(self):
+        self.assertTrue(self.c["wrong_root_not_accepted"])
+
 
 class LinkageTest(unittest.TestCase):
     """Criterion 3 (linkage) — the C1-C3 relations, not three loose claims."""
@@ -132,6 +173,7 @@ class ProvenanceSeparationTest(unittest.TestCase):
     def test_4_r1_r2_r3_are_distinct_results(self):
         r = EXP.run_experiment()
         self.assertTrue(r["R1_local_replay"]["chain_ok"])
+        self.assertTrue(r["R1_local_replay"]["accepted"])
         self.assertEqual(r["R2_external_anchor"]["status"], "NOT_DEMONSTRATED")
         self.assertEqual(r["R3_publication"]["status"], "NOT_RELEASED")
         # R2/R3 do not stand in for R1: loop ok does not depend on them
