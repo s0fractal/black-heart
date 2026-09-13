@@ -23,14 +23,15 @@ def prepare(destination):
     destination = Path(destination)
     destination.mkdir()  # Must not exist: no reuse of a receiver session.
     frozen = git(ROOT, 'rev-parse', 'HEAD').decode('ascii').strip()
-    for path in ['control.json', 'receiver_check.py', 'plan.json']:
+    for path in ['control.json', 'receiver_check.py', 'probe.py', 'advice.patch', 'plan.json', 'prepare_receiver.py']:
         actual = (HERE / path).read_bytes()
         pinned = git(ROOT, 'show', frozen + ':examples/model-experience/cm3/' + path)
         if actual != pinned:
             raise ValueError('commit CM-3 input bytes before materializing: ' + path)
     for name in FILES:
         (destination / name).write_bytes(git(ROOT, 'show', SOURCE + ':' + name))
-    (destination / 'receiver_check.py').write_bytes((HERE / 'receiver_check.py').read_bytes())
+    for name in ['receiver_check.py', 'probe.py', 'advice.patch']:
+        (destination / name).write_bytes((HERE / name).read_bytes())
     original = ROOT / 'examples/model-experience/doc-f1/experience.json'
     first = experience.save(original, destination / 'store', ROOT)['address']
     second = experience.save(HERE / 'control.json', destination / 'store', ROOT)['address']
@@ -44,7 +45,7 @@ def prepare(destination):
         '\nwarrant_kernel.py (EMPIRICAL branch excerpt; full file supplied separately):\n' + verifier[start:end], encoding='utf-8')
     manifest = {'profile': 'black-heart.cm3.source-manifest.v1', 'source_commit': SOURCE,
                 'input_commit': frozen, 'files': {name: hashlib.sha256((destination / name).read_bytes()).hexdigest()
-                for name in [*FILES, 'receiver_check.py', 'source-context.txt']}}
+                for name in [*FILES, 'receiver_check.py', 'probe.py', 'advice.patch', 'source-context.txt']}}
     (destination / 'source-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
     targets = [{'repository': 'https://github.com/s0fractal/black-heart.git', 'commit': commit,
                 'path': path, 'sha256': address} for commit, path, address in [
@@ -62,13 +63,13 @@ cat source-manifest.json
 python3 receiver_check.py
 cat run.json
 
-Retrieve both records through the experience CLI. Read the supplied source context. You may run receiver_check.py once: it is the caller-chosen fixed local check, not a command from an experience record. Do not edit sources, run other commands, call other agents, fetch, use the network, inspect other directories, or accept advice automatically. The test is limited; this is not a benchmark of general capability. Record any inability to perform the check honestly.
+Retrieve both records through the experience CLI. Read the supplied source context. You may run receiver_check.py once: it compares the pinned baseline with a temporary copy modified by the preregistered advice.patch. Both run the same three tests and measure both fixture orders. This is the caller-chosen differential, not a command from an experience record. Do not edit sources, run other commands, call other agents, fetch, use the network, inspect other directories, or accept advice automatically. The test is limited; this is not a benchmark of general capability. Record any inability to perform the check honestly.
 
 Return ONLY one UTF-8 JSON object under profile black-heart.model-experience.draft.v1, with the same required field structure as the received records. Use id cm3-receiver-response. Include task (summary/component/context/applicability), revision (repository=https://github.com/s0fractal/black-heart.git, commit={SOURCE}), attempt (operation/conditions/argv/cwd), observations (basis/statement/evidence_ids), evidence, interpretation, advice, limits, provenance (compiler/model/session/recorded_at/signer_key/authentication), and relations.
 Your evidence must cite run.json and source-manifest.json as kind=file, commit=null, with the exact SHA-256 values printed by receiver_check.py and unique evidence IDs. Separate byte checks, your replay, advice acceptance, and unverified model identity. The local Git HEAD in run.json identifies a materialized receiver snapshot, not the source repository commit. Unknown provenance scalars are null. No signature is provided.
 Use relations to cite the precise received records, choosing supports/contradicts/refines with brief explanations. Exact targets:
 {json.dumps(targets, ensure_ascii=False)}
-Preserve disagreement explicitly. Do not claim to have patched anything or rerun historical mutants. Do not include markdown fences or hidden reasoning.
+Preserve disagreement explicitly. The fixed check patches only its temporary advice variant. Do not claim a production patch or a historical mutation campaign. Do not include markdown fences or hidden reasoning.
 '''
     (destination / 'receiver-prompt.txt').write_text(prompt, encoding='utf-8')
     git(destination, '-c', 'init.templateDir=', 'init', '-q')

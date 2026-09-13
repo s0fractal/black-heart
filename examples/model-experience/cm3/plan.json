@@ -3,7 +3,7 @@
   "status": "PREPARED_NOT_RUN",
   "source_commit": "e102b07ee8c83082007d2d2f0b1d38b00dd6780f",
   "sender": "Codex; original DOC-F1 compiler and current control compiler are declared metadata, exact original model unknown",
-  "receiver": "PENDING: distinct provider model in a fresh session, no prior chat",
+  "receiver": "AUTHORIZED: one fresh Claude Code session via existing Max subscription; runtime supplies declared model metadata",
   "question": "Should the proposed early return on the first unsettled EMPIRICAL fixture be adopted at the pinned revision?",
   "predefined_expected_property": "A settled mismatch must yield FAIL even when another fixture suspends, in either fixture order; suspension alone is UNVERIFIED. The early-return advice must be rejected for this scope.",
   "allowed_check": [
@@ -18,7 +18,7 @@
   "success_requires": [
     "distinct receiver model reported by runtime, fresh session, approved package and source context only",
     "receiver retrieves the two records by the CM-2 path",
-    "receiver performs the fixed local check, with actual Git HEAD/status and output captured",
+    "receiver runs the fixed baseline/advice differential, preserving actual HEAD/status, commands and outputs for each variant",
     "receiver distinguishes byte verification, replay and advice acceptance, identifies the fixture-order issue and bounds exception semantics",
     "receiver emits a separate valid experience record with exact source digests and relations; predecessors remain unchanged"
   ],
@@ -26,7 +26,34 @@
     "not a blind model benchmark: the supplied original record already states the invariant",
     "synthetic contradictory advice is explicitly labelled, not a second real observation",
     "one task and one exchange do not establish general error prevention or model independence",
-    "no generic runner, automatic adoption, patch, merge, publication or CM-4 adapter"
+    "no generic runner, automatic adoption, production patch, merge, publication or CM-4 adapter"
   ],
-  "unavailable_receiver": "NOT_RUN; preserve prepared artifacts; no same-model simulation"
+  "unavailable_receiver": "NOT_RUN; preserve prepared artifacts; no same-model simulation",
+  "predefined_differential": {
+    "baseline": {
+      "tests": 3,
+      "failures": 0,
+      "ordered_verdicts": [
+        "fail",
+        "fail"
+      ]
+    },
+    "advice_applied": {
+      "tests": 3,
+      "failures": 1,
+      "failing_test": "test_an_unsettled_fixture_does_not_mask_a_settled_mismatch",
+      "failing_order": "[OMEGA, K] where OMEGA = (S I I) (S I I)",
+      "ordered_verdicts": [
+        "unverified",
+        "fail"
+      ]
+    },
+    "patch": "advice.patch; fixed before receiver launch, no record-supplied code"
+  },
+  "context_isolation": {
+    "cwd": "fresh /private/tmp snapshot outside Projects",
+    "client": "safe-mode, no-session-persistence, empty setting sources, custom system prompt, disabled auto memory",
+    "tools": "Bash only, exact approved command list with dontAsk permission mode",
+    "verification": "observe submitted API system/user context before forwarding; record context and tool evidence without credentials or hidden reasoning; refuse unexpected project memory"
+  }
 }
