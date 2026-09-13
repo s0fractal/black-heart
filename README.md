@@ -2,6 +2,11 @@
 
 > **"A paper should not just assert its truth. A paper should execute its own proof."**
 
+**Current selected direction (2026-09-13):** local proposals, decisions and
+immutable PDF successors — see the [living-library interaction brief](docs/LIVING-LIBRARY-INTERACTION.md).
+The first task is proposal intake; these interaction commands are not yet
+implemented. Public stamping and publication are deferred while this loop is built.
+
 **Black-Heart** is an experimental laboratory for:
 1. **Glyph Combinatory Logic (`glyph.py`):** Pure SKIY calculus defined on UTF-8 glyphs (`🖤`, `🤍`, `🌿`, `🔁`, `⚓`) with deterministic ATP budgets and content-addressed normal form hashing.
 2. **Self-Executing Proof-Carrying PDF Polyglots (`polyglot.py`, `monad.py`):** Compilers producing files that are simultaneously **100% valid ISO 32000 PDF documents** (rendering in macOS Preview, Chrome, Acrobat) and **100% valid executable Python scripts** (`python3 document.pdf`).
@@ -1033,6 +1038,5 @@ To address the security boundaries of executable documents, Project Black-Heart 
 Project Black-Heart is dual-licensed under [LICENSE](LICENSE):
 * **Software Implementation & Codebase:** [GNU Affero General Public License v3.0 (AGPL-3.0-only)](LICENSE#L13)
 * **Specifications, Documentation & Manifestos:** [Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)](LICENSE#L625)
-
 
 

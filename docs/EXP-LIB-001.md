@@ -2,6 +2,13 @@
 
 Status: **proposed** (protocol for review; no runner yet). Revision 4.
 
+> Navigation update, 2026-09-13: the status above records the protocol's original
+> stage. The runner/package reader, R2 reader and offline frozen package are now
+> present (PRs #39–#43). This does not demonstrate an external anchor or publish
+> a release. The next selected work is [local PDF interaction](LIVING-LIBRARY-INTERACTION.md),
+> not automatic stamping. The protocol and pre-registration remain historical;
+> the new interaction format must not overwrite the fixed experiment.
+
 Goal: the first Black-Heart PDF whose verifiable history — claim, application,
 counterexample, refinement — replays from its **oldest reachable confirmed
 ancestor** using only the deposited bytes plus a separately-pinned trust
