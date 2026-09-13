@@ -1,15 +1,15 @@
 # AGORA-0.1: Mycelial Social Democracy & Consensus Parliament
 
-> **Project:** `%🖤 Black-Heart` Collective Governance Continuum
-> **Status:** Ratified & Cryptographically Audited
-> **Date:** 2026-09-09
+> **Project:** `%🖤 Black-Heart` Collective Governance Continuum  
+> **Status:** Ratified & Cryptographically Audited  
+> **Date:** 2026-09-09  
 > **Engines:** `agora.py`, `test_agora.py`
 
 ---
 
 ## 1. Vision & Constitutional Philosophy
 
-In distributed multi-agent systems, collective decision-making typically degenerates into either centralized autocracy or plutocratic token voting, where entities with the largest balance dictate constitutional rules.
+In distributed multi-agent systems, collective decision-making typically degenerates into either centralized autocracy or plutocratic token voting, where entities with the largest balance dictate constitutional rules. 
 
 **Mycelial Social Democracy** (`agora.py`) establishes an anti-plutocratic governance architecture inspired by biological mycelial networks. Organisms allocate metabolic energy (ATP) into quadratic ballots to ratify combinatory theorems, adjust ecosystem parameters, and append irreversible constitutional amendments to a shared polyglot document.
 
@@ -153,26 +153,26 @@ In decentralized multi-agent federations, governance cannot assume a single flat
 
 ### 7.1 Formal Invariants (FSA1–FSA6)
 
-* **FSA1 (Federated Chamber Separation):**
+* **FSA1 (Federated Chamber Separation):**  
   Each chamber $U_k$ operates within its bounded context, domain invariants, and local fuel limit. Local voting takes place within the chamber.
 
-* **FSA2 (Anti-Plutocratic Quadratic Assembly):**
+* **FSA2 (Anti-Plutocratic Quadratic Assembly):**  
   Voting power across the federation strictly follows:
   $$v_i = \operatorname{sign}(w_i) \cdot \lfloor\sqrt{|w_i|}\rfloor$$
   Oligarchical concentration of ATP cannot overpower grassroots majorities.
 
-* **FSA3 (Gini Inequality Telemetry & Plutocracy Ceiling):**
+* **FSA3 (Gini Inequality Telemetry & Plutocracy Ceiling):**  
   The parliament tracks the federation-wide Gini index $G_{\text{fed}}$. If $G_{\text{fed}} \ge 0.65$, a Plutocracy Alert is recorded in the settlement receipt.
 
-* **FSA4 (Čech Cohomological Veto):**
+* **FSA4 (Čech Cohomological Veto):**  
   Political supermajority ($\ge 66.7\%$) is a necessary but **insufficient** condition for ratification. A proposal MUST achieve zero Čech cohomology obstruction:
   $$\dim H^1(\mathcal{U}, \mathcal{F}) = 0$$
   If any pairwise 1-cocycle $(\delta s)_{ij} \ne 0$, the bill is blocked fail-closed with status `REJECTED_COHOMOLOGICAL_FRACTURE`.
 
-* **FSA5 (Fail-Closed Theorem Soundness & Stake Slashing):**
+* **FSA5 (Fail-Closed Theorem Soundness & Stake Slashing):**  
   If a motion proposes an algebraic equivalence that reduces to false or diverges under test fixtures, the proposer's pledged stake is slashed: 50% permanently burned, 50% redistributed to Nay voters.
 
-* **FSA6 (Dual-Spine ISO 32000 Polyglot HUD):**
+* **FSA6 (Dual-Spine ISO 32000 Polyglot HUD):**  
   The parliament compiles into a self-contained ISO 32000 PDF polyglot rendering the chamber simplicial nerve $\mathcal{N}(\mathcal{U})$, quadratic vote distributions, and Lorenz/Gini curves, with an embedded standalone Python CLI auditor (`python3 sheaf_parliament.pdf --audit`).
 
 ### 7.2 Obstruction as a Research Trigger (proposal)

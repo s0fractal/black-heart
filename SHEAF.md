@@ -1,9 +1,9 @@
 # SHEAF-0.1: Епістемічні Пучки, Когомології Чеха та Локально-Глобальна Склейка Доказів
 
-> **Статус:** ПРИЙНЯТО ТА ВПРОВАДЖЕНО як Двигун #33 (%🖤 Engine #33) у [sheaf_kernel.py](sheaf_kernel.py).
-> **Проєкт:** Project Black-Heart (%🖤).
-> **Дата:** 2026-09-10.
-> **Формальна назва:** Normative Specification of Epistemic Sheaf Kernel, Čech Cohomology & Decentralized Proof Descent (`SHEAF-0.1`).
+> **Статус:** ПРИЙНЯТО ТА ВПРОВАДЖЕНО як Двигун #33 (%🖤 Engine #33) у [sheaf_kernel.py](sheaf_kernel.py).  
+> **Проєкт:** Project Black-Heart (%🖤).  
+> **Дата:** 2026-09-10.  
+> **Формальна назва:** Normative Specification of Epistemic Sheaf Kernel, Čech Cohomology & Decentralized Proof Descent (`SHEAF-0.1`).  
 > **Призначення:** Математична формалізація переходу від локальних істин (контекстних допусків `SCOPED_ADMISSION-0.1`) до глобальних теорем через теорію пучків (sheaf theory). Забезпечує математично строгий детектор контекстних суперечностей через когомології Чеха $H^1(\mathcal{U}, \mathcal{F})$: якщо локальні докази несумісні на перетинах контекстів ($H^1 \ne 0$), глобальне твердження відхиляється `fail-closed`.
 
 ---
@@ -84,17 +84,17 @@ $$(\delta s)_{ij} = \text{res}_{U_{ij}, U_i}(s_i) \ominus \text{res}_{U_{ij}, U_
 
 ## 3. Нормативні Інваріанти SHEAF-0.1
 
-* **`SH1` (Topological Poset Specialization):**
+* **`SH1` (Topological Poset Specialization):**  
   Спеціалізація контекстів є рефлексивною, транзитивною та антисиметричною. Перетин $U \cap V$ строго монотонно звужує бюджети та об'єднує інваріанти.
-* **`SH2` (Strict Functoriality of Restrictions):**
+* **`SH2` (Strict Functoriality of Restrictions):**  
   Відображення звуження $\text{res}_{V, U}$ зберігає нормальну форму комбінатора і задовольняє тотожність та асоціативність композиції. Звуження за межі підконтексту або з перевищенням ліміту кроків негайно викидає виключення `ValueError`.
-* **`SH3` (Unique Global Section Synthesis):**
+* **`SH3` (Unique Global Section Synthesis):**  
   За умови нульового дефекту Чеха ($H^1 = 0$) ядро гарантовано синтезує єдиний глобальний переріз зі статусом `GLUED_GLOBAL`, що успадковує об'єднані домени та максимальний верифікований бюджет.
-* **`SH4` (Fail-Closed Cohomology Gate):**
+* **`SH4` (Fail-Closed Cohomology Gate):**  
   Будь-який нетривіальний коцикл $\delta s_{ij} \ne 0$ на відкритому перетині $U_i \cap U_j$ повністю блокує склейку (`is_gluing_admissible = False`).
-* **`SH5` (Covering Completeness):**
+* **`SH5` (Covering Completeness):**  
   Спроба перевірки спуску на покритті, де для хоча б однієї карти відсутній локальний переріз, негайно повертає відхилення без обчислення коциклів.
-* **`SH6` (ISO 32000 Simplicial Polyglot & Tamper Defense):**
+* **`SH6` (ISO 32000 Simplicial Polyglot & Tamper Defense):**  
   Сертифікат спуску пучка компілюється як двошаровий ISO 32000 PDF із векторною графікою нерва покриття $\mathcal{N}(\mathcal{U})$, аудитом коциклів та автономним Python-аудитором (`python3 sheaf.pdf --audit`). Будь-яка модифікація байтів маніфесту блокується через хеш `MANIFEST_HASH`.
 
 ---
