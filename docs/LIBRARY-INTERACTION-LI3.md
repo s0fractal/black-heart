@@ -63,9 +63,17 @@ chosen so that every interruption leaves a state a reader can *name*:
 2. create   <successor>.partial      (exclusive create; refuses if present)
 3. derive   successor_pdf_sha256 from the bytes actually written
 4. create   <receipt>.partial        (exclusive create; refuses if present)
-5. publish  <successor>.partial  ->  <successor>     (rename)
-6. publish  <receipt>.partial    ->  <receipt>       (rename)   <-- completion
+5. publish  <successor>.partial  ->  <successor>     (no-clobber)
+6. publish  <receipt>.partial    ->  <receipt>       (no-clobber)  <-- completion
 ```
+
+**Publication must refuse at the filesystem level, for both targets.**
+`os.rename` *silently replaces* its destination, so checking `os.path.exists`
+first is a TOCTOU window rather than a guarantee: a file created in between is
+destroyed. Publication therefore hard-links the staging name onto the target —
+`os.link` fails with `FileExistsError` when the target exists — and only then
+removes the staging name. The earlier existence checks remain as an early,
+precise error message; they are **not** the protection.
 
 **The receipt is the completion marker, and it is published last.** Therefore:
 
@@ -110,8 +118,12 @@ caller's pins, a **fresh** verifier confirms, without regenerating anything:
 - the successor bytes hash to its `successor_pdf_sha256`;
 - the receipt verifies under an issuer the **caller** pinned;
 - the decision and proposal are the ones the receipt names;
-- **every claim of the parent is still present in the successor, and exactly
-  one claim was added, and it is the proposed one.**
+- **every claim record of the parent is still present in the successor, and
+  exactly one record was added, and it is the proposal's authenticated claim.**
+  Records are compared **in full and with multiplicity**, never by identifier: a
+  record that keeps its `claim_id` while its body is replaced is not preserved,
+  a bare `{"claim_id": ...}` stub is not the claim, and a record appearing twice
+  does not collapse into one.
 
 Altering any artifact is detected for the property it purports to establish.
 Regeneration is a *separate* result and is never required for verification — the
@@ -133,8 +145,15 @@ python3 cli.py library explain-transition --parent <p.pdf> --successor <s.pdf>
                             --expect-issuer-pk <hex> [--policy <pol>]
 ```
 
-Exit `0` success, `2` named refusal, `1` unexpected error. A refusal publishes
-nothing and leaves every input byte-identical.
+Exit `0` success, `2` named refusal, `1` unexpected error. Every input is left
+byte-identical by any refusal.
+
+**A refusal does not always mean nothing was published.** That claim was wrong
+and is withdrawn: publication is two steps, and a failure at the second one
+leaves the successor published with no receipt — the `INCOMPLETE` state of §3,
+which the refusal message names explicitly. A refusal *before* the first
+publication step publishes nothing; a refusal *at or after* it leaves the
+successor in place, because nothing here rolls back.
 
 ## 7. Out of scope
 

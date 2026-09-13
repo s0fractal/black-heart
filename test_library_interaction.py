@@ -1427,16 +1427,16 @@ class ApplyStateEffectTest(LI3Base):
         prop, dec = self.pipeline(tag="ord")
         out = self.d / "s_ord.pdf"
         rec = self.d / "r_ord.json"
-        real_rename = os.rename
+        real_link = os.link
         calls = {"n": 0}
 
-        def failing_rename(src, dst):
+        def failing_link(src, dst):
             calls["n"] += 1
             if calls["n"] == 2:
                 raise OSError("injected failure publishing the receipt")
-            return real_rename(src, dst)
+            return real_link(src, dst)
 
-        with mock.patch.object(li.os, "rename", side_effect=failing_rename):
+        with mock.patch.object(li.os, "link", side_effect=failing_link):
             res = li.apply_transition(str(self.parent), str(prop), str(dec),
                                       str(self.policy_path), str(self.issuer_key),
                                       str(out), str(rec))
@@ -1449,6 +1449,62 @@ class ApplyStateEffectTest(LI3Base):
                                     str(rec), self.i_pk)
         self.assertFalse(chk["ok"])
         self.assertEqual(chk["refusal"], "RECEIPT_UNREADABLE")
+
+    def _reissue_receipt(self, successor_path, prop, rec, added_claim_id):
+        body = li.receipt_body(self.parent_sha, _sha256(successor_path),
+                               json.loads(prop.read_text())["proposal_id"],
+                               json.loads(rec.read_text())["body"]["decision_id"],
+                               json.loads(rec.read_text())["body"]["policy_sha256"],
+                               added_claim_id, self.i_pk)
+        rid = li.compute_receipt_id(body)
+        doc = {"profile": li.TRANSITION_PROFILE, "body": body, "receipt_id": rid,
+               "receipt_signature_hex": crypto.sign_hex(self.i_sk,
+                                                        li.receipt_message(rid))}
+        out = self.d / f"reissued_{successor_path.stem}.json"
+        out.write_text(json.dumps(doc))
+        return out
+
+    def test_a_preserved_claim_whose_body_changed_is_detected(self):
+        """Identifiers are not records: keeping claim_id while replacing the body
+        must not read as preservation, even with a genuinely re-signed receipt
+        from the pinned issuer."""
+        prop, dec = self.pipeline(tag="ob")
+        r, out, rec = self.apply_cli(prop, dec, tag="ob")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        claims = json.loads(json.dumps(li.read_parent(str(out))["manifest"]["claims"]))
+        old_id = self.old_claim.claim_id
+        for c in claims:
+            if c.get("claim_id") == old_id:
+                c["body"]["tau"] = "🌿 tampered"      # id kept, body replaced
+        forged = self.d / "ob.pdf"
+        forged.write_bytes(li.render_successor_pdf(claims, ["forged: old body changed"]))
+        rec2 = self._reissue_receipt(forged, prop, rec,
+                                     json.loads(prop.read_text())["body"]["claim"]["claim_id"])
+        res = li.explain_transition(str(self.parent), str(forged), str(prop),
+                                    str(dec), str(rec2), self.i_pk)
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["refusal"], "PARENT_CLAIMS_DROPPED")
+
+    def test_an_added_stub_carrying_only_the_claim_id_is_detected(self):
+        prop, dec = self.pipeline(tag="stub")
+        r, out, rec = self.apply_cli(prop, dec, tag="stub")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        added_id = json.loads(prop.read_text())["body"]["claim"]["claim_id"]
+        claims = [c for c in li.read_parent(str(out))["manifest"]["claims"]
+                  if c.get("claim_id") != added_id]
+        claims.append({"claim_id": added_id})            # a bare stub
+        forged = self.d / "stub.pdf"
+        forged.write_bytes(li.render_successor_pdf(claims, ["forged: stub addition"]))
+        rec2 = self._reissue_receipt(forged, prop, rec, added_id)
+        res = li.explain_transition(str(self.parent), str(forged), str(prop),
+                                    str(dec), str(rec2), self.i_pk)
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["refusal"], "ADDED_CLAIM_MISMATCH")
+
+    def test_duplicate_records_are_counted_not_collapsed(self):
+        counts = li._record_multiset([{"claim_id": "a"}, {"claim_id": "a"},
+                                      {"claim_id": "b"}])
+        self.assertEqual(sorted(counts.values()), [1, 2])
 
     def test_a_successor_adding_two_claims_is_refused(self):
         prop, dec = self.pipeline(tag="two")
@@ -1474,6 +1530,42 @@ class ApplyStateEffectTest(LI3Base):
                                     str(dec), str(rec2), self.i_pk)
         self.assertFalse(res["ok"])
         self.assertEqual(res["refusal"], "CLAIM_COUNT_UNEXPECTED")
+
+    def _race_publish(self, kind):
+        """Create a bystander at the destination AFTER any pre-check, immediately
+        before the real publish operation -- the interleaving an exists() check
+        cannot cover."""
+        prop, dec = self.pipeline(tag=f"race{kind}")
+        out = self.d / f"race_{kind}.pdf"
+        rec = self.d / f"race_{kind}.json"
+        victim = out if kind == "out" else rec
+        sentinel = b"EXISTING INDEPENDENT ARTIFACT"
+        real_link = os.link
+
+        def raced_link(src, dst):
+            if str(dst) == str(victim):
+                victim.write_bytes(sentinel)
+            return real_link(src, dst)
+
+        with mock.patch.object(li.os, "link", side_effect=raced_link):
+            res = li.apply_transition(str(self.parent), str(prop), str(dec),
+                                      str(self.policy_path), str(self.issuer_key),
+                                      str(out), str(rec))
+        return res, victim, sentinel
+
+    def test_publication_never_overwrites_a_successor_that_appears_late(self):
+        res, victim, sentinel = self._race_publish("out")
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["refusal"], "OUTPUT_EXISTS")
+        self.assertEqual(victim.read_bytes(), sentinel,
+                         "a file that appeared after the pre-check was overwritten")
+
+    def test_publication_never_overwrites_a_receipt_that_appears_late(self):
+        res, victim, sentinel = self._race_publish("receipt")
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["refusal"], "RECEIPT_EXISTS")
+        self.assertEqual(victim.read_bytes(), sentinel,
+                         "a file that appeared after the pre-check was overwritten")
 
     def test_two_proposals_against_one_parent_give_two_children(self):
         """Not a conflict: no election of a newest state, neither invalidates

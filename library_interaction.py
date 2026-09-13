@@ -982,11 +982,42 @@ def verify_receipt(raw: bytes, expect_issuer_pk: Optional[str] = None) -> Dict[s
     return _ok(receipt_id=doc["receipt_id"], **out)
 
 
+def _publish_no_clobber(src: str, dst: str) -> None:
+    """Publish `src` as `dst` WITHOUT ever replacing an existing `dst`.
+
+    os.rename SILENTLY REPLACES its destination, so an os.path.exists() check
+    before it is a TOCTOU window, not a guarantee: a file created in between is
+    destroyed. The refusal must come from the file operation itself, so this
+    hard-links (which fails with FileExistsError when dst exists) and only then
+    removes the staging name. Raises FileExistsError if dst exists."""
+    os.link(src, dst)
+    os.unlink(src)
+
+
 def _claim_ids(manifest_claims) -> list:
     out = []
     for c in manifest_claims:
         out.append(c.get("claim_id") if isinstance(c, dict) else None)
     return out
+
+
+def _canonical_record(claim_record) -> bytes:
+    """The WHOLE record, canonically encoded. Comparing claim_id alone lets a
+    record keep its identifier while its body is replaced, or be reduced to a
+    bare {"claim_id": ...} stub -- both of which must not read as preserved."""
+    try:
+        return wk.canonical_jcs(claim_record)
+    except Exception:                                        # noqa: BLE001
+        return json.dumps(claim_record, sort_keys=True, default=str).encode("utf-8")
+
+
+def _record_multiset(manifest_claims) -> Dict[bytes, int]:
+    """Counts, not a set: a record appearing twice must not collapse into one."""
+    counts: Dict[bytes, int] = {}
+    for c in manifest_claims:
+        k = _canonical_record(c)
+        counts[k] = counts.get(k, 0) + 1
+    return counts
 
 
 def apply_transition(pdf_path: str, proposal_path: str, decision_path: str,
@@ -1096,13 +1127,27 @@ def apply_transition(pdf_path: str, proposal_path: str, decision_path: str,
     except OSError as e:
         return _refuse("RECEIPT_UNWRITABLE", f"{type(e).__name__}: {e}")
 
+    # Publication refuses at the filesystem level for BOTH targets; the earlier
+    # os.path.exists() checks are an early, friendly name, never the guarantee.
     try:
-        os.rename(stage_out, out_path)          # publish the successor
-        os.rename(stage_receipt, receipt_path)  # completion marker, published LAST
+        _publish_no_clobber(stage_out, out_path)          # publish the successor
+    except FileExistsError:
+        return _refuse("OUTPUT_EXISTS",
+                       f"{out_path} appeared before publication; nothing was overwritten")
+    except OSError as e:
+        return _refuse("PUBLISH_FAILED", f"{type(e).__name__}: {e}; nothing was published")
+    try:
+        _publish_no_clobber(stage_receipt, receipt_path)   # completion marker, LAST
+    except FileExistsError:
+        return _refuse("RECEIPT_EXISTS",
+                       f"{receipt_path} appeared before publication; nothing was "
+                       "overwritten. NOTE: the successor is already published, so "
+                       "this transition is INCOMPLETE, not undone")
     except OSError as e:
         return _refuse("PUBLISH_FAILED",
-                       f"{type(e).__name__}: {e}; staged files remain for inspection "
-                       "-- nothing was rolled back")
+                       f"{type(e).__name__}: {e}; the successor is already published "
+                       "and is left in place -- the transition is INCOMPLETE, not "
+                       "rolled back")
 
     return _ok(successor_path=out_path, receipt_path=receipt_path,
                parent_pdf_sha256=parent["pdf_sha256"],
@@ -1158,21 +1203,41 @@ def explain_transition(parent_path: str, successor_path: str, proposal_path: str
     if decision["decision_id"] != receipt["decision_id"]:
         return _refuse("RECEIPT_DECISION_MISMATCH", "receipt names another decision")
 
-    before, after = _claim_ids(parent["manifest"]["claims"]), \
-        _claim_ids(successor["manifest"]["claims"])
-    missing = [c for c in before if c not in after]
-    if missing:
-        return _refuse("PARENT_CLAIMS_DROPPED",
-                       f"{len(missing)} parent claim(s) are absent from the successor")
-    added = list(after)
-    for c in before:
-        added.remove(c)
-    if len(added) != 1:
+    # Compare WHOLE records with multiplicity, not identifiers: a record whose
+    # body was replaced keeps its claim_id, and a stub {"claim_id": ...} shares
+    # it too. Neither is preservation.
+    before_counts = _record_multiset(parent["manifest"]["claims"])
+    after_counts = _record_multiset(successor["manifest"]["claims"])
+    for rec, n in before_counts.items():
+        if after_counts.get(rec, 0) < n:
+            return _refuse("PARENT_CLAIMS_DROPPED",
+                           "a parent claim record is absent from the successor, or "
+                           "appears fewer times (records compared in full, not by id)")
+    added_records = []
+    for rec, n in after_counts.items():
+        extra = n - before_counts.get(rec, 0)
+        if extra > 0:
+            added_records.extend([rec] * extra)
+    if len(added_records) != 1:
         return _refuse("CLAIM_COUNT_UNEXPECTED",
-                       f"successor adds {len(added)} claims; exactly one was proposed")
-    if added[0] != receipt["added_claim_id"] or added[0] != proposal["claim_id"]:
+                       f"successor adds {len(added_records)} claim record(s); "
+                       "exactly one was proposed")
+
+    # The added record must BE the authenticated claim of the proposal -- not
+    # merely something carrying its identifier.
+    proposal_claim = authenticate_claim_document(
+        json.loads(praw.decode("utf-8"))["body"]["claim"])
+    if not proposal_claim["ok"]:
+        return proposal_claim
+    if added_records[0] != _canonical_record(proposal_claim["claim_dict"]):
         return _refuse("ADDED_CLAIM_MISMATCH",
-                       "the added claim is not the proposed one")
+                       "the added record is not the proposal's authenticated claim")
+    added = [proposal_claim["claim_id"]]
+    before = _claim_ids(parent["manifest"]["claims"])
+    after = _claim_ids(successor["manifest"]["claims"])
+    if added[0] != receipt["added_claim_id"]:
+        return _refuse("ADDED_CLAIM_MISMATCH",
+                       "the receipt names a different added claim")
 
     return _ok(transition="COMPLETE",
                parent_pdf_sha256=parent["pdf_sha256"],
