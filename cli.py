@@ -1822,6 +1822,53 @@ def cmd_morpho_autopoiesis(args):
         print("Usage: python3 cli.py morpho-autopoiesis {init,evolve,audit,table,info} ...")
 
 
+def cmd_library(args):
+    """LI-1 thin routing. All logic lives in library_interaction.py; this only
+    parses arguments, prints the named result, and maps it to an exit code
+    (0 ok, 2 named refusal). It never evaluates or admits anything."""
+    import json as _json
+    import library_interaction as li
+
+    if args.action == "inspect":
+        res = li.inspect_parent(args.pdf, getattr(args, "expect_parent_sha256", None))
+        if res["ok"] and getattr(args, "proposal", None):
+            try:
+                with open(args.proposal, "rb") as f:
+                    praw = f.read()
+            except OSError as e:
+                res = {"ok": False, "refusal": "PROPOSAL_UNREADABLE",
+                       "detail": f"{type(e).__name__}: {e}"}
+            else:
+                bound = li.verify_proposal(praw, res["pdf_sha256"])
+                res = dict(res)
+                res["proposal_check"] = bound
+                if not bound["ok"]:
+                    res["ok"] = False
+                    res["refusal"] = bound["refusal"]
+                    res["detail"] = bound["detail"]
+    elif args.action == "add-claim":
+        res = li.add_claim(args.pdf, args.expect_parent_sha256, args.claim,
+                           args.proposer_key_file, args.out)
+    else:
+        print("Usage: python3 cli.py library {inspect,add-claim} ...")
+        sys.exit(1)
+
+    if getattr(args, "json", False):
+        print(_json.dumps(res, indent=2, sort_keys=True, default=str))
+    elif res["ok"]:
+        print("\033[1;32m[+] %\U0001f5a4 LI-1 OK\033[0m")
+        for k, v in res.items():
+            if k in ("ok", "refusal", "manifest", "claim", "claim_dict"):
+                continue
+            print(f"    {k}: {v}")
+        # Intake is never an admission; say so in plain words, every time.
+        print("\033[1;33m    PROPOSAL ONLY - evidence not evaluated, nothing admitted\033[0m")
+    else:
+        print(f"\033[1;31m[-] REFUSED: {res['refusal']}\033[0m")
+        print(f"    {res['detail']}")
+    sys.exit(0 if res["ok"] else 2)
+
+
 def cmd_warrant_kernel(args):
     """Engine #24: Epistemic Kernel & Unified Edge-Claims (WARRANT-0.2)."""
     import crypto
@@ -4318,6 +4365,33 @@ def main():
     p_ma_info = morpho_subs.add_parser("info", help="Display organism HUD and morphogenetic state")
     p_ma_info.add_argument("file", help="Target morpho-autopoietic organism PDF")
 
+    # library (LI-1: proposal intake for one warrant-ledger PDF profile)
+    p_lib = subparsers.add_parser(
+        "library",
+        help="LI-1: propose a claim against an exact PDF (intake only; admits nothing)"
+    )
+    lib_subs = p_lib.add_subparsers(dest="action")
+
+    p_lib_inspect = lib_subs.add_parser(
+        "inspect", help="Identify the exact input PDF and its supported manifest profile")
+    p_lib_inspect.add_argument("--pdf", required=True, help="Parent PDF, read as DATA (never executed)")
+    p_lib_inspect.add_argument("--expect-parent-sha256", default=None,
+                               help="Optional caller-supplied expected parent byte digest")
+    p_lib_inspect.add_argument("--proposal", default=None,
+                               help="Optional proposal to check for binding to THIS pdf")
+    p_lib_inspect.add_argument("--json", action="store_true", help="Machine-readable output")
+
+    p_lib_add = lib_subs.add_parser(
+        "add-claim", help="Create a parent-bound, proposer-signed proposal (admits nothing)")
+    p_lib_add.add_argument("--pdf", required=True, help="Parent PDF, read as DATA (never executed)")
+    p_lib_add.add_argument("--expect-parent-sha256", required=True,
+                           help="REQUIRED caller-supplied expected parent byte digest")
+    p_lib_add.add_argument("--claim", required=True, help="Path to the explicit signed EdgeClaim JSON")
+    p_lib_add.add_argument("--proposer-key-file", required=True,
+                           help="File holding the proposer Ed25519 secret key (never passed on argv)")
+    p_lib_add.add_argument("--out", required=True, help="Proposal output path (must not exist)")
+    p_lib_add.add_argument("--json", action="store_true", help="Machine-readable output")
+
     # warrant-kernel (Engine #24: WARRANT-0.2 Epistemic Kernel & Unified Edge-Claims)
     p_wk = subparsers.add_parser(
         "warrant-kernel",
@@ -4695,6 +4769,8 @@ def main():
         cmd_autopoiesis(args)
     elif args.command == "morpho-autopoiesis":
         cmd_morpho_autopoiesis(args)
+    elif args.command == "library":
+        cmd_library(args)
     elif args.command == "warrant-kernel":
         cmd_warrant_kernel(args)
     elif args.command == "warrant-forget":
