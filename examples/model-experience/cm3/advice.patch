@@ -1,0 +1,18 @@
+--- a/warrant_kernel.py
++++ b/warrant_kernel.py
+@@ -739,10 +739,11 @@
+                     if not res_p.is_settled() or not res_s.is_settled():
+                         # No comparison is possible; keep scanning, because a
+                         # settled mismatch on a later fixture is still a verdict.
+-                        unsettled.append({"fixture": fix,
+-                                          "parent": res_p.status.value,
+-                                          "successor": res_s.status.value})
+-                        continue
++                        return Verdict(
++                            status=VerificationStatus.UNVERIFIED,
++                            grade=EvidenceGrade.EMPIRICAL,
++                            reason="CM-3 fixed advice control: stop at first unsettled fixture"
++                        )
+ 
+                     if glyph.canonical_bytes(res_p.term) != glyph.canonical_bytes(res_s.term):
+                         return Verdict(

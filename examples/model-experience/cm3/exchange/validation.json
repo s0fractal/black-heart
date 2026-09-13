@@ -1,0 +1,49 @@
+{
+  "status": "EXCHANGE_RECORDED_READY_FOR_REVIEW",
+  "input_commit": "7c05695ca59658edb0e310fd29bbad4d6c09c966",
+  "prelaunch_commit": "edfc9916b1cb0d744b84034fd894c2a4395b96b7",
+  "response_sha256": "c4455c79a05f41e9fcc8277c66a405e871a13f213a2909a55ca6c6b12887883d",
+  "store_round_trip_byte_identical": true,
+  "predecessors_preserved": true,
+  "search_matches": 3,
+  "observed_commands": [
+    "python3 experience.py search --component EMPIRICAL --store store",
+    "python3 experience.py read 8dd97cdc9ff4e43b4ba1c9108faa2bc81f5a0a9f3f3187f31e0e3cf000bb7a0b --store store",
+    "python3 experience.py read 18e967a766d22364f4e0ed55749930b6b8a59e26a772a96160d271950b297c42 --store store",
+    "cat source-context.txt",
+    "cat source-manifest.json",
+    "python3 receiver_check.py",
+    "cat run.json"
+  ],
+  "runtime_declared_model": "claude-opus-5[1m]",
+  "runtime_session_id": "dd621914-b9cd-40cc-804b-77950214f2b4",
+  "provider_requests": 4,
+  "stdout_byte_identical": true,
+  "request_context_checked": 4,
+  "context_scope": "Submitted client context only, not undisclosed provider-side context. Initial user text exactly matches the approved prompt; only Bash tool schema and allowlisted commands. Client-added account/date/attribution text removed before forwarding.",
+  "runtime_builtin_skills_metadata": [
+    "deep-research",
+    "dataviz",
+    "update-config",
+    "verify",
+    "debug",
+    "code-review",
+    "simplify",
+    "batch",
+    "fewer-permission-prompts",
+    "doctor",
+    "loop",
+    "schedule",
+    "claude-api",
+    "workflow-authoring",
+    "run",
+    "run-skill-generator"
+  ],
+  "skills_boundary": "CLI init advertises built-in skill names despite safe mode. They were not available as request tools or injected user text; do not infer empty runtime skill metadata.",
+  "identity_scope": "CLI/provider-declared Claude model; no cryptographic model identity or independence attestation. Original sender record declares Codex, exact historical model unknown.",
+  "limits": [
+    "One labelled-control exchange, not blind evaluation or general model reliability evidence.",
+    "No production patch or advice adoption; temporary advice variant only.",
+    "No receiver-output edits, no additional live session, no merge or CM-4."
+  ]
+}

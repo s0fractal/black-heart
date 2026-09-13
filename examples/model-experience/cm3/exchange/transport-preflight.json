@@ -1,0 +1,10 @@
+{
+  "exit_code": 0,
+  "live": false,
+  "provider_requests": 0,
+  "observed_requests": 1,
+  "context_refusals": [],
+  "hidden_reasoning_lines_omitted": 0,
+  "stdout_byte_identical": true,
+  "scope": "Observed client request context and public CLI output only; not a claim about undisclosed provider-side context or model independence."
+}
