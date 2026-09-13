@@ -84,6 +84,7 @@ def _assert_local(module_name: str) -> None:
         )
 
 SUITES = [
+    ("CM-2: Local Model Experience", "test_experience"),
     ("Optional trusted-local CLI cache", "test_verify_cached"),
     ("CLI data verification and bounded CEGIS parser", "test_cli_verify"),
     ("Suite Import Isolation: One Checkout, No Tracked Writes", "test_suite_isolation"),
