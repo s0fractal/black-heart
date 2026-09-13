@@ -39,7 +39,10 @@ SHA-256 correspondence establishes neither truth nor repository ownership.
 
 `relations` uses the CM-1 exact Git target (`repository`, full `commit`, relative
 `path`, `sha256`). Save requires the predecessor already in the store and checks
-its target Git blob against the digest in the supplied local repository. The URL
+its target Git blob against the digest in the supplied local repository.
+For both evidence and relation targets, `save` checks that the object named by
+`commit` has Git type `commit`; a tree/blob/tag object is `INVALID_COMMIT`
+even if Git could resolve its path to matching source bytes. The URL
 is descriptive, not authenticated. This minimal slice supports **Git-anchored
 relation targets**; commit a new predecessor before citing it. It does not
 invent a commit for an uncommitted local record. On read, the immediate
@@ -104,3 +107,17 @@ checks missing fields/sources, duplicates, UTF-8, tampering, unsafe paths,
 no-clobber races, publication/cleanup failure and non-execution of input argv.
 CI includes this module in `test_all.py`, using full checkout history so the
 real DOC-F1 tests cannot silently skip.
+
+## B1 amendment
+
+[check-b1.json](check-b1.json) records the amended focused run and source digests;
+[check.json](check.json) remains the historical pre-amendment run unchanged.
+Two regression controls substitute the real tree OID for an evidence commit
+and a relation-target commit while retaining matching blob bytes. Both were
+accepted before the amendment; both now refuse with `INVALID_COMMIT`, exit 2,
+without saving a successor or changing the retained predecessor.
+
+Packets inherit `mkstemp` owner-only permissions (`0600`); a shared CM-3 store
+will need an explicit access decision. CM-2 status must be updated after verified
+merge, at the start of CM-3; readiness is not acceptance. The non-blocking review
+notes about generic I/O refusal codes and cleanup masking remain outside B1.

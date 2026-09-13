@@ -213,6 +213,41 @@ class ExperienceTest(unittest.TestCase):
             ex.search(self.store)
         self.assertFalse(sentinel.exists())
 
+    def test_tree_oid_is_not_an_evidence_commit(self):
+        self.require_history()
+        commit = self.r['evidence'][0]['commit']
+        tree = subprocess.check_output(
+            ['git', 'rev-parse', commit + '^{tree}'], cwd=ROOT).decode('ascii').strip()
+        # Same path and source bytes: a digest check alone cannot catch this.
+        self.r['evidence'][0]['commit'] = tree
+        self.write(self.r)
+        before = self.record.read_bytes()
+        result = self.cli('save', self.record, '--repo', ROOT)
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertEqual(json.loads(result.stderr)['refusal'], 'INVALID_COMMIT')
+        self.assertEqual(self.record.read_bytes(), before)
+        self.assertFalse(self.store.exists())
+
+    def test_tree_oid_is_not_a_relation_commit(self):
+        self.require_history()
+        first = self.save()['address']
+        predecessor = self.store / (first + '.json')
+        before = predecessor.read_bytes()
+        tree = subprocess.check_output(
+            ['git', 'rev-parse', CM1 + '^{tree}'], cwd=ROOT).decode('ascii').strip()
+        self.r['id'] = 'synthetic-tree-relation-control'
+        self.r['relations'] = [{'relation': 'contradicts', 'target': {
+            'repository': self.r['revision']['repository'], 'commit': tree,
+            'path': 'examples/model-experience/doc-f1/experience.json', 'sha256': first},
+            'explanation': 'Synthetic invalid object-type control, not a model exchange.'}]
+        self.write(self.r)
+        result = self.cli('save', self.record, '--repo', ROOT)
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertEqual(json.loads(result.stderr)['refusal'], 'INVALID_COMMIT')
+        self.assertEqual(predecessor.read_bytes(), before)
+        self.assertEqual(list(self.store.iterdir()), [predecessor])
+        self.assertEqual(ex.read(self.store, first)[0], self.raw)
+
     def test_disagreement_control_preserves_exact_predecessor(self):
         self.require_history()
         first = self.save()['address']

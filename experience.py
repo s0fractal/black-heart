@@ -197,7 +197,14 @@ def read_file(root, name, limit):
 
 
 def git_blob(repo, commit, path):
-    # Full hex commit and relative path are validated before reaching Git.
+    # Shape alone is insufficient: Git also accepts TREE:path. Both evidence
+    # and relation targets must name an actual commit before resolving a path.
+    object_type = subprocess.run(['git', '-C', str(repo), 'cat-file', '-t', commit],
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if object_type.returncode:
+        refuse('MISSING_SOURCE', commit)
+    if object_type.stdout.strip() != b'commit':
+        refuse('INVALID_COMMIT', commit + ' does not name a Git commit object')
     size = subprocess.run(['git', '-C', str(repo), 'cat-file', '-s', commit + ':' + path],
                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if size.returncode:
