@@ -1,0 +1,140 @@
+{
+  "profile": "black-heart.model-experience.draft.v1",
+  "id": "cm4-empirical-search-current-agent",
+  "task": {
+    "summary": "Find prior EMPIRICAL/SUSPENDED experience for the owner and preserve a source-qualified answer.",
+    "component": "EMPIRICAL / model experience adapter",
+    "context": "Actual user-selected query in the current Codex session; three repository examples imported into a new temporary store.",
+    "applicability": "Local CM-2 corpus search and saved-artifact verification; not a new differential run."
+  },
+  "revision": {
+    "repository": "https://github.com/s0fractal/black-heart.git",
+    "commit": "da3bb9c71839cada2a07b865017cc32e25c8bd78"
+  },
+  "attempt": {
+    "operation": "Import, search, read and verify saved exchange; compose a bounded answer.",
+    "conditions": "See interaction events for actual commands and checkout state. The report is the second local execution, after an earlier run left untracked outputs; recording_chronology discloses that boundary. No provider session or evaluator replay.",
+    "argv": [],
+    "cwd": "/Users/s0fractal/Projects/.worktrees/black-heart-cm4"
+  },
+  "observations": [
+    {
+      "basis": "replayed",
+      "statement": "I executed and measured these local CLI operations in this session: search returned three valid EMPIRICAL records after explicit example imports, and the saved-exchange verifier returned ok. Here basis=replayed refers only to rerunning these data operations; the CLI evidence_replayed=false remains correct because neither the historical evaluator differential nor record-supplied evidence commands were executed.",
+      "evidence_ids": [
+        "interaction",
+        "saved_check"
+      ]
+    },
+    {
+      "basis": "reported",
+      "statement": "The historical DOC-F1 record reports the settlement repair; the synthetic control recommends early UNVERIFIED; the receiver reports rejecting that advice after a 3/3 versus 2/3 differential. I did not rerun that differential.",
+      "evidence_ids": [
+        "original",
+        "control",
+        "receiver"
+      ]
+    },
+    {
+      "basis": "source_read",
+      "statement": "The post-review qualifications identify the receiver observation-7 evidence-pointer error and sender ownership of differential design.",
+      "evidence_ids": [
+        "qualifications"
+      ]
+    },
+    {
+      "basis": "source_read",
+      "statement": "The saved answer discloses the example-only corpus, reported historical measurements and the absence of a new differential replay.",
+      "evidence_ids": [
+        "answer"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "original",
+      "kind": "git_blob",
+      "path": "examples/model-experience/doc-f1/experience.json",
+      "commit": "da3bb9c71839cada2a07b865017cc32e25c8bd78",
+      "sha256": "8dd97cdc9ff4e43b4ba1c9108faa2bc81f5a0a9f3f3187f31e0e3cf000bb7a0b",
+      "locator": null
+    },
+    {
+      "id": "control",
+      "kind": "git_blob",
+      "path": "examples/model-experience/cm3/control.json",
+      "commit": "da3bb9c71839cada2a07b865017cc32e25c8bd78",
+      "sha256": "18e967a766d22364f4e0ed55749930b6b8a59e26a772a96160d271950b297c42",
+      "locator": null
+    },
+    {
+      "id": "receiver",
+      "kind": "git_blob",
+      "path": "examples/model-experience/cm3/exchange/response.json",
+      "commit": "da3bb9c71839cada2a07b865017cc32e25c8bd78",
+      "sha256": "c4455c79a05f41e9fcc8277c66a405e871a13f213a2909a55ca6c6b12887883d",
+      "locator": null
+    },
+    {
+      "id": "qualifications",
+      "kind": "git_blob",
+      "path": "examples/model-experience/cm3/README.md",
+      "commit": "da3bb9c71839cada2a07b865017cc32e25c8bd78",
+      "sha256": "174d0428b3bc37783427aaa37bf4dc3200ecaa03c40c860fdfc8da8572a6c1ca",
+      "locator": null
+    },
+    {
+      "id": "interaction",
+      "kind": "file",
+      "path": "interaction.json",
+      "commit": null,
+      "sha256": "cf46e86620272f8845c92b90c5d51f56c8100b1cfa222db81e85bed103f4d134",
+      "locator": null
+    },
+    {
+      "id": "saved_check",
+      "kind": "file",
+      "path": "saved-check.json",
+      "commit": null,
+      "sha256": "72b4624ab8e7f5f95289d46c139134106e46503d882fc196c587f611918e9796",
+      "locator": null
+    },
+    {
+      "id": "answer",
+      "kind": "file",
+      "path": "answer.md",
+      "commit": null,
+      "sha256": "836153fd16af5764a235e9b128b18b99376ce4d88aa47d2de73d5a15bdd113cd",
+      "locator": null
+    }
+  ],
+  "interpretation": "A user-selected natural-language query led to actual local retrieval and a saved answer with qualified sources. The current compiler chose and ran the CLI operations.",
+  "advice": "Read conflicting records together, inspect post-review qualifications, and distinguish historical reports from the checks performed in this session.",
+  "limits": [
+    "Current Codex session already knows CM-3; not fresh-session or independent evaluation.",
+    "One search scenario does not demonstrate all skill routes or causal improvement from the skill.",
+    "Store is temporary; reproducibility requires reimporting the committed source records.",
+    "No advice adoption, stake action, authentication or provider call.",
+    "The interaction report covers a repeated local run, not the first attempt; its prior-run chronology is a post-review operator disclosure."
+  ],
+  "provenance": {
+    "compiler": "Codex",
+    "model": null,
+    "session": null,
+    "recorded_at": null,
+    "signer_key": null,
+    "authentication": "Unsigned compiler-authored record; no signature or model authentication performed."
+  },
+  "relations": [
+    {
+      "relation": "refines",
+      "target": {
+        "repository": "https://github.com/s0fractal/black-heart.git",
+        "commit": "da3bb9c71839cada2a07b865017cc32e25c8bd78",
+        "path": "examples/model-experience/cm3/exchange/response.json",
+        "sha256": "c4455c79a05f41e9fcc8277c66a405e871a13f213a2909a55ca6c6b12887883d"
+      },
+      "explanation": "Preserves the receiver response while carrying forward its documented evidence-pointer and independence qualifications."
+    }
+  ]
+}
