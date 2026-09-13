@@ -75,7 +75,7 @@ Two notes kept deliberately:
   part of this remediation line and are not carried into remediation PRs.
 
 
-## DOC-F1 — EMPIRICAL compares suspended intermediate terms (OPEN)
+## DOC-F1 — EMPIRICAL compares suspended intermediate terms (CLOSED in code by #49)
 
 Recorded 2026-09-13 from Claude's floor-document review; Codex repeated the
 probe on `8fed8bb834e37c190bc512ebc74f9440e4a3e8fa`. This is a new entry,
@@ -105,3 +105,64 @@ the documentation amendment.
 Repair candidate: [PR #49](https://github.com/s0fractal/black-heart/pull/49),
 reported head `18cee9d`. It is separate from this documentation change;
 DOC-F1 remains OPEN here pending review and merge of that repair.
+
+### Resolution (2026-09-13)
+
+The text above is kept as recorded. The repair landed in
+[PR #49](https://github.com/s0fractal/black-heart/pull/49): reviewed and
+accepted head `1bb50f66d801342aa74015220f26266062707843` (the reported head
+`18cee9d` rebased onto `732da0a`; the patch was unchanged by the rebase), merged
+as `f10856708bb02122ff272edb2ffaaa5ec3d00d69` after all eight checks passed.
+
+Rule now implemented in the EMPIRICAL branch, independent of fixture order:
+
+- a settled mismatch on any fixture is a checked negative: `fail`, and an
+  unsettled fixture elsewhere does not mask it;
+- otherwise an unsettled side on any fixture gives `unverified`, naming the
+  unsettled fixtures and their statuses;
+- `pass` only when both sides settle and agree on every fixture.
+
+Evidence: `test_empirical_settlement.py` was run against the unchanged branch
+first (7 of 10 failed), then passed after the repair; it covers both suspension
+shapes, both mixed SETTLED/SUSPENDED shapes, settled match and mismatch
+controls, and order independence. Five targeted mutants were killed. The
+reviewer additionally ran all permutations of three fixtures for each outcome
+and budget boundaries 0 and 1.
+
+Consequences, measured on `8fed8bb` versus the repair branch: `audit_claim`
+`pass` → `unverified`; host `warrant-kernel audit` exit status 0 → 1; ledger PDF
+status text `PASS` → `UNVERIFIED`. LI-2 evidence is unchanged because its policy
+admits Grade G only and never reaches this branch; `promote_empirical_to_axiomatic`
+is unchanged because it does not consult the audit. Rewards were checked by
+reading source, not measured: the metabolism gas bounty is paid on the
+COUNTEREXAMPLE path only, and organism ATP credit uses
+`metamorphosis.FrozenEvaluator`, which has its own settled gate.
+
+Not closed by #49 (source reading, not measured): an exception raised while
+parsing or evaluating an EMPIRICAL fixture still maps to `fail`, as it does in
+GROUNDED, while COUNTEREXAMPLE maps an exception during its replay to
+`unverified` (its operand parse errors are `fail`). Aligning the branches is a
+separate decision.
+
+### Backlog: same-shape candidates (unverified, no branches)
+
+Recorded from a syntactic scan at `8fed8bb`: functions that evaluate terms and
+compare results with no settlement check **in the same function**. A check in a
+helper or caller is invisible to that scan, so these are candidates for triage,
+not established defects, and no branch exists for any of them.
+
+- `agora.audit_combinator_theorem`
+- `autopoiesis.check_palimpsest_guard`
+- `autopoiesis._evaluate_traces_on_fixtures`
+- `cegis_kernel.superoptimize_combinator`
+- `cegis_kernel.evaluate_candidate`
+- `cegis_kernel._evaluate_term` — spot-checked: returns a possibly-suspended
+  term string that its caller compares; same shape, not probed
+- `cegis_kernel.spec_fn`
+- `glyph.audit`
+- `monad.audit_contract_polyglot`
+- `mycelium.verify`
+- `sheaf_agora.resolve_session`
+- `symbiosis.dialectical_crossover`
+- `warrant_kernel.verify_symbolic_algebraic_rule` — spot-checked: evaluates
+  fixed terminating terms; a practical false positive
