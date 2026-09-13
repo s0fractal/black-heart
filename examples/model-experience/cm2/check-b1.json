@@ -1,0 +1,31 @@
+{
+  "scope": "CM-2 behavioral tests, real DOC-F1 storage/read/search and synthetic disagreement control. No actual independent model exchange, no advice acceptance or authentication.",
+  "conditions": "Caller explicitly chooses this fixed local test module. Full local Git history required. Test stores are temporary. No argv read from experience JSON.",
+  "checkout_before": {
+    "head": "4fe0857cb99704801fd2680592f59bf463d20461\n",
+    "status_porcelain": " M examples/model-experience/cm2/README.md\n M experience.py\n M test_experience.py\n M xC010-model-experience.md\n"
+  },
+  "checkout_after": {
+    "head": "4fe0857cb99704801fd2680592f59bf463d20461\n",
+    "status_porcelain": " M examples/model-experience/cm2/README.md\n M experience.py\n M test_experience.py\n M xC010-model-experience.md\n"
+  },
+  "argv": [
+    "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "-m",
+    "unittest",
+    "-v",
+    "test_experience"
+  ],
+  "cwd": "/Users/s0fractal/Projects/.worktrees/black-heart-cm2",
+  "python": "3.14.7 (main, Aug  5 2026, 10:29:49) [Clang 21.0.0 (clang-2100.1.1.101)]",
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "exit_code": 0,
+  "stdout": "",
+  "stderr": "test_disagreement_control_preserves_exact_predecessor (test_experience.ExperienceTest.test_disagreement_control_preserves_exact_predecessor) ... ok\ntest_duplicate_keys_and_invalid_utf8 (test_experience.ExperienceTest.test_duplicate_keys_and_invalid_utf8) ... ok\ntest_missing_packet_source_and_symlink_destination (test_experience.ExperienceTest.test_missing_packet_source_and_symlink_destination) ... ok\ntest_missing_tampered_and_symlink_source (test_experience.ExperienceTest.test_missing_tampered_and_symlink_source) ... ok\ntest_no_clobber_retry_and_publication_race (test_experience.ExperienceTest.test_no_clobber_retry_and_publication_race) ... ok\ntest_publication_failure_and_cleanup_outcome (test_experience.ExperienceTest.test_publication_failure_and_cleanup_outcome) ... ok\ntest_real_save_read_search_portable_snapshot (test_experience.ExperienceTest.test_real_save_read_search_portable_snapshot) ... ok\ntest_refusals_before_writes (test_experience.ExperienceTest.test_refusals_before_writes) ... ok\ntest_saved_corruption_visible_to_read_and_search (test_experience.ExperienceTest.test_saved_corruption_visible_to_read_and_search) ... ok\ntest_size_limits_and_wrong_source_type (test_experience.ExperienceTest.test_size_limits_and_wrong_source_type) ... ok\ntest_tree_oid_is_not_a_relation_commit (test_experience.ExperienceTest.test_tree_oid_is_not_a_relation_commit) ... ok\ntest_tree_oid_is_not_an_evidence_commit (test_experience.ExperienceTest.test_tree_oid_is_not_an_evidence_commit) ... ok\ntest_untrusted_argv_is_data (test_experience.ExperienceTest.test_untrusted_argv_is_data) ... ok\n\n----------------------------------------------------------------------\nRan 13 tests in 2.891s\n\nOK\n",
+  "source_sha256": {
+    "experience.py": "29ebb41da214e605813e83b2fad8a52dbfb9eef3b444ce9f5334e7462884e8e0",
+    "test_experience.py": "870db6549218fa9315c754f55688f26c9a20f3a410dc5029e208739985747c7f",
+    "examples/model-experience/doc-f1/experience.json": "8dd97cdc9ff4e43b4ba1c9108faa2bc81f5a0a9f3f3187f31e0e3cf000bb7a0b",
+    "examples/model-experience/doc-f1/replay.json": "6fffb579ce5a99daf5ab8886137e84a804d365a06c5e79d737b85fa591e6f168"
+  }
+}
