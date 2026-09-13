@@ -1,0 +1,42 @@
+{
+  "save": {
+    "path": "/private/tmp/black-heart-cm4-routes/save",
+    "head": "d22d983eb8392aab31389d283b204bcd93def702",
+    "files": {
+      "xC010-model-experience.md": "a0c346504b4f083253970b0121beaaf135eb9caf96f8d43695f75e567e524613",
+      "task.txt": "57a8ad7c56a48513730dad3c606c2b46cbbabd108a4fbc1d9b508a7c27261a7d",
+      "experience.py": "29ebb41da214e605813e83b2fad8a52dbfb9eef3b444ce9f5334e7462884e8e0",
+      "inbox/experience.json": "1ee0f07c11867e3984e8f9116f0c00b14c08940ce8164396fb8c7ad3c38b0557",
+      "inbox/source.txt": "bb13c05e34fac976d0e80be89512a58a5fe00a2c8f52830dfa68fc7127562a0a",
+      "examples/model-experience/cm3/README.md": "174d0428b3bc37783427aaa37bf4dc3200ecaa03c40c860fdfc8da8572a6c1ca",
+      "examples/model-experience/cm2/README.md": "73677e633864a7837a7817fc705b61fda500c0e758969022cb15e7b3d184def3",
+      ".agents/skills/black-heart-experience/SKILL.md": "b418f8bc4b73b9d96399cc52af20a5ca4eda12a174c3e85698563716f5e73614"
+    },
+    "prompt_sha256": "57a8ad7c56a48513730dad3c606c2b46cbbabd108a4fbc1d9b508a7c27261a7d"
+  },
+  "replay": {
+    "path": "/private/tmp/black-heart-cm4-routes/replay",
+    "head": "cc649af1a4aa1d56de18c6ae45f2afc73e9754aa",
+    "files": {
+      "xC010-model-experience.md": "a0c346504b4f083253970b0121beaaf135eb9caf96f8d43695f75e567e524613",
+      "task.txt": "001628b2393c301c7097dbb26151fe4532aace5c8a9bf7b9821e00827edcf1e7",
+      "experience.py": "29ebb41da214e605813e83b2fad8a52dbfb9eef3b444ce9f5334e7462884e8e0",
+      "inbox/original.json": "8dd97cdc9ff4e43b4ba1c9108faa2bc81f5a0a9f3f3187f31e0e3cf000bb7a0b",
+      "inbox/control.json": "18e967a766d22364f4e0ed55749930b6b8a59e26a772a96160d271950b297c42",
+      "check/source-manifest.json": "0978547df101272712844a3792d3270085b002dea00f8a6504778f3aaf5c05c5",
+      "check/glyph.py": "b30badd37a29f892c5c2ec4c87cb4706afbbea588249c92e82f5f84093b884dd",
+      "check/receiver_check.py": "eaeaaf115950604b1e236970ea8d479cc66a275d7aab685269f4d17d0649bc14",
+      "check/warrant_kernel.py": "6b568db39b167c5f607c531193f3eeda101a53d1bccd31d73943be90c3464893",
+      "check/advice.patch": "f28cc270fe7df6beea1e05c6fb2507483c18a3a1dbeef5d06d5e31832078717b",
+      "check/crypto.py": "d9c726c4940aedc7e6ec061b2b0740116009b3a577391fac56a7802cc129f263",
+      "check/probe.py": "c27cf5b09697370ef94cfd9e82433f519886de1dc2dbdc67ba580008b920fc62",
+      "check/test_empirical_settlement.py": "125e9e41fccf33ca6965556954681748cfc23002c76662da86636a0ade6f2186",
+      "store/8dd97cdc9ff4e43b4ba1c9108faa2bc81f5a0a9f3f3187f31e0e3cf000bb7a0b.json": "cc784519d925daa08555371c29e287506b87e3190e8a9061660d3f6f5f6e9a3f",
+      "store/18e967a766d22364f4e0ed55749930b6b8a59e26a772a96160d271950b297c42.json": "bebf373a40dfea0e17ff00267b85f82d049ad99b739e5d9a68f65495f1b1da46",
+      "examples/model-experience/cm3/README.md": "174d0428b3bc37783427aaa37bf4dc3200ecaa03c40c860fdfc8da8572a6c1ca",
+      "examples/model-experience/cm2/README.md": "73677e633864a7837a7817fc705b61fda500c0e758969022cb15e7b3d184def3",
+      ".agents/skills/black-heart-experience/SKILL.md": "b418f8bc4b73b9d96399cc52af20a5ca4eda12a174c3e85698563716f5e73614"
+    },
+    "prompt_sha256": "001628b2393c301c7097dbb26151fe4532aace5c8a9bf7b9821e00827edcf1e7"
+  }
+}
