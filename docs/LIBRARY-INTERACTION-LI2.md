@@ -107,6 +107,23 @@ editing a saved policy invalidates every decision that cited it.
 - A saved decision is a **report, not a grant**. `verify_decision` re-derives the
   id and signature and checks the caller's expected proposal/parent/policy pins;
   it never trusts the stated fields.
+- **A signature is attribution, not evidence.** Re-signing a body with the same
+  key must not launder its content, so the reader validates the **nested**
+  content *before using any field*: the evaluator profile and version must be
+  supported, every field set must be exact, budgets must be non-negative ints,
+  the verdict and grade must be known values, reasons must be strings, and
+  `admission.admitted: true` over a non-`pass` verdict is
+  `DECISION_INCONSISTENT`. Each is a named refusal; none raises.
+- `atp_spent` is recorded **only from an explicit measurement**. `Verdict
+  .delta_atp` defaults to `0`, so a branch that never ran a reduction is
+  otherwise indistinguishable from one that measured zero; when nothing was
+  measured the decision records `atp_spent: null` with
+  `atp_spent_measured: false`, and a body claiming an unmeasured `0` is refused.
+- Verifying a decision establishes **who sealed it** and that its content is
+  well-formed and self-consistent. The result says so explicitly:
+  `attribution_verified: true`, `evidence_replayed_by_reader: false`,
+  `decider_authority_established: false`. A self-declared signing key is not
+  authority; a reader needing either must establish it itself.
 
 ## 5. Preconditions checked before any evaluation
 
@@ -135,8 +152,10 @@ and leaves every input byte-identical.
 `POLICY_FIELD_MISSING`, `POLICY_FIELD_TYPE`, `POLICY_TRUST_ALL`,
 `POLICY_NO_SIGNATURE`, `POLICY_UNSUPPORTED_GRADE`,
 `POLICY_UNSUPPORTED_OPERATION`, `POLICY_BUDGET_INVALID`,
-`DECISION_*` (parse/profile/field/id/signature and the proposal, parent and
-policy pin mismatches), plus every LI-1 refusal, which still applies first.
+`DECISION_UNSUPPORTED_EVALUATOR`, `DECISION_FIELD_MISSING`,
+`DECISION_FIELD_TYPE`, `DECISION_INCONSISTENT`, and the other `DECISION_*`
+(parse/profile/id/signature and the proposal, parent and policy pin mismatches),
+plus every LI-1 refusal, which still applies first.
 
 ## 8. What LI-2 does not do
 

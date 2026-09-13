@@ -803,6 +803,62 @@ class EvaluationTest(LI2Base):
         self.assertEqual(api["decision_id"], cli_res["decision_id"])
 
 
+class AtpMeasurementTest(LI2Base):
+    """The recorded counter must be the counter that actually ran. Verdict
+    .delta_atp defaults to 0, so a branch that omits the measurement is
+    indistinguishable from one that measured zero -- the recorded figure is
+    therefore taken only from an explicit measurement, and is null otherwise."""
+
+    def recorded(self, kind, policy=None, name=None):
+        prop = self.proposal_for(self.case_claim(kind), f"atp_{name or kind}.json")
+        r, out = self.evaluate_cli(prop, policy, out_name=f"datp_{name or kind}.json")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        body = json.loads(out.read_bytes().decode())["body"]
+        return body["evaluation"]["status"], body["evaluator"]
+
+    def test_settled_pass_records_the_actual_counter(self):
+        actual = glyph.evaluate(glyph.parse(SETTLED), max_atp=100)
+        status, ev = self.recorded("pass")
+        self.assertEqual(status, wk.VerificationStatus.PASS.value)
+        self.assertTrue(ev["atp_spent_measured"])
+        self.assertEqual(ev["atp_spent"], actual.atp_spent)
+
+    def test_settled_mismatch_records_the_actual_counter(self):
+        # The reduction DID run: recording 0 here was the reported defect.
+        actual = glyph.evaluate(glyph.parse(SETTLED), max_atp=100)
+        self.assertGreater(actual.atp_spent, 0)
+        status, ev = self.recorded("fail")
+        self.assertEqual(status, wk.VerificationStatus.FAIL.value)
+        self.assertTrue(ev["atp_spent_measured"])
+        self.assertEqual(ev["atp_spent"], actual.atp_spent)
+        self.assertNotEqual(ev["atp_spent"], 0)
+
+    def test_suspended_run_records_the_actual_counter(self):
+        actual = glyph.evaluate(glyph.parse(OMEGA), max_atp=100)
+        self.assertFalse(actual.is_settled())
+        status, ev = self.recorded("unverified")
+        self.assertEqual(status, wk.VerificationStatus.UNVERIFIED.value)
+        self.assertTrue(ev["atp_spent_measured"])
+        self.assertEqual(ev["atp_spent"], actual.atp_spent)
+
+    def test_a_refusal_before_execution_records_null_not_zero(self):
+        # Deny-all policy: audit_claim returns before any reduction runs, so
+        # there is NO measurement. It must be null, never 0.
+        deny = self.write_policy("deny_atp.json", tc_trusted_author_pks=[])
+        status, ev = self.recorded("pass", deny, name="deny")
+        self.assertEqual(status, wk.VerificationStatus.UNVERIFIED.value)
+        self.assertFalse(ev["atp_spent_measured"])
+        self.assertIsNone(ev["atp_spent"])
+
+    def test_verdict_delta_atp_alone_cannot_be_trusted(self):
+        """Why the measurement comes from details, not delta_atp: the field
+        defaults to 0 on every verdict that never measured anything."""
+        v = wk.Verdict(status=wk.VerificationStatus.UNVERIFIED,
+                       grade=wk.EvidenceGrade.GROUNDED, reason="no run")
+        self.assertEqual(v.delta_atp, 0)
+        self.assertEqual(v.details, {})
+
+
 class DecisionBindingTest(LI2Base):
     """A decision is a report bound to one subject; substituting anything must
     not transfer it."""
@@ -845,25 +901,92 @@ class DecisionBindingTest(LI2Base):
                             wk.VerificationStatus.PASS.value)
         self.assertFalse(neg_body["admission"]["admitted"])
 
-        for source, path, value in (
-                (neg_raw, ("evaluation", "status"), wk.VerificationStatus.PASS.value),
-                (neg_raw, ("admission", "admitted"), True),
-                (self.raw, ("policy_sha256",), "0" * 64),
-                (self.raw, ("parent_pdf_sha256",), "0" * 64),
-                (self.raw, ("proposal_id",), "0" * 64)):
+        # (source, path, value, refusal as-is, refusal after honest re-signing)
+        cases = [
+            (neg_raw, ("evaluation", "status"), wk.VerificationStatus.PASS.value,
+             "DECISION_ID_MISMATCH", "DECISION_SIGNATURE_INVALID"),
+            # admitted=true over a non-PASS verdict contradicts itself, so it is
+            # caught by the consistency check even when honestly re-signed.
+            (neg_raw, ("admission", "admitted"), True,
+             "DECISION_INCONSISTENT", "DECISION_INCONSISTENT"),
+            (self.raw, ("policy_sha256",), "0" * 64,
+             "DECISION_ID_MISMATCH", "DECISION_SIGNATURE_INVALID"),
+            (self.raw, ("parent_pdf_sha256",), "0" * 64,
+             "DECISION_ID_MISMATCH", "DECISION_SIGNATURE_INVALID"),
+            (self.raw, ("proposal_id",), "0" * 64,
+             "DECISION_ID_MISMATCH", "DECISION_SIGNATURE_INVALID"),
+        ]
+        for source, path, value, want_raw, want_resigned in cases:
             with self.subTest(path=path):
                 doc = json.loads(source.decode())
                 target = doc["body"]
                 for k in path[:-1]:
                     target = target[k]
                 target[path[-1]] = value
-                blob = json.dumps(doc).encode()
-                self.assertEqual(li.verify_decision(blob)["refusal"],
-                                 "DECISION_ID_MISMATCH")
-                # re-deriving the id then fails the decider signature
+                self.assertEqual(li.verify_decision(json.dumps(doc).encode())["refusal"],
+                                 want_raw)
                 doc["decision_id"] = li.compute_decision_id(doc["body"])
                 self.assertEqual(li.verify_decision(json.dumps(doc).encode())["refusal"],
-                                 "DECISION_SIGNATURE_INVALID")
+                                 want_resigned)
+
+    def test_a_resigned_body_is_still_checked_for_content(self):
+        """A decider signature is ATTRIBUTION, not evidence. Re-signing a body
+        with the SAME key must not launder unsupported, malformed or
+        self-contradictory content."""
+        neg_prop = self.proposal_for(self.case_claim("fail"), "rs.json")
+        r, neg = self.evaluate_cli(neg_prop, out_name="drs.json")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        base = json.loads(neg.read_bytes().decode())
+
+        def resign(mutate):
+            doc = json.loads(json.dumps(base))
+            mutate(doc["body"])
+            doc["decision_id"] = li.compute_decision_id(doc["body"])
+            doc["decision_signature_hex"] = crypto.sign_hex(
+                self.d_sk, li.decision_message(doc["decision_id"]))
+            return json.dumps(doc).encode()
+
+        def set_ev_profile(b):
+            b["evaluator"]["profile"] = "unsupported.v99"
+
+        def set_ev_version(b):
+            b["evaluator"]["version"] = "99"
+
+        def empty_evaluator(b):
+            b["evaluator"] = {}
+
+        def list_status(b):
+            b["evaluation"]["status"] = []
+
+        def drop_reason(b):
+            b["admission"].pop("reason")
+
+        def admit_on_fail(b):
+            b["admission"]["admitted"] = True
+
+        def fake_zero_atp(b):
+            b["evaluator"]["atp_spent_measured"] = False
+            b["evaluator"]["atp_spent"] = 0
+
+        table = [(set_ev_profile, "DECISION_UNSUPPORTED_EVALUATOR"),
+                 (set_ev_version, "DECISION_UNSUPPORTED_EVALUATOR"),
+                 (empty_evaluator, "DECISION_FIELD_MISSING"),
+                 (list_status, "DECISION_FIELD_TYPE"),
+                 (drop_reason, "DECISION_FIELD_MISSING"),
+                 (admit_on_fail, "DECISION_INCONSISTENT"),
+                 (fake_zero_atp, "DECISION_FIELD_TYPE")]
+        for mutate, want in table:
+            with self.subTest(want=want, case=mutate.__name__):
+                blob = resign(mutate)
+                res = li.verify_decision(blob)          # must not raise
+                self.assertFalse(res["ok"])
+                self.assertEqual(res["refusal"], want)
+
+    def test_verification_states_its_own_boundaries(self):
+        out = li.verify_decision(self.raw)
+        self.assertTrue(out["attribution_verified"])
+        self.assertFalse(out["evidence_replayed_by_reader"])
+        self.assertFalse(out["decider_authority_established"])
 
     def test_a_decision_for_one_proposal_does_not_cover_another(self):
         other = self.proposal_for(self.case_claim("fail"), "other.json")

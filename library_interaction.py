@@ -561,10 +561,17 @@ def evaluate_evidence(claim, trust_config) -> Dict[str, Any]:
     quantity only -- it decides nothing about admission."""
     verdict = wk.WarrantVerifier(trust_config).audit_claim(claim)
     details = verdict.details if isinstance(getattr(verdict, "details", None), dict) else {}
+    # Verdict.delta_atp DEFAULTS TO 0, so it cannot distinguish "measured zero"
+    # from "never measured" -- most refusals return before any reduction runs.
+    # Only an explicit details["atp_spent"] is a measurement; anything else is
+    # recorded as null, never as 0.
+    measured = "atp_spent" in details and isinstance(details["atp_spent"], int) \
+        and not isinstance(details["atp_spent"], bool)
     return {"status": verdict.status.value,
             "grade": verdict.grade.value,
             "reason": verdict.reason,
-            "atp_spent": int(details.get("atp_spent", getattr(verdict, "delta_atp", 0) or 0))}
+            "atp_spent": int(details["atp_spent"]) if measured else None,
+            "atp_spent_measured": bool(measured)}
 
 
 def decide_admission(evaluation: Dict[str, Any], operation: str, grade: str,
@@ -611,6 +618,84 @@ def decision_message(decision_id: str) -> bytes:
     return DECISION_SIG_DOMAIN + bytes.fromhex(decision_id)
 
 
+_EVALUATOR_FIELDS = {"profile", "version", "atp_budget_requested",
+                     "atp_budget_limit", "atp_spent", "atp_spent_measured"}
+_EVALUATION_FIELDS = {"status", "grade", "reason"}
+_ADMISSION_FIELDS = {"admitted", "reason"}
+_GRADE_VALUES = frozenset(g.value for g in wk.EvidenceGrade)
+
+
+def _is_nonneg_int(v) -> bool:
+    return isinstance(v, int) and not isinstance(v, bool) and v >= 0
+
+
+def validate_decision_body(body: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Check the NESTED content of a decision before any field is used.
+    A decider signature is ATTRIBUTION -- it says who sealed the report. It is
+    not evidence replay and not authority, so a re-signed body with an unknown
+    evaluator, a wrongly-typed verdict, a missing reason, or an admission that
+    contradicts its own verdict must be a named refusal, not an ok result and
+    not an exception. Returns a refusal dict, or None when the body is sound."""
+    ev = body["evaluator"]
+    if set(ev.keys()) != _EVALUATOR_FIELDS:
+        return _refuse("DECISION_FIELD_MISSING",
+                       f"evaluator fields {sorted(ev.keys())} != {sorted(_EVALUATOR_FIELDS)}")
+    if ev["profile"] != EVALUATOR_PROFILE:
+        return _refuse("DECISION_UNSUPPORTED_EVALUATOR",
+                       f"evaluator profile {ev['profile']!r} is not {EVALUATOR_PROFILE!r}")
+    if ev["version"] != EVALUATOR_VERSION:
+        return _refuse("DECISION_UNSUPPORTED_EVALUATOR",
+                       f"evaluator version {ev['version']!r} is not {EVALUATOR_VERSION!r}")
+    for f in ("atp_budget_requested", "atp_budget_limit"):
+        if not _is_nonneg_int(ev[f]):
+            return _refuse("DECISION_FIELD_TYPE", f"evaluator.{f} is not a non-negative int")
+    if not isinstance(ev["atp_spent_measured"], bool):
+        return _refuse("DECISION_FIELD_TYPE", "evaluator.atp_spent_measured is not a boolean")
+    if ev["atp_spent_measured"]:
+        if not _is_nonneg_int(ev["atp_spent"]):
+            return _refuse("DECISION_FIELD_TYPE",
+                           "evaluator.atp_spent is not a non-negative int although "
+                           "it is marked as measured")
+    elif ev["atp_spent"] is not None:
+        # Absence of a measurement is null, never a number that reads as one.
+        return _refuse("DECISION_FIELD_TYPE",
+                       "evaluator.atp_spent must be null when nothing was measured")
+
+    evl = body["evaluation"]
+    if set(evl.keys()) != _EVALUATION_FIELDS:
+        return _refuse("DECISION_FIELD_MISSING",
+                       f"evaluation fields {sorted(evl.keys())} != {sorted(_EVALUATION_FIELDS)}")
+    if not isinstance(evl["status"], str) or evl["status"] not in VERDICT_VALUES:
+        return _refuse("DECISION_FIELD_TYPE",
+                       f"evaluation.status {evl['status']!r} is not a verdict")
+    if not isinstance(evl["grade"], str) or evl["grade"] not in _GRADE_VALUES:
+        return _refuse("DECISION_FIELD_TYPE", f"evaluation.grade {evl['grade']!r} is not a grade")
+    if not isinstance(evl["reason"], str):
+        return _refuse("DECISION_FIELD_TYPE", "evaluation.reason is not a string")
+
+    adm = body["admission"]
+    if set(adm.keys()) != _ADMISSION_FIELDS:
+        return _refuse("DECISION_FIELD_MISSING",
+                       f"admission fields {sorted(adm.keys())} != {sorted(_ADMISSION_FIELDS)}")
+    if not isinstance(adm["admitted"], bool):
+        return _refuse("DECISION_FIELD_TYPE", "admission.admitted is not a boolean")
+    if not isinstance(adm["reason"], str):
+        return _refuse("DECISION_FIELD_TYPE", "admission.reason is not a string")
+    # A decision that admits on a non-PASS verdict contradicts itself.
+    if adm["admitted"] and evl["status"] != VERDICT_PASS:
+        return _refuse("DECISION_INCONSISTENT",
+                       f"admission.admitted is true while evaluation.status is "
+                       f"{evl['status']!r}")
+
+    for f in ("proposal_id", "parent_pdf_sha256", "policy_sha256", "claim_id"):
+        if not _is_hex(body[f], 64):
+            return _refuse("DECISION_FIELD_TYPE", f"{f} is not a 64-hex digest")
+    for f in ("claim_author_pk_hex", "proposer_pk_hex", "decider_pk_hex"):
+        if not (_is_hex(body[f], 64) and crypto.is_valid_public_key(body[f])):
+            return _refuse("DECISION_FIELD_TYPE", f"{f} is not a valid public key")
+    return None
+
+
 def verify_decision(raw: bytes, expect_proposal_id: Optional[str] = None,
                     expect_parent_sha256: Optional[str] = None,
                     expect_policy_sha256: Optional[str] = None) -> Dict[str, Any]:
@@ -643,14 +728,9 @@ def verify_decision(raw: bytes, expect_proposal_id: Optional[str] = None,
     for f in ("evaluator", "evaluation", "admission"):
         if not isinstance(body[f], dict):
             return _refuse("DECISION_FIELD_TYPE", f"{f} is not an object")
-    if body["evaluation"].get("status") not in VERDICT_VALUES:
-        return _refuse("DECISION_FIELD_TYPE",
-                       f"evaluation.status {body['evaluation'].get('status')!r} is not a verdict")
-    if not isinstance(body["admission"].get("admitted"), bool):
-        return _refuse("DECISION_FIELD_TYPE", "admission.admitted is not a boolean")
-    if not (_is_hex(body["decider_pk_hex"], 64) and
-            crypto.is_valid_public_key(body["decider_pk_hex"])):
-        return _refuse("DECISION_MALFORMED", "decider_pk_hex is not a valid public key")
+    nested = validate_decision_body(body)
+    if nested is not None:
+        return nested
     if not _is_hex(doc["decision_id"], 64):
         return _refuse("DECISION_MALFORMED", "decision_id is not a 64-hex digest")
 
@@ -677,7 +757,17 @@ def verify_decision(raw: bytes, expect_proposal_id: Optional[str] = None,
                evaluation_status=body["evaluation"]["status"],
                admitted=body["admission"]["admitted"],
                admission_reason=body["admission"]["reason"],
+               atp_spent=body["evaluator"]["atp_spent"],
+               atp_spent_measured=body["evaluator"]["atp_spent_measured"],
                decider_pk_hex=body["decider_pk_hex"],
+               # Explicit boundaries: verifying this artifact establishes WHO
+               # sealed the report and that its content is well-formed and
+               # self-consistent. It does NOT re-run the mathematics, and it
+               # does NOT make the decider authorized -- a self-declared signing
+               # key is not authority. A reader that needs either must do it.
+               attribution_verified=True,
+               evidence_replayed_by_reader=False,
+               decider_authority_established=False,
                applied=False, status="DECISION_ONLY")
 
 
@@ -716,7 +806,11 @@ def evaluate(pdf_path: str, proposal_path: str, policy_path: str,
     evaluator = {"profile": EVALUATOR_PROFILE, "version": EVALUATOR_VERSION,
                  "atp_budget_requested": int(getattr(claim.witness, "atp_budget", 0) or 0),
                  "atp_budget_limit": policy["max_atp_budget"],
-                 "atp_spent": evaluation.pop("atp_spent")}
+                 # null when the verifier reported no measurement (e.g. a policy
+                 # refusal that returned before any reduction ran). Absence of a
+                 # measurement is never written as zero.
+                 "atp_spent": evaluation.pop("atp_spent"),
+                 "atp_spent_measured": evaluation.pop("atp_spent_measured")}
     admission = decide_admission(evaluation, proposal["operation"], claim_res["grade"],
                                  policy["allowed_operations"], policy["allowed_grades"])
 
