@@ -1,0 +1,17 @@
+{
+  "source_revision": "befcb4adfd1af26c18237a933e1817f9899142a2",
+  "argv": [
+    "python3",
+    "-m",
+    "unittest",
+    "-v",
+    "test_empirical_settlement"
+  ],
+  "cwd": "repository root",
+  "python": "3.14.7",
+  "platform": "Darwin arm64",
+  "exit_code": 0,
+  "stdout": "",
+  "stderr": "test_agreement_on_some_fixtures_plus_an_unsettled_one_is_not_a_pass (test_empirical_settlement.EmpiricalSettlementTest.test_agreement_on_some_fixtures_plus_an_unsettled_one_is_not_a_pass) ... ok\ntest_an_unsettled_fixture_does_not_mask_a_settled_mismatch (test_empirical_settlement.EmpiricalSettlementTest.test_an_unsettled_fixture_does_not_mask_a_settled_mismatch) ... ok\ntest_both_suspended_on_different_terms_is_not_a_fail (test_empirical_settlement.EmpiricalSettlementTest.test_both_suspended_on_different_terms_is_not_a_fail) ... ok\ntest_both_suspended_on_the_same_term_is_not_a_pass (test_empirical_settlement.EmpiricalSettlementTest.test_both_suspended_on_the_same_term_is_not_a_pass) ... ok\ntest_fixtures_really_produce_the_named_settlement_states (test_empirical_settlement.EmpiricalSettlementTest.test_fixtures_really_produce_the_named_settlement_states) ... ok\ntest_parent_settles_successor_suspends (test_empirical_settlement.EmpiricalSettlementTest.test_parent_settles_successor_suspends) ... ok\ntest_parent_suspends_successor_settles (test_empirical_settlement.EmpiricalSettlementTest.test_parent_suspends_successor_settles) ... ok\ntest_settled_agreement_on_every_fixture_passes (test_empirical_settlement.EmpiricalSettlementTest.test_settled_agreement_on_every_fixture_passes) ... ok\ntest_settled_mismatch_fails (test_empirical_settlement.EmpiricalSettlementTest.test_settled_mismatch_fails) ... ok\ntest_unverified_names_the_unsettled_fixture_and_is_not_a_verdict (test_empirical_settlement.EmpiricalSettlementTest.test_unverified_names_the_unsettled_fixture_and_is_not_a_verdict) ... ok\n\n----------------------------------------------------------------------\nRan 10 tests in 0.119s\n\nOK\n",
+  "scope": "Existing DOC-F1 regression tests only; no historical checkout, mutants, CLI, PDF or full suite rerun."
+}

@@ -7,8 +7,11 @@
 
 > **"A paper should not just assert its truth. A paper should execute its own proof."**
 
-**Current selected direction (2026-09-13):** local proposals, decisions and
-immutable PDF successors — see the [living-library interaction brief](docs/LIVING-LIBRARY-INTERACTION.md).
+**Current selected direction:** cross-model communication and experience across
+sessions — [CM contract, status and sequential queue](xC010-model-experience.md).
+Start with the [DOC-F1 experience packet](examples/model-experience/doc-f1/README.md).
+
+Existing substrate: [living-library interaction](docs/LIVING-LIBRARY-INTERACTION.md).
 The local loop is implemented end to end: **LI-1** proposal intake
 (`library inspect`, `library add-claim` — [contract](docs/LIBRARY-INTERACTION-LI1.md)),
 **LI-2** caller-policy evaluation with an attributed decision (`library evaluate`

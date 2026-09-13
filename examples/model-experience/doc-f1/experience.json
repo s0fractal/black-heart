@@ -1,0 +1,135 @@
+{
+  "profile": "black-heart.model-experience.draft.v1",
+  "id": "doc-f1-empirical-settlement-01",
+  "task": {
+    "summary": "Avoid crediting suspended EMPIRICAL intermediate terms as completed evidence.",
+    "component": "warrant_kernel.WarrantVerifier.audit_claim / EMPIRICAL",
+    "context": "Merged DOC-F1 repair #49; prepare evidence a later model can use without the review chat. Q = S I I; I=🤍, K=🖤, S=🌿. Each head is applied to each fixture.",
+    "applicability": "Signed EmpiricalWitness, correct fixture fingerprint, caller explicitly trusts the author, ATP budget 50 per side. Advice concerns normally returning fixture evaluations, not exception semantics or universal equivalence."
+  },
+  "revision": {
+    "repository": "https://github.com/s0fractal/black-heart.git",
+    "commit": "befcb4adfd1af26c18237a933e1817f9899142a2"
+  },
+  "attempt": {
+    "operation": "Repeat the existing DOC-F1 regression module and read the merged repair plus remediation resolution.",
+    "conditions": "Python 3.14.7, Darwin arm64; existing tests generate ephemeral signing keys and explicitly trust their public key. No key material retained. Current code only; old code and mutants not rerun.",
+    "argv": [
+      "python3",
+      "-m",
+      "unittest",
+      "-v",
+      "test_empirical_settlement"
+    ],
+    "cwd": "repository root at revision.commit"
+  },
+  "observations": [
+    {
+      "basis": "reported",
+      "statement": "Ledger attributes discovery to Claude floor-document review and a Codex repeat at 8fed8bb834e37c190bc512ebc74f9440e4a3e8fa. These are historical attributions, not verified model identities. Budget 50: heads I Q vs K Q I on Q suspended equally and audited pass; Q vs I Q on Q suspended differently and audited fail. Repair head 1bb50f66d801342aa74015220f26266062707843 merged as f10856708bb02122ff272edb2ffaaa5ec3d00d69 in PR #49.",
+      "evidence_ids": [
+        "ledger"
+      ]
+    },
+    {
+      "basis": "reported",
+      "statement": "Resolution reports 7/10 failures before repair, 10/10 after, five killed mutants, reviewer permutations and budget boundaries 0/1. It reports audit pass→unverified, host CLI exit 0→1 and PDF PASS→UNVERIFIED. LI-2 and promotion unchanged; reward paths source-read only. None of these historical differential/mutant/consumer runs was repeated for this record.",
+      "evidence_ids": [
+        "ledger"
+      ]
+    },
+    {
+      "basis": "replayed",
+      "statement": "Current existing module: 10 tests, exit 0. Its precondition test confirms equal and unequal SUSPENDED/SUSPENDED shapes, SETTLED/SUSPENDED and a settled mismatch. Audit cases confirm both suspended shapes and both asymmetric suspension shapes give unverified; settled agreement gives pass, settled mismatch fail. Both fixture orders preserve fail for a settled mismatch mixed with suspension, and unverified for agreement mixed with suspension.",
+      "evidence_ids": [
+        "tests",
+        "replay"
+      ]
+    },
+    {
+      "basis": "source_read",
+      "statement": "Cause and repair: the EMPIRICAL branch now checks both is_settled() results before comparing canonical_bytes. It collects unsettled fixtures and continues, so a later settled mismatch still yields fail; otherwise accumulated suspension yields unverified; full settled agreement yields pass. The Git repair is present in the pinned source.",
+      "evidence_ids": [
+        "verifier",
+        "ledger"
+      ]
+    },
+    {
+      "basis": "source_read",
+      "statement": "The EMPIRICAL fixture loop still catches exceptions and returns fail (Fixture execution failed). This record does not establish that such a fail is a checked mathematical negative. The ledger explicitly leaves alignment with other branches unresolved. Exception behavior was not runtime-probed here.",
+      "evidence_ids": [
+        "verifier",
+        "ledger"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "ledger",
+      "kind": "git_blob",
+      "path": "docs/REMEDIATION-LEDGER.md",
+      "commit": "befcb4adfd1af26c18237a933e1817f9899142a2",
+      "sha256": "fb38093b90bda01f67188336e3831c503d38477447e2b82e3a0bafbbe8f646dd",
+      "locator": "DOC-F1 and Resolution (2026-09-13)"
+    },
+    {
+      "id": "tests",
+      "kind": "git_blob",
+      "path": "test_empirical_settlement.py",
+      "commit": "befcb4adfd1af26c18237a933e1817f9899142a2",
+      "sha256": "125e9e41fccf33ca6965556954681748cfc23002c76662da86636a0ade6f2186",
+      "locator": "EmpiricalSettlementTest; BUDGET=50; all 10 tests"
+    },
+    {
+      "id": "verifier",
+      "kind": "git_blob",
+      "path": "warrant_kernel.py",
+      "commit": "befcb4adfd1af26c18237a933e1817f9899142a2",
+      "sha256": "6b568db39b167c5f607c531193f3eeda101a53d1bccd31d73943be90c3464893",
+      "locator": "WarrantVerifier.audit_claim, EMPIRICAL branch (lines 682-790)"
+    },
+    {
+      "id": "glyph",
+      "kind": "git_blob",
+      "path": "glyph.py",
+      "commit": "befcb4adfd1af26c18237a933e1817f9899142a2",
+      "sha256": "b30badd37a29f892c5c2ec4c87cb4706afbbea588249c92e82f5f84093b884dd",
+      "locator": "parse, evaluate, canonical_bytes"
+    },
+    {
+      "id": "crypto",
+      "kind": "git_blob",
+      "path": "crypto.py",
+      "commit": "befcb4adfd1af26c18237a933e1817f9899142a2",
+      "sha256": "d9c726c4940aedc7e6ec061b2b0740116009b3a577391fac56a7802cc129f263",
+      "locator": "generate_keypair and signatures used by tests"
+    },
+    {
+      "id": "replay",
+      "kind": "file",
+      "path": "replay.json",
+      "commit": null,
+      "sha256": "6fffb579ce5a99daf5ab8886137e84a804d365a06c5e79d737b85fa591e6f168",
+      "locator": "argv, runtime, exit_code, stdout, stderr"
+    }
+  ],
+  "interpretation": "Matching or differing intermediate terms from an exhausted budget do not establish agreement or refutation. The repair keeps searching past suspension because a separately completed mismatch is still useful negative evidence. This is an explanation of a bounded regression, not a proof about every evaluator.",
+  "advice": "When changing EMPIRICAL comparison, retain the completion precondition on both sides and the mixed-fixture order controls. Do not return unverified immediately at the first suspended fixture: it can mask a later settled mismatch. Recheck the current revision and conditions before applying this advice. Treat exception semantics as a separate unresolved decision.",
+  "limits": [
+    "Only existing DOC-F1 regression tests were rerun; no fresh adversarial mutation campaign or independent-model confirmation.",
+    "Historical pre-fix results, downstream CLI/PDF differences, five mutants and reviewer extras remain reported evidence.",
+    "No full suite, security audit, admission/reward measurement, network model calls, OTS or publication was performed.",
+    "Fixture exceptions remain fail; do not generalize the normal-return ordering rule to all error paths.",
+    "The Git commit pins repository source, not an exhaustive environment/dependency attestation. Runtime is recorded in replay.json; ephemeral keys and test duration need not reproduce byte-for-byte.",
+    "No experience CLI, indexing, signatures or actual cross-model transfer demonstrated; this is a new unsigned data record."
+  ],
+  "provenance": {
+    "compiler": "Codex (declared tool/operator name)",
+    "model": null,
+    "session": null,
+    "recorded_at": null,
+    "signer_key": null,
+    "authentication": "unsigned; repository provenance only; no authenticated model identity or independence"
+  },
+  "relations": []
+}
