@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "operation": "VERIFY_SAVED_EXCHANGE",
+  "response_sha256": "c4455c79a05f41e9fcc8277c66a405e871a13f213a2909a55ca6c6b12887883d",
+  "records_found": 3,
+  "predecessors_preserved": true,
+  "model_invoked": false,
+  "evidence_replayed_by_this_reader": false,
+  "scope": "Artifact correspondence and scoped report consistency, not authenticated model identity or general advice truth."
+}

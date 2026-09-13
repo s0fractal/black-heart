@@ -1,6 +1,6 @@
 # CM-4 — local experience skill
 
-**ACTIVE / implementation in progress.** CM-3 is accepted. This slice chooses
+**ACTIVE / READY FOR REVIEW.** CM-3 is accepted. This slice chooses
 [a skill](../../../.agents/skills/black-heart-experience/SKILL.md) over the existing
 CM-2 CLI: the accepted receiver used shell/file tools successfully, and no new
 server or transport is required for local save, search and inspection.
@@ -15,10 +15,56 @@ The repository skill is the reviewable source. An operator can load that file
 explicitly. Any local installation is a separate convenience; this PR does not
 establish automatic discovery across agents or change global agent settings.
 
-The first trial uses the owner's request “пробуй, чого чекати )” as authorization.
-The compiler chooses an EMPIRICAL corpus scenario: import the three recorded
-examples, search/read them, verify the saved CM-3 exchange offline, and save a
-new bounded experience. This is an actual tool path in the current Codex session,
-not a fresh user's independently observed choice or a blind skill evaluation.
-The original CM-3 response and frozen inputs remain unchanged. No provider
-session, OAuth proxy, external API purchase, or evidence replay is needed.
+## Observed interaction
+
+The owner authorized CM-4 and then selected the actual question:
+**«Що вже пробували щодо EMPIRICAL і SUSPENDED?»**
+
+The current Codex operator loaded the skill, imported the three repository
+examples into a disclosed temporary local store, searched/read them and ran the
+saved-exchange verifier. [interaction.json](interaction.json) records that exact
+question, commands, raw stdout/stderr, actual checkout state and skill digest.
+The checkout includes untracked trial outputs; source identity is pinned to
+`da3bb9c` and the full commit recorded in the report.
+
+[answer.md](answer.md) preserves the source-qualified answer;
+[experience.json](experience.json) is a new record with seven evidence sources
+and a `refines` link to the unchanged receiver response. The answer distinguishes
+historical reported measurements from this session's artifact verification and
+carries forward both receiver-response qualifications.
+
+[save-check.json](save-check.json) records actual save → byte-identical read →
+search (four records), unchanged predecessors, and `OUTPUT_EXISTS` on retry.
+New record address:
+`66bcaabb54e4b75e505af06eb5fb16e19721b7d9c975df3791c7f1fc0daa808f`.
+[saved-check.json](saved-check.json) is the offline CM-3 verifier result: no
+provider call and no evaluator replay. No OAuth proxy was used.
+
+This is a real user-selected query and current-agent tool path. It is not a
+fresh-session, blind, independent or causal evaluation of the skill. The
+operator already knew CM-3. Only the retrieval/answer route and subsequent
+record retention were exercised; the skill's broader replay route is not
+claimed behaviorally validated. The corpus is three imported examples, not
+all prior user memory. Temporary store paths in reports are historical and may
+expire; committed raw records remain available for reimport.
+
+## Reproduce the data operations
+
+Choose a fresh external store and use the existing CM-2 CLI to save, in order:
+
+1. `examples/model-experience/doc-f1/experience.json`
+2. `examples/model-experience/cm3/control.json`
+3. `examples/model-experience/cm3/exchange/response.json`
+4. `examples/model-experience/cm4/experience.json`
+
+Supply this full local repository as `--repo`. Search with `--component EMPIRICAL`,
+and read the fourth address with `--raw` to compare its original bytes. This
+reproduces storage/lookup correspondence, not the model's natural-language
+interpretation. The [CM-2 commands](../cm2/README.md) and skill specify the CLI.
+Keep `da3bb9c` reachable when merging: evidence and the relation target name
+that exact source commit. Use a normal merge rather than squash/rebase.
+
+Validation performed: skill-creator's structural validator passed; all 13
+`test_experience` tests passed; the actual interaction and roundtrip above
+succeeded. No production Python or test runner changes are included. Frozen
+CM-3 files and historical records remain unchanged.
