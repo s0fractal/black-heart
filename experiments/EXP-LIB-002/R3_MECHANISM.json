@@ -1,0 +1,44 @@
+{
+  "bytes_outside_manifest_identical": true,
+  "distinct_digests": 5,
+  "distinct_orders": 5,
+  "manifests_identical_after_sorting_admitted_grades": true,
+  "orders": {
+    "seed0_a": [
+      "GROUNDED",
+      "COUNTEREXAMPLE",
+      "AXIOMATIC",
+      "EMPIRICAL"
+    ],
+    "seed1": [
+      "EMPIRICAL",
+      "GROUNDED",
+      "COUNTEREXAMPLE",
+      "AXIOMATIC"
+    ],
+    "seed2": [
+      "COUNTEREXAMPLE",
+      "EMPIRICAL",
+      "GROUNDED",
+      "AXIOMATIC"
+    ],
+    "seed3": [
+      "COUNTEREXAMPLE",
+      "GROUNDED",
+      "AXIOMATIC",
+      "EMPIRICAL"
+    ],
+    "seed4": [
+      "EMPIRICAL",
+      "COUNTEREXAMPLE",
+      "AXIOMATIC",
+      "GROUNDED"
+    ],
+    "seed5": [
+      "COUNTEREXAMPLE",
+      "GROUNDED",
+      "AXIOMATIC",
+      "EMPIRICAL"
+    ]
+  }
+}

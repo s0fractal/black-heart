@@ -1,0 +1,54 @@
+%PDF-1.7
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 506 >>
+stream
+q
+0.05 0.06 0.08 rg
+0 0 612 792 re f
+BT
+/F1 14 Tf
+1 1 1 rg
+45 740 Td
+(%# BLACK-HEART LIBRARY - DATA ONLY SUCCESSOR) Tj
+/F1 9 Tf
+0 -16 Td
+(Parent sha256: 6a6bc1bb8774556df9cd3598dc527fef...) Tj
+0 -16 Td
+(Added claim:   c405a975c98d6772dfa62f3c7167019b...) Tj
+0 -16 Td
+(Grade:         GROUNDED \(one bounded check, not a universal truth\)) Tj
+0 -16 Td
+(Claims:        2 preserved + 1 added) Tj
+0 -16 Td
+(Verify with the host CLI, never by running this file: python3 cli.py library explain-transition) Tj
+ET
+Q
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000000804 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+874
+%%EOF
+# %üñ§ WARRANT_KERNEL_MANIFEST: {"claims": [{"body": {"author_pk_hex": "66be7e332c7a453332bd9d0a7f7db055f5c5ef1a06ada66d98b39fb6810c473a", "grade": "GROUNDED", "omega": "\ud83d\udda4", "parent_hash": "5e6c0f2c337874c88a36fb6b6e94607b2acc1c38297d0a5b1d85a0eb77c74482", "polarity": "AFFIRM", "successor_hash": "5e6c0f2c337874c88a36fb6b6e94607b2acc1c38297d0a5b1d85a0eb77c74482", "tau": "\ud83d\udda4", "witness": {"atp_budget": 100, "expected_hash": "5e6c0f2c337874c88a36fb6b6e94607b2acc1c38297d0a5b1d85a0eb77c74482", "kind": "grounded", "term_expr": "\ud83d\udda4"}}, "claim_id": "4128b6b10dd8ade940d3eccbd1e5903da3f1091fcb2b6e3b5491808e8c9e8996", "endorsements": [], "signature_hex": "1501b302a719da01851fc352c0ce09993ddba42bf718e52a126882f53dabbd7a17749714fc7283c3141f9bf4372354ae72532908fc1625388b05b3f4b07cda09"}, {"body": {"author_pk_hex": "66be7e332c7a453332bd9d0a7f7db055f5c5ef1a06ada66d98b39fb6810c473a", "grade": "GROUNDED", "omega": "\ud83e\udd0d \ud83e\udd0d", "parent_hash": "9149e4c37baa93d42dc252e38330e7939efff3310a3fd476c156d9870beca7c3", "polarity": "AFFIRM", "successor_hash": "9149e4c37baa93d42dc252e38330e7939efff3310a3fd476c156d9870beca7c3", "tau": "\ud83e\udd0d \ud83e\udd0d", "witness": {"atp_budget": 100, "expected_hash": "489ceb9c9d7ea73e246cf1d1032964ac532f069267aee6e2a549fbea8a002e2e", "kind": "grounded", "term_expr": "\ud83e\udd0d \ud83e\udd0d"}}, "claim_id": "50c164cc46389f30e7bcaded9d2c60e7a4005ddf4541e7b3fe1568763dbf6a4e", "endorsements": [], "signature_hex": "7de873baed42433e31c08656188f05f27f70734d301946c5f55c67cd46c6e3a1dcef6028f3df0430dfad97f391c2b87968861ca3b63051f876d8afcccae0ed05"}, {"body": {"author_pk_hex": "66be7e332c7a453332bd9d0a7f7db055f5c5ef1a06ada66d98b39fb6810c473a", "grade": "GROUNDED", "omega": "\ud83e\udd0d (\ud83e\udd0d \ud83e\udd0d)", "parent_hash": "4afd993ff7e4c9619aafe4de9922b68a9c4478c9bc721f62de40c91107d01fc5", "polarity": "AFFIRM", "successor_hash": "4afd993ff7e4c9619aafe4de9922b68a9c4478c9bc721f62de40c91107d01fc5", "tau": "\ud83e\udd0d (\ud83e\udd0d \ud83e\udd0d)", "witness": {"atp_budget": 100, "expected_hash": "489ceb9c9d7ea73e246cf1d1032964ac532f069267aee6e2a549fbea8a002e2e", "kind": "grounded", "term_expr": "\ud83e\udd0d (\ud83e\udd0d \ud83e\udd0d)"}}, "claim_id": "c405a975c98d6772dfa62f3c7167019bb70b441410f8357c29436b9429483da1", "endorsements": [], "signature_hex": "af6059f726a4da5a3deedf7734574f30f5725e6eb03e1cf2557f5bf1672fe3a371004eef1985dea3789779b586956800a7b77beb26017c36ad4e98ccd534ee06"}], "format": "WARRANT-0.2", "trust_config": {"admitted_grades": ["GROUNDED", "COUNTEREXAMPLE", "AXIOMATIC", "EMPIRICAL"], "max_atp_budget": 100000, "require_bound_signature": true, "trusted_author_pks": null}}

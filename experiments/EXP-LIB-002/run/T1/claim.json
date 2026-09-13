@@ -1,0 +1,20 @@
+{
+  "body": {
+    "author_pk_hex": "66be7e332c7a453332bd9d0a7f7db055f5c5ef1a06ada66d98b39fb6810c473a",
+    "grade": "GROUNDED",
+    "omega": "\ud83e\udd0d \ud83e\udd0d",
+    "parent_hash": "9149e4c37baa93d42dc252e38330e7939efff3310a3fd476c156d9870beca7c3",
+    "polarity": "AFFIRM",
+    "successor_hash": "9149e4c37baa93d42dc252e38330e7939efff3310a3fd476c156d9870beca7c3",
+    "tau": "\ud83e\udd0d \ud83e\udd0d",
+    "witness": {
+      "atp_budget": 100,
+      "expected_hash": "489ceb9c9d7ea73e246cf1d1032964ac532f069267aee6e2a549fbea8a002e2e",
+      "kind": "grounded",
+      "term_expr": "\ud83e\udd0d \ud83e\udd0d"
+    }
+  },
+  "claim_id": "50c164cc46389f30e7bcaded9d2c60e7a4005ddf4541e7b3fe1568763dbf6a4e",
+  "endorsements": [],
+  "signature_hex": "7de873baed42433e31c08656188f05f27f70734d301946c5f55c67cd46c6e3a1dcef6028f3df0430dfad97f391c2b87968861ca3b63051f876d8afcccae0ed05"
+}

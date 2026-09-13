@@ -1,0 +1,126 @@
+{
+  "all_confirmed": true,
+  "digests": {
+    "P0.pdf": "9093167b7886f0fd1605782cdc0222bb431cf03fcbeaa7bfa20deb98fef3b7cd",
+    "P1.pdf": "6a6bc1bb8774556df9cd3598dc527fefa8e778124056805521b844a13ed7acd1",
+    "P2.pdf": "eec4304dc92cc1c6ef68d4eb535a625597b1b4497c640a9592481ff66ed2452e",
+    "T1/claim.json": "97573408d19121acce1735df1546d30849d10d7342df704b3f66a1e281ad72f0",
+    "T1/decision.json": "770d30fea3df2a77ad254da923ddcf591a47727f593c8e63c2b73039c4fbd653",
+    "T1/proposal.json": "85cb06263686fd204ec366331cc3be539190a21718a06e3bcf3ad4c440c7071c",
+    "T1/receipt.json": "f0d5ab5d3c1593718ef04fb88584f88ff35422bb97d0bab493dc837f3a547855",
+    "T2/claim.json": "dce5e42bb5f16d996301e603a75e35fbc42e7947a74f62ab3d58bbb0bb49a348",
+    "T2/decision.json": "56be7ef07ce22e3a87000d01cc2ec9a5fb88bb0e4c3d9e6a651643b69f29a1c4",
+    "T2/proposal.json": "712f953c758248ade2dda9a031645890e4b2a85d1615f266fed9c6b4155f2421",
+    "T2/receipt.json": "95a9b99634feae25d3a15f26454f32a2abe5f12bb8cd42bc345d7628decb0b7a",
+    "policy.json": "44d9538a93190176cec4ae5c783f290c92faa7e3277b8cb3a95048f649a5c987"
+  },
+  "experiment": "EXP-LIB-002",
+  "note": "public fixture keys; outcomes attest one bounded check per claim under one caller policy, not that any document is true",
+  "observed": {
+    "H1": {
+      "admitted": true,
+      "apply_exit": 0,
+      "claims": [
+        1,
+        2
+      ],
+      "cleanup_complete": true,
+      "evaluation_status": "pass",
+      "transition_state": "COMPLETE"
+    },
+    "H2": {
+      "admitted": true,
+      "apply_exit": 0,
+      "claims": [
+        2,
+        3
+      ],
+      "cleanup_complete": true,
+      "evaluation_status": "pass",
+      "transition_state": "COMPLETE"
+    },
+    "H3": {
+      "claims_after": 2,
+      "claims_preserved": 1,
+      "exit": 0,
+      "regenerated": false,
+      "transition": "COMPLETE"
+    },
+    "H4": {
+      "claims_after": 3,
+      "claims_preserved": 2,
+      "exit": 0,
+      "regenerated": false,
+      "transition": "COMPLETE"
+    },
+    "H5": {
+      "P0_unchanged": true,
+      "P1_unchanged": true
+    },
+    "H6": {
+      "P0_in_P1": true,
+      "P0_in_P2": true,
+      "P1_in_P2": true
+    },
+    "H7": {
+      "claim_count": 3,
+      "manifest_format": "WARRANT-0.2"
+    },
+    "H8": {
+      "T1": {
+        "equals_independent_count": true,
+        "measured": true
+      },
+      "T2": {
+        "equals_independent_count": true,
+        "measured": true
+      }
+    },
+    "H9": [
+      "COMPLETE",
+      "COMPLETE"
+    ],
+    "N1a": {
+      "exit": 2,
+      "refusal": "RECEIPT_PARENT_MISMATCH"
+    },
+    "N1b": {
+      "exit": 2,
+      "refusal": "RECEIPT_PARENT_MISMATCH"
+    },
+    "N2": {
+      "exit": 2,
+      "refusal": "RECEIPT_SUCCESSOR_MISMATCH"
+    },
+    "N3": {
+      "exit": 2,
+      "refusal": "PARENT_CLAIMS_DROPPED"
+    },
+    "N4": {
+      "exit": 2,
+      "refusal": "RECEIPT_UNREADABLE"
+    }
+  },
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "predictions": "experiments/EXP-LIB-002/PREDICTIONS.md",
+  "python": "3.14.7",
+  "pythonhashseed": "0",
+  "source_commit": "2b94e058365e11c31ac2d9df470f85da0c047d34",
+  "source_tree_clean": true,
+  "verdicts": {
+    "H1": "CONFIRMED",
+    "H2": "CONFIRMED",
+    "H3": "CONFIRMED",
+    "H4": "CONFIRMED",
+    "H5": "CONFIRMED",
+    "H6": "CONFIRMED",
+    "H7": "CONFIRMED",
+    "H8": "CONFIRMED",
+    "H9": "CONFIRMED",
+    "N1a": "CONFIRMED",
+    "N1b": "CONFIRMED",
+    "N2": "CONFIRMED",
+    "N3": "CONFIRMED",
+    "N4": "CONFIRMED"
+  }
+}

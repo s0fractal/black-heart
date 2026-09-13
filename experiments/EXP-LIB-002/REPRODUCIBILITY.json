@@ -1,0 +1,13 @@
+{
+  "R1_outcomes_identical_across_seeds": true,
+  "R2_bytes_identical_with_fixed_seed": true,
+  "R2_differing_files": [],
+  "R3_distinct_p0_digests": 5,
+  "R3_p0_digests_not_all_equal_across_seeds_0_5": true,
+  "every_run_confirmed_H_and_N": true,
+  "verdicts": {
+    "R1": "CONFIRMED",
+    "R2": "CONFIRMED",
+    "R3": "CONFIRMED"
+  }
+}

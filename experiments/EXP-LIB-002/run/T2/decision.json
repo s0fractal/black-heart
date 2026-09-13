@@ -1,0 +1,31 @@
+{
+  "body": {
+    "admission": {
+      "admitted": true,
+      "reason": "evidence PASSed and the caller policy permits this operation and grade"
+    },
+    "claim_author_pk_hex": "66be7e332c7a453332bd9d0a7f7db055f5c5ef1a06ada66d98b39fb6810c473a",
+    "claim_id": "c405a975c98d6772dfa62f3c7167019bb70b441410f8357c29436b9429483da1",
+    "decider_pk_hex": "91a28a0b74381593a4d9469579208926afc8ad82c8839b7644359b9eba9a4b3a",
+    "evaluation": {
+      "grade": "GROUNDED",
+      "reason": "Closed-term deterministic reduction verified",
+      "status": "pass"
+    },
+    "evaluator": {
+      "atp_budget_limit": 10000,
+      "atp_budget_requested": 100,
+      "atp_spent": 2,
+      "atp_spent_measured": true,
+      "profile": "black-heart.li2.grounded-evaluator.v1",
+      "version": "1"
+    },
+    "parent_pdf_sha256": "6a6bc1bb8774556df9cd3598dc527fefa8e778124056805521b844a13ed7acd1",
+    "policy_sha256": "684df372dcd4f4ae04f09951dd7b39c119334267b4a142d8f6428c8413f9518c",
+    "proposal_id": "92b402034c1b35176a3668621756ce065f15da3fc7f2d69f4da4eb73e4d11686",
+    "proposer_pk_hex": "0b513ad9b4924015ca0902ed079044d3ac5dbec2306f06948c10da8eb6e39f2d"
+  },
+  "decision_id": "4eb891d7d67742953cb684bb881693be149c835ce0eba2a6791713cedc2eb7f9",
+  "decision_signature_hex": "1ba483ed1eb401fc0db253f15347e44ea30af51178b086f302a962b26a334bc971527981531367587ae94f83b7788d08c01a60d6fdd783046e0bed586cae940c",
+  "profile": "black-heart.library-interaction.decision.v1"
+}
