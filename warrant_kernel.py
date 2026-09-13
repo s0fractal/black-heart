@@ -715,6 +715,16 @@ class WarrantVerifier:
 
             total_atp_parent = 0
             total_atp_succ = 0
+            # A replay that does not SETTLE is not evidence (DOC-F1). Comparing
+            # only term bytes let two SUSPENDED sides pass as "equivalent" when
+            # they happened to stop on the same intermediate term, and fail as
+            # "refuted" when they did not -- the same boundary GROUNDED and
+            # COUNTEREXAMPLE already hold. The verdict is order-independent:
+            #   - a SETTLED mismatch on any fixture is a checked negative -> FAIL,
+            #     and an unsettled fixture elsewhere does not mask it;
+            #   - otherwise any unsettled side on any fixture -> UNVERIFIED;
+            #   - only full settled agreement -> PASS.
+            unsettled = []
             try:
                 for fix in w_emp.fixtures:
                     f_term = glyph.parse(fix)
@@ -723,6 +733,16 @@ class WarrantVerifier:
 
                     res_p = glyph.evaluate(p_term, max_atp=self.trust_config.max_atp_budget)
                     res_s = glyph.evaluate(s_term, max_atp=self.trust_config.max_atp_budget)
+                    total_atp_parent += res_p.atp_spent
+                    total_atp_succ += res_s.atp_spent
+
+                    if not res_p.is_settled() or not res_s.is_settled():
+                        # No comparison is possible; keep scanning, because a
+                        # settled mismatch on a later fixture is still a verdict.
+                        unsettled.append({"fixture": fix,
+                                          "parent": res_p.status.value,
+                                          "successor": res_s.status.value})
+                        continue
 
                     if glyph.canonical_bytes(res_p.term) != glyph.canonical_bytes(res_s.term):
                         return Verdict(
@@ -730,8 +750,25 @@ class WarrantVerifier:
                             grade=EvidenceGrade.EMPIRICAL,
                             reason=f"Empirical equivalence failed on fixture '{fix}': parent -> {res_p.term} != succ -> {res_s.term}"
                         )
-                    total_atp_parent += res_p.atp_spent
-                    total_atp_succ += res_s.atp_spent
+
+                if unsettled:
+                    return Verdict(
+                        status=VerificationStatus.UNVERIFIED,
+                        grade=EvidenceGrade.EMPIRICAL,
+                        reason=(f"Empirical replay did not settle within "
+                                f"{self.trust_config.max_atp_budget} ATP on "
+                                f"{len(unsettled)} of {len(w_emp.fixtures)} fixture(s); an "
+                                "unsettled computation is neither agreement nor refutation. "
+                                "A refusal is not a verdict."),
+                        details={
+                            "unsettled_fixtures": [u["fixture"] for u in unsettled],
+                            "unsettled": unsettled,
+                            "sample_size": len(w_emp.fixtures),
+                            "atp_parent_total": total_atp_parent,
+                            "atp_successor_total": total_atp_succ,
+                            "fixtures_fp": actual_fp,
+                        }
+                    )
 
                 replayed_delta_atp = total_atp_parent - total_atp_succ
                 return Verdict(
