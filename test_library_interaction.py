@@ -1567,6 +1567,131 @@ class ApplyStateEffectTest(LI3Base):
         self.assertEqual(victim.read_bytes(), sentinel,
                          "a file that appeared after the pre-check was overwritten")
 
+    # ---- publication vs cleanup: the report must match the filesystem ---- #
+    def _apply_with_faults(self, tag, fail_unlink_of=(), fail_link_of=()):
+        """Inject failures by staging/target NAME. Returns (result, out, rec)."""
+        prop, dec = self.pipeline(tag=tag)
+        out = self.d / f"f_{tag}.pdf"
+        rec = self.d / f"f_{tag}.json"
+        names = {"successor": str(out), "receipt": str(rec)}
+        unlink_targets = {names[n] + li.STAGING_SUFFIX for n in fail_unlink_of}
+        link_targets = {names[n] for n in fail_link_of}
+        real_unlink, real_link = os.unlink, os.link
+
+        def unlink(path, *a, **kw):
+            if str(path) in unlink_targets:
+                raise PermissionError("injected staging cleanup failure")
+            return real_unlink(path, *a, **kw)
+
+        def link(src, dst, *a, **kw):
+            if str(dst) in link_targets:
+                raise OSError("injected publication failure")
+            return real_link(src, dst, *a, **kw)
+
+        with mock.patch.object(li.os, "unlink", side_effect=unlink), \
+                mock.patch.object(li.os, "link", side_effect=link):
+            res = li.apply_transition(str(self.parent), str(prop), str(dec),
+                                      str(self.policy_path), str(self.issuer_key),
+                                      str(out), str(rec))
+        return res, out, rec, prop, dec
+
+    def assert_report_matches_disk(self, res, out, rec, prop, dec):
+        """The invariant: every state claim in the result is checked against
+        what is actually on disk, and against a fresh reader."""
+        staging = [str(out) + li.STAGING_SUFFIX, str(rec) + li.STAGING_SUFFIX]
+        self.assertEqual(sorted(res["leftover_staging_paths"]),
+                         sorted(p for p in staging if os.path.exists(p)))
+        for path in res["published_paths"]:
+            self.assertTrue(os.path.exists(path), f"reported published but absent: {path}")
+        if out.exists() and str(out) not in res["published_paths"]:
+            self.fail("successor exists on disk but the report omits it as published")
+        expected_state = ("COMPLETE" if out.exists() and rec.exists()
+                          else "INCOMPLETE" if out.exists() else "NOT_PUBLISHED")
+        self.assertEqual(res["transition_state"], expected_state)
+        self.assertEqual(res["cleanup_complete"], not res["leftover_staging_paths"])
+        if expected_state == "COMPLETE":
+            reader = li.explain_transition(str(self.parent), str(out), str(prop),
+                                           str(dec), str(rec), self.i_pk)
+            self.assertTrue(reader["ok"], reader)
+            self.assertEqual(reader["transition"], "COMPLETE")
+        detail = (res.get("detail") or "").lower()
+        if out.exists():
+            self.assertNotIn("nothing was published", detail)
+            self.assertNotIn("was not published", detail)
+
+    def test_cleanup_failure_after_successor_publication_is_not_unpublished(self):
+        res, out, rec, prop, dec = self._apply_with_faults(
+            "cu_succ", fail_unlink_of=("successor",))
+        self.assertTrue(out.exists())
+        self.assert_report_matches_disk(res, out, rec, prop, dec)
+        # a failed cleanup does not cancel publication: the run completes
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(res["transition_state"], "COMPLETE")
+        self.assertFalse(res["cleanup_complete"])
+        self.assertEqual(res["leftover_staging_paths"], [str(out) + li.STAGING_SUFFIX])
+
+    def test_cleanup_failure_after_receipt_publication_is_complete(self):
+        res, out, rec, prop, dec = self._apply_with_faults(
+            "cu_rec", fail_unlink_of=("receipt",))
+        self.assertTrue(out.exists() and rec.exists())
+        self.assert_report_matches_disk(res, out, rec, prop, dec)
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(res["transition_state"], "COMPLETE")
+        self.assertEqual(res["leftover_staging_paths"], [str(rec) + li.STAGING_SUFFIX])
+
+    def test_cleanup_failures_on_both_staging_names(self):
+        res, out, rec, prop, dec = self._apply_with_faults(
+            "cu_both", fail_unlink_of=("successor", "receipt"))
+        self.assert_report_matches_disk(res, out, rec, prop, dec)
+        self.assertEqual(res["transition_state"], "COMPLETE")
+        self.assertEqual(len(res["leftover_staging_paths"]), 2)
+
+    def test_successor_cleanup_fails_and_receipt_publication_fails(self):
+        """Combined: the successor IS published (cleanup failed), then the receipt
+        cannot be published. INCOMPLETE -- and the report must still say the
+        successor is published."""
+        res, out, rec, prop, dec = self._apply_with_faults(
+            "combo", fail_unlink_of=("successor",), fail_link_of=("receipt",))
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["refusal"], "PUBLISH_FAILED")
+        self.assertTrue(out.exists())
+        self.assertFalse(rec.exists())
+        self.assert_report_matches_disk(res, out, rec, prop, dec)
+        self.assertEqual(res["transition_state"], "INCOMPLETE")
+        self.assertEqual(res["published_paths"], [str(out)])
+        self.assertIn("IS published", res["detail"])
+
+    def test_successor_publication_failure_reports_nothing_published(self):
+        res, out, rec, prop, dec = self._apply_with_faults(
+            "nopub", fail_link_of=("successor",))
+        self.assertFalse(res["ok"])
+        self.assertFalse(out.exists())
+        self.assert_report_matches_disk(res, out, rec, prop, dec)
+        self.assertEqual(res["transition_state"], "NOT_PUBLISHED")
+        self.assertEqual(res["published_paths"], [])
+
+    def test_a_bystander_at_the_target_is_never_reported_as_ours(self):
+        """published_paths records only names THIS run created. A file that was
+        already at the target is not a publication by this run."""
+        res, victim, sentinel = self._race_publish("out")
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["published_paths"], [])
+        self.assertEqual(res["transition_state"], "NOT_PUBLISHED")
+        self.assertEqual(victim.read_bytes(), sentinel)
+
+    def test_a_strangers_file_at_the_receipt_target_is_not_our_completion(self):
+        """Both final names can exist while only ONE was created by this run: a
+        bystander sits at the receipt target. Existence is not completion -- the
+        state must be INCOMPLETE, and the stranger's file is never counted as
+        this run's completion marker."""
+        res, victim, sentinel = self._race_publish("receipt")
+        out = self.d / "race_receipt.pdf"
+        self.assertFalse(res["ok"])
+        self.assertTrue(out.exists() and victim.exists())       # both names exist...
+        self.assertEqual(victim.read_bytes(), sentinel)          # ...one is not ours
+        self.assertEqual(res["transition_state"], "INCOMPLETE")
+        self.assertEqual(res["published_paths"], [str(out)])
+
     def test_two_proposals_against_one_parent_give_two_children(self):
         """Not a conflict: no election of a newest state, neither invalidates
         the other."""

@@ -982,16 +982,26 @@ def verify_receipt(raw: bytes, expect_issuer_pk: Optional[str] = None) -> Dict[s
     return _ok(receipt_id=doc["receipt_id"], **out)
 
 
-def _publish_no_clobber(src: str, dst: str) -> None:
+def _publish_no_clobber(src: str, dst: str) -> Optional[str]:
     """Publish `src` as `dst` WITHOUT ever replacing an existing `dst`.
 
     os.rename SILENTLY REPLACES its destination, so an os.path.exists() check
     before it is a TOCTOU window, not a guarantee: a file created in between is
     destroyed. The refusal must come from the file operation itself, so this
-    hard-links (which fails with FileExistsError when dst exists) and only then
-    removes the staging name. Raises FileExistsError if dst exists."""
-    os.link(src, dst)
-    os.unlink(src)
+    hard-links, which fails with FileExistsError when dst exists.
+
+    PUBLICATION and CLEANUP are separate outcomes. If os.link raises, nothing
+    was published and the exception propagates. Once os.link has succeeded the
+    final name EXISTS -- that is publication, and it is not undone by anything
+    that follows. Removing the staging name afterwards is only cleanup: if
+    os.unlink fails, the staging name is returned as a leftover, and the
+    publication still stands. No rollback is attempted."""
+    os.link(src, dst)                       # raises -> NOT published
+    try:
+        os.unlink(src)
+    except OSError:
+        return src                          # published, staging name left behind
+    return None
 
 
 def _claim_ids(manifest_claims) -> list:
@@ -1129,33 +1139,70 @@ def apply_transition(pdf_path: str, proposal_path: str, decision_path: str,
 
     # Publication refuses at the filesystem level for BOTH targets; the earlier
     # os.path.exists() checks are an early, friendly name, never the guarantee.
+    #
+    # What gets reported is DERIVED FROM FACTS, never from which step raised:
+    # `published` records only final names that THIS run's os.link created (a
+    # bystander that already existed at a target is not ours), and leftovers are
+    # observed on disk. A failed cleanup never turns a publication into "nothing
+    # was published", and never turns a completed transition into INCOMPLETE.
+    published: list = []
+
+    def _state(refusal=None, detail=None, extra=None):
+        leftovers = [p for p in (stage_out, stage_receipt) if os.path.exists(p)]
+        if out_path in published and receipt_path in published:
+            state = "COMPLETE"
+        elif out_path in published:
+            state = "INCOMPLETE"            # successor published, no receipt
+        else:
+            state = "NOT_PUBLISHED"
+        fields = {"transition_state": state,
+                  "published_paths": list(published),
+                  "leftover_staging_paths": leftovers,
+                  "cleanup_complete": not leftovers}
+        if extra:
+            fields.update(extra)
+        if refusal is not None:
+            out = _refuse(refusal, detail)
+            out.update(fields)
+            return out
+        return fields
+
     try:
         _publish_no_clobber(stage_out, out_path)          # publish the successor
+        published.append(out_path)
     except FileExistsError:
-        return _refuse("OUTPUT_EXISTS",
-                       f"{out_path} appeared before publication; nothing was overwritten")
+        return _state("OUTPUT_EXISTS",
+                      f"{out_path} appeared before publication; nothing was overwritten "
+                      "and nothing was published")
     except OSError as e:
-        return _refuse("PUBLISH_FAILED", f"{type(e).__name__}: {e}; nothing was published")
+        return _state("PUBLISH_FAILED",
+                      f"{type(e).__name__}: {e}; the successor was not published")
+
     try:
         _publish_no_clobber(stage_receipt, receipt_path)   # completion marker, LAST
+        published.append(receipt_path)
     except FileExistsError:
-        return _refuse("RECEIPT_EXISTS",
-                       f"{receipt_path} appeared before publication; nothing was "
-                       "overwritten. NOTE: the successor is already published, so "
-                       "this transition is INCOMPLETE, not undone")
+        return _state("RECEIPT_EXISTS",
+                      f"{receipt_path} appeared before publication; nothing was "
+                      "overwritten. The successor IS published, so this transition is "
+                      "INCOMPLETE -- not undone")
     except OSError as e:
-        return _refuse("PUBLISH_FAILED",
-                       f"{type(e).__name__}: {e}; the successor is already published "
-                       "and is left in place -- the transition is INCOMPLETE, not "
-                       "rolled back")
+        return _state("PUBLISH_FAILED",
+                      f"{type(e).__name__}: {e}; the successor IS published and is left "
+                      "in place, so this transition is INCOMPLETE -- not rolled back")
 
+    fields = _state()
+    note = "successor and receipt published; the parent file was not written to"
+    if not fields["cleanup_complete"]:
+        note += ("; CLEANUP DID NOT COMPLETE -- leftover staging names remain and must "
+                 "be removed before this output path is reused. The publication stands.")
     return _ok(successor_path=out_path, receipt_path=receipt_path,
                parent_pdf_sha256=parent["pdf_sha256"],
                successor_pdf_sha256=successor_sha,
                receipt_id=rid, added_claim_id=claim.claim_id,
                claims_before=len(existing), claims_after=len(successor_claims),
                parent_unchanged=True, status="TRANSITION_COMPLETE",
-               note="successor and receipt published; the parent file was not written to")
+               note=note, **fields)
 
 
 def explain_transition(parent_path: str, successor_path: str, proposal_path: str,

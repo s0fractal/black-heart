@@ -85,7 +85,28 @@ precise error message; they are **not** the protection.
 
 A successor without a receipt is never reported as a transition. This is
 **not rollback**: a published successor is left in place, and LI-3 deletes
-nothing. Calling a reordered write sequence "atomic" would be false, so the
+nothing.
+
+**Publication and cleanup are separate outcomes.** Each publish step is a
+hard link followed by removal of the staging name. The link is the publication:
+once it succeeds the final name exists, and nothing that follows undoes it.
+Removing the staging name is only cleanup — if that fails, a leftover staging
+name remains, but the publication **stands**, and `apply` carries on to the next
+step rather than reporting a publication that did not happen.
+
+The result therefore reports state **derived from facts**, never from which
+step raised:
+
+| field | meaning |
+|---|---|
+| `transition_state` | `COMPLETE` (both final names created by this run), `INCOMPLETE` (successor only), or `NOT_PUBLISHED` |
+| `published_paths` | final names **this run's** link created — a file already at a target is not reported as ours |
+| `leftover_staging_paths` | staging names observed on disk after the run |
+| `cleanup_complete` | `false` when any leftover remains |
+
+A transition can be `COMPLETE` with `cleanup_complete: false`: both artifacts are
+published and verifiable, and a leftover staging name must be removed before
+that output path is reused. Leftovers are named, never deleted automatically. Calling a reordered write sequence "atomic" would be false, so the
 specification states the opposite explicitly.
 
 Leftover `.partial` files are **never** reused or silently overwritten: a
