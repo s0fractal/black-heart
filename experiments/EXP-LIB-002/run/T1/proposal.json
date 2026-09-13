@@ -1,0 +1,31 @@
+{
+  "body": {
+    "claim": {
+      "body": {
+        "author_pk_hex": "66be7e332c7a453332bd9d0a7f7db055f5c5ef1a06ada66d98b39fb6810c473a",
+        "grade": "GROUNDED",
+        "omega": "\ud83e\udd0d \ud83e\udd0d",
+        "parent_hash": "9149e4c37baa93d42dc252e38330e7939efff3310a3fd476c156d9870beca7c3",
+        "polarity": "AFFIRM",
+        "successor_hash": "9149e4c37baa93d42dc252e38330e7939efff3310a3fd476c156d9870beca7c3",
+        "tau": "\ud83e\udd0d \ud83e\udd0d",
+        "witness": {
+          "atp_budget": 100,
+          "expected_hash": "489ceb9c9d7ea73e246cf1d1032964ac532f069267aee6e2a549fbea8a002e2e",
+          "kind": "grounded",
+          "term_expr": "\ud83e\udd0d \ud83e\udd0d"
+        }
+      },
+      "claim_id": "50c164cc46389f30e7bcaded9d2c60e7a4005ddf4541e7b3fe1568763dbf6a4e",
+      "endorsements": [],
+      "signature_hex": "7de873baed42433e31c08656188f05f27f70734d301946c5f55c67cd46c6e3a1dcef6028f3df0430dfad97f391c2b87968861ca3b63051f876d8afcccae0ed05"
+    },
+    "operation": "add-claim",
+    "parent_manifest_format": "WARRANT-0.2",
+    "parent_pdf_sha256": "9093167b7886f0fd1605782cdc0222bb431cf03fcbeaa7bfa20deb98fef3b7cd",
+    "proposer_pk_hex": "0b513ad9b4924015ca0902ed079044d3ac5dbec2306f06948c10da8eb6e39f2d"
+  },
+  "envelope_signature_hex": "e1b885c5cf15a7c9539502be4d01740dce2ac2c45df3157a2775614287f64edd3a18832eda33d964093eb6d410bb4d3115b31b55a225338652dab2658a2ef706",
+  "profile": "black-heart.library-interaction.proposal.v1",
+  "proposal_id": "65353205bf4ee78dc77da2a26fbfc0f62b81658a3541197bab3edcb47bc27f50"
+}

@@ -1,0 +1,19 @@
+{
+  "allowed_grades": [
+    "GROUNDED"
+  ],
+  "allowed_operations": [
+    "add-claim"
+  ],
+  "profile": "black-heart.library-interaction.policy.v1",
+  "trust_config": {
+    "admitted_grades": [
+      "GROUNDED"
+    ],
+    "max_atp_budget": 10000,
+    "require_bound_signature": true,
+    "trusted_author_pks": [
+      "66be7e332c7a453332bd9d0a7f7db055f5c5ef1a06ada66d98b39fb6810c473a"
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "body": {
+    "author_pk_hex": "66be7e332c7a453332bd9d0a7f7db055f5c5ef1a06ada66d98b39fb6810c473a",
+    "grade": "GROUNDED",
+    "omega": "\ud83e\udd0d (\ud83e\udd0d \ud83e\udd0d)",
+    "parent_hash": "4afd993ff7e4c9619aafe4de9922b68a9c4478c9bc721f62de40c91107d01fc5",
+    "polarity": "AFFIRM",
+    "successor_hash": "4afd993ff7e4c9619aafe4de9922b68a9c4478c9bc721f62de40c91107d01fc5",
+    "tau": "\ud83e\udd0d (\ud83e\udd0d \ud83e\udd0d)",
+    "witness": {
+      "atp_budget": 100,
+      "expected_hash": "489ceb9c9d7ea73e246cf1d1032964ac532f069267aee6e2a549fbea8a002e2e",
+      "kind": "grounded",
+      "term_expr": "\ud83e\udd0d (\ud83e\udd0d \ud83e\udd0d)"
+    }
+  },
+  "claim_id": "c405a975c98d6772dfa62f3c7167019bb70b441410f8357c29436b9429483da1",
+  "endorsements": [],
+  "signature_hex": "af6059f726a4da5a3deedf7734574f30f5725e6eb03e1cf2557f5bf1672fe3a371004eef1985dea3789779b586956800a7b77beb26017c36ad4e98ccd534ee06"
+}

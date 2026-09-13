@@ -1,0 +1,14 @@
+{
+  "body": {
+    "added_claim_id": "c405a975c98d6772dfa62f3c7167019bb70b441410f8357c29436b9429483da1",
+    "decision_id": "4eb891d7d67742953cb684bb881693be149c835ce0eba2a6791713cedc2eb7f9",
+    "issuer_pk_hex": "0beef5a9e679e6a3e134fe27837bff32c7cb5f5d44ea09bcb0e542bad6a4c0cc",
+    "parent_pdf_sha256": "6a6bc1bb8774556df9cd3598dc527fefa8e778124056805521b844a13ed7acd1",
+    "policy_sha256": "684df372dcd4f4ae04f09951dd7b39c119334267b4a142d8f6428c8413f9518c",
+    "proposal_id": "92b402034c1b35176a3668621756ce065f15da3fc7f2d69f4da4eb73e4d11686",
+    "successor_pdf_sha256": "eec4304dc92cc1c6ef68d4eb535a625597b1b4497c640a9592481ff66ed2452e"
+  },
+  "profile": "black-heart.library-interaction.transition.v1",
+  "receipt_id": "b22d8ec59c63d636a9a24f69e361b3ed9243fafa19bb23a414491021904f6ab7",
+  "receipt_signature_hex": "08a8d09c41d8eb5c0cc90de46ba3d75de7713fc9f01e1e7a7f66fec273291534c04bacbd61113e6496c83ef67ad51b5b878e19ccba251088bc4ba08af37b2f09"
+}
