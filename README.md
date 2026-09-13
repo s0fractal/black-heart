@@ -1,5 +1,10 @@
 # Project Black-Heart (%🖤)
 
+> **Документація за поверхами (draft):** [адресний індекс x0000–xF000](ADDRESS-INDEX.md).
+> Нові контракти розрізняють реалізацію, перевірені межі й плани. Старий огляд нижче
+> ще не перенесено повністю; його широкі твердження не є результатами нового аудиту.
+
+
 > **"A paper should not just assert its truth. A paper should execute its own proof."**
 
 **Current selected direction (2026-09-13):** local proposals, decisions and

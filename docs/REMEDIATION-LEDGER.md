@@ -73,3 +73,35 @@ Two notes kept deliberately:
   performance store, not an attestation, and it does not replace a fresh check of a release.
 - The local development checkout also carries unpublished continuation experiments. They are not
   part of this remediation line and are not carried into remediation PRs.
+
+
+## DOC-F1 — EMPIRICAL compares suspended intermediate terms (OPEN)
+
+Recorded 2026-09-13 from Claude's floor-document review; Codex repeated the
+probe on `8fed8bb834e37c190bc512ebc74f9440e4a3e8fa`. This is a new entry,
+not a change to the scope or count of the historical scan above.
+
+`WarrantVerifier.audit_claim`, EMPIRICAL branch, evaluates both applications
+but compares their term bytes without checking settlement. With a valid signed
+claim and caller trust admitting its author, both suspended sides can produce
+`pass` on equal intermediate terms or `fail` on unequal intermediate terms.
+This entry establishes the audit verdict defect; downstream admission/reward
+impact has not been measured here. GROUNDED and COUNTEREXAMPLE have settlement
+checks and are not the affected branches.
+
+Reproduction operands (glyph syntax, budget 50 for each side): let `Q = S I I`;
+apply each head to the fixture Q. Heads `I Q` vs `K Q I` give suspended/suspended
+and audit pass. Heads `Q` vs `I Q` give suspended/suspended and audit fail.
+Settling control: heads `I` vs `S K K`, fixtures `[I, K]`, gives pass.
+Create and sign an EmpiricalWitness with the correct fixtures fingerprint;
+run with a TrustConfig that explicitly trusts the author.
+
+Required repair: do not compare an unsettled pair as completed evidence;
+return UNVERIFIED for either suspended side. Include both asymmetric cases
+and completed match/mismatch controls. Re-check reachable consumers before
+claiming an admission or economic consequence. No code fix is included in
+the documentation amendment.
+
+Repair candidate: [PR #49](https://github.com/s0fractal/black-heart/pull/49),
+reported head `18cee9d`. It is separate from this documentation change;
+DOC-F1 remains OPEN here pending review and merge of that repair.
