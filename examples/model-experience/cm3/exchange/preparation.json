@@ -1,0 +1,12 @@
+{
+  "receiver_directory": "/private/tmp/black-heart-cm3-receiver",
+  "source_commit": "e102b07ee8c83082007d2d2f0b1d38b00dd6780f",
+  "input_commit": "7c05695ca59658edb0e310fd29bbad4d6c09c966",
+  "snapshot_head": "8cbf49c8ba0b60fc29fc807686d51b104f15425a",
+  "record_addresses": [
+    "8dd97cdc9ff4e43b4ba1c9108faa2bc81f5a0a9f3f3187f31e0e3cf000bb7a0b",
+    "18e967a766d22364f4e0ed55749930b6b8a59e26a772a96160d271950b297c42"
+  ],
+  "prompt_sha256": "d0c145823dc883b90c0cc2a6462a592ce6e971e9c29ae3ba1da705a400a61b70",
+  "source_manifest_sha256": "3836846b26877670641eafa78cbdc6eb305cb5e3a3b988607de52e7a58896217"
+}
