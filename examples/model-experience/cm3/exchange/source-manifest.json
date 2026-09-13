@@ -1,0 +1,16 @@
+{
+  "profile": "black-heart.cm3.source-manifest.v1",
+  "source_commit": "e102b07ee8c83082007d2d2f0b1d38b00dd6780f",
+  "input_commit": "7c05695ca59658edb0e310fd29bbad4d6c09c966",
+  "files": {
+    "experience.py": "29ebb41da214e605813e83b2fad8a52dbfb9eef3b444ce9f5334e7462884e8e0",
+    "test_empirical_settlement.py": "125e9e41fccf33ca6965556954681748cfc23002c76662da86636a0ade6f2186",
+    "warrant_kernel.py": "6b568db39b167c5f607c531193f3eeda101a53d1bccd31d73943be90c3464893",
+    "glyph.py": "b30badd37a29f892c5c2ec4c87cb4706afbbea588249c92e82f5f84093b884dd",
+    "crypto.py": "d9c726c4940aedc7e6ec061b2b0740116009b3a577391fac56a7802cc129f263",
+    "receiver_check.py": "eaeaaf115950604b1e236970ea8d479cc66a275d7aab685269f4d17d0649bc14",
+    "probe.py": "c27cf5b09697370ef94cfd9e82433f519886de1dc2dbdc67ba580008b920fc62",
+    "advice.patch": "f28cc270fe7df6beea1e05c6fb2507483c18a3a1dbeef5d06d5e31832078717b",
+    "source-context.txt": "74e0f20c6a5598854f9befcb940679a670ef2aa1c9efb72052d7acbe4fbd9f91"
+  }
+}

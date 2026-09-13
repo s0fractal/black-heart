@@ -88,5 +88,13 @@ class DifferentialTest(unittest.TestCase):
             self.assertEqual((root / 'run.json').read_bytes(), saved)
 
 
+class SavedExchangeTest(unittest.TestCase):
+    def test_response_roundtrip_context_and_original_packets(self):
+        result = module('verify_saved').verify()
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['records_found'], 3)
+        self.assertFalse(result['model_invoked'])
+
+
 if __name__ == '__main__':
     unittest.main()

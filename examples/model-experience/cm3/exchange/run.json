@@ -1,0 +1,109 @@
+{
+  "profile": "black-heart.cm3.local-check.v2",
+  "scope": "Fixed baseline versus preregistered early-return advice patch; three tests and two explicit fixture orders. No repository patch or automatic advice adoption.",
+  "source_commit": "e102b07ee8c83082007d2d2f0b1d38b00dd6780f",
+  "checkout_before": {
+    "head": "8cbf49c8ba0b60fc29fc807686d51b104f15425a\n",
+    "status_porcelain": ""
+  },
+  "checkout_after": {
+    "head": "8cbf49c8ba0b60fc29fc807686d51b104f15425a\n",
+    "status_porcelain": "?? .cm3-variants/\n?? run.json\n"
+  },
+  "conditions": "Fresh temporary variants; fixed patch and probe from the approved input commit; ATP 50; ephemeral test keys.",
+  "python": "3.14.7 (main, Aug  5 2026, 10:29:49) [Clang 21.0.0 (clang-2100.1.1.101)]",
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "patch_sha256": "f28cc270fe7df6beea1e05c6fb2507483c18a3a1dbeef5d06d5e31832078717b",
+  "baseline": {
+    "checkout_before": {
+      "head": "28035dfc4a5f5bfd9981307a98266f8a81c08320\n",
+      "status_porcelain": ""
+    },
+    "checkout_after": {
+      "head": "28035dfc4a5f5bfd9981307a98266f8a81c08320\n",
+      "status_porcelain": "?? __pycache__/\n"
+    },
+    "argv": [
+      "/opt/homebrew/opt/python@3.14/bin/python3.14",
+      "probe.py"
+    ],
+    "cwd": "/private/tmp/black-heart-cm3-receiver/.cm3-variants/baseline",
+    "warrant_kernel_sha256": "6b568db39b167c5f607c531193f3eeda101a53d1bccd31d73943be90c3464893",
+    "exit_code": 0,
+    "stdout": "{\"tests_run\": 3, \"failures\": [], \"errors\": [], \"test_output\": \"test_an_unsettled_fixture_does_not_mask_a_settled_mismatch (test_empirical_settlement.EmpiricalSettlementTest.test_an_unsettled_fixture_does_not_mask_a_settled_mismatch) ... ok\\ntest_both_suspended_on_the_same_term_is_not_a_pass (test_empirical_settlement.EmpiricalSettlementTest.test_both_suspended_on_the_same_term_is_not_a_pass) ... ok\\ntest_both_suspended_on_different_terms_is_not_a_fail (test_empirical_settlement.EmpiricalSettlementTest.test_both_suspended_on_different_terms_is_not_a_fail) ... ok\\n\\n----------------------------------------------------------------------\\nRan 3 tests in 0.040s\\n\\nOK\\n\", \"fixture_orders\": [{\"fixtures\": [\"🌿 🤍 🤍 (🌿 🤍 🤍)\", \"🖤\"], \"verdict\": \"fail\", \"reason\": \"Empirical equivalence failed on fixture '🖤': parent -> 🖤 != succ -> 🤍\"}, {\"fixtures\": [\"🖤\", \"🌿 🤍 🤍 (🌿 🤍 🤍)\"], \"verdict\": \"fail\", \"reason\": \"Empirical equivalence failed on fixture '🖤': parent -> 🖤 != succ -> 🤍\"}], \"budget\": 50}\n",
+    "stderr": "",
+    "measurement": {
+      "tests_run": 3,
+      "failures": [],
+      "errors": [],
+      "test_output": "test_an_unsettled_fixture_does_not_mask_a_settled_mismatch (test_empirical_settlement.EmpiricalSettlementTest.test_an_unsettled_fixture_does_not_mask_a_settled_mismatch) ... ok\ntest_both_suspended_on_the_same_term_is_not_a_pass (test_empirical_settlement.EmpiricalSettlementTest.test_both_suspended_on_the_same_term_is_not_a_pass) ... ok\ntest_both_suspended_on_different_terms_is_not_a_fail (test_empirical_settlement.EmpiricalSettlementTest.test_both_suspended_on_different_terms_is_not_a_fail) ... ok\n\n----------------------------------------------------------------------\nRan 3 tests in 0.040s\n\nOK\n",
+      "fixture_orders": [
+        {
+          "fixtures": [
+            "🌿 🤍 🤍 (🌿 🤍 🤍)",
+            "🖤"
+          ],
+          "verdict": "fail",
+          "reason": "Empirical equivalence failed on fixture '🖤': parent -> 🖤 != succ -> 🤍"
+        },
+        {
+          "fixtures": [
+            "🖤",
+            "🌿 🤍 🤍 (🌿 🤍 🤍)"
+          ],
+          "verdict": "fail",
+          "reason": "Empirical equivalence failed on fixture '🖤': parent -> 🖤 != succ -> 🤍"
+        }
+      ],
+      "budget": 50
+    }
+  },
+  "advice_applied": {
+    "checkout_before": {
+      "head": "28035dfc4a5f5bfd9981307a98266f8a81c08320\n",
+      "status_porcelain": " M warrant_kernel.py\n"
+    },
+    "checkout_after": {
+      "head": "28035dfc4a5f5bfd9981307a98266f8a81c08320\n",
+      "status_porcelain": " M warrant_kernel.py\n?? __pycache__/\n"
+    },
+    "argv": [
+      "/opt/homebrew/opt/python@3.14/bin/python3.14",
+      "probe.py"
+    ],
+    "cwd": "/private/tmp/black-heart-cm3-receiver/.cm3-variants/advice",
+    "warrant_kernel_sha256": "ee0baa101ec6f92cc74796b99ae0cb1b9a79ad646870e77fbc79a7d3bd8c0d82",
+    "exit_code": 1,
+    "stdout": "{\"tests_run\": 3, \"failures\": [\"test_empirical_settlement.EmpiricalSettlementTest.test_an_unsettled_fixture_does_not_mask_a_settled_mismatch (order=['🌿 🤍 🤍 (🌿 🤍 🤍)', '🖤'])\"], \"errors\": [], \"test_output\": \"test_an_unsettled_fixture_does_not_mask_a_settled_mismatch (test_empirical_settlement.EmpiricalSettlementTest.test_an_unsettled_fixture_does_not_mask_a_settled_mismatch) ... \\n  test_an_unsettled_fixture_does_not_mask_a_settled_mismatch (test_empirical_settlement.EmpiricalSettlementTest.test_an_unsettled_fixture_does_not_mask_a_settled_mismatch) (order=['🌿 🤍 🤍 (🌿 🤍 🤍)', '🖤']) ... FAIL\\ntest_both_suspended_on_the_same_term_is_not_a_pass (test_empirical_settlement.EmpiricalSettlementTest.test_both_suspended_on_the_same_term_is_not_a_pass) ... ok\\ntest_both_suspended_on_different_terms_is_not_a_fail (test_empirical_settlement.EmpiricalSettlementTest.test_both_suspended_on_different_terms_is_not_a_fail) ... ok\\n\\n======================================================================\\nFAIL: test_an_unsettled_fixture_does_not_mask_a_settled_mismatch (test_empirical_settlement.EmpiricalSettlementTest.test_an_unsettled_fixture_does_not_mask_a_settled_mismatch) (order=['🌿 🤍 🤍 (🌿 🤍 🤍)', '🖤'])\\n----------------------------------------------------------------------\\nTraceback (most recent call last):\\n  File \\\"/private/tmp/black-heart-cm3-receiver/.cm3-variants/advice/test_empirical_settlement.py\\\", line 110, in test_an_unsettled_fixture_does_not_mask_a_settled_mismatch\\n    self.assertEqual(v.status, VerificationStatus.FAIL, v.reason)\\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\nAssertionError: <VerificationStatus.UNVERIFIED: 'unverified'> != <VerificationStatus.FAIL: 'fail'> : CM-3 fixed advice control: stop at first unsettled fixture\\n\\n----------------------------------------------------------------------\\nRan 3 tests in 0.042s\\n\\nFAILED (failures=1)\\n\", \"fixture_orders\": [{\"fixtures\": [\"🌿 🤍 🤍 (🌿 🤍 🤍)\", \"🖤\"], \"verdict\": \"unverified\", \"reason\": \"CM-3 fixed advice control: stop at first unsettled fixture\"}, {\"fixtures\": [\"🖤\", \"🌿 🤍 🤍 (🌿 🤍 🤍)\"], \"verdict\": \"fail\", \"reason\": \"Empirical equivalence failed on fixture '🖤': parent -> 🖤 != succ -> 🤍\"}], \"budget\": 50}\n",
+    "stderr": "",
+    "measurement": {
+      "tests_run": 3,
+      "failures": [
+        "test_empirical_settlement.EmpiricalSettlementTest.test_an_unsettled_fixture_does_not_mask_a_settled_mismatch (order=['🌿 🤍 🤍 (🌿 🤍 🤍)', '🖤'])"
+      ],
+      "errors": [],
+      "test_output": "test_an_unsettled_fixture_does_not_mask_a_settled_mismatch (test_empirical_settlement.EmpiricalSettlementTest.test_an_unsettled_fixture_does_not_mask_a_settled_mismatch) ... \n  test_an_unsettled_fixture_does_not_mask_a_settled_mismatch (test_empirical_settlement.EmpiricalSettlementTest.test_an_unsettled_fixture_does_not_mask_a_settled_mismatch) (order=['🌿 🤍 🤍 (🌿 🤍 🤍)', '🖤']) ... FAIL\ntest_both_suspended_on_the_same_term_is_not_a_pass (test_empirical_settlement.EmpiricalSettlementTest.test_both_suspended_on_the_same_term_is_not_a_pass) ... ok\ntest_both_suspended_on_different_terms_is_not_a_fail (test_empirical_settlement.EmpiricalSettlementTest.test_both_suspended_on_different_terms_is_not_a_fail) ... ok\n\n======================================================================\nFAIL: test_an_unsettled_fixture_does_not_mask_a_settled_mismatch (test_empirical_settlement.EmpiricalSettlementTest.test_an_unsettled_fixture_does_not_mask_a_settled_mismatch) (order=['🌿 🤍 🤍 (🌿 🤍 🤍)', '🖤'])\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/private/tmp/black-heart-cm3-receiver/.cm3-variants/advice/test_empirical_settlement.py\", line 110, in test_an_unsettled_fixture_does_not_mask_a_settled_mismatch\n    self.assertEqual(v.status, VerificationStatus.FAIL, v.reason)\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: <VerificationStatus.UNVERIFIED: 'unverified'> != <VerificationStatus.FAIL: 'fail'> : CM-3 fixed advice control: stop at first unsettled fixture\n\n----------------------------------------------------------------------\nRan 3 tests in 0.042s\n\nFAILED (failures=1)\n",
+      "fixture_orders": [
+        {
+          "fixtures": [
+            "🌿 🤍 🤍 (🌿 🤍 🤍)",
+            "🖤"
+          ],
+          "verdict": "unverified",
+          "reason": "CM-3 fixed advice control: stop at first unsettled fixture"
+        },
+        {
+          "fixtures": [
+            "🖤",
+            "🌿 🤍 🤍 (🌿 🤍 🤍)"
+          ],
+          "verdict": "fail",
+          "reason": "Empirical equivalence failed on fixture '🖤': parent -> 🖤 != succ -> 🤍"
+        }
+      ],
+      "budget": 50
+    }
+  },
+  "expected_differential_observed": true,
+  "source_manifest_sha256": "3836846b26877670641eafa78cbdc6eb305cb5e3a3b988607de52e7a58896217"
+}
