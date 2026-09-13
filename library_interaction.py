@@ -802,9 +802,18 @@ def evaluate(pdf_path: str, proposal_path: str, policy_path: str,
         return claim_res
     claim = claim_res["claim"]
 
+    # The witness budget is recorded in the decision, so it must be admissible
+    # BEFORE anything is executed or written -- otherwise evaluate can emit a
+    # decision its own reader refuses. (from_dict coerces with int(), so a
+    # negative value arrives here as a negative int rather than a type error.)
+    requested = getattr(claim.witness, "atp_budget", None)
+    if not _is_nonneg_int(requested):
+        return _refuse("CLAIM_BUDGET_INVALID",
+                       f"witness atp_budget {requested!r} is not a non-negative int")
+
     evaluation = evaluate_evidence(claim, policy["trust_config"])
     evaluator = {"profile": EVALUATOR_PROFILE, "version": EVALUATOR_VERSION,
-                 "atp_budget_requested": int(getattr(claim.witness, "atp_budget", 0) or 0),
+                 "atp_budget_requested": requested,
                  "atp_budget_limit": policy["max_atp_budget"],
                  # null when the verifier reported no measurement (e.g. a policy
                  # refusal that returned before any reduction ran). Absence of a
@@ -816,6 +825,14 @@ def evaluate(pdf_path: str, proposal_path: str, policy_path: str,
 
     body = decision_body(proposal, policy["policy_sha256"], evaluator, evaluation,
                          admission, key["proposer_pk_hex"])
+    # Writer/reader agreement is structural, not a promise: the body goes
+    # through the SAME validator the reader uses, before it is signed or
+    # written. A body this host would refuse to read is never emitted.
+    self_check = validate_decision_body(body)
+    if self_check is not None:
+        return _refuse("DECISION_SELF_CHECK_FAILED",
+                       f"refusing to emit a decision this reader would reject: "
+                       f"{self_check['refusal']}: {self_check['detail']}")
     did = compute_decision_id(body)
     decision = {"profile": DECISION_PROFILE, "body": body, "decision_id": did,
                 "decision_signature_hex": crypto.sign_hex(key["secret_key_hex"],

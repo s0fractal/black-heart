@@ -125,6 +125,17 @@ editing a saved policy invalidates every decision that cited it.
   `decider_authority_established: false`. A self-declared signing key is not
   authority; a reader needing either must establish it itself.
 
+## 4bis. Producer and reader agree by construction
+
+Whatever `evaluate` writes, this host's own reader must accept under the
+matching pins. That is enforced structurally, not promised: the formed decision
+body is passed through **the reader's own `validate_decision_body`** before it
+is signed or written, and a body this host would refuse to read is never
+emitted (`DECISION_SELF_CHECK_FAILED`). Inputs that would produce such a body
+are refused earlier and more precisely — a witness `atp_budget` that is not a
+non-negative int is `CLAIM_BUDGET_INVALID`, checked **before** any reduction
+runs and before anything is written, so no output file is created.
+
 ## 5. Preconditions checked before any evaluation
 
 `evaluate` re-runs the full LI-1 authentication rather than trusting that the
@@ -152,6 +163,7 @@ and leaves every input byte-identical.
 `POLICY_FIELD_MISSING`, `POLICY_FIELD_TYPE`, `POLICY_TRUST_ALL`,
 `POLICY_NO_SIGNATURE`, `POLICY_UNSUPPORTED_GRADE`,
 `POLICY_UNSUPPORTED_OPERATION`, `POLICY_BUDGET_INVALID`,
+`CLAIM_BUDGET_INVALID`, `DECISION_SELF_CHECK_FAILED`,
 `DECISION_UNSUPPORTED_EVALUATOR`, `DECISION_FIELD_MISSING`,
 `DECISION_FIELD_TYPE`, `DECISION_INCONSISTENT`, and the other `DECISION_*`
 (parse/profile/id/signature and the proposal, parent and policy pin mismatches),

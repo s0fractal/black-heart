@@ -20,6 +20,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -857,6 +858,78 @@ class AtpMeasurementTest(LI2Base):
                        grade=wk.EvidenceGrade.GROUNDED, reason="no run")
         self.assertEqual(v.delta_atp, 0)
         self.assertEqual(v.details, {})
+
+
+class ProducerReaderAgreementTest(LI2Base):
+    """Whatever `evaluate` writes, this host's own reader must accept under the
+    matching pins. Anything else is a producer/reader contract defect, even when
+    it grants nothing: here a negative witness budget produced a decision that
+    verify_decision then refused."""
+
+    def _write_and_read(self, claim, policy=None, tag="rt"):
+        cp = self.d / f"claim_{tag}.json"
+        cp.write_text(json.dumps(claim.to_dict(), indent=2))
+        prop = self.d / f"prop_{tag}.json"
+        r = self.cli("add-claim", "--pdf", str(self.parent),
+                     "--expect-parent-sha256", self.parent_sha, "--claim", str(cp),
+                     "--proposer-key-file", str(self.key_path), "--out", str(prop),
+                     "--json")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        out = self.d / f"dec_{tag}.json"
+        r2 = self.cli("evaluate", "--pdf", str(self.parent), "--proposal", str(prop),
+                      "--policy", str(policy or self.policy_path),
+                      "--decider-key-file", str(self.decider_key), "--out", str(out),
+                      "--json")
+        return r2, out, prop
+
+    def test_every_written_decision_is_accepted_by_its_own_reader(self):
+        """The general invariant, not just the reported case."""
+        deny = self.write_policy("deny_rt.json", tc_trusted_author_pks=[])
+        scenarios = [("pass", None), ("fail", None), ("unverified", None),
+                     ("pass", deny)]
+        for kind, policy in scenarios:
+            with self.subTest(kind=kind, policy=bool(policy)):
+                tag = f"{kind}{'_deny' if policy else ''}"
+                r, out, prop = self._write_and_read(self.case_claim(kind), policy, tag)
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                res = json.loads(r.stdout)
+                back = li.verify_decision(out.read_bytes(),
+                                          expect_proposal_id=res["proposal_id"],
+                                          expect_parent_sha256=res["parent_pdf_sha256"],
+                                          expect_policy_sha256=res["policy_sha256"])
+                self.assertTrue(back["ok"],
+                                f"{tag}: written decision refused by its own reader: {back}")
+
+    def test_negative_witness_budget_is_refused_without_writing(self):
+        claim = self.grounded_claim(SETTLED, "0" * 64, budget=-1)
+        r, out, _ = self._write_and_read(claim, tag="negbudget")
+        self.assertEqual(r.returncode, 2, r.stdout)
+        self.assertIn("CLAIM_BUDGET_INVALID", r.stdout)
+        self.assertFalse(out.exists(), "a refused evaluation still wrote a decision")
+
+    def test_budget_boundary_values(self):
+        for budget, ok in ((0, True), (1, True), (-1, False), (-1000, False)):
+            with self.subTest(budget=budget):
+                claim = self.grounded_claim(SETTLED, "0" * 64, budget=budget)
+                r, out, _ = self._write_and_read(claim, tag=f"b{budget}")
+                self.assertEqual(r.returncode, 0 if ok else 2, r.stdout)
+                self.assertEqual(out.exists(), ok)
+                if ok:
+                    self.assertTrue(li.verify_decision(out.read_bytes())["ok"])
+
+    def test_a_body_the_reader_would_reject_is_never_emitted(self):
+        """The structural guarantee: evaluate runs the formed body through the
+        reader's own validator before signing. Simulated by making that
+        validator reject everything -- nothing may be written."""
+        out = self.d / "selfcheck.json"
+        prop = self.proposal_for(self.case_claim("pass"), "sc.json")
+        with mock.patch.object(li, "validate_decision_body",
+                               return_value={"ok": False, "refusal": "X", "detail": "y"}):
+            res = li.evaluate(str(self.parent), str(prop), str(self.policy_path),
+                              str(self.decider_key), str(out))
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["refusal"], "DECISION_SELF_CHECK_FAILED")
+        self.assertFalse(out.exists())
 
 
 class DecisionBindingTest(LI2Base):
