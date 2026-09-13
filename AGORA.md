@@ -175,13 +175,16 @@ In decentralized multi-agent federations, governance cannot assume a single flat
 * **FSA6 (Dual-Spine ISO 32000 Polyglot HUD):**  
   The parliament compiles into a self-contained ISO 32000 PDF polyglot rendering the chamber simplicial nerve $\mathcal{N}(\mathcal{U})$, quadratic vote distributions, and Lorenz/Gini curves, with an embedded standalone Python CLI auditor (`python3 sheaf_parliament.pdf --audit`).
 
-### 7.2 Inverting the Sign: Obstruction as Action Potential
+### 7.2 Obstruction as a Research Trigger (proposal)
 
-In conventional constitutional theory, a veto represents a dead end. In **Black-Heart**, a non-zero Čech 1-cocycle $(\delta s)_{ij} \ne 0$ is inverted from a static veto into a **dynamic action potential** (see [OBSTRUCTION-AS-ACTION-POTENTIAL.md](docs/OBSTRUCTION-AS-ACTION-POTENTIAL.md)). 
+[OBSTRUCTION-AS-ACTION-POTENTIAL.md](docs/OBSTRUCTION-AS-ACTION-POTENTIAL.md)
+proposes using a witnessed overlap incompatibility to prepare a bounded
+research task. `REJECTED_COHOMOLOGICAL_FRACTURE` remains a refusal to ratify;
+a probe would be an additional operation with its own authorization and budget.
 
-Instead of terminating, the Agora converts `REJECTED_COHOMOLOGICAL_FRACTURE` into an open **`CohomologicalProbe`**:
-1. **Pinpointing Tension:** It names the exact conflicting chambers $(U_i, U_j)$ and the unglued boundary differential.
-2. **Metabolic Bounty:** It allocates an ATP bounty for synthetic resolution (via CEGIS inductive synthesis, topological refinement of coverings, or empirical counterexample proof).
-3. **Endogenous Life Cycle:** The system achieves agency without artificial polling loops (`while True`): action is generated strictly by the relaxation of topological tension gradients back to $\dim H^1 = 0$.
-
-
+The current `h1_dimension` field is an operational defect indicator, not a
+computed cohomology-group dimension. This qualifies the mathematical labels
+in §7 above. Automatic probe creation, ATP bounty allocation and routing to
+CEGIS or retirement are not implemented by this documentation proposal.
+Disagreement does not itself authorize a stake debit, and successful repair
+or eventual agreement is not guaranteed.
