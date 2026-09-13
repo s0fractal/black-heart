@@ -1,8 +1,10 @@
 # CM-3 — one bounded receiver exchange
 
-**ACTIVE / READY FOR REVIEW.** One owner-authorized fresh Claude Max session
+**COMPLETE / ACCEPTED AND MERGED.** One owner-authorized fresh Claude Max session
 completed. Runtime declares `claude-opus-5[1m]`; this is metadata, not an identity
-attestation. CM-2 is merged, CM-3 is not yet accepted, CM-4 remains queued.
+attestation. CM-3 was accepted at `e1d72af7de030ea983d305aa51cad0850c9d2d3e` and merged
+as `d57124f5d0398610377083dc242eda78ad3c3df3` in [PR #54](https://github.com/s0fractal/black-heart/pull/54).
+CM-4 remains queued.
 
 [Response](exchange/response.json) is the exact emitted UTF-8 JSON text,
 [run](exchange/run.json) is the receiver's measured differential, and
@@ -124,3 +126,28 @@ behavior cannot pass the expected differential. It also tests rejection/removal
 of unexpected context and preservation of the saved response/predecessors.
 This is one labelled-control transfer with a measured rejection, not a blind
 benchmark or proof that future models will avoid every repeated error.
+
+## Post-review qualifications
+
+The owner supplied an ACCEPT review for the exact head above. The merge retains
+input commit `7c05695ca59658edb0e310fd29bbad4d6c09c966` in main ancestry.
+`validation.json` remains the historical pre-review report; its readiness status
+and no-merge scope describe the recording stage, not the current lifecycle status.
+
+Two defects in the immutable receiver response remain visible:
+
+- Observation 7 (`basis: reported`) cites `run`, but its historical statements
+  come from the two received records, not `run.json`. That evidence pointer does
+  not support those statements; read the predecessor records for their sources.
+- The phrase “my independent differential” overstates independence. The sender
+  designed and preregistered the comparison; the receiver executed it. This is
+  receiver execution of a sender-designed check, not independent test design.
+
+The reviewer reports using the same model as the receiver. Artifact checks do
+not thereby establish independent model assessment of the receiver's answer.
+The response bytes, source evidence and frozen plan have not been edited.
+
+The request-rewriting Max OAuth launcher was authorized for this one exchange.
+That authorization is not a decision to reuse it routinely: before selecting
+it as a CM-4 pattern, the owner must explicitly decide on that mode of use.
+This note neither establishes provider-policy compatibility nor launches CM-4.
