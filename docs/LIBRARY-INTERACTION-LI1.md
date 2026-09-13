@@ -121,6 +121,15 @@ domain and are **never** reinterpreted as PDF byte addresses.
   be replayed as an envelope signature, or the reverse.
 - **The claim author and the proposer are different identities.** They may be the
   same key, but the envelope records them separately and never conflates them.
+- **The envelope signature authenticates the sealer, not the contents.** A
+  receiver of an external envelope must never assume it was produced by this
+  `add-claim`, so `verify_proposal` repeats the **same** claim authentication
+  that intake performs — structure, recomputed claim id, author signature —
+  through one shared function (`authenticate_claim_document`), and validates
+  **every** signed body field, including `parent_manifest_format`: a genuine
+  signature over an unknown profile does not make that profile supported.
+  `claim_authenticated: true` in a result means exactly those three checks; it
+  is not evaluation (LI-2) and not admission.
 - **No file paths or file names appear in the signed body.** Paths are locators;
   identity is the digest and the key.
 
@@ -158,7 +167,10 @@ python3 cli.py library add-claim --pdf <path> --expect-parent-sha256 <hex>
 `CLAIM_DUPLICATE_KEYS`, `CLAIM_MALFORMED`, `CLAIM_ID_MISMATCH`,
 `CLAIM_SIGNATURE_INVALID`, `UNSUPPORTED_OPERATION`, `PROPOSER_KEY_UNREADABLE`,
 `PROPOSER_KEY_MALFORMED`, `OUTPUT_EXISTS`, `OUTPUT_UNWRITABLE`,
-`PROPOSAL_*` (parse/profile/signature/binding, for `inspect --proposal`).
+`PROPOSAL_UNSUPPORTED_MANIFEST_FORMAT`, and the other `PROPOSAL_*`
+(parse/profile/signature/binding). The envelope reader returns the same
+`CLAIM_*` names as intake for the same claim defect — one vocabulary, one
+shared check, on both paths.
 
 Every refusal is a named result on stderr/JSON with exit 2. On any refusal the
 input PDF, the claim file, the key file and any pre-existing output are left

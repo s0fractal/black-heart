@@ -332,6 +332,126 @@ class EnvelopeTest(LI1Base):
         self.assertNotIn(self.p_sk, self.out.read_text())
 
 
+class EnvelopeReaderAuthenticatesClaimTest(LI1Base):
+    """A receiver of an EXTERNAL envelope cannot assume it came through our own
+    add_claim. The reader must repeat the full claim authentication, not lean on
+    the proposer's signature -- which only proves who sealed the envelope."""
+
+    def setUp(self):
+        super().setUp()
+        self.good_claim = json.loads(self.claim_path.read_text())
+
+    def sealed(self, claim_value, fmt="WARRANT-0.2", operation="add-claim"):
+        """A genuinely proposer-signed envelope around arbitrary content."""
+        body = {"operation": operation, "parent_pdf_sha256": self.parent_sha,
+                "parent_manifest_format": fmt, "claim": claim_value,
+                "proposer_pk_hex": self.p_pk}
+        pid = li.compute_proposal_id(body)
+        return json.dumps({
+            "profile": li.PROPOSAL_PROFILE, "body": body, "proposal_id": pid,
+            "envelope_signature_hex": crypto.sign_hex(self.p_sk,
+                                                      li.envelope_message(pid)),
+        }).encode()
+
+    def _bad_claims(self):
+        import copy
+        bad_sig = copy.deepcopy(self.good_claim)
+        bad_sig["signature_hex"] = "0" * 8 + bad_sig["signature_hex"][8:]
+        bad_id = copy.deepcopy(self.good_claim)
+        bad_id["claim_id"] = "f" * 64
+        tampered = copy.deepcopy(self.good_claim)
+        tampered["body"]["tau"] = "🖤"
+        no_witness = copy.deepcopy(self.good_claim)
+        no_witness["body"].pop("witness")
+        return {
+            "null": (None, "CLAIM_MALFORMED"),
+            "empty_object": ({}, "CLAIM_MALFORMED"),
+            "list": ([], "CLAIM_MALFORMED"),
+            "string": ("text", "CLAIM_MALFORMED"),
+            "missing_witness": (no_witness, "CLAIM_MALFORMED"),
+            "invalid_author_signature": (bad_sig, "CLAIM_SIGNATURE_INVALID"),
+            "wrong_claim_id": (bad_id, "CLAIM_ID_MISMATCH"),
+            "tampered_body": (tampered, "CLAIM_ID_MISMATCH"),
+        }
+
+    def test_a_real_proposer_signature_does_not_launder_a_bad_claim(self):
+        for label, (value, want) in self._bad_claims().items():
+            with self.subTest(claim=label):
+                res = li.verify_proposal(self.sealed(value))
+                self.assertFalse(res["ok"], f"{label} was accepted")
+                self.assertEqual(res["refusal"], want)
+
+    def test_both_paths_reject_the_same_claim_documents_identically(self):
+        """The shared check is actually shared: intake and the envelope reader
+        return the SAME named refusal for the same claim document."""
+        for label, (value, want) in self._bad_claims().items():
+            with self.subTest(claim=label):
+                intake = li.authenticate_claim_document(value)
+                reader = li.verify_proposal(self.sealed(value))
+                self.assertEqual(intake["refusal"], want)
+                self.assertEqual(reader["refusal"], intake["refusal"])
+
+    def test_intake_file_path_and_envelope_path_agree_on_disk_too(self):
+        for label, (value, want) in self._bad_claims().items():
+            with self.subTest(claim=label):
+                p = self.d / f"c_{label}.json"
+                p.write_text(json.dumps(value))
+                self.assertEqual(li.load_claim(str(p))["refusal"], want)
+
+    def test_signed_but_unsupported_parent_manifest_format_is_refused(self):
+        # A real signature over an unknown profile does not make it supported.
+        res = li.verify_proposal(self.sealed(self.good_claim, fmt="unsupported.v99"))
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["refusal"], "PROPOSAL_UNSUPPORTED_MANIFEST_FORMAT")
+
+    def test_signed_but_unsupported_operation_is_refused(self):
+        res = li.verify_proposal(self.sealed(self.good_claim, operation="apply"))
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["refusal"], "UNSUPPORTED_OPERATION")
+
+    def test_honest_positive_with_distinct_author_and_proposer_keys(self):
+        res = li.verify_proposal(self.sealed(self.good_claim), self.parent_sha)
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(res["status"], "PROPOSAL_ONLY")
+        self.assertNotEqual(res["claim_author_pk_hex"], res["proposer_pk_hex"])
+        self.assertEqual(res["claim_author_pk_hex"], self.a_pk)
+        self.assertEqual(res["proposer_pk_hex"], self.p_pk)
+        # authenticated != evaluated != admitted
+        self.assertTrue(res["claim_authenticated"])
+        self.assertFalse(res["evaluated"])
+        self.assertFalse(res["admitted"])
+
+    def test_every_signed_body_field_is_validated_by_the_reader(self):
+        """Exhaust the class: each field of the signed body must have at least
+        one value the reader refuses. A field nobody can break is a field nobody
+        checks."""
+        breakers = {
+            "operation": ("apply", "UNSUPPORTED_OPERATION"),
+            "parent_pdf_sha256": ("zz" * 32, "PROPOSAL_MALFORMED"),
+            "parent_manifest_format": ("unsupported.v99",
+                                       "PROPOSAL_UNSUPPORTED_MANIFEST_FORMAT"),
+            "claim": (None, "CLAIM_MALFORMED"),
+            "proposer_pk_hex": ("00" * 32, "PROPOSAL_MALFORMED"),
+        }
+        body_fields = set(json.loads(self.sealed(self.good_claim))["body"].keys())
+        self.assertEqual(set(breakers), body_fields,
+                         "a signed body field has no refusal control")
+        for field, (value, want) in breakers.items():
+            with self.subTest(field=field):
+                body = {"operation": "add-claim", "parent_pdf_sha256": self.parent_sha,
+                        "parent_manifest_format": "WARRANT-0.2",
+                        "claim": self.good_claim, "proposer_pk_hex": self.p_pk}
+                body[field] = value
+                pid = li.compute_proposal_id(body)
+                raw = json.dumps({
+                    "profile": li.PROPOSAL_PROFILE, "body": body, "proposal_id": pid,
+                    "envelope_signature_hex": crypto.sign_hex(
+                        self.p_sk, li.envelope_message(pid))}).encode()
+                res = li.verify_proposal(raw)
+                self.assertFalse(res["ok"], f"{field} accepted a broken value")
+                self.assertEqual(res["refusal"], want)
+
+
 class CliAcceptanceTest(LI1Base):
     """The LI-1 acceptance list, exercised through the REAL CLI subprocess."""
 

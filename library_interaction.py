@@ -212,21 +212,18 @@ def inspect_parent(path: str, expect_parent_sha256: Optional[str] = None) -> Dic
 # --------------------------------------------------------------------------- #
 # The supplied claim: parsed and AUTHENTICATED (not evaluated)
 # --------------------------------------------------------------------------- #
-def load_claim(path: str) -> Dict[str, Any]:
-    raw, refusal = _read_file(path, MAX_CLAIM_BYTES,
-                              "CLAIM_UNREADABLE", "CLAIM_TOO_LARGE")
-    if refusal:
-        return refusal
-    try:
-        doc = json.loads(raw.decode("utf-8"), object_pairs_hook=_no_dupe_pairs)
-    except UnicodeDecodeError as e:
-        return _refuse("CLAIM_NOT_JSON", f"not UTF-8: {e}")
-    except ValueError as e:
-        name = ("CLAIM_DUPLICATE_KEYS" if "duplicate JSON key" in str(e)
-                else "CLAIM_NOT_JSON")
-        return _refuse(name, str(e))
+def authenticate_claim_document(doc: Any) -> Dict[str, Any]:
+    """THE claim check, shared by BOTH paths -- intake (`load_claim`) and the
+    envelope reader (`verify_proposal`). A receiver of an external envelope must
+    never assume it came through our own `add_claim`, so the reader repeats
+    exactly this, not a weaker version of it.
+
+    Structure, recomputed claim id and author signature only. It does NOT check
+    the claim's mathematics: that is LI-2's evaluation, and nothing here implies
+    the claim is true."""
     if not isinstance(doc, dict):
-        return _refuse("CLAIM_MALFORMED", f"claim is {type(doc).__name__}, not an object")
+        return _refuse("CLAIM_MALFORMED",
+                       f"claim is {type(doc).__name__}, not an object")
     try:
         claim = wk.EdgeClaim.from_dict(doc)
     except Exception as e:                                   # noqa: BLE001
@@ -246,6 +243,23 @@ def load_claim(path: str) -> Dict[str, Any]:
                claim_id=claim.claim_id,
                grade=claim.grade.value,
                author_pk_hex=claim.author_pk_hex)
+
+
+def load_claim(path: str) -> Dict[str, Any]:
+    """Intake path: read the file, parse it, then run the SHARED check."""
+    raw, refusal = _read_file(path, MAX_CLAIM_BYTES,
+                              "CLAIM_UNREADABLE", "CLAIM_TOO_LARGE")
+    if refusal:
+        return refusal
+    try:
+        doc = json.loads(raw.decode("utf-8"), object_pairs_hook=_no_dupe_pairs)
+    except UnicodeDecodeError as e:
+        return _refuse("CLAIM_NOT_JSON", f"not UTF-8: {e}")
+    except ValueError as e:
+        name = ("CLAIM_DUPLICATE_KEYS" if "duplicate JSON key" in str(e)
+                else "CLAIM_NOT_JSON")
+        return _refuse(name, str(e))
+    return authenticate_claim_document(doc)
 
 
 def load_proposer_key(path: str) -> Dict[str, Any]:
@@ -345,6 +359,17 @@ def verify_proposal(raw: bytes, expect_parent_sha256: Optional[str] = None) -> D
         return _refuse("PROPOSAL_MALFORMED", "proposer_pk_hex is not a valid public key")
     if not _is_hex(doc["proposal_id"], 64):
         return _refuse("PROPOSAL_MALFORMED", "proposal_id is not a 64-hex digest")
+    # A real signature over an unknown profile does not make it supported.
+    if body["parent_manifest_format"] != SUPPORTED_MANIFEST_FORMAT:
+        return _refuse("PROPOSAL_UNSUPPORTED_MANIFEST_FORMAT",
+                       f"{body['parent_manifest_format']!r} is not "
+                       f"{SUPPORTED_MANIFEST_FORMAT!r}")
+    # The proposer's signature authenticates WHO sealed the envelope. It is NOT
+    # a substitute for authenticating the claim inside it: an external envelope
+    # need never have passed through our own add_claim.
+    inner = authenticate_claim_document(body["claim"])
+    if not inner["ok"]:
+        return inner
 
     recomputed = compute_proposal_id(body)
     if recomputed != doc["proposal_id"].lower():
@@ -362,11 +387,13 @@ def verify_proposal(raw: bytes, expect_parent_sha256: Optional[str] = None) -> D
     return _ok(proposal_id=doc["proposal_id"],
                operation=body["operation"],
                parent_pdf_sha256=body["parent_pdf_sha256"],
+               parent_manifest_format=body["parent_manifest_format"],
                proposer_pk_hex=body["proposer_pk_hex"],
-               claim_author_pk_hex=(body["claim"].get("body", {}) or {}).get("author_pk_hex")
-               if isinstance(body["claim"], dict) else None,
-               claim_id=body["claim"].get("claim_id") if isinstance(body["claim"], dict) else None,
-               admitted=False,
+               claim_author_pk_hex=inner["author_pk_hex"],
+               claim_id=inner["claim_id"],
+               claim_grade=inner["grade"],
+               claim_authenticated=True,     # structure/id/signature only
+               evaluated=False, admitted=False,
                status="PROPOSAL_ONLY")
 
 
