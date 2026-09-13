@@ -25,7 +25,7 @@ superseded_by: []
 Поверх `x3` визначає правила обліку обчислювальних витрат і граничні умови зупинки в репозиторії Black-Heart:
 1. **Дискретний лічильник редукцій (`glyph.evaluate`):** Облік скорочень за правилами комбінаторів SKIY за правилом leftmost-outermost.
 2. **Межа бюджету та зупинка:** Правило переходу в стан `EvalStatus.SUSPENDED`, коли залишок бюджету дорівнює нулю, а вираз містить невиконаний редекс.
-3. **Розмежування статусів перевірки:** У гілках GROUNDED, COUNTEREXAMPLE і EMPIRICAL `WarrantVerifier.audit_claim` недолічене обчислення (`SUSPENDED`) веде до `UNVERIFIED`, а не `FAIL`. EMPIRICAL дотримується цього правила з ремонту `DOC-F1` ([PR #49](https://github.com/s0fractal/black-heart/pull/49), `main` `f108567`); на `8fed8bb` не дотримувався (див. §6.1).
+3. **Розмежування статусів перевірки:** У гілках GROUNDED і COUNTEREXAMPLE `WarrantVerifier.audit_claim` недолічене обчислення (`SUSPENDED`) веде до `UNVERIFIED`, а не `FAIL`. У EMPIRICAL з ремонту `DOC-F1` ([PR #49](https://github.com/s0fractal/black-heart/pull/49), `main` `f108567`): завершена розбіжність на будь-якій fixture → `FAIL`; за її відсутності будь-яка незавершена сторона → `UNVERIFIED`; завершений збіг на всіх fixtures → `PASS`. На `8fed8bb` EMPIRICAL цього не дотримувався (див. §6.1).
 4. **Принцип точності вимірів:** Суворе розрізнення між **виміряним нулем** (`atp_spent = 0`) та **відсутністю виміру** (`atp_spent: null`, `atp_spent_measured: false`).
 
 ### 1.2 Виключення з області (Non-Scope)
@@ -93,7 +93,7 @@ superseded_by: []
 
 ### 2.3 Названі відмови та винятки в коді
 * **`glyph.BudgetExceededError`**: Викликається у `glyph.evaluate`, коли ліміт `max_atp` вичерпано при встановленому прапорці `raise_on_limit=True`.
-* **`VerificationStatus.UNVERIFIED`**: Вердикт у `warrant_kernel.WarrantVerifier.audit_claim`, коли редукція свідчення `EvidenceGrade.GROUNDED`, `EvidenceGrade.COUNTEREXAMPLE` чи (з `f108567`) `EvidenceGrade.EMPIRICAL` зависла в `SUSPENDED` («A refusal is not a verdict»).
+* **`VerificationStatus.UNVERIFIED`**: Вердикт у `warrant_kernel.WarrantVerifier.audit_claim`, коли редукція свідчення `EvidenceGrade.GROUNDED` чи `EvidenceGrade.COUNTEREXAMPLE` зависла в `SUSPENDED` («A refusal is not a verdict»). Для `EvidenceGrade.EMPIRICAL` (з `f108567`) — лише якщо жодна fixture не дала завершеної розбіжності: завершена розбіжність на будь-якій fixture → `FAIL`; за її відсутності будь-яка незавершена сторона → `UNVERIFIED`; завершений збіг на всіх fixtures → `PASS`.
 * **`DECISION_FIELD_TYPE`**: Відмова валідатора рішень у `library_interaction.py`, якщо `atp_spent` не є `null` за відсутності виміру (`atp_spent_measured: false`), або типи полів не відповідають схемі.
 * **`DECISION_INCONSISTENT`**: Відмова у `library_interaction.py`, якщо рішення містить суперечність між допуском і вердиктом (наприклад, `admitted: true` поверх статусу, відмінного від `PASS`).
 
@@ -162,7 +162,7 @@ python3 cli.py library evaluate --pdf document.pdf --proposal prop.json --policy
 - [ ] Ввести параметр `max_ast_nodes` у `glyph.evaluate` для обмеження росту розміру дерева в процесі редукції.
 - [ ] Обробити `RecursionError` під час обходу аномально глибоких термів із переведенням у контрольований статус відмови, а не крах рантайму.
 - [ ] Описати наявні перетворення між лічильниками й резервами, починаючи з `_expected_credit` у `morpho_autopoiesis.py`; для кожного назвати формулу, споживача, аудит і межі.
-- [x] Виправити `DOC-F1`: призупинена будь-яка сторона EMPIRICAL → `UNVERIFIED`; завершений збіг → `PASS`, завершена розбіжність → `FAIL`; змішані випадки SETTLED/SUSPENDED перевірено ([PR #49](https://github.com/s0fractal/black-heart/pull/49)).
+- [x] Виправити `DOC-F1`: завершена розбіжність на будь-якій fixture EMPIRICAL → `FAIL`; за її відсутності будь-яка незавершена сторона → `UNVERIFIED`; завершений збіг на всіх fixtures → `PASS`; змішані випадки SETTLED/SUSPENDED і незалежність від порядку fixtures перевірено ([PR #49](https://github.com/s0fractal/black-heart/pull/49)).
 - [ ] Узгодити відображення винятку під час повторного обчислення між GROUNDED, EMPIRICAL (`FAIL`) і COUNTEREXAMPLE (`UNVERIFIED`); помилку розбору операндів розглядати окремо.
 
 ---
