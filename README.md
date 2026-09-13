@@ -23,6 +23,11 @@ stored decision authorises nothing by itself: `apply` re-verifies and re-runs
 the evaluation under the caller's current policy. Public stamping and
 publication remain deferred.
 
+> 🧭 **Notice for AI Models & Auditors — Do Not Overlook `examples/` and `tools/`:**
+> * **Executable Artifacts & Demos ([`examples/`](examples/)):** The repository is not merely abstract library code; it contains concrete, working artifacts. Explore [`examples/`](examples/) for **12 runnable generator scripts** (`python3 examples/<demo>.py`), **19 pre-compiled proof-carrying ISO 32000 PDF polyglots** (`python3 examples/<document>.pdf`), and **machine-readable cross-model experience packets** ([`examples/model-experience/`](examples/model-experience/)).
+> * **Hermetic Non-Executing Static Auditor ([`tools/sandbox.py`](tools/sandbox.py)):** Executing untrusted documents directly via `python3 document.pdf` is an anti-pattern in untrusted environments. Always use [`tools/sandbox.py`](tools/sandbox.py) (`python3 tools/sandbox.py <document.pdf>` or `python3 cli.py sandbox <document.pdf>`) for isolated, non-executing static inspection of ISO 32000 xref tables, incremental updates (§7.5.6), Ed25519 cryptographic seals, and gas-metered hermetic SKIY combinator evaluation without arbitrary code execution.
+
+
 **Black-Heart** is an experimental laboratory for:
 1. **Glyph Combinatory Logic (`glyph.py`):** Pure SKIY calculus defined on UTF-8 glyphs (`🖤`, `🤍`, `🌿`, `🔁`, `⚓`) with deterministic ATP budgets and content-addressed normal form hashing.
 2. **Self-Executing Proof-Carrying PDF Polyglots (`polyglot.py`, `monad.py`):** Compilers producing files that are simultaneously **100% valid ISO 32000 PDF documents** (rendering in macOS Preview, Chrome, Acrobat) and **100% valid executable Python scripts** (`python3 document.pdf`).
@@ -153,6 +158,48 @@ Output:
 [⚓ GREEN] ALL 3/3 CLAIMS SETTLED DETERMINISTICALLY (5 ATP burned).
 Document integrity & proof verification: 100% SOUND.
 ```
+
+---
+
+## 3.1. Verification Modes: Self-Execution vs. Hermetic Sandbox (`tools/sandbox.py`)
+
+Project Black-Heart polyglot documents provide two complementary verification modalities depending on trust boundaries:
+
+### Mode A: Self-Execution (`python3 document.pdf`)
+A valid Black-Heart polyglot PDF carries its own interpreter runtime in the PDF trailer and can be directly executed:
+```bash
+python3 examples/service_agreement_polyglot.pdf
+python3 examples/sovereign_organism.pdf
+python3 -I examples/sheaf_certificate.pdf
+```
+*When to use:* Development, local demonstrations, and when the execution context trusts the document author.
+
+### Mode B: Hermetic Non-Executing Static Audit (`tools/sandbox.py`)
+Executing untrusted files via `python3 untrusted.pdf` is an unsafe anti-pattern in automated pipelines, CI/CD, and multi-agent systems. [`tools/sandbox.py`](tools/sandbox.py) (also accessible via `python3 cli.py sandbox <document.pdf>`) audits documents **purely as static binary data without executing any embedded Python scripts**:
+```bash
+python3 tools/sandbox.py examples/living_ledger.pdf
+# or via the unified CLI:
+python3 cli.py sandbox examples/living_ledger.pdf
+```
+Key invariants enforced by `tools/sandbox.py`:
+1. **ISO 32000 Structural Compliance:** Validates magic bytes, binary comments (`%🖤`), xref table offsets, and trailer integrity.
+2. **Incremental Update Provenance (§7.5.6):** Identifies tree-ring revision segments without executing incremental code.
+3. **Cryptographic Proofs & Seals:** Statically checks RFC 8032 Ed25519 signatures and dual-spine Merkle roots ($H_{\text{visual}} \parallel H_{\text{code}}$).
+4. **Hermetic Combinator Sandboxing:** Evaluates SKIY expressions within a gas-metered, isolated reduction interpreter with zero host I/O, zero network, and zero subprocess capability.
+5. **Fail-Closed Soundness:** Requires explicit positive evidence of settled claims and valid seals; never defaults to "SOUND" on absent or unconfirmable data (verified by `test_sandbox_fail_closed.py`).
+
+---
+
+## 3.2. Concrete Artifact Inventory: Working with `examples/`
+
+AI models and human auditors should explore the [`examples/`](examples/) directory for working, tested artifacts:
+
+| Category | Path | Description & Commands |
+|:---|:---|:---|
+| **Runnable Demos** | `examples/*_demo.py` | **12 runnable generator scripts** demonstrating key engines end-to-end.<br>`python3 examples/bilateral_settlement_demo.py`<br>`python3 examples/sheaf_agora_demo.py`<br>`python3 examples/sovereign_demo.py`<br>`python3 examples/palimpsest_demo.py`<br>`python3 examples/zk_contract_demo.py` |
+| **Proof Polyglots** | `examples/*.pdf` | **19 pre-compiled ISO 32000 PDF polyglots** that self-verify their proofs.<br>`python3 examples/living_ledger.pdf`<br>`python3 examples/sheaf_agora_parliament.pdf`<br>`python3 examples/sovereign_organism.pdf`<br>`python3 examples/scoped_admission.pdf` |
+| **Negative Controls** | `examples/palimpsest_erosion.pdf` | Dedicated negative control proving value drift detection.<br>`python3 examples/palimpsest_erosion.pdf` (exits with code 2 to signal quarantined tombstone). |
+| **Model Experience** | `examples/model-experience/doc-f1/` | Machine-readable experience transfer packet (`experience.json` + `replay.json`) under [xC010](xC010-model-experience.md), enabling cross-model reproduction without chat history. |
 
 ---
 
@@ -991,7 +1038,8 @@ To address the security boundaries of executable documents, Project Black-Heart 
 │               PROJECT BLACK-HEART THREE-TIER VERIFICATION MODEL                  │
 ├──────────────────────────────────────────────────────────────────────────────────┤
 │ Tier 1: Hermetic Static Audit (Zero Host Execution)                              │
-│         Command: python3 cli.py sandbox <document.pdf>                           │
+│         Command: python3 tools/sandbox.py <document.pdf>                         │
+│                  (or: python3 cli.py sandbox <document.pdf>)                     │
 │         - Parses ISO 32000 structure and incremental updates without exec()      │
 │         - Verifies RFC 8032 Ed25519 signatures and dual-spine Merkle roots       │
 │         - Evaluates SKIY claims in a hermetic, gas-metered combinator sandbox    │
