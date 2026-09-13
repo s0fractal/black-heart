@@ -1,0 +1,10 @@
+{
+  "exit_code": 0,
+  "timed_out": false,
+  "elapsed_seconds": 128.99846058303956,
+  "omitted_reasoning_events": 0,
+  "head_after": "cc649af1a4aa1d56de18c6ae45f2afc73e9754aa",
+  "status_after": "?? output/\n?? store/682272a124f3512f594eb78cc3c86785797a50ad85f6998793d6f9507e63ff69.json\n",
+  "finished_at": "2026-09-13T23:48:08.146948+00:00",
+  "public_trace_scope": "Only public command/file/final events retained; no hidden reasoning requested or stored."
+}

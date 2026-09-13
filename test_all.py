@@ -85,6 +85,7 @@ def _assert_local(module_name: str) -> None:
 
 SUITES = [
     ("CM-3: Offline Differential and Context Boundary", "test_cm3_exchange"),
+    ("CM-4: Retained Save and Replay Routes", "test_cm4_routes"),
     ("CM-2: Local Model Experience", "test_experience"),
     ("Optional trusted-local CLI cache", "test_verify_cached"),
     ("CLI data verification and bounded CEGIS parser", "test_cli_verify"),

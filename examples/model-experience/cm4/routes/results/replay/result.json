@@ -1,0 +1,207 @@
+{
+  "profile": "black-heart.model-experience.draft.v1",
+  "id": "local-early-unverified-receiver-result",
+  "task": {
+    "summary": "Перевірити ранній UNVERIFIED у EMPIRICAL локальним порівнянням і зберегти окремий результат.",
+    "component": "warrant_kernel.WarrantVerifier.audit_claim / EMPIRICAL",
+    "context": "Погоджений локальний знімок; отримана порада явно позначена synthetic control.",
+    "applicability": "Нормальне повернення fixture evaluations, signed EmpiricalWitness, довірений тестовий автор, ATP 50 на сторону; три вибрані тести й два порядки fixtures."
+  },
+  "revision": {
+    "repository": "/private/tmp/black-heart-cm4-routes/replay",
+    "commit": "cc649af1a4aa1d56de18c6ae45f2afc73e9754aa"
+  },
+  "attempt": {
+    "operation": "Одноразове виконання наданого sender-designed receiver_check.py з байт-ідентичної копії output/check у тимчасових локальних варіантах.",
+    "conditions": "Критерій до запуску: база exit 0, 3/3, FAIL в обох порядках; advice exit 1, єдина невдача mixed-order тесту, UNVERIFIED/FAIL за порядками. ATP 50; ефемерні ключі; timeout 60 s на probe, зовнішня межа 150 s. Виміряні HEAD/status/runtime та stdout/stderr у run і execution. Початковий git status до створення output був порожній; під час запуску ?? output/.",
+    "argv": [
+      "/opt/homebrew/opt/python@3.14/bin/python3.14",
+      "/private/tmp/black-heart-cm4-routes/replay/output/check/receiver_check.py"
+    ],
+    "cwd": "/private/tmp/black-heart-cm4-routes/replay"
+  },
+  "observations": [
+    {
+      "basis": "reported",
+      "statement": "Оригінал радить продовжувати перевірку після suspension, щоб не приховати пізнішу завершену розбіжність. Контроль пропонує негайний UNVERIFIED та прямо називає себе синтетичним, без виміряного результату чи підтвердженої незалежної моделі.",
+      "evidence_ids": [
+        "original",
+        "control"
+      ]
+    },
+    {
+      "basis": "source_read",
+      "statement": "Базова EMPIRICAL гілка накопичує unsettled fixtures і продовжує цикл; завершена розбіжність повертає FAIL. Патч замінює append/continue негайним UNVERIFIED. Наданий check наперед задає порівняння; це не незалежний дизайн тесту отримувачем.",
+      "evidence_ids": [
+        "kernel",
+        "patch",
+        "checker",
+        "probe",
+        "tests"
+      ]
+    },
+    {
+      "basis": "replayed",
+      "statement": "Один запуск check завершився exit 0 з expected_differential_observed=true. База: 3 тести, без failures/errors, exit 0, обидва порядки FAIL. Варіант advice: 3 тести, одна failure у test_an_unsettled_fixture_does_not_mask_a_settled_mismatch для [OMEGA,K], без errors, exit 1; [OMEGA,K] дає UNVERIFIED, [K,OMEGA] дає FAIL.",
+      "evidence_ids": [
+        "run",
+        "execution",
+        "stdout",
+        "stderr"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "original",
+      "kind": "file",
+      "path": "original.json",
+      "commit": null,
+      "sha256": "8dd97cdc9ff4e43b4ba1c9108faa2bc81f5a0a9f3f3187f31e0e3cf000bb7a0b",
+      "locator": "advice, observations, limits and provenance; supplied record, not historical replay by this operator"
+    },
+    {
+      "id": "control",
+      "kind": "file",
+      "path": "control.json",
+      "commit": null,
+      "sha256": "18e967a766d22364f4e0ed55749930b6b8a59e26a772a96160d271950b297c42",
+      "locator": "advice, observations, limits and provenance; supplied record, not historical replay by this operator"
+    },
+    {
+      "id": "run",
+      "kind": "file",
+      "path": "check/run.json",
+      "commit": null,
+      "sha256": "065549930984e10de840796b6eef4139ca6ed50460a1845e34c66b49a149bcfd",
+      "locator": "baseline and advice_applied measurements, checkout states, runtime, budget and expected_differential_observed"
+    },
+    {
+      "id": "execution",
+      "kind": "file",
+      "path": "execution.json",
+      "commit": null,
+      "sha256": "402064278e81164ce0e288d83a7ea300ececdbe9e1d8a1ef60657695fbe3b92b",
+      "locator": "actual outer command, exit code, snapshot HEAD/status and input byte comparisons"
+    },
+    {
+      "id": "stdout",
+      "kind": "file",
+      "path": "check.stdout.json",
+      "commit": null,
+      "sha256": "2249e46d597cf37de90cfb761859aa92fe7ea96479139c781e9d64e93f4bd85f",
+      "locator": "complete raw checker stdout"
+    },
+    {
+      "id": "stderr",
+      "kind": "file",
+      "path": "check.stderr.txt",
+      "commit": null,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "locator": "complete raw checker stderr"
+    },
+    {
+      "id": "checker",
+      "kind": "file",
+      "path": "check/receiver_check.py",
+      "commit": null,
+      "sha256": "eaeaaf115950604b1e236970ea8d479cc66a275d7aab685269f4d17d0649bc14",
+      "locator": "fixed differential and acceptance criterion"
+    },
+    {
+      "id": "probe",
+      "kind": "file",
+      "path": "check/probe.py",
+      "commit": null,
+      "sha256": "c27cf5b09697370ef94cfd9e82433f519886de1dc2dbdc67ba580008b920fc62",
+      "locator": "three selected tests and two explicit fixture orders"
+    },
+    {
+      "id": "tests",
+      "kind": "file",
+      "path": "check/test_empirical_settlement.py",
+      "commit": null,
+      "sha256": "125e9e41fccf33ca6965556954681748cfc23002c76662da86636a0ade6f2186",
+      "locator": "selected regression assertions"
+    },
+    {
+      "id": "kernel",
+      "kind": "file",
+      "path": "check/warrant_kernel.py",
+      "commit": null,
+      "sha256": "6b568db39b167c5f607c531193f3eeda101a53d1bccd31d73943be90c3464893",
+      "locator": "EMPIRICAL branch, lines 682-790"
+    },
+    {
+      "id": "glyph",
+      "kind": "file",
+      "path": "check/glyph.py",
+      "commit": null,
+      "sha256": "b30badd37a29f892c5c2ec4c87cb4706afbbea588249c92e82f5f84093b884dd",
+      "locator": "baseline dependency bytes"
+    },
+    {
+      "id": "crypto",
+      "kind": "file",
+      "path": "check/crypto.py",
+      "commit": null,
+      "sha256": "d9c726c4940aedc7e6ec061b2b0740116009b3a577391fac56a7802cc129f263",
+      "locator": "baseline dependency bytes"
+    },
+    {
+      "id": "patch",
+      "kind": "file",
+      "path": "check/advice.patch",
+      "commit": null,
+      "sha256": "f28cc270fe7df6beea1e05c6fb2507483c18a3a1dbeef5d06d5e31832078717b",
+      "locator": "fixed early-UNVERIFIED change"
+    },
+    {
+      "id": "manifest",
+      "kind": "file",
+      "path": "check/source-manifest.json",
+      "commit": null,
+      "sha256": "0978547df101272712844a3792d3270085b002dea00f8a6504778f3aaf5c05c5",
+      "locator": "declared historical source commit and checked source digests"
+    }
+  ],
+  "interpretation": "Для цих входів ранній UNVERIFIED маскує пізнішу завершену розбіжність і робить вердикт залежним від порядку fixtures; контрольну пораду відхилено у перевіреній області.",
+  "advice": "Зберігати перевірку завершеності обох сторін і продовжувати після suspension, щоб виявити завершену розбіжність. Зберігати регресійний контроль обох порядків; перед перенесенням висновку перевірити актуальні код та умови.",
+  "limits": [
+    "Рівно один запуск наданого порівняння: три тести на варіант і два явні порядки, ATP 50. Повний suite, інші бюджети та exception semantics не перевірялися.",
+    "Це виконання заздалегідь наданого sender-designed check; не незалежний дизайн, не сліпий benchmark та не універсальний доказ.",
+    "revision.commit і relations.commit є локальним HEAD знімка, не канонічним commit upstream. source-manifest декларує історичний source_commit; відповідність байтів перевірено локально, upstream не перевірявся.",
+    "Історичні replay оригіналу не повторювалися. CM-2 перевірка байтів не автентифікує модель чи незалежність. Невідомі метадані залишені null.",
+    "Патч застосовано лише до тимчасового advice-варіанта під output; вхідні файли не змінено. Мережа, зовнішні сесії, субагенти та публікація не використовувалися."
+  ],
+  "provenance": {
+    "compiler": "Codex (declared operator name)",
+    "model": null,
+    "session": null,
+    "recorded_at": null,
+    "signer_key": null,
+    "authentication": "unsigned; model identity and independence not authenticated"
+  },
+  "relations": [
+    {
+      "relation": "supports",
+      "target": {
+        "repository": "/private/tmp/black-heart-cm4-routes/replay",
+        "commit": "cc649af1a4aa1d56de18c6ae45f2afc73e9754aa",
+        "path": "inbox/original.json",
+        "sha256": "8dd97cdc9ff4e43b4ba1c9108faa2bc81f5a0a9f3f3187f31e0e3cf000bb7a0b"
+      },
+      "explanation": "Локальний replay підтримує вузьке правило: suspension не має маскувати завершену розбіжність."
+    },
+    {
+      "relation": "contradicts",
+      "target": {
+        "repository": "/private/tmp/black-heart-cm4-routes/replay",
+        "commit": "cc649af1a4aa1d56de18c6ae45f2afc73e9754aa",
+        "path": "inbox/control.json",
+        "sha256": "18e967a766d22364f4e0ed55749930b6b8a59e26a772a96160d271950b297c42"
+      },
+      "explanation": "Негайний UNVERIFIED порушує перевірене правило та дає залежність від порядку."
+    }
+  ]
+}

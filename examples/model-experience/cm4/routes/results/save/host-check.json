@@ -1,0 +1,11 @@
+{
+  "route": "save",
+  "mechanical_checks": "PASS",
+  "new_address": "1ee0f07c11867e3984e8f9116f0c00b14c08940ce8164396fb8c7ad3c38b0557",
+  "records_found": 1,
+  "input_files_unchanged": true,
+  "session_head": "d22d983eb8392aab31389d283b204bcd93def702",
+  "completed_commands": 11,
+  "failed_commands": [],
+  "scope": "Host byte/state checks; final prose and tool-scope interpretation require review."
+}
