@@ -444,3 +444,414 @@ def add_claim(pdf_path: str, expect_parent_sha256: str, claim_path: str,
                # does not evaluate the claim's mathematics and admits nothing.
                evaluated=False, admitted=False, status="PROPOSAL_ONLY",
                note="proposal recorded; evidence not evaluated, nothing admitted")
+
+
+# --------------------------------------------------------------------------- #
+# LI-2: evidence evaluation and an attributed admission decision
+# Contract: docs/LIBRARY-INTERACTION-LI2.md
+# --------------------------------------------------------------------------- #
+POLICY_PROFILE = "black-heart.library-interaction.policy.v1"
+DECISION_PROFILE = "black-heart.library-interaction.decision.v1"
+EVALUATOR_PROFILE = "black-heart.li2.grounded-evaluator.v1"
+EVALUATOR_VERSION = "1"
+DECISION_SIG_DOMAIN = b"bh-li2-decision-v1:"
+
+# The only grade LI-2 supports. Any other grade is a named unsupported
+# operation until a later slice selects it -- including inside a policy, which
+# is refused rather than silently narrowed.
+SUPPORTED_GRADE = wk.EvidenceGrade.GROUNDED.value          # "GROUNDED"
+
+# Taken FROM the enum, never restated: VerificationStatus values are lowercase
+# ("pass"/"fail"/"unverified") while EvidenceGrade values are uppercase. Writing
+# the strings by hand here silently disabled admission and would have made
+# verify_decision refuse every genuine decision.
+VERDICT_PASS = wk.VerificationStatus.PASS.value
+VERDICT_VALUES = frozenset(v.value for v in wk.VerificationStatus)
+MAX_POLICY_BYTES = 1 * 1024 * 1024
+MAX_DECISION_BYTES = 4 * 1024 * 1024
+
+
+def load_policy(path: str) -> Dict[str, Any]:
+    """The CALLER's policy. Never read from the parent document, the proposal or
+    a default. Two shapes are refused outright instead of being used: an
+    implicit trust-all author set, and a policy that waives signature checks."""
+    raw, refusal = _read_file(path, MAX_POLICY_BYTES,
+                              "POLICY_UNREADABLE", "POLICY_TOO_LARGE")
+    if refusal:
+        return refusal
+    try:
+        doc = json.loads(raw.decode("utf-8"), object_pairs_hook=_no_dupe_pairs)
+    except UnicodeDecodeError as e:
+        return _refuse("POLICY_NOT_JSON", f"not UTF-8: {e}")
+    except ValueError as e:
+        name = ("POLICY_DUPLICATE_KEYS" if "duplicate JSON key" in str(e)
+                else "POLICY_NOT_JSON")
+        return _refuse(name, str(e))
+    if not isinstance(doc, dict):
+        return _refuse("POLICY_NOT_OBJECT", f"policy is {type(doc).__name__}, not an object")
+    if doc.get("profile") != POLICY_PROFILE:
+        return _refuse("POLICY_UNSUPPORTED_PROFILE", f"{doc.get('profile')!r}")
+
+    for field, want, tname in (("trust_config", dict, "object"),
+                               ("allowed_operations", list, "list"),
+                               ("allowed_grades", list, "list")):
+        if field not in doc:
+            return _refuse("POLICY_FIELD_MISSING", f"policy has no {field!r}")
+        if not isinstance(doc[field], want) or isinstance(doc[field], bool):
+            return _refuse("POLICY_FIELD_TYPE",
+                           f"{field!r} is {type(doc[field]).__name__}, not a {tname}")
+    tc_raw = doc["trust_config"]
+
+    # is_author_trusted() treats None as TRUST EVERYONE. An empty list is a
+    # legitimate deny-all and is accepted; an absent/None allowlist is not.
+    if tc_raw.get("trusted_author_pks", None) is None:
+        return _refuse("POLICY_TRUST_ALL",
+                       "trusted_author_pks is absent or null, which means trust-all; "
+                       "supply an explicit list (an empty list is a valid deny-all)")
+    if not isinstance(tc_raw["trusted_author_pks"], list):
+        return _refuse("POLICY_FIELD_TYPE", "trusted_author_pks is not a list")
+    for pk in tc_raw["trusted_author_pks"]:
+        if not (_is_hex(pk, 64) and crypto.is_valid_public_key(pk)):
+            return _refuse("POLICY_FIELD_TYPE", f"trusted author {pk!r} is not a public key")
+    if tc_raw.get("require_bound_signature", None) is not True:
+        return _refuse("POLICY_NO_SIGNATURE",
+                       "require_bound_signature must be exactly true")
+
+    budget = tc_raw.get("max_atp_budget", None)
+    if not (isinstance(budget, int) and not isinstance(budget, bool) and budget > 0):
+        return _refuse("POLICY_BUDGET_INVALID",
+                       f"max_atp_budget must be a positive int, got {budget!r}")
+
+    admitted = tc_raw.get("admitted_grades", None)
+    if not isinstance(admitted, list) or not admitted:
+        return _refuse("POLICY_FIELD_TYPE", "admitted_grades must be a non-empty list")
+    for collection, label in ((admitted, "admitted_grades"),
+                              (doc["allowed_grades"], "allowed_grades")):
+        for g in collection:
+            if g != SUPPORTED_GRADE:
+                return _refuse("POLICY_UNSUPPORTED_GRADE",
+                               f"{label} contains {g!r}; only {SUPPORTED_GRADE!r} is "
+                               "supported in LI-2")
+    if not doc["allowed_operations"]:
+        return _refuse("POLICY_FIELD_TYPE", "allowed_operations must be non-empty")
+    for op in doc["allowed_operations"]:
+        if op != SUPPORTED_OPERATION:
+            return _refuse("POLICY_UNSUPPORTED_OPERATION",
+                           f"allowed_operations contains {op!r}")
+
+    try:
+        trust = wk.TrustConfig(
+            trusted_author_pks=set(tc_raw["trusted_author_pks"]),
+            admitted_grades={wk.EvidenceGrade(g) for g in admitted},
+            max_atp_budget=budget,
+            require_bound_signature=True)
+    except Exception as e:                                   # noqa: BLE001
+        return _refuse("POLICY_FIELD_TYPE", f"{type(e).__name__}: {e}")
+
+    return _ok(policy=doc, trust_config=trust,
+               policy_sha256=hashlib.sha256(wk.canonical_jcs(doc)).hexdigest(),
+               allowed_operations=list(doc["allowed_operations"]),
+               allowed_grades=list(doc["allowed_grades"]),
+               max_atp_budget=budget)
+
+
+def evaluate_evidence(claim, trust_config) -> Dict[str, Any]:
+    """Replay the evidence through the REAL host verifier under the CALLER's
+    policy. No reimplementation, no adapter defaults. This is the evidence
+    quantity only -- it decides nothing about admission."""
+    verdict = wk.WarrantVerifier(trust_config).audit_claim(claim)
+    details = verdict.details if isinstance(getattr(verdict, "details", None), dict) else {}
+    # Verdict.delta_atp DEFAULTS TO 0, so it cannot distinguish "measured zero"
+    # from "never measured" -- most refusals return before any reduction runs.
+    # Only an explicit details["atp_spent"] is a measurement; anything else is
+    # recorded as null, never as 0.
+    measured = "atp_spent" in details and isinstance(details["atp_spent"], int) \
+        and not isinstance(details["atp_spent"], bool)
+    return {"status": verdict.status.value,
+            "grade": verdict.grade.value,
+            "reason": verdict.reason,
+            "atp_spent": int(details["atp_spent"]) if measured else None,
+            "atp_spent_measured": bool(measured)}
+
+
+def decide_admission(evaluation: Dict[str, Any], operation: str, grade: str,
+                     allowed_operations, allowed_grades) -> Dict[str, Any]:
+    """The POLICY quantity, computed separately from the evidence quantity.
+    PASS is necessary but never sufficient; a refusal here is a policy outcome
+    and never a mathematical claim about the claim."""
+    if operation not in allowed_operations:
+        return {"admitted": False,
+                "reason": f"policy does not permit operation {operation!r}"}
+    if grade not in allowed_grades:
+        return {"admitted": False, "reason": f"policy does not permit grade {grade!r}"}
+    if evaluation["status"] != VERDICT_PASS:
+        return {"admitted": False,
+                "reason": f"evidence did not pass (status {evaluation['status']}); "
+                          "UNVERIFIED is no verdict and FAIL is a checked negative"}
+    return {"admitted": True,
+            "reason": "evidence PASSed and the caller policy permits this "
+                      "operation and grade"}
+
+
+def decision_body(proposal: Dict[str, Any], policy_sha256: str, evaluator: Dict[str, Any],
+                  evaluation: Dict[str, Any], admission: Dict[str, Any],
+                  decider_pk_hex: str) -> Dict[str, Any]:
+    return {
+        "proposal_id": proposal["proposal_id"],
+        "parent_pdf_sha256": proposal["parent_pdf_sha256"],
+        "policy_sha256": policy_sha256,
+        "claim_id": proposal["claim_id"],
+        "claim_author_pk_hex": proposal["claim_author_pk_hex"],
+        "proposer_pk_hex": proposal["proposer_pk_hex"],
+        "evaluator": evaluator,
+        "evaluation": evaluation,
+        "admission": admission,
+        "decider_pk_hex": decider_pk_hex.lower(),
+    }
+
+
+def compute_decision_id(body: Dict[str, Any]) -> str:
+    return hashlib.sha256(wk.canonical_jcs(body)).hexdigest()
+
+
+def decision_message(decision_id: str) -> bytes:
+    return DECISION_SIG_DOMAIN + bytes.fromhex(decision_id)
+
+
+_EVALUATOR_FIELDS = {"profile", "version", "atp_budget_requested",
+                     "atp_budget_limit", "atp_spent", "atp_spent_measured"}
+_EVALUATION_FIELDS = {"status", "grade", "reason"}
+_ADMISSION_FIELDS = {"admitted", "reason"}
+_GRADE_VALUES = frozenset(g.value for g in wk.EvidenceGrade)
+
+
+def _is_nonneg_int(v) -> bool:
+    return isinstance(v, int) and not isinstance(v, bool) and v >= 0
+
+
+def validate_decision_body(body: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Check the NESTED content of a decision before any field is used.
+    A decider signature is ATTRIBUTION -- it says who sealed the report. It is
+    not evidence replay and not authority, so a re-signed body with an unknown
+    evaluator, a wrongly-typed verdict, a missing reason, or an admission that
+    contradicts its own verdict must be a named refusal, not an ok result and
+    not an exception. Returns a refusal dict, or None when the body is sound."""
+    ev = body["evaluator"]
+    if set(ev.keys()) != _EVALUATOR_FIELDS:
+        return _refuse("DECISION_FIELD_MISSING",
+                       f"evaluator fields {sorted(ev.keys())} != {sorted(_EVALUATOR_FIELDS)}")
+    if ev["profile"] != EVALUATOR_PROFILE:
+        return _refuse("DECISION_UNSUPPORTED_EVALUATOR",
+                       f"evaluator profile {ev['profile']!r} is not {EVALUATOR_PROFILE!r}")
+    if ev["version"] != EVALUATOR_VERSION:
+        return _refuse("DECISION_UNSUPPORTED_EVALUATOR",
+                       f"evaluator version {ev['version']!r} is not {EVALUATOR_VERSION!r}")
+    for f in ("atp_budget_requested", "atp_budget_limit"):
+        if not _is_nonneg_int(ev[f]):
+            return _refuse("DECISION_FIELD_TYPE", f"evaluator.{f} is not a non-negative int")
+    if not isinstance(ev["atp_spent_measured"], bool):
+        return _refuse("DECISION_FIELD_TYPE", "evaluator.atp_spent_measured is not a boolean")
+    if ev["atp_spent_measured"]:
+        if not _is_nonneg_int(ev["atp_spent"]):
+            return _refuse("DECISION_FIELD_TYPE",
+                           "evaluator.atp_spent is not a non-negative int although "
+                           "it is marked as measured")
+    elif ev["atp_spent"] is not None:
+        # Absence of a measurement is null, never a number that reads as one.
+        return _refuse("DECISION_FIELD_TYPE",
+                       "evaluator.atp_spent must be null when nothing was measured")
+
+    evl = body["evaluation"]
+    if set(evl.keys()) != _EVALUATION_FIELDS:
+        return _refuse("DECISION_FIELD_MISSING",
+                       f"evaluation fields {sorted(evl.keys())} != {sorted(_EVALUATION_FIELDS)}")
+    if not isinstance(evl["status"], str) or evl["status"] not in VERDICT_VALUES:
+        return _refuse("DECISION_FIELD_TYPE",
+                       f"evaluation.status {evl['status']!r} is not a verdict")
+    if not isinstance(evl["grade"], str) or evl["grade"] not in _GRADE_VALUES:
+        return _refuse("DECISION_FIELD_TYPE", f"evaluation.grade {evl['grade']!r} is not a grade")
+    if not isinstance(evl["reason"], str):
+        return _refuse("DECISION_FIELD_TYPE", "evaluation.reason is not a string")
+
+    adm = body["admission"]
+    if set(adm.keys()) != _ADMISSION_FIELDS:
+        return _refuse("DECISION_FIELD_MISSING",
+                       f"admission fields {sorted(adm.keys())} != {sorted(_ADMISSION_FIELDS)}")
+    if not isinstance(adm["admitted"], bool):
+        return _refuse("DECISION_FIELD_TYPE", "admission.admitted is not a boolean")
+    if not isinstance(adm["reason"], str):
+        return _refuse("DECISION_FIELD_TYPE", "admission.reason is not a string")
+    # A decision that admits on a non-PASS verdict contradicts itself.
+    if adm["admitted"] and evl["status"] != VERDICT_PASS:
+        return _refuse("DECISION_INCONSISTENT",
+                       f"admission.admitted is true while evaluation.status is "
+                       f"{evl['status']!r}")
+
+    for f in ("proposal_id", "parent_pdf_sha256", "policy_sha256", "claim_id"):
+        if not _is_hex(body[f], 64):
+            return _refuse("DECISION_FIELD_TYPE", f"{f} is not a 64-hex digest")
+    for f in ("claim_author_pk_hex", "proposer_pk_hex", "decider_pk_hex"):
+        if not (_is_hex(body[f], 64) and crypto.is_valid_public_key(body[f])):
+            return _refuse("DECISION_FIELD_TYPE", f"{f} is not a valid public key")
+    return None
+
+
+def verify_decision(raw: bytes, expect_proposal_id: Optional[str] = None,
+                    expect_parent_sha256: Optional[str] = None,
+                    expect_policy_sha256: Optional[str] = None) -> Dict[str, Any]:
+    """A saved decision is a REPORT, not a grant. Re-derive the id and the
+    signature and check the caller's pins; never trust the stated fields."""
+    if len(raw) > MAX_DECISION_BYTES:
+        return _refuse("DECISION_TOO_LARGE", f"{len(raw)} bytes")
+    try:
+        doc = json.loads(raw.decode("utf-8"), object_pairs_hook=_no_dupe_pairs)
+    except UnicodeDecodeError as e:
+        return _refuse("DECISION_NOT_JSON", f"not UTF-8: {e}")
+    except ValueError as e:
+        name = ("DECISION_DUPLICATE_KEYS" if "duplicate JSON key" in str(e)
+                else "DECISION_NOT_JSON")
+        return _refuse(name, str(e))
+    if not isinstance(doc, dict):
+        return _refuse("DECISION_MALFORMED", f"is {type(doc).__name__}, not an object")
+    if set(doc.keys()) != {"profile", "body", "decision_id", "decision_signature_hex"}:
+        return _refuse("DECISION_MALFORMED", f"unexpected fields: {sorted(doc.keys())}")
+    if doc["profile"] != DECISION_PROFILE:
+        return _refuse("DECISION_UNSUPPORTED_PROFILE", f"{doc['profile']!r}")
+    body = doc["body"]
+    if not isinstance(body, dict):
+        return _refuse("DECISION_MALFORMED", "body is not an object")
+    want = {"proposal_id", "parent_pdf_sha256", "policy_sha256", "claim_id",
+            "claim_author_pk_hex", "proposer_pk_hex", "evaluator", "evaluation",
+            "admission", "decider_pk_hex"}
+    if set(body.keys()) != want:
+        return _refuse("DECISION_MALFORMED", f"unexpected body fields: {sorted(body.keys())}")
+    for f in ("evaluator", "evaluation", "admission"):
+        if not isinstance(body[f], dict):
+            return _refuse("DECISION_FIELD_TYPE", f"{f} is not an object")
+    nested = validate_decision_body(body)
+    if nested is not None:
+        return nested
+    if not _is_hex(doc["decision_id"], 64):
+        return _refuse("DECISION_MALFORMED", "decision_id is not a 64-hex digest")
+
+    recomputed = compute_decision_id(body)
+    if recomputed != doc["decision_id"].lower():
+        return _refuse("DECISION_ID_MISMATCH",
+                       f"stated {doc['decision_id'][:16]}... != recomputed {recomputed[:16]}...")
+    if not crypto.verify_hex(body["decider_pk_hex"], decision_message(recomputed),
+                             doc["decision_signature_hex"]):
+        return _refuse("DECISION_SIGNATURE_INVALID",
+                       "decision signature does not verify under decider_pk_hex")
+
+    # The caller's pins. A decision never transfers to another subject.
+    for pin, field, name in ((expect_proposal_id, "proposal_id", "DECISION_PROPOSAL_MISMATCH"),
+                             (expect_parent_sha256, "parent_pdf_sha256", "DECISION_PARENT_MISMATCH"),
+                             (expect_policy_sha256, "policy_sha256", "DECISION_POLICY_MISMATCH")):
+        if pin is not None and body[field].lower() != str(pin).strip().lower():
+            return _refuse(name, f"decision binds {body[field][:16]}..., not {str(pin)[:16]}...")
+
+    return _ok(decision_id=doc["decision_id"],
+               proposal_id=body["proposal_id"],
+               parent_pdf_sha256=body["parent_pdf_sha256"],
+               policy_sha256=body["policy_sha256"],
+               evaluation_status=body["evaluation"]["status"],
+               admitted=body["admission"]["admitted"],
+               admission_reason=body["admission"]["reason"],
+               atp_spent=body["evaluator"]["atp_spent"],
+               atp_spent_measured=body["evaluator"]["atp_spent_measured"],
+               decider_pk_hex=body["decider_pk_hex"],
+               # Explicit boundaries: verifying this artifact establishes WHO
+               # sealed the report and that its content is well-formed and
+               # self-consistent. It does NOT re-run the mathematics, and it
+               # does NOT make the decider authorized -- a self-declared signing
+               # key is not authority. A reader that needs either must do it.
+               attribution_verified=True,
+               evidence_replayed_by_reader=False,
+               decider_authority_established=False,
+               applied=False, status="DECISION_ONLY")
+
+
+def evaluate(pdf_path: str, proposal_path: str, policy_path: str,
+             decider_key_file: str, out_path: str) -> Dict[str, Any]:
+    """LI-2 `evaluate`: re-authenticate, replay the evidence under the caller's
+    policy, decide admission separately, and RECORD the decision. No successor,
+    no reward, no change to the parent."""
+    parent = read_parent(pdf_path)
+    if not parent["ok"]:
+        return parent
+    praw, refusal = _read_file(proposal_path, MAX_PROPOSAL_BYTES,
+                               "PROPOSAL_UNREADABLE", "PROPOSAL_TOO_LARGE")
+    if refusal:
+        return refusal
+    # LI-1 authentication is re-run in full, bound to this parent's exact bytes.
+    proposal = verify_proposal(praw, parent["pdf_sha256"])
+    if not proposal["ok"]:
+        return proposal
+    policy = load_policy(policy_path)
+    if not policy["ok"]:
+        return policy
+    key = load_proposer_key(decider_key_file)
+    if not key["ok"]:
+        return {"ok": False,
+                "refusal": key["refusal"].replace("PROPOSER_KEY", "DECIDER_KEY"),
+                "detail": key["detail"]}
+
+    claim_res = authenticate_claim_document(
+        json.loads(praw.decode("utf-8"))["body"]["claim"])
+    if not claim_res["ok"]:
+        return claim_res
+    claim = claim_res["claim"]
+
+    # The witness budget is recorded in the decision, so it must be admissible
+    # BEFORE anything is executed or written -- otherwise evaluate can emit a
+    # decision its own reader refuses. (from_dict coerces with int(), so a
+    # negative value arrives here as a negative int rather than a type error.)
+    requested = getattr(claim.witness, "atp_budget", None)
+    if not _is_nonneg_int(requested):
+        return _refuse("CLAIM_BUDGET_INVALID",
+                       f"witness atp_budget {requested!r} is not a non-negative int")
+
+    evaluation = evaluate_evidence(claim, policy["trust_config"])
+    evaluator = {"profile": EVALUATOR_PROFILE, "version": EVALUATOR_VERSION,
+                 "atp_budget_requested": requested,
+                 "atp_budget_limit": policy["max_atp_budget"],
+                 # null when the verifier reported no measurement (e.g. a policy
+                 # refusal that returned before any reduction ran). Absence of a
+                 # measurement is never written as zero.
+                 "atp_spent": evaluation.pop("atp_spent"),
+                 "atp_spent_measured": evaluation.pop("atp_spent_measured")}
+    admission = decide_admission(evaluation, proposal["operation"], claim_res["grade"],
+                                 policy["allowed_operations"], policy["allowed_grades"])
+
+    body = decision_body(proposal, policy["policy_sha256"], evaluator, evaluation,
+                         admission, key["proposer_pk_hex"])
+    # Writer/reader agreement is structural, not a promise: the body goes
+    # through the SAME validator the reader uses, before it is signed or
+    # written. A body this host would refuse to read is never emitted.
+    self_check = validate_decision_body(body)
+    if self_check is not None:
+        return _refuse("DECISION_SELF_CHECK_FAILED",
+                       f"refusing to emit a decision this reader would reject: "
+                       f"{self_check['refusal']}: {self_check['detail']}")
+    did = compute_decision_id(body)
+    decision = {"profile": DECISION_PROFILE, "body": body, "decision_id": did,
+                "decision_signature_hex": crypto.sign_hex(key["secret_key_hex"],
+                                                          decision_message(did))}
+    try:
+        with open(out_path, "xb") as f:
+            f.write(json.dumps(decision, sort_keys=True, indent=2).encode("utf-8") + b"\n")
+    except FileExistsError:
+        return _refuse("OUTPUT_EXISTS", f"{out_path} already exists; refusing to overwrite")
+    except OSError as e:
+        return _refuse("OUTPUT_UNWRITABLE", f"{type(e).__name__}: {e}")
+
+    return _ok(decision_id=did, proposal_id=proposal["proposal_id"],
+               parent_pdf_sha256=parent["pdf_sha256"],
+               policy_sha256=policy["policy_sha256"],
+               evaluation_status=evaluation["status"],
+               evaluation_reason=evaluation["reason"],
+               atp_spent=evaluator["atp_spent"],
+               admitted=admission["admitted"], admission_reason=admission["reason"],
+               decider_pk_hex=key["proposer_pk_hex"], out_path=out_path,
+               applied=False, status="DECISION_ONLY",
+               note="decision recorded; no successor, no reward, parent unchanged")

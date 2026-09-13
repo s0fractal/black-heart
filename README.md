@@ -4,8 +4,13 @@
 
 **Current selected direction (2026-09-13):** local proposals, decisions and
 immutable PDF successors — see the [living-library interaction brief](docs/LIVING-LIBRARY-INTERACTION.md).
-The first task is proposal intake; these interaction commands are not yet
-implemented. Public stamping and publication are deferred while this loop is built.
+Implemented so far: **LI-1** proposal intake (`library inspect`, `library add-claim`
+— [contract](docs/LIBRARY-INTERACTION-LI1.md)) and **LI-2** caller-policy
+evaluation with an attributed decision (`library evaluate` —
+[contract](docs/LIBRARY-INTERACTION-LI2.md)). **LI-3** (immutable successor and
+`explain-transition`) is **not implemented**: no successor PDF is produced yet,
+and a decision authorises nothing by itself. Public stamping and publication
+remain deferred while this loop is built.
 
 **Black-Heart** is an experimental laboratory for:
 1. **Glyph Combinatory Logic (`glyph.py`):** Pure SKIY calculus defined on UTF-8 glyphs (`🖤`, `🤍`, `🌿`, `🔁`, `⚓`) with deterministic ATP budgets and content-addressed normal form hashing.

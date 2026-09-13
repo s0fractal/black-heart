@@ -1846,11 +1846,31 @@ def cmd_library(args):
                     res["ok"] = False
                     res["refusal"] = bound["refusal"]
                     res["detail"] = bound["detail"]
+        if res["ok"] and getattr(args, "decision", None):
+            try:
+                with open(args.decision, "rb") as f:
+                    draw = f.read()
+            except OSError as e:
+                res = {"ok": False, "refusal": "DECISION_UNREADABLE",
+                       "detail": f"{type(e).__name__}: {e}"}
+            else:
+                chk = li.verify_decision(draw, expect_parent_sha256=res["pdf_sha256"])
+                res = dict(res)
+                res["decision_check"] = chk
+                if not chk["ok"]:
+                    res["ok"] = False
+                    res["refusal"] = chk["refusal"]
+                    res["detail"] = chk["detail"]
     elif args.action == "add-claim":
         res = li.add_claim(args.pdf, args.expect_parent_sha256, args.claim,
                            args.proposer_key_file, args.out)
+    elif args.action == "evaluate":
+        # Same authoritative call the API exposes; no adapter defaults, and
+        # --policy is required so no implicit policy can slip in.
+        res = li.evaluate(args.pdf, args.proposal, args.policy,
+                          args.decider_key_file, args.out)
     else:
-        print("Usage: python3 cli.py library {inspect,add-claim} ...")
+        print("Usage: python3 cli.py library {inspect,add-claim,evaluate} ...")
         sys.exit(1)
 
     if getattr(args, "json", False):
@@ -4379,6 +4399,8 @@ def main():
                                help="Optional caller-supplied expected parent byte digest")
     p_lib_inspect.add_argument("--proposal", default=None,
                                help="Optional proposal to check for binding to THIS pdf")
+    p_lib_inspect.add_argument("--decision", default=None,
+                               help="Optional decision to check against THIS pdf")
     p_lib_inspect.add_argument("--json", action="store_true", help="Machine-readable output")
 
     p_lib_add = lib_subs.add_parser(
@@ -4391,6 +4413,17 @@ def main():
                            help="File holding the proposer Ed25519 secret key (never passed on argv)")
     p_lib_add.add_argument("--out", required=True, help="Proposal output path (must not exist)")
     p_lib_add.add_argument("--json", action="store_true", help="Machine-readable output")
+
+    p_lib_eval = lib_subs.add_parser(
+        "evaluate", help="LI-2: replay evidence under the CALLER's policy and record a decision")
+    p_lib_eval.add_argument("--pdf", required=True, help="Parent PDF, read as DATA (never executed)")
+    p_lib_eval.add_argument("--proposal", required=True, help="Proposal produced by add-claim")
+    p_lib_eval.add_argument("--policy", required=True,
+                            help="REQUIRED caller policy; there is no default policy")
+    p_lib_eval.add_argument("--decider-key-file", required=True,
+                            help="File holding the decider Ed25519 secret key")
+    p_lib_eval.add_argument("--out", required=True, help="Decision output path (must not exist)")
+    p_lib_eval.add_argument("--json", action="store_true", help="Machine-readable output")
 
     # warrant-kernel (Engine #24: WARRANT-0.2 Epistemic Kernel & Unified Edge-Claims)
     p_wk = subparsers.add_parser(

@@ -20,6 +20,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -562,6 +563,579 @@ class CliAcceptanceTest(LI1Base):
                      "--out", str(second_path))
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertEqual(second_path.read_bytes(), first)
+
+
+# --------------------------------------------------------------------------- #
+# LI-2: evidence evaluation and an attributed admission decision
+# --------------------------------------------------------------------------- #
+import glyph
+
+I_G, S_G = "🤍", "🌿"
+SETTLED = f"{I_G} {I_G}"
+OMEGA = f"{S_G} {I_G} {I_G} ({S_G} {I_G} {I_G})"      # does not settle
+
+
+class LI2Base(LI1Base):
+    def setUp(self):
+        super().setUp()
+        self.d_sk, self.d_pk = crypto.generate_keypair()      # DECIDER identity
+        self.decider_key = self.d / "decider.key"
+        self.decider_key.write_text(self.d_sk + "\n")
+        self.policy_path = self.d / "policy.json"
+        self.policy_path.write_text(json.dumps(self.policy_doc(), indent=2))
+
+    def policy_doc(self, **over):
+        pol = {"profile": li.POLICY_PROFILE,
+               "trust_config": {"trusted_author_pks": [self.a_pk],
+                                "admitted_grades": ["GROUNDED"],
+                                "max_atp_budget": 10000,
+                                "require_bound_signature": True},
+               "allowed_operations": ["add-claim"],
+               "allowed_grades": ["GROUNDED"]}
+        for k, v in over.items():
+            if k.startswith("tc_"):
+                pol["trust_config"][k[3:]] = v
+            else:
+                pol[k] = v
+        return pol
+
+    def write_policy(self, name, **over):
+        p = self.d / name
+        p.write_text(json.dumps(self.policy_doc(**over), indent=2))
+        return p
+
+    def grounded_claim(self, term, expected_hash, budget=100):
+        ph = glyph.term_hash(glyph.parse(term))
+        return wk.EdgeClaim.create_and_sign(
+            ph, term, term, ph, wk.Polarity.AFFIRM,
+            wk.GroundedWitness(term_expr=term, expected_hash=expected_hash,
+                               atp_budget=budget),
+            self.a_sk, self.a_pk)
+
+    def case_claim(self, kind):
+        if kind == "pass":
+            h = glyph.evaluate(glyph.parse(SETTLED), max_atp=100).hash
+            return self.grounded_claim(SETTLED, h)
+        if kind == "fail":
+            return self.grounded_claim(SETTLED, "0" * 64)
+        if kind == "unverified":
+            h = glyph.evaluate(glyph.parse(OMEGA), max_atp=100).hash
+            return self.grounded_claim(OMEGA, h)
+        raise AssertionError(kind)
+
+    def proposal_for(self, claim, name="p.json"):
+        cp = self.d / f"claim_{name}"
+        cp.write_text(json.dumps(claim.to_dict(), indent=2))
+        out = self.d / name
+        r = self.cli("add-claim", "--pdf", str(self.parent),
+                     "--expect-parent-sha256", self.parent_sha,
+                     "--claim", str(cp), "--proposer-key-file", str(self.key_path),
+                     "--out", str(out), "--json")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return out
+
+    def evaluate_cli(self, proposal_path, policy_path=None, out_name="d.json"):
+        out = self.d / out_name
+        r = self.cli("evaluate", "--pdf", str(self.parent),
+                     "--proposal", str(proposal_path),
+                     "--policy", str(policy_path or self.policy_path),
+                     "--decider-key-file", str(self.decider_key),
+                     "--out", str(out), "--json")
+        return r, out
+
+
+class VerdictVocabularyTest(LI2Base):
+    """The verdict/grade vocabularies are taken FROM the enums, never restated:
+    VerificationStatus values are lowercase while EvidenceGrade values are
+    uppercase, and hand-written strings silently disabled admission."""
+
+    def test_constants_match_the_enums(self):
+        self.assertEqual(li.VERDICT_PASS, wk.VerificationStatus.PASS.value)
+        self.assertEqual(li.VERDICT_VALUES,
+                         frozenset(v.value for v in wk.VerificationStatus))
+        self.assertEqual(li.SUPPORTED_GRADE, wk.EvidenceGrade.GROUNDED.value)
+
+    def test_status_and_grade_cases_actually_differ(self):
+        self.assertEqual(wk.VerificationStatus.PASS.value, "pass")
+        self.assertEqual(wk.EvidenceGrade.GROUNDED.value, "GROUNDED")
+
+
+class PolicyTest(LI2Base):
+    """The caller's policy, and the two shapes the brief forbids."""
+
+    def test_valid_policy_loads_and_digests(self):
+        res = li.load_policy(str(self.policy_path))
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(len(res["policy_sha256"]), 64)
+
+    def test_trust_all_author_set_is_refused(self):
+        for value in (None, "omit"):
+            with self.subTest(value=value):
+                doc = self.policy_doc()
+                if value == "omit":
+                    doc["trust_config"].pop("trusted_author_pks")
+                else:
+                    doc["trust_config"]["trusted_author_pks"] = None
+                p = self.d / "trustall.json"
+                p.write_text(json.dumps(doc))
+                self.assertEqual(li.load_policy(str(p))["refusal"], "POLICY_TRUST_ALL")
+
+    def test_empty_author_list_is_a_valid_deny_all(self):
+        # None means trust-everyone; [] is a legitimate deny-all and is accepted.
+        p = self.write_policy("deny.json", tc_trusted_author_pks=[])
+        self.assertTrue(li.load_policy(str(p))["ok"])
+
+    def test_waiving_signature_checks_is_refused(self):
+        for value in (False, None, "yes", 1):
+            with self.subTest(value=value):
+                p = self.write_policy("nosig.json", tc_require_bound_signature=value)
+                self.assertEqual(li.load_policy(str(p))["refusal"], "POLICY_NO_SIGNATURE")
+
+    def test_other_grades_are_unsupported_operations(self):
+        for field, value in (("tc_admitted_grades", ["AXIOMATIC"]),
+                             ("allowed_grades", ["EMPIRICAL"]),
+                             ("tc_admitted_grades", ["GROUNDED", "AXIOMATIC"])):
+            with self.subTest(field=field, value=value):
+                p = self.write_policy("grade.json", **{field: value})
+                self.assertEqual(li.load_policy(str(p))["refusal"],
+                                 "POLICY_UNSUPPORTED_GRADE")
+
+    def test_other_operations_are_refused(self):
+        p = self.write_policy("op.json", allowed_operations=["apply"])
+        self.assertEqual(li.load_policy(str(p))["refusal"], "POLICY_UNSUPPORTED_OPERATION")
+
+    def test_budget_must_be_a_positive_int(self):
+        for value in (0, -1, "100", True, None, 1.5):
+            with self.subTest(value=value):
+                p = self.write_policy("budget.json", tc_max_atp_budget=value)
+                self.assertEqual(li.load_policy(str(p))["refusal"], "POLICY_BUDGET_INVALID")
+
+    def test_malformed_policies_are_named_not_exceptions(self):
+        for name, blob in (("a.json", b"{"), ("b.json", b"[]"),
+                           ("c.json", b'{"a":1,"a":2}'), ("d.json", b"{}")):
+            with self.subTest(name=name):
+                p = self.d / name
+                p.write_bytes(blob)
+                res = li.load_policy(str(p))
+                self.assertFalse(res["ok"])
+                self.assertTrue(res["refusal"].startswith("POLICY_"))
+
+
+class EvaluationTest(LI2Base):
+    """Grade G through the real verifier: the three outcomes, and admission as
+    a SEPARATE quantity."""
+
+    def test_settled_match_passes_and_can_be_admitted(self):
+        r, out = self.evaluate_cli(self.proposal_for(self.case_claim("pass")))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        res = json.loads(r.stdout)
+        self.assertEqual(res["evaluation_status"], wk.VerificationStatus.PASS.value)
+        self.assertTrue(res["admitted"])
+
+    def test_settled_mismatch_fails(self):
+        r, _ = self.evaluate_cli(self.proposal_for(self.case_claim("fail"), "f.json"),
+                                 out_name="df.json")
+        res = json.loads(r.stdout)
+        self.assertEqual(res["evaluation_status"], wk.VerificationStatus.FAIL.value)
+        self.assertFalse(res["admitted"])
+
+    def test_non_termination_stays_unverified(self):
+        r, _ = self.evaluate_cli(self.proposal_for(self.case_claim("unverified"), "u.json"),
+                                 out_name="du.json")
+        res = json.loads(r.stdout)
+        self.assertEqual(res["evaluation_status"],
+                         wk.VerificationStatus.UNVERIFIED.value)
+        self.assertFalse(res["admitted"])
+        # UNVERIFIED is no verdict -- never reported as a refutation
+        self.assertNotIn("refut", res["admission_reason"].lower())
+
+    def test_same_claim_under_a_policy_not_authorizing_its_author(self):
+        deny = self.write_policy("deny2.json", tc_trusted_author_pks=[])
+        r, _ = self.evaluate_cli(self.proposal_for(self.case_claim("pass"), "p2.json"),
+                                 deny, out_name="dd.json")
+        res = json.loads(r.stdout)
+        self.assertNotEqual(res["evaluation_status"], wk.VerificationStatus.PASS.value)
+        self.assertFalse(res["admitted"])
+
+    def test_evidence_and_admission_are_separate_fields(self):
+        # A PASS that policy does not permit must still record the PASS.
+        ev = {"status": wk.VerificationStatus.PASS.value, "grade": "GROUNDED",
+              "reason": "x"}
+        denied = li.decide_admission(ev, "add-claim", "GROUNDED", ["apply"], ["GROUNDED"])
+        self.assertFalse(denied["admitted"])
+        self.assertEqual(ev["status"], wk.VerificationStatus.PASS.value)
+        allowed = li.decide_admission(ev, "add-claim", "GROUNDED",
+                                      ["add-claim"], ["GROUNDED"])
+        self.assertTrue(allowed["admitted"])
+
+    def test_admission_refusal_is_never_a_mathematical_claim(self):
+        for ev_status in (wk.VerificationStatus.FAIL.value,
+                          wk.VerificationStatus.UNVERIFIED.value):
+            out = li.decide_admission({"status": ev_status, "grade": "GROUNDED",
+                                       "reason": "r"}, "add-claim", "GROUNDED",
+                                      ["add-claim"], ["GROUNDED"])
+            self.assertFalse(out["admitted"])
+            self.assertNotIn("false", out["reason"].lower())
+            self.assertNotIn("disproved", out["reason"].lower())
+
+    def test_evaluate_refuses_a_proposal_bound_to_another_parent(self):
+        """LI-2 re-runs the LI-1 binding against THIS parent's bytes. Without
+        it a decision could be produced for a document the proposal never
+        targeted. (No other test covers evaluate's own precondition.)"""
+        prop = self.proposal_for(self.case_claim("pass"), "bound.json")
+        p2 = self.second_parent()
+        out = self.d / "never_dec.json"
+        r = self.cli("evaluate", "--pdf", str(p2), "--proposal", str(prop),
+                     "--policy", str(self.policy_path),
+                     "--decider-key-file", str(self.decider_key), "--out", str(out))
+        self.assertEqual(r.returncode, 2, r.stdout)
+        self.assertIn("PROPOSAL_PARENT_MISMATCH", r.stdout)
+        self.assertFalse(out.exists())
+
+    def test_api_and_cli_agree(self):
+        """Both must exercise the same authoritative check, no adapter defaults."""
+        prop = self.proposal_for(self.case_claim("pass"), "p3.json")
+        r, _ = self.evaluate_cli(prop, out_name="cli.json")
+        api = li.evaluate(str(self.parent), str(prop), str(self.policy_path),
+                          str(self.decider_key), str(self.d / "api.json"))
+        cli_res = json.loads(r.stdout)
+        self.assertEqual(api["evaluation_status"], cli_res["evaluation_status"])
+        self.assertEqual(api["admitted"], cli_res["admitted"])
+        self.assertEqual(api["decision_id"], cli_res["decision_id"])
+
+
+class AtpMeasurementTest(LI2Base):
+    """The recorded counter must be the counter that actually ran. Verdict
+    .delta_atp defaults to 0, so a branch that omits the measurement is
+    indistinguishable from one that measured zero -- the recorded figure is
+    therefore taken only from an explicit measurement, and is null otherwise."""
+
+    def recorded(self, kind, policy=None, name=None):
+        prop = self.proposal_for(self.case_claim(kind), f"atp_{name or kind}.json")
+        r, out = self.evaluate_cli(prop, policy, out_name=f"datp_{name or kind}.json")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        body = json.loads(out.read_bytes().decode())["body"]
+        return body["evaluation"]["status"], body["evaluator"]
+
+    def test_settled_pass_records_the_actual_counter(self):
+        actual = glyph.evaluate(glyph.parse(SETTLED), max_atp=100)
+        status, ev = self.recorded("pass")
+        self.assertEqual(status, wk.VerificationStatus.PASS.value)
+        self.assertTrue(ev["atp_spent_measured"])
+        self.assertEqual(ev["atp_spent"], actual.atp_spent)
+
+    def test_settled_mismatch_records_the_actual_counter(self):
+        # The reduction DID run: recording 0 here was the reported defect.
+        actual = glyph.evaluate(glyph.parse(SETTLED), max_atp=100)
+        self.assertGreater(actual.atp_spent, 0)
+        status, ev = self.recorded("fail")
+        self.assertEqual(status, wk.VerificationStatus.FAIL.value)
+        self.assertTrue(ev["atp_spent_measured"])
+        self.assertEqual(ev["atp_spent"], actual.atp_spent)
+        self.assertNotEqual(ev["atp_spent"], 0)
+
+    def test_suspended_run_records_the_actual_counter(self):
+        actual = glyph.evaluate(glyph.parse(OMEGA), max_atp=100)
+        self.assertFalse(actual.is_settled())
+        status, ev = self.recorded("unverified")
+        self.assertEqual(status, wk.VerificationStatus.UNVERIFIED.value)
+        self.assertTrue(ev["atp_spent_measured"])
+        self.assertEqual(ev["atp_spent"], actual.atp_spent)
+
+    def test_a_refusal_before_execution_records_null_not_zero(self):
+        # Deny-all policy: audit_claim returns before any reduction runs, so
+        # there is NO measurement. It must be null, never 0.
+        deny = self.write_policy("deny_atp.json", tc_trusted_author_pks=[])
+        status, ev = self.recorded("pass", deny, name="deny")
+        self.assertEqual(status, wk.VerificationStatus.UNVERIFIED.value)
+        self.assertFalse(ev["atp_spent_measured"])
+        self.assertIsNone(ev["atp_spent"])
+
+    def test_verdict_delta_atp_alone_cannot_be_trusted(self):
+        """Why the measurement comes from details, not delta_atp: the field
+        defaults to 0 on every verdict that never measured anything."""
+        v = wk.Verdict(status=wk.VerificationStatus.UNVERIFIED,
+                       grade=wk.EvidenceGrade.GROUNDED, reason="no run")
+        self.assertEqual(v.delta_atp, 0)
+        self.assertEqual(v.details, {})
+
+
+class ProducerReaderAgreementTest(LI2Base):
+    """Whatever `evaluate` writes, this host's own reader must accept under the
+    matching pins. Anything else is a producer/reader contract defect, even when
+    it grants nothing: here a negative witness budget produced a decision that
+    verify_decision then refused."""
+
+    def _write_and_read(self, claim, policy=None, tag="rt"):
+        cp = self.d / f"claim_{tag}.json"
+        cp.write_text(json.dumps(claim.to_dict(), indent=2))
+        prop = self.d / f"prop_{tag}.json"
+        r = self.cli("add-claim", "--pdf", str(self.parent),
+                     "--expect-parent-sha256", self.parent_sha, "--claim", str(cp),
+                     "--proposer-key-file", str(self.key_path), "--out", str(prop),
+                     "--json")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        out = self.d / f"dec_{tag}.json"
+        r2 = self.cli("evaluate", "--pdf", str(self.parent), "--proposal", str(prop),
+                      "--policy", str(policy or self.policy_path),
+                      "--decider-key-file", str(self.decider_key), "--out", str(out),
+                      "--json")
+        return r2, out, prop
+
+    def test_every_written_decision_is_accepted_by_its_own_reader(self):
+        """The general invariant, not just the reported case."""
+        deny = self.write_policy("deny_rt.json", tc_trusted_author_pks=[])
+        scenarios = [("pass", None), ("fail", None), ("unverified", None),
+                     ("pass", deny)]
+        for kind, policy in scenarios:
+            with self.subTest(kind=kind, policy=bool(policy)):
+                tag = f"{kind}{'_deny' if policy else ''}"
+                r, out, prop = self._write_and_read(self.case_claim(kind), policy, tag)
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                res = json.loads(r.stdout)
+                back = li.verify_decision(out.read_bytes(),
+                                          expect_proposal_id=res["proposal_id"],
+                                          expect_parent_sha256=res["parent_pdf_sha256"],
+                                          expect_policy_sha256=res["policy_sha256"])
+                self.assertTrue(back["ok"],
+                                f"{tag}: written decision refused by its own reader: {back}")
+
+    def test_negative_witness_budget_is_refused_without_writing(self):
+        claim = self.grounded_claim(SETTLED, "0" * 64, budget=-1)
+        r, out, _ = self._write_and_read(claim, tag="negbudget")
+        self.assertEqual(r.returncode, 2, r.stdout)
+        self.assertIn("CLAIM_BUDGET_INVALID", r.stdout)
+        self.assertFalse(out.exists(), "a refused evaluation still wrote a decision")
+
+    def test_budget_boundary_values(self):
+        for budget, ok in ((0, True), (1, True), (-1, False), (-1000, False)):
+            with self.subTest(budget=budget):
+                claim = self.grounded_claim(SETTLED, "0" * 64, budget=budget)
+                r, out, _ = self._write_and_read(claim, tag=f"b{budget}")
+                self.assertEqual(r.returncode, 0 if ok else 2, r.stdout)
+                self.assertEqual(out.exists(), ok)
+                if ok:
+                    self.assertTrue(li.verify_decision(out.read_bytes())["ok"])
+
+    def test_a_body_the_reader_would_reject_is_never_emitted(self):
+        """The structural guarantee: evaluate runs the formed body through the
+        reader's own validator before signing. Simulated by making that
+        validator reject everything -- nothing may be written."""
+        out = self.d / "selfcheck.json"
+        prop = self.proposal_for(self.case_claim("pass"), "sc.json")
+        with mock.patch.object(li, "validate_decision_body",
+                               return_value={"ok": False, "refusal": "X", "detail": "y"}):
+            res = li.evaluate(str(self.parent), str(prop), str(self.policy_path),
+                              str(self.decider_key), str(out))
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["refusal"], "DECISION_SELF_CHECK_FAILED")
+        self.assertFalse(out.exists())
+
+
+class DecisionBindingTest(LI2Base):
+    """A decision is a report bound to one subject; substituting anything must
+    not transfer it."""
+
+    def setUp(self):
+        super().setUp()
+        self.prop = self.proposal_for(self.case_claim("pass"))
+        r, self.dec = self.evaluate_cli(self.prop)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.res = json.loads(r.stdout)
+        self.raw = self.dec.read_bytes()
+
+    def test_decision_verifies_against_its_own_pins(self):
+        prop = json.loads(self.prop.read_text())
+        out = li.verify_decision(self.raw, prop["proposal_id"], self.parent_sha,
+                                 self.res["policy_sha256"])
+        self.assertTrue(out["ok"], out)
+        self.assertEqual(out["status"], "DECISION_ONLY")
+        self.assertFalse(out["applied"])
+
+    def test_each_substituted_pin_is_refused(self):
+        for kwargs, want in (
+            ({"expect_proposal_id": "0" * 64}, "DECISION_PROPOSAL_MISMATCH"),
+            ({"expect_parent_sha256": "0" * 64}, "DECISION_PARENT_MISMATCH"),
+            ({"expect_policy_sha256": "0" * 64}, "DECISION_POLICY_MISMATCH"),
+        ):
+            with self.subTest(want=want):
+                self.assertEqual(li.verify_decision(self.raw, **kwargs)["refusal"], want)
+
+    def test_flipping_the_verdict_or_admission_breaks_the_decision(self):
+        # The flip must start from a NEGATIVE decision, otherwise setting
+        # status="pass"/admitted=True on an already-passing decision changes
+        # nothing and the control would be vacuous.
+        negative_prop = self.proposal_for(self.case_claim("fail"), "neg.json")
+        r, neg = self.evaluate_cli(negative_prop, out_name="dneg.json")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        neg_raw = neg.read_bytes()
+        neg_body = json.loads(neg_raw.decode())["body"]
+        self.assertNotEqual(neg_body["evaluation"]["status"],
+                            wk.VerificationStatus.PASS.value)
+        self.assertFalse(neg_body["admission"]["admitted"])
+
+        # (source, path, value, refusal as-is, refusal after honest re-signing)
+        cases = [
+            (neg_raw, ("evaluation", "status"), wk.VerificationStatus.PASS.value,
+             "DECISION_ID_MISMATCH", "DECISION_SIGNATURE_INVALID"),
+            # admitted=true over a non-PASS verdict contradicts itself, so it is
+            # caught by the consistency check even when honestly re-signed.
+            (neg_raw, ("admission", "admitted"), True,
+             "DECISION_INCONSISTENT", "DECISION_INCONSISTENT"),
+            (self.raw, ("policy_sha256",), "0" * 64,
+             "DECISION_ID_MISMATCH", "DECISION_SIGNATURE_INVALID"),
+            (self.raw, ("parent_pdf_sha256",), "0" * 64,
+             "DECISION_ID_MISMATCH", "DECISION_SIGNATURE_INVALID"),
+            (self.raw, ("proposal_id",), "0" * 64,
+             "DECISION_ID_MISMATCH", "DECISION_SIGNATURE_INVALID"),
+        ]
+        for source, path, value, want_raw, want_resigned in cases:
+            with self.subTest(path=path):
+                doc = json.loads(source.decode())
+                target = doc["body"]
+                for k in path[:-1]:
+                    target = target[k]
+                target[path[-1]] = value
+                self.assertEqual(li.verify_decision(json.dumps(doc).encode())["refusal"],
+                                 want_raw)
+                doc["decision_id"] = li.compute_decision_id(doc["body"])
+                self.assertEqual(li.verify_decision(json.dumps(doc).encode())["refusal"],
+                                 want_resigned)
+
+    def test_a_resigned_body_is_still_checked_for_content(self):
+        """A decider signature is ATTRIBUTION, not evidence. Re-signing a body
+        with the SAME key must not launder unsupported, malformed or
+        self-contradictory content."""
+        neg_prop = self.proposal_for(self.case_claim("fail"), "rs.json")
+        r, neg = self.evaluate_cli(neg_prop, out_name="drs.json")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        base = json.loads(neg.read_bytes().decode())
+
+        def resign(mutate):
+            doc = json.loads(json.dumps(base))
+            mutate(doc["body"])
+            doc["decision_id"] = li.compute_decision_id(doc["body"])
+            doc["decision_signature_hex"] = crypto.sign_hex(
+                self.d_sk, li.decision_message(doc["decision_id"]))
+            return json.dumps(doc).encode()
+
+        def set_ev_profile(b):
+            b["evaluator"]["profile"] = "unsupported.v99"
+
+        def set_ev_version(b):
+            b["evaluator"]["version"] = "99"
+
+        def empty_evaluator(b):
+            b["evaluator"] = {}
+
+        def list_status(b):
+            b["evaluation"]["status"] = []
+
+        def drop_reason(b):
+            b["admission"].pop("reason")
+
+        def admit_on_fail(b):
+            b["admission"]["admitted"] = True
+
+        def fake_zero_atp(b):
+            b["evaluator"]["atp_spent_measured"] = False
+            b["evaluator"]["atp_spent"] = 0
+
+        table = [(set_ev_profile, "DECISION_UNSUPPORTED_EVALUATOR"),
+                 (set_ev_version, "DECISION_UNSUPPORTED_EVALUATOR"),
+                 (empty_evaluator, "DECISION_FIELD_MISSING"),
+                 (list_status, "DECISION_FIELD_TYPE"),
+                 (drop_reason, "DECISION_FIELD_MISSING"),
+                 (admit_on_fail, "DECISION_INCONSISTENT"),
+                 (fake_zero_atp, "DECISION_FIELD_TYPE")]
+        for mutate, want in table:
+            with self.subTest(want=want, case=mutate.__name__):
+                blob = resign(mutate)
+                res = li.verify_decision(blob)          # must not raise
+                self.assertFalse(res["ok"])
+                self.assertEqual(res["refusal"], want)
+
+    def test_verification_states_its_own_boundaries(self):
+        out = li.verify_decision(self.raw)
+        self.assertTrue(out["attribution_verified"])
+        self.assertFalse(out["evidence_replayed_by_reader"])
+        self.assertFalse(out["decider_authority_established"])
+
+    def test_a_decision_for_one_proposal_does_not_cover_another(self):
+        other = self.proposal_for(self.case_claim("fail"), "other.json")
+        other_id = json.loads(other.read_text())["proposal_id"]
+        self.assertEqual(li.verify_decision(self.raw, expect_proposal_id=other_id)["refusal"],
+                         "DECISION_PROPOSAL_MISMATCH")
+
+    def test_decision_records_the_actual_budget_figures(self):
+        body = json.loads(self.raw.decode())["body"]
+        ev = body["evaluator"]
+        self.assertEqual(ev["profile"], li.EVALUATOR_PROFILE)
+        self.assertEqual(ev["atp_budget_limit"], 10000)
+        self.assertGreaterEqual(ev["atp_spent"], 0)
+        self.assertIn("atp_budget_requested", ev)
+
+    def test_decision_domain_is_distinct(self):
+        self.assertNotEqual(li.DECISION_SIG_DOMAIN, li.ENVELOPE_SIG_DOMAIN)
+        self.assertNotEqual(li.DECISION_SIG_DOMAIN, b"warrant-sig-v1:")
+
+    def test_malformed_decisions_are_named_not_exceptions(self):
+        for blob in (b"", b"{", b"[]", b"null", b'{"a":1,"a":2}',
+                     b'{"profile":"x","body":{},"decision_id":"0",'
+                     b'"decision_signature_hex":"0"}'):
+            with self.subTest(blob=blob):
+                res = li.verify_decision(blob)
+                self.assertFalse(res["ok"])
+                self.assertTrue(res["refusal"].startswith("DECISION_"))
+
+
+class LI2StateEffectTest(LI2Base):
+    """A decision is recorded and nothing else happens."""
+
+    def test_refusals_write_nothing_and_preserve_inputs(self):
+        prop = self.proposal_for(self.case_claim("pass"))
+        digests = {p: _sha256(p) for p in (self.parent, prop, self.policy_path,
+                                           self.decider_key)}
+        bad_policy = self.write_policy("nosig2.json", tc_require_bound_signature=False)
+        out = self.d / "never.json"
+        r = self.cli("evaluate", "--pdf", str(self.parent), "--proposal", str(prop),
+                     "--policy", str(bad_policy), "--decider-key-file",
+                     str(self.decider_key), "--out", str(out))
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("POLICY_NO_SIGNATURE", r.stdout)
+        self.assertFalse(out.exists())
+        for p, want in digests.items():
+            self.assertEqual(_sha256(p), want)
+
+    def test_parent_is_untouched_by_a_successful_evaluation(self):
+        before = self.parent.read_bytes()
+        self.evaluate_cli(self.proposal_for(self.case_claim("pass")))
+        self.assertEqual(self.parent.read_bytes(), before)
+
+    def test_existing_decision_output_is_not_overwritten(self):
+        prop = self.proposal_for(self.case_claim("pass"))
+        r, out = self.evaluate_cli(prop)
+        self.assertEqual(r.returncode, 0)
+        before = out.read_bytes()
+        r2, _ = self.evaluate_cli(prop)
+        self.assertEqual(r2.returncode, 2)
+        self.assertIn("OUTPUT_EXISTS", r2.stdout)
+        self.assertEqual(out.read_bytes(), before)
+
+    def test_evaluate_produces_no_successor_pdf(self):
+        before = sorted(p.name for p in self.d.iterdir())
+        r, out = self.evaluate_cli(self.proposal_for(self.case_claim("pass")))
+        self.assertEqual(r.returncode, 0)
+        after = sorted(p.name for p in self.d.iterdir())
+        new = set(after) - set(before)
+        self.assertFalse([n for n in new if n.endswith(".pdf")],
+                         f"evaluate created a PDF: {new}")
+
+    def test_result_states_it_is_a_decision_only(self):
+        r, _ = self.evaluate_cli(self.proposal_for(self.case_claim("pass")))
+        res = json.loads(r.stdout)
+        self.assertEqual(res["status"], "DECISION_ONLY")
+        self.assertFalse(res["applied"])
 
 
 if __name__ == "__main__":

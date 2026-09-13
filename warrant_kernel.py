@@ -615,10 +615,17 @@ class WarrantVerifier:
                         details={"status": res.status.value, "atp_spent": res.atp_spent}
                     )
                 if res.hash != w.expected_hash:
+                    # The reduction DID run and DID consume ATP; omitting the
+                    # measurement here made a genuine cost indistinguishable
+                    # from "no measurement", and consumers defaulting delta_atp
+                    # to 0 then recorded a settled mismatch as costing nothing.
                     return Verdict(
                         status=VerificationStatus.FAIL,
                         grade=EvidenceGrade.GROUNDED,
-                        reason=f"Grounded hash mismatch: replayed {res.hash[:12]} != expected {w.expected_hash[:12]}"
+                        reason=f"Grounded hash mismatch: replayed {res.hash[:12]} != expected {w.expected_hash[:12]}",
+                        delta_atp=res.atp_spent,
+                        details={"hash": res.hash, "expected_hash": w.expected_hash,
+                                 "atp_spent": res.atp_spent}
                     )
                 return Verdict(
                     status=VerificationStatus.PASS,
