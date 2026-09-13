@@ -22,6 +22,60 @@ SYSTEM = ('You are receiver B in the bounded CM-3 engineering exchange. '
           'Do not use project memory, previous conversations, other agents, or external sources.')
 
 
+def check_context(body, prompt, commands):
+    system = body.get('system', [])
+    system = [{'type': 'text', 'text': system}] if isinstance(system, str) else system
+    texts = [block.get('text', '') for block in system]
+    allowed_system = lambda text: (text == SYSTEM or text.startswith('x-anthropic-billing-header:')
+                                  or text in ("You are Claude Code, Anthropic's official CLI for Claude.",
+                                              "You are a Claude agent, built on Anthropic's Claude Agent SDK."))
+    if not all(allowed_system(t) for t in texts) or SYSTEM not in texts:
+        raise ValueError('UNAPPROVED_SYSTEM_CONTEXT')
+    messages = body.get('messages', [])
+    if not messages or messages[0].get('role') != 'user':
+        raise ValueError('INITIAL_USER_MESSAGE_MISSING')
+    first = messages[0]['content']
+    first = [{'type': 'text', 'text': first}] if isinstance(first, str) else first
+    first_text = [b.get('text', '') for b in first if b.get('type') == 'text']
+    if first_text.count(prompt) != 1:
+        raise ValueError('EXACT_PACKET_PROMPT_MISSING')
+    # Safe mode still adds account/date/attribution reminders. Remove ALL
+    # client-added user text, retaining only the exact approved packet.
+    # Record counts/digests, never the potentially private removed text.
+    removed = [t for t in first_text if t != prompt]
+    messages[0]['content'] = [{'type': 'text', 'text': prompt}]
+    for message in messages[1:]:
+        if message.get('role') == 'user':
+            content = message.get('content', [])
+            if not isinstance(content, list):
+                raise ValueError('UNEXPECTED_FOLLOWUP_USER_CONTENT')
+            for block in content:
+                if block.get('type') != 'tool_result':
+                    removed.append(json.dumps(block, sort_keys=True))
+            message['content'] = [block for block in content if block.get('type') == 'tool_result']
+            if not message['content']:
+                raise ValueError('NO_ALLOWED_TOOL_RESULT')
+    if {t['name'] for t in body.get('tools', [])} - {'Bash'}:
+        raise ValueError('UNAPPROVED_TOOL_SET')
+    if body.get('thinking', {}).get('type', 'disabled') != 'disabled':
+        raise ValueError('THINKING_NOT_DISABLED')
+    for message in messages:
+        content = message.get('content', [])
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if block.get('type') in ('thinking', 'redacted_thinking'):
+                raise ValueError('HIDDEN_REASONING_IN_CONTEXT')
+            if block.get('type') == 'tool_use':
+                if block.get('name') != 'Bash' or block.get('input', {}).get('command') not in commands:
+                    raise ValueError('UNAPPROVED_TOOL_COMMAND')
+    return {'system': system, 'initial_user_content': messages[0]['content'],
+            'removed_client_text_sha256': [hashlib.sha256(t.encode()).hexdigest() for t in removed], 'tools': body.get('tools', []),
+            'model': body.get('model'), 'message_count': len(messages),
+            'system_sha256': hashlib.sha256(json.dumps(system, sort_keys=True).encode()).hexdigest(),
+            'initial_user_sha256': hashlib.sha256(json.dumps(messages[0]['content'], sort_keys=True).encode()).hexdigest()}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('snapshot', type=Path)
@@ -44,44 +98,6 @@ def main():
     lock = threading.Lock()
     session = str(uuid.uuid4())
 
-    def check_context(body):
-        system = body.get('system', [])
-        system = [{'type': 'text', 'text': system}] if isinstance(system, str) else system
-        texts = [block.get('text', '') for block in system]
-        allowed_system = lambda text: (text == SYSTEM or text.startswith('x-anthropic-billing-header:')
-                                      or text == "You are Claude Code, Anthropic's official CLI for Claude.")
-        if not all(allowed_system(t) for t in texts) or SYSTEM not in texts:
-            raise ValueError('UNAPPROVED_SYSTEM_CONTEXT: ' + repr([t[:100] for t in texts if not allowed_system(t)]))
-        messages = body.get('messages', [])
-        if not messages or messages[0].get('role') != 'user':
-            raise ValueError('INITIAL_USER_MESSAGE_MISSING')
-        first = messages[0]['content']
-        first = [{'type': 'text', 'text': first}] if isinstance(first, str) else first
-        first_text = [b.get('text', '') for b in first if b.get('type') == 'text']
-        # Only the exact packet prompt and the client's date-only reminder.
-        import re
-        date_only = re.compile(r'<system-reminder>\n# currentDate\nToday.s date is \d{4}-\d{2}-\d{2}\.\n\nIMPORTANT: this context may or may not be relevant to your tasks\. You should not respond to this context unless it is highly relevant to your task\.\n</system-reminder>\n?')
-        if prompt not in first_text or any(t != prompt and not date_only.fullmatch(t) for t in first_text):
-            raise ValueError('UNAPPROVED_USER_CONTEXT: ' + repr([t[:100] for t in first_text if t != prompt]))
-        if {t['name'] for t in body.get('tools', [])} - {'Bash'}:
-            raise ValueError('UNAPPROVED_TOOL_SET')
-        if body.get('thinking', {}).get('type', 'disabled') != 'disabled':
-            raise ValueError('THINKING_NOT_DISABLED')
-        for message in messages:
-            content = message.get('content', [])
-            if not isinstance(content, list):
-                continue
-            for block in content:
-                if block.get('type') in ('thinking', 'redacted_thinking'):
-                    raise ValueError('HIDDEN_REASONING_IN_CONTEXT')
-                if block.get('type') == 'tool_use':
-                    if block.get('name') != 'Bash' or block.get('input', {}).get('command') not in commands:
-                        raise ValueError('UNAPPROVED_TOOL_COMMAND')
-        return {'system': system, 'initial_user_content': first, 'tools': body.get('tools', []),
-                'model': body.get('model'), 'message_count': len(messages),
-                'system_sha256': hashlib.sha256(json.dumps(system, sort_keys=True).encode()).hexdigest(),
-                'initial_user_sha256': hashlib.sha256(json.dumps(first, sort_keys=True).encode()).hexdigest()}
-
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *unused):
             pass  # Never log request headers/credentials.
@@ -96,7 +112,8 @@ def main():
                     raise ValueError('REQUEST_SIZE')
                 raw = self.rfile.read(size)
                 body = json.loads(raw)
-                context = check_context(body)
+                context = check_context(body, prompt, commands)
+                raw = json.dumps(body, ensure_ascii=False).encode('utf-8')
                 with lock:
                     audit.append(context)
                 if not args.live:
@@ -104,9 +121,18 @@ def main():
                             'model': body.get('model'), 'content': [{'type': 'text', 'text': 'LOCAL TRANSPORT PREFLIGHT ONLY. No model was called.'}],
                             'stop_reason': 'end_turn', 'stop_sequence': None,
                             'usage': {'input_tokens': 0, 'output_tokens': 0}}
-                    payload = json.dumps(data).encode()
+                    text = data['content'][0]['text']
+                    events = [
+                        ('message_start', {'type': 'message_start', 'message': {**data, 'content': [], 'stop_reason': None}}),
+                        ('content_block_start', {'type': 'content_block_start', 'index': 0, 'content_block': {'type': 'text', 'text': ''}}),
+                        ('content_block_delta', {'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'text_delta', 'text': text}}),
+                        ('content_block_stop', {'type': 'content_block_stop', 'index': 0}),
+                        ('message_delta', {'type': 'message_delta', 'delta': {'stop_reason': 'end_turn', 'stop_sequence': None}, 'usage': {'output_tokens': 0}}),
+                        ('message_stop', {'type': 'message_stop'}),
+                    ]
+                    payload = ''.join('event: ' + name + '\ndata: ' + json.dumps(event) + '\n\n' for name, event in events).encode()
                     self.send_response(200)
-                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Content-Type', 'text/event-stream')
                     self.send_header('Content-Length', str(len(payload)))
                     self.end_headers()
                     self.wfile.write(payload)

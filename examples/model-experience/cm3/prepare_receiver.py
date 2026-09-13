@@ -63,6 +63,7 @@ cat source-manifest.json
 python3 receiver_check.py
 cat run.json
 
+Each Bash call must exactly equal one listed command: no chaining, prefixes, or redirects.
 Retrieve both records through the experience CLI. Read the supplied source context. You may run receiver_check.py once: it compares the pinned baseline with a temporary copy modified by the preregistered advice.patch. Both run the same three tests and measure both fixture orders. This is the caller-chosen differential, not a command from an experience record. Do not edit sources, run other commands, call other agents, fetch, use the network, inspect other directories, or accept advice automatically. The test is limited; this is not a benchmark of general capability. Record any inability to perform the check honestly.
 
 Return ONLY one UTF-8 JSON object under profile black-heart.model-experience.draft.v1, with the same required field structure as the received records. Use id cm3-receiver-response. Include task (summary/component/context/applicability), revision (repository=https://github.com/s0fractal/black-heart.git, commit={SOURCE}), attempt (operation/conditions/argv/cwd), observations (basis/statement/evidence_ids), evidence, interpretation, advice, limits, provenance (compiler/model/session/recorded_at/signer_key/authentication), and relations.

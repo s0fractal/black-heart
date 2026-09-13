@@ -54,6 +54,6 @@
     "cwd": "fresh /private/tmp snapshot outside Projects",
     "client": "safe-mode, no-session-persistence, empty setting sources, custom system prompt, disabled auto memory",
     "tools": "Bash only, exact approved command list with dontAsk permission mode",
-    "verification": "observe submitted API system/user context before forwarding; record context and tool evidence without credentials or hidden reasoning; refuse unexpected project memory"
+    "verification": "Observe and restrict submitted requests: retain exact approved initial user prompt, allowed system blocks and subsequent allowed tool results; remove client-added user text and retain only its hashes; refuse unknown system context/tools/commands or thinking. Record complete public stdout only if no hidden-reasoning fields."
   }
 }
