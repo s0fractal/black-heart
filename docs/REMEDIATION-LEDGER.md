@@ -4,6 +4,9 @@
 > select the next feature work: proposal intake, caller-policy evaluation, then
 > immutable PDF successors. Publication/stamping are deferred. This scheduling
 > note closes no finding and does not refresh the historical audit coverage below.
+> Progress: LI-1 and LI-2 are implemented ([LI-1](LIBRARY-INTERACTION-LI1.md),
+> [LI-2](LIBRARY-INTERACTION-LI2.md)); LI-3 is not. Neither closes any finding
+> below, and neither touches the six scan residuals.
 
 Base: `origin/main` = `1d1908f`. Probe rerun here: `python3 -B ../black-heart-remediation-2026-09-11/baseline_probe.py .`
 reproduces Codex's three observations at this HEAD (they were first recorded at `ce05d3e`).
