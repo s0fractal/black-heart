@@ -142,5 +142,13 @@
     }
   ],
   "scope": "Actual current-agent tool execution after user request; no fresh model, evidence replay, or causal skill-effect measurement",
-  "checkout_after": "?? examples/model-experience/cm4/interaction.json\n?? examples/model-experience/cm4/saved-check.json\n"
+  "checkout_after": "?? examples/model-experience/cm4/interaction.json\n?? examples/model-experience/cm4/saved-check.json\n",
+  "recording_chronology": {
+    "basis": "Operator disclosure from this task history; added during B1 review correction, not measured by the original report.",
+    "previous_local_run": "An earlier local execution of the same import/search/read/saved-verifier scenario wrote interaction.json and saved-check.json. Its first report did not capture checkout_before at the intended boundary; that report was replaced before the original PR commit.",
+    "reason_for_repeat": "The compiler corrected the harness to capture git status before executing its recorded commands, then reran the local scenario in a new temporary store. No provider session or evaluator differential was run in either attempt.",
+    "recorded_run": "The events in this file belong to that second local execution. Its checkout_before was measured before events[0], after the earlier execution had left the two untracked files. It is not the state before the first attempt or before the user request.",
+    "checkout_after_boundary": "Measured after the recorded commands and writing saved-check.json, before overwriting interaction.json with this report.",
+    "previous_run_archive": "The earlier report was not separately committed; no claim is made to preserve its complete output or timestamps."
+  }
 }

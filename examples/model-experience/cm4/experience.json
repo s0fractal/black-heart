@@ -13,14 +13,14 @@
   },
   "attempt": {
     "operation": "Import, search, read and verify saved exchange; compose a bounded answer.",
-    "conditions": "See interaction events for actual commands and checkout state. No provider session or evaluator replay.",
+    "conditions": "See interaction events for actual commands and checkout state. The report is the second local execution, after an earlier run left untracked outputs; recording_chronology discloses that boundary. No provider session or evaluator replay.",
     "argv": [],
     "cwd": "/Users/s0fractal/Projects/.worktrees/black-heart-cm4"
   },
   "observations": [
     {
       "basis": "replayed",
-      "statement": "The local CLI search returned three valid EMPIRICAL records after explicit example imports; the saved-exchange verifier returned ok with no model invocation or evaluator replay.",
+      "statement": "I executed and measured these local CLI operations in this session: search returned three valid EMPIRICAL records after explicit example imports, and the saved-exchange verifier returned ok. Here basis=replayed refers only to rerunning these data operations; the CLI evidence_replayed=false remains correct because neither the historical evaluator differential nor record-supplied evidence commands were executed.",
       "evidence_ids": [
         "interaction",
         "saved_check"
@@ -88,7 +88,7 @@
       "kind": "file",
       "path": "interaction.json",
       "commit": null,
-      "sha256": "550b3de04140fc3a4340e188820b6fdba5684807d595114072c05af4281cff87",
+      "sha256": "cf46e86620272f8845c92b90c5d51f56c8100b1cfa222db81e85bed103f4d134",
       "locator": null
     },
     {
@@ -114,7 +114,8 @@
     "Current Codex session already knows CM-3; not fresh-session or independent evaluation.",
     "One search scenario does not demonstrate all skill routes or causal improvement from the skill.",
     "Store is temporary; reproducibility requires reimporting the committed source records.",
-    "No advice adoption, stake action, authentication or provider call."
+    "No advice adoption, stake action, authentication or provider call.",
+    "The interaction report covers a repeated local run, not the first attempt; its prior-run chronology is a post-review operator disclosure."
   ],
   "provenance": {
     "compiler": "Codex",
@@ -122,7 +123,7 @@
     "session": null,
     "recorded_at": null,
     "signer_key": null,
-    "authentication": null
+    "authentication": "Unsigned compiler-authored record; no signature or model authentication performed."
   },
   "relations": [
     {
