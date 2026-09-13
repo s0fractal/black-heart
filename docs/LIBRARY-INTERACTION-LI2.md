@@ -127,6 +127,11 @@ editing a saved policy invalidates every decision that cited it.
 
 ## 4bis. Producer and reader agree by construction
 
+*Clarification added with LI-3 (Codex, 2026-09-13): sharing one validator gives
+the producer and the reader **identical structural requirements**. It does not
+prove that validator correct on arbitrary input — it removes the disagreement
+between writing and reading, which is a narrower claim.*
+
 Whatever `evaluate` writes, this host's own reader must accept under the
 matching pins. That is enforced structurally, not promised: the formed decision
 body is passed through **the reader's own `validate_decision_body`** before it

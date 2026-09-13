@@ -16,12 +16,14 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
 import unittest
 from unittest import mock
 from pathlib import Path
+from pathlib import Path as pathlib_Path
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path[:1]:
@@ -1136,6 +1138,645 @@ class LI2StateEffectTest(LI2Base):
         res = json.loads(r.stdout)
         self.assertEqual(res["status"], "DECISION_ONLY")
         self.assertFalse(res["applied"])
+
+
+# --------------------------------------------------------------------------- #
+# LI-3: immutable successor and a readable transition
+# --------------------------------------------------------------------------- #
+class LI3Base(LI2Base):
+    def setUp(self):
+        super().setUp()
+        self.i_sk, self.i_pk = crypto.generate_keypair()        # receipt ISSUER
+        self.issuer_key = self.d / "issuer.key"
+        self.issuer_key.write_text(self.i_sk + "\n")
+        # a DIFFERENT pre-existing claim, so preservation is observable
+        self.old_claim = self.grounded_claim("🖤", "f" * 64, budget=10)
+        self.parent = self.d / "parent3.pdf"
+        wk.generate_warrant_ledger_pdf([self.old_claim], str(self.parent),
+                                       wk.TrustConfig())
+        self.parent_sha = _sha256(self.parent)
+
+    def pipeline(self, claim=None, tag="t", policy=None):
+        """add-claim -> evaluate, returning (proposal, decision)."""
+        claim = claim if claim is not None else self.case_claim("pass")
+        cp = self.d / f"c_{tag}.json"
+        cp.write_text(json.dumps(claim.to_dict(), indent=2))
+        prop = self.d / f"p_{tag}.json"
+        r = self.cli("add-claim", "--pdf", str(self.parent),
+                     "--expect-parent-sha256", self.parent_sha, "--claim", str(cp),
+                     "--proposer-key-file", str(self.key_path), "--out", str(prop))
+        self.assertEqual(r.returncode, 0, r.stdout)
+        dec = self.d / f"d_{tag}.json"
+        r = self.cli("evaluate", "--pdf", str(self.parent), "--proposal", str(prop),
+                     "--policy", str(policy or self.policy_path),
+                     "--decider-key-file", str(self.decider_key), "--out", str(dec))
+        self.assertEqual(r.returncode, 0, r.stdout)
+        return prop, dec
+
+    def apply_cli(self, prop, dec, tag="t", policy=None, parent=None):
+        out = self.d / f"s_{tag}.pdf"
+        rec = self.d / f"r_{tag}.json"
+        r = self.cli("apply", "--pdf", str(parent or self.parent),
+                     "--proposal", str(prop), "--decision", str(dec),
+                     "--policy", str(policy or self.policy_path),
+                     "--issuer-key-file", str(self.issuer_key),
+                     "--out", str(out), "--receipt", str(rec), "--json")
+        return r, out, rec
+
+    def explain_cli(self, prop, dec, out, rec, issuer=None, parent=None):
+        args = ["explain-transition", "--parent", str(parent or self.parent),
+                "--successor", str(out), "--proposal", str(prop),
+                "--decision", str(dec), "--receipt", str(rec), "--json"]
+        if issuer is not None:
+            args += ["--expect-issuer-pk", issuer]
+        return self.cli(*args)
+
+
+class SuccessorProfileTest(LI3Base):
+    """The successor is data-only, and it composes."""
+
+    def test_successor_is_data_only_and_starts_at_pdf(self):
+        prop, dec = self.pipeline()
+        r, out, _rec = self.apply_cli(prop, dec)
+        self.assertEqual(r.returncode, 0, r.stdout)
+        raw = out.read_bytes()
+        self.assertEqual(raw[:8], b"%PDF-1.7")
+        self.assertNotIn(b"#!/", raw)
+        self.assertNotIn(b"import sys", raw)
+        self.assertNotIn(b"__file__", raw)
+
+    def test_successor_xref_offsets_are_correct(self):
+        # The parent profile's offsets are wrong by its prologue length; the
+        # successor's must actually point at the objects.
+        prop, dec = self.pipeline(tag="x")
+        r, out, _ = self.apply_cli(prop, dec, tag="x")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        raw = out.read_bytes()
+        sx = int(re.search(rb"startxref\s+(\d+)", raw).group(1))
+        self.assertEqual(raw[sx:sx + 4], b"xref")
+        xr = raw.find(b"xref")
+        first = int(raw[xr + 11:xr + 41].split()[3])
+        self.assertEqual(raw[first:first + 7], b"1 0 obj")
+
+    def test_a_successor_can_be_the_parent_of_the_next_proposal(self):
+        prop, dec = self.pipeline(tag="c")
+        r, out, _ = self.apply_cli(prop, dec, tag="c")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        res = li.read_parent(str(out))
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(res["claim_count"], 2)
+
+    def test_parent_file_is_never_written_to(self):
+        before = self.parent.read_bytes()
+        prop, dec = self.pipeline(tag="pu")
+        r, _out, _rec = self.apply_cli(prop, dec, tag="pu")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertEqual(self.parent.read_bytes(), before)
+
+
+class TransitionVerificationTest(LI3Base):
+    """A fresh verifier confirms preservation and exactly-one addition."""
+
+    def setUp(self):
+        super().setUp()
+        self.prop, self.dec = self.pipeline(tag="v")
+        r, self.out, self.rec = self.apply_cli(self.prop, self.dec, tag="v")
+        self.assertEqual(r.returncode, 0, r.stdout)
+
+    def test_old_claims_remain_and_exactly_one_is_added(self):
+        r = self.explain_cli(self.prop, self.dec, self.out, self.rec, self.i_pk)
+        self.assertEqual(r.returncode, 0, r.stdout)
+        res = json.loads(r.stdout)
+        self.assertEqual(res["claims_preserved"], 1)
+        self.assertEqual(res["claims_after"], 2)
+        self.assertEqual(len(res["admitted_claim_ids"]), 1)
+        self.assertFalse(res["regenerated"])
+        self.assertFalse(res["evidence_replayed_by_reader"])
+
+    def test_verification_does_not_regenerate_the_successor(self):
+        with mock.patch.object(li, "render_successor_pdf",
+                               side_effect=AssertionError("regeneration forbidden")):
+            res = li.explain_transition(str(self.parent), str(self.out), str(self.prop),
+                                        str(self.dec), str(self.rec), self.i_pk)
+        self.assertTrue(res["ok"], res)
+
+    def test_issuer_is_not_self_declaring(self):
+        # Without a caller-pinned issuer, authority is reported as NOT established.
+        r = self.explain_cli(self.prop, self.dec, self.out, self.rec, issuer=None)
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertFalse(json.loads(r.stdout)["issuer_authorized_by_caller"])
+        # A different pinned issuer is a refusal.
+        _other_sk, other_pk = crypto.generate_keypair()
+        r2 = self.explain_cli(self.prop, self.dec, self.out, self.rec, other_pk)
+        self.assertEqual(r2.returncode, 2)
+        self.assertIn("RECEIPT_ISSUER_MISMATCH", r2.stdout)
+
+    def test_altering_each_artifact_is_detected(self):
+        table = {}
+
+        def flip(path):
+            b = bytearray(path.read_bytes())
+            i = len(b) // 2
+            b[i] = b[i] ^ 0x01
+            return bytes(b)
+
+        for label, path in (("successor", self.out), ("receipt", self.rec)):
+            with self.subTest(artifact=label):
+                original = path.read_bytes()
+                path.write_bytes(flip(path))
+                try:
+                    r = self.explain_cli(self.prop, self.dec, self.out, self.rec, self.i_pk)
+                    self.assertEqual(r.returncode, 2, f"{label} tamper not detected")
+                    table[label] = r.stdout
+                finally:
+                    path.write_bytes(original)
+        self.assertEqual(len(table), 2)
+
+    def test_a_successor_with_a_dropped_parent_claim_is_refused(self):
+        # Build a successor that keeps only the NEW claim: preservation broken.
+        added = json.loads(self.prop.read_text())["body"]["claim"]
+        forged = self.d / "forged.pdf"
+        forged.write_bytes(li.render_successor_pdf([added], ["forged"]))
+        res = li.explain_transition(str(self.parent), str(forged), str(self.prop),
+                                    str(self.dec), str(self.rec), self.i_pk)
+        self.assertFalse(res["ok"])
+        # the receipt binds the real successor bytes, so this is caught there
+        self.assertEqual(res["refusal"], "RECEIPT_SUCCESSOR_MISMATCH")
+
+    def test_claim_preservation_is_checked_independently_of_the_receipt(self):
+        """Re-issue a receipt for the forged successor: preservation must still
+        be the thing that refuses it."""
+        added = json.loads(self.prop.read_text())["body"]["claim"]
+        forged = self.d / "forged2.pdf"
+        forged.write_bytes(li.render_successor_pdf([added], ["forged"]))
+        body = li.receipt_body(self.parent_sha, _sha256(forged),
+                               json.loads(self.prop.read_text())["proposal_id"],
+                               json.loads(self.rec.read_text())["body"]["decision_id"],
+                               json.loads(self.rec.read_text())["body"]["policy_sha256"],
+                               added["claim_id"], self.i_pk)
+        rid = li.compute_receipt_id(body)
+        doc = {"profile": li.TRANSITION_PROFILE, "body": body, "receipt_id": rid,
+               "receipt_signature_hex": crypto.sign_hex(self.i_sk, li.receipt_message(rid))}
+        rec2 = self.d / "rec2.json"
+        rec2.write_text(json.dumps(doc))
+        res = li.explain_transition(str(self.parent), str(forged), str(self.prop),
+                                    str(self.dec), str(rec2), self.i_pk)
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["refusal"], "PARENT_CLAIMS_DROPPED")
+
+
+class ApplyStateEffectTest(LI3Base):
+    """Repetition, staging, write failure and recovery."""
+
+    def test_repeat_application_refuses_and_adds_nothing(self):
+        prop, dec = self.pipeline(tag="r1")
+        r1, out, rec = self.apply_cli(prop, dec, tag="r1")
+        self.assertEqual(r1.returncode, 0, r1.stdout)
+        before_out, before_rec = out.read_bytes(), rec.read_bytes()
+        r2, _o, _r = self.apply_cli(prop, dec, tag="r1")
+        self.assertEqual(r2.returncode, 2)
+        self.assertIn("OUTPUT_EXISTS", r2.stdout)
+        self.assertEqual(out.read_bytes(), before_out)
+        self.assertEqual(rec.read_bytes(), before_rec)
+        # and the successor still holds exactly 2 claims: nothing double-added
+        self.assertEqual(li.read_parent(str(out))["claim_count"], 2)
+
+    def test_applying_to_a_parent_that_already_has_the_claim_is_refused(self):
+        prop, dec = self.pipeline(tag="ap")
+        r, out, _rec = self.apply_cli(prop, dec, tag="ap")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        # now use the successor as the parent: it already contains the claim
+        succ_sha = _sha256(out)
+        cp = self.d / "c_ap2.json"
+        cp.write_text(json.dumps(self.case_claim("pass").to_dict(), indent=2))
+        prop2 = self.d / "p_ap2.json"
+        r2 = self.cli("add-claim", "--pdf", str(out), "--expect-parent-sha256", succ_sha,
+                      "--claim", str(cp), "--proposer-key-file", str(self.key_path),
+                      "--out", str(prop2))
+        self.assertEqual(r2.returncode, 0, r2.stdout)
+        dec2 = self.d / "d_ap2.json"
+        r3 = self.cli("evaluate", "--pdf", str(out), "--proposal", str(prop2),
+                      "--policy", str(self.policy_path), "--decider-key-file",
+                      str(self.decider_key), "--out", str(dec2))
+        self.assertEqual(r3.returncode, 0, r3.stdout)
+        r4, out2, _ = self.apply_cli(prop2, dec2, tag="ap2", parent=out)
+        self.assertEqual(r4.returncode, 2, r4.stdout)
+        self.assertIn("CLAIM_ALREADY_PRESENT", r4.stdout)
+        self.assertFalse(out2.exists())
+
+    def test_leftover_staging_files_are_refused_not_reused(self):
+        prop, dec = self.pipeline(tag="st")
+        out = self.d / "s_st.pdf"
+        stale = pathlib_Path(str(out) + li.STAGING_SUFFIX)
+        stale.write_bytes(b"leftover from an interrupted run")
+        r, _o, _rec = self.apply_cli(prop, dec, tag="st")
+        self.assertEqual(r.returncode, 2, r.stdout)
+        self.assertIn("STAGING_EXISTS", r.stdout)
+        self.assertEqual(stale.read_bytes(), b"leftover from an interrupted run")
+        self.assertFalse(out.exists())
+
+    def test_leftover_receipt_staging_is_named_and_leaves_nothing_behind(self):
+        """Here the staging pre-check is load-bearing: without it the exclusive
+        create for the receipt raises inside the write path, giving a less
+        precise name AND leaving a staged successor behind."""
+        prop, dec = self.pipeline(tag="rs2")
+        rec = self.d / "r_rs2.json"
+        stale = pathlib_Path(str(rec) + li.STAGING_SUFFIX)
+        stale.write_bytes(b"leftover receipt staging")
+        out = self.d / "s_rs2.pdf"
+        r = self.cli("apply", "--pdf", str(self.parent), "--proposal", str(prop),
+                     "--decision", str(dec), "--policy", str(self.policy_path),
+                     "--issuer-key-file", str(self.issuer_key),
+                     "--out", str(out), "--receipt", str(rec))
+        self.assertEqual(r.returncode, 2, r.stdout)
+        self.assertIn("STAGING_EXISTS", r.stdout)
+        self.assertFalse(out.exists())
+        self.assertFalse(pathlib_Path(str(out) + li.STAGING_SUFFIX).exists(),
+                         "a staged successor was left behind")
+        self.assertEqual(stale.read_bytes(), b"leftover receipt staging")
+
+    def test_write_failure_publishes_nothing(self):
+        prop, dec = self.pipeline(tag="wf")
+        out = self.d / "nodir" / "s.pdf"          # parent directory does not exist
+        rec = self.d / "r_wf.json"
+        r = self.cli("apply", "--pdf", str(self.parent), "--proposal", str(prop),
+                     "--decision", str(dec), "--policy", str(self.policy_path),
+                     "--issuer-key-file", str(self.issuer_key),
+                     "--out", str(out), "--receipt", str(rec))
+        self.assertEqual(r.returncode, 2, r.stdout)
+        self.assertIn("OUTPUT_UNWRITABLE", r.stdout)
+        self.assertFalse(rec.exists())
+        self.assertFalse(out.exists())
+
+    def test_a_successor_without_a_receipt_is_not_a_transition(self):
+        """The crash point after publishing the successor: INCOMPLETE."""
+        prop, dec = self.pipeline(tag="inc")
+        r, out, rec = self.apply_cli(prop, dec, tag="inc")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        rec.unlink()                               # as if interrupted before step 6
+        res = li.explain_transition(str(self.parent), str(out), str(prop),
+                                    str(dec), str(rec), self.i_pk)
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["refusal"], "RECEIPT_UNREADABLE")
+
+    def test_publish_order_leaves_incomplete_not_a_bare_receipt(self):
+        """The receipt is the completion marker and is published LAST. Injected
+        failure on the second rename must leave the successor published and NO
+        receipt -- the INCOMPLETE state -- never a receipt naming a file that is
+        not there."""
+        prop, dec = self.pipeline(tag="ord")
+        out = self.d / "s_ord.pdf"
+        rec = self.d / "r_ord.json"
+        real_link = os.link
+        calls = {"n": 0}
+
+        def failing_link(src, dst):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise OSError("injected failure publishing the receipt")
+            return real_link(src, dst)
+
+        with mock.patch.object(li.os, "link", side_effect=failing_link):
+            res = li.apply_transition(str(self.parent), str(prop), str(dec),
+                                      str(self.policy_path), str(self.issuer_key),
+                                      str(out), str(rec))
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["refusal"], "PUBLISH_FAILED")
+        self.assertTrue(out.exists(), "successor should already be published")
+        self.assertFalse(rec.exists(), "the receipt must not be published")
+        # and that state is not a transition
+        chk = li.explain_transition(str(self.parent), str(out), str(prop), str(dec),
+                                    str(rec), self.i_pk)
+        self.assertFalse(chk["ok"])
+        self.assertEqual(chk["refusal"], "RECEIPT_UNREADABLE")
+
+    def _reissue_receipt(self, successor_path, prop, rec, added_claim_id):
+        body = li.receipt_body(self.parent_sha, _sha256(successor_path),
+                               json.loads(prop.read_text())["proposal_id"],
+                               json.loads(rec.read_text())["body"]["decision_id"],
+                               json.loads(rec.read_text())["body"]["policy_sha256"],
+                               added_claim_id, self.i_pk)
+        rid = li.compute_receipt_id(body)
+        doc = {"profile": li.TRANSITION_PROFILE, "body": body, "receipt_id": rid,
+               "receipt_signature_hex": crypto.sign_hex(self.i_sk,
+                                                        li.receipt_message(rid))}
+        out = self.d / f"reissued_{successor_path.stem}.json"
+        out.write_text(json.dumps(doc))
+        return out
+
+    def test_a_preserved_claim_whose_body_changed_is_detected(self):
+        """Identifiers are not records: keeping claim_id while replacing the body
+        must not read as preservation, even with a genuinely re-signed receipt
+        from the pinned issuer."""
+        prop, dec = self.pipeline(tag="ob")
+        r, out, rec = self.apply_cli(prop, dec, tag="ob")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        claims = json.loads(json.dumps(li.read_parent(str(out))["manifest"]["claims"]))
+        old_id = self.old_claim.claim_id
+        for c in claims:
+            if c.get("claim_id") == old_id:
+                c["body"]["tau"] = "🌿 tampered"      # id kept, body replaced
+        forged = self.d / "ob.pdf"
+        forged.write_bytes(li.render_successor_pdf(claims, ["forged: old body changed"]))
+        rec2 = self._reissue_receipt(forged, prop, rec,
+                                     json.loads(prop.read_text())["body"]["claim"]["claim_id"])
+        res = li.explain_transition(str(self.parent), str(forged), str(prop),
+                                    str(dec), str(rec2), self.i_pk)
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["refusal"], "PARENT_CLAIMS_DROPPED")
+
+    def test_an_added_stub_carrying_only_the_claim_id_is_detected(self):
+        prop, dec = self.pipeline(tag="stub")
+        r, out, rec = self.apply_cli(prop, dec, tag="stub")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        added_id = json.loads(prop.read_text())["body"]["claim"]["claim_id"]
+        claims = [c for c in li.read_parent(str(out))["manifest"]["claims"]
+                  if c.get("claim_id") != added_id]
+        claims.append({"claim_id": added_id})            # a bare stub
+        forged = self.d / "stub.pdf"
+        forged.write_bytes(li.render_successor_pdf(claims, ["forged: stub addition"]))
+        rec2 = self._reissue_receipt(forged, prop, rec, added_id)
+        res = li.explain_transition(str(self.parent), str(forged), str(prop),
+                                    str(dec), str(rec2), self.i_pk)
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["refusal"], "ADDED_CLAIM_MISMATCH")
+
+    def test_duplicate_records_are_counted_not_collapsed(self):
+        counts = li._record_multiset([{"claim_id": "a"}, {"claim_id": "a"},
+                                      {"claim_id": "b"}])
+        self.assertEqual(sorted(counts.values()), [1, 2])
+
+    def test_a_successor_adding_two_claims_is_refused(self):
+        prop, dec = self.pipeline(tag="two")
+        r, out, rec = self.apply_cli(prop, dec, tag="two")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        parent_claims = li.read_parent(str(self.parent))["manifest"]["claims"]
+        added = json.loads(prop.read_text())["body"]["claim"]
+        extra = self.grounded_claim("🤍 (🤍 🤍)", "a" * 64, budget=10).to_dict()
+        forged = self.d / "two.pdf"
+        forged.write_bytes(li.render_successor_pdf(
+            list(parent_claims) + [added, extra], ["forged: two additions"]))
+        body = li.receipt_body(self.parent_sha, _sha256(forged),
+                               json.loads(prop.read_text())["proposal_id"],
+                               json.loads(rec.read_text())["body"]["decision_id"],
+                               json.loads(rec.read_text())["body"]["policy_sha256"],
+                               added["claim_id"], self.i_pk)
+        rid = li.compute_receipt_id(body)
+        doc = {"profile": li.TRANSITION_PROFILE, "body": body, "receipt_id": rid,
+               "receipt_signature_hex": crypto.sign_hex(self.i_sk, li.receipt_message(rid))}
+        rec2 = self.d / "two_rec.json"
+        rec2.write_text(json.dumps(doc))
+        res = li.explain_transition(str(self.parent), str(forged), str(prop),
+                                    str(dec), str(rec2), self.i_pk)
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["refusal"], "CLAIM_COUNT_UNEXPECTED")
+
+    def _race_publish(self, kind):
+        """Create a bystander at the destination AFTER any pre-check, immediately
+        before the real publish operation -- the interleaving an exists() check
+        cannot cover."""
+        prop, dec = self.pipeline(tag=f"race{kind}")
+        out = self.d / f"race_{kind}.pdf"
+        rec = self.d / f"race_{kind}.json"
+        victim = out if kind == "out" else rec
+        sentinel = b"EXISTING INDEPENDENT ARTIFACT"
+        real_link = os.link
+
+        def raced_link(src, dst):
+            if str(dst) == str(victim):
+                victim.write_bytes(sentinel)
+            return real_link(src, dst)
+
+        with mock.patch.object(li.os, "link", side_effect=raced_link):
+            res = li.apply_transition(str(self.parent), str(prop), str(dec),
+                                      str(self.policy_path), str(self.issuer_key),
+                                      str(out), str(rec))
+        return res, victim, sentinel
+
+    def test_publication_never_overwrites_a_successor_that_appears_late(self):
+        res, victim, sentinel = self._race_publish("out")
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["refusal"], "OUTPUT_EXISTS")
+        self.assertEqual(victim.read_bytes(), sentinel,
+                         "a file that appeared after the pre-check was overwritten")
+
+    def test_publication_never_overwrites_a_receipt_that_appears_late(self):
+        res, victim, sentinel = self._race_publish("receipt")
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["refusal"], "RECEIPT_EXISTS")
+        self.assertEqual(victim.read_bytes(), sentinel,
+                         "a file that appeared after the pre-check was overwritten")
+
+    # ---- publication vs cleanup: the report must match the filesystem ---- #
+    def _apply_with_faults(self, tag, fail_unlink_of=(), fail_link_of=()):
+        """Inject failures by staging/target NAME. Returns (result, out, rec)."""
+        prop, dec = self.pipeline(tag=tag)
+        out = self.d / f"f_{tag}.pdf"
+        rec = self.d / f"f_{tag}.json"
+        names = {"successor": str(out), "receipt": str(rec)}
+        unlink_targets = {names[n] + li.STAGING_SUFFIX for n in fail_unlink_of}
+        link_targets = {names[n] for n in fail_link_of}
+        real_unlink, real_link = os.unlink, os.link
+
+        def unlink(path, *a, **kw):
+            if str(path) in unlink_targets:
+                raise PermissionError("injected staging cleanup failure")
+            return real_unlink(path, *a, **kw)
+
+        def link(src, dst, *a, **kw):
+            if str(dst) in link_targets:
+                raise OSError("injected publication failure")
+            return real_link(src, dst, *a, **kw)
+
+        with mock.patch.object(li.os, "unlink", side_effect=unlink), \
+                mock.patch.object(li.os, "link", side_effect=link):
+            res = li.apply_transition(str(self.parent), str(prop), str(dec),
+                                      str(self.policy_path), str(self.issuer_key),
+                                      str(out), str(rec))
+        return res, out, rec, prop, dec
+
+    def assert_report_matches_disk(self, res, out, rec, prop, dec):
+        """The invariant: every state claim in the result is checked against
+        what is actually on disk, and against a fresh reader."""
+        staging = [str(out) + li.STAGING_SUFFIX, str(rec) + li.STAGING_SUFFIX]
+        self.assertEqual(sorted(res["leftover_staging_paths"]),
+                         sorted(p for p in staging if os.path.exists(p)))
+        for path in res["published_paths"]:
+            self.assertTrue(os.path.exists(path), f"reported published but absent: {path}")
+        if out.exists() and str(out) not in res["published_paths"]:
+            self.fail("successor exists on disk but the report omits it as published")
+        expected_state = ("COMPLETE" if out.exists() and rec.exists()
+                          else "INCOMPLETE" if out.exists() else "NOT_PUBLISHED")
+        self.assertEqual(res["transition_state"], expected_state)
+        self.assertEqual(res["cleanup_complete"], not res["leftover_staging_paths"])
+        if expected_state == "COMPLETE":
+            reader = li.explain_transition(str(self.parent), str(out), str(prop),
+                                           str(dec), str(rec), self.i_pk)
+            self.assertTrue(reader["ok"], reader)
+            self.assertEqual(reader["transition"], "COMPLETE")
+        detail = (res.get("detail") or "").lower()
+        if out.exists():
+            self.assertNotIn("nothing was published", detail)
+            self.assertNotIn("was not published", detail)
+
+    def test_cleanup_failure_after_successor_publication_is_not_unpublished(self):
+        res, out, rec, prop, dec = self._apply_with_faults(
+            "cu_succ", fail_unlink_of=("successor",))
+        self.assertTrue(out.exists())
+        self.assert_report_matches_disk(res, out, rec, prop, dec)
+        # a failed cleanup does not cancel publication: the run completes
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(res["transition_state"], "COMPLETE")
+        self.assertFalse(res["cleanup_complete"])
+        self.assertEqual(res["leftover_staging_paths"], [str(out) + li.STAGING_SUFFIX])
+
+    def test_cleanup_failure_after_receipt_publication_is_complete(self):
+        res, out, rec, prop, dec = self._apply_with_faults(
+            "cu_rec", fail_unlink_of=("receipt",))
+        self.assertTrue(out.exists() and rec.exists())
+        self.assert_report_matches_disk(res, out, rec, prop, dec)
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(res["transition_state"], "COMPLETE")
+        self.assertEqual(res["leftover_staging_paths"], [str(rec) + li.STAGING_SUFFIX])
+
+    def test_cleanup_failures_on_both_staging_names(self):
+        res, out, rec, prop, dec = self._apply_with_faults(
+            "cu_both", fail_unlink_of=("successor", "receipt"))
+        self.assert_report_matches_disk(res, out, rec, prop, dec)
+        self.assertEqual(res["transition_state"], "COMPLETE")
+        self.assertEqual(len(res["leftover_staging_paths"]), 2)
+
+    def test_successor_cleanup_fails_and_receipt_publication_fails(self):
+        """Combined: the successor IS published (cleanup failed), then the receipt
+        cannot be published. INCOMPLETE -- and the report must still say the
+        successor is published."""
+        res, out, rec, prop, dec = self._apply_with_faults(
+            "combo", fail_unlink_of=("successor",), fail_link_of=("receipt",))
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["refusal"], "PUBLISH_FAILED")
+        self.assertTrue(out.exists())
+        self.assertFalse(rec.exists())
+        self.assert_report_matches_disk(res, out, rec, prop, dec)
+        self.assertEqual(res["transition_state"], "INCOMPLETE")
+        self.assertEqual(res["published_paths"], [str(out)])
+        self.assertIn("IS published", res["detail"])
+
+    def test_successor_publication_failure_reports_nothing_published(self):
+        res, out, rec, prop, dec = self._apply_with_faults(
+            "nopub", fail_link_of=("successor",))
+        self.assertFalse(res["ok"])
+        self.assertFalse(out.exists())
+        self.assert_report_matches_disk(res, out, rec, prop, dec)
+        self.assertEqual(res["transition_state"], "NOT_PUBLISHED")
+        self.assertEqual(res["published_paths"], [])
+
+    def test_a_bystander_at_the_target_is_never_reported_as_ours(self):
+        """published_paths records only names THIS run created. A file that was
+        already at the target is not a publication by this run."""
+        res, victim, sentinel = self._race_publish("out")
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["published_paths"], [])
+        self.assertEqual(res["transition_state"], "NOT_PUBLISHED")
+        self.assertEqual(victim.read_bytes(), sentinel)
+
+    def test_a_strangers_file_at_the_receipt_target_is_not_our_completion(self):
+        """Both final names can exist while only ONE was created by this run: a
+        bystander sits at the receipt target. Existence is not completion -- the
+        state must be INCOMPLETE, and the stranger's file is never counted as
+        this run's completion marker."""
+        res, victim, sentinel = self._race_publish("receipt")
+        out = self.d / "race_receipt.pdf"
+        self.assertFalse(res["ok"])
+        self.assertTrue(out.exists() and victim.exists())       # both names exist...
+        self.assertEqual(victim.read_bytes(), sentinel)          # ...one is not ours
+        self.assertEqual(res["transition_state"], "INCOMPLETE")
+        self.assertEqual(res["published_paths"], [str(out)])
+
+    def test_two_proposals_against_one_parent_give_two_children(self):
+        """Not a conflict: no election of a newest state, neither invalidates
+        the other."""
+        p1, d1 = self.pipeline(tag="f1")
+        other = self.grounded_claim("🤍 (🤍 🤍)",
+                                    glyph.evaluate(glyph.parse("🤍 (🤍 🤍)"),
+                                                   max_atp=100).hash, budget=100)
+        p2, d2 = self.pipeline(claim=other, tag="f2")
+        r1, o1, rc1 = self.apply_cli(p1, d1, tag="f1")
+        r2, o2, rc2 = self.apply_cli(p2, d2, tag="f2")
+        self.assertEqual(r1.returncode, 0, r1.stdout)
+        self.assertEqual(r2.returncode, 0, r2.stdout)
+        self.assertNotEqual(_sha256(o1), _sha256(o2))
+        for prop, dec, o, rc in ((p1, d1, o1, rc1), (p2, d2, o2, rc2)):
+            res = self.explain_cli(prop, dec, o, rc, self.i_pk)
+            self.assertEqual(res.returncode, 0, res.stdout)
+        self.assertEqual(self.parent.read_bytes(), self.parent.read_bytes())
+
+
+class ApplyReEvaluatesTest(LI3Base):
+    """A saved admitted=true authorises nothing by itself."""
+
+    def test_a_policy_changed_since_the_decision_is_caught(self):
+        # NOTE: this is stopped by the decision's POLICY PIN, before any
+        # re-evaluation. It is kept as a control for the pin, not as evidence
+        # that apply re-evaluates -- see the two tests below for that.
+        prop, dec = self.pipeline(tag="pc")
+        deny = self.write_policy("deny_apply.json", tc_trusted_author_pks=[])
+        r, out, rec = self.apply_cli(prop, dec, tag="pc", policy=deny)
+        self.assertEqual(r.returncode, 2, r.stdout)
+        self.assertIn("DECISION_POLICY_MISMATCH", r.stdout)
+        self.assertFalse(out.exists())
+        self.assertFalse(rec.exists())
+
+    def test_a_non_admitting_decision_cannot_produce_a_successor(self):
+        """Reaches the re-evaluation: the policy pin matches, the decision is
+        genuine, and it simply does not admit."""
+        prop, dec = self.pipeline(claim=self.case_claim("fail"), tag="na")
+        body = json.loads(dec.read_text())["body"]
+        self.assertFalse(body["admission"]["admitted"])
+        r, out, rec = self.apply_cli(prop, dec, tag="na")
+        self.assertEqual(r.returncode, 2, r.stdout)
+        self.assertIn("NOT_ADMITTED_NOW", r.stdout)
+        self.assertFalse(out.exists())
+        self.assertFalse(rec.exists())
+
+    def test_the_live_evaluation_governs_not_the_stored_decision(self):
+        """The decision honestly says admitted; the evaluation run AT APPLY TIME
+        says otherwise. The live result must win -- a saved admitted=true
+        authorises nothing by itself."""
+        prop, dec = self.pipeline(tag="live")
+        self.assertTrue(json.loads(dec.read_text())["body"]["admission"]["admitted"])
+        out = self.d / "s_live.pdf"
+        rec = self.d / "r_live.json"
+        with mock.patch.object(li, "evaluate_evidence", return_value={
+                "status": wk.VerificationStatus.UNVERIFIED.value, "grade": "GROUNDED",
+                "reason": "injected: the live run does not settle",
+                "atp_spent": None, "atp_spent_measured": False}):
+            res = li.apply_transition(str(self.parent), str(prop), str(dec),
+                                      str(self.policy_path), str(self.issuer_key),
+                                      str(out), str(rec))
+        self.assertFalse(res["ok"])
+        self.assertEqual(res["refusal"], "NOT_ADMITTED_NOW")
+        self.assertFalse(out.exists())
+        self.assertFalse(rec.exists())
+
+    def test_a_stale_parent_is_refused(self):
+        prop, dec = self.pipeline(tag="sp")
+        r, out, rec = self.apply_cli(prop, dec, tag="sp", parent=self.second_parent())
+        self.assertEqual(r.returncode, 2, r.stdout)
+        self.assertIn("PROPOSAL_PARENT_MISMATCH", r.stdout)
+        self.assertFalse(out.exists())
+
+    def test_a_substituted_decision_does_not_carry_authority(self):
+        """Saved-artifact substitution followed by the next operation."""
+        prop, dec = self.pipeline(tag="sub")
+        other_prop, other_dec = self.pipeline(
+            claim=self.grounded_claim("🤍 (🤍 🤍)",
+                                      glyph.evaluate(glyph.parse("🤍 (🤍 🤍)"),
+                                                     max_atp=100).hash, budget=100),
+            tag="sub2")
+        r, out, rec = self.apply_cli(prop, other_dec, tag="sub")
+        self.assertEqual(r.returncode, 2, r.stdout)
+        self.assertIn("DECISION_PROPOSAL_MISMATCH", r.stdout)
+        self.assertFalse(out.exists())
 
 
 if __name__ == "__main__":
