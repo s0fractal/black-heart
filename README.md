@@ -4,13 +4,16 @@
 
 **Current selected direction (2026-09-13):** local proposals, decisions and
 immutable PDF successors — see the [living-library interaction brief](docs/LIVING-LIBRARY-INTERACTION.md).
-Implemented so far: **LI-1** proposal intake (`library inspect`, `library add-claim`
-— [contract](docs/LIBRARY-INTERACTION-LI1.md)) and **LI-2** caller-policy
-evaluation with an attributed decision (`library evaluate` —
-[contract](docs/LIBRARY-INTERACTION-LI2.md)). **LI-3** (immutable successor and
-`explain-transition`) is **not implemented**: no successor PDF is produced yet,
-and a decision authorises nothing by itself. Public stamping and publication
-remain deferred while this loop is built.
+The local loop is implemented end to end: **LI-1** proposal intake
+(`library inspect`, `library add-claim` — [contract](docs/LIBRARY-INTERACTION-LI1.md)),
+**LI-2** caller-policy evaluation with an attributed decision (`library evaluate`
+— [contract](docs/LIBRARY-INTERACTION-LI2.md)), and **LI-3** an immutable
+successor plus a readable transition (`library apply`,
+`library explain-transition` — [contract](docs/LIBRARY-INTERACTION-LI3.md)).
+A successor is data-only and is itself a valid parent, so the loop composes. A
+stored decision authorises nothing by itself: `apply` re-verifies and re-runs
+the evaluation under the caller's current policy. Public stamping and
+publication remain deferred.
 
 **Black-Heart** is an experimental laboratory for:
 1. **Glyph Combinatory Logic (`glyph.py`):** Pure SKIY calculus defined on UTF-8 glyphs (`🖤`, `🤍`, `🌿`, `🔁`, `⚓`) with deterministic ATP budgets and content-addressed normal form hashing.

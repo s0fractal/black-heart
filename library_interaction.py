@@ -855,3 +855,335 @@ def evaluate(pdf_path: str, proposal_path: str, policy_path: str,
                decider_pk_hex=key["proposer_pk_hex"], out_path=out_path,
                applied=False, status="DECISION_ONLY",
                note="decision recorded; no successor, no reward, parent unchanged")
+
+
+# --------------------------------------------------------------------------- #
+# LI-3: immutable successor and a readable transition
+# Contract: docs/LIBRARY-INTERACTION-LI3.md
+# --------------------------------------------------------------------------- #
+TRANSITION_PROFILE = "black-heart.library-interaction.transition.v1"
+RECEIPT_SIG_DOMAIN = b"bh-li3-transition-v1:"
+STAGING_SUFFIX = ".partial"
+MAX_RECEIPT_BYTES = 1 * 1024 * 1024
+
+_VERIFY_NOTE = ("Verify with the host CLI, never by running this file: "
+                "python3 cli.py library explain-transition ...")
+
+
+def render_successor_pdf(claims: list, note_lines: list) -> bytes:
+    """A DATA-ONLY successor: begins at %PDF with correct xref offsets and
+    carries no executable code -- unlike the existing parent profile, whose
+    Python prologue shifts every offset and whose embedded runner reads the
+    document's own trust config. The manifest line keeps the SAME format, so the
+    LI-1 reader parses a successor unchanged and it can be the next parent."""
+    lines = ["q", "0.05 0.06 0.08 rg", "0 0 612 792 re f",
+             "BT", "/F1 14 Tf", "1 1 1 rg", "45 740 Td",
+             "(%# BLACK-HEART LIBRARY - DATA ONLY SUCCESSOR) Tj", "/F1 9 Tf"]
+    for n in note_lines:
+        lines += ["0 -16 Td", f"({wk._sanitize_pdf_text(str(n)[:95])}) Tj"]
+    lines += ["ET", "Q"]
+    content = "\n".join(lines).encode("latin-1", "replace")
+    objs = [b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
+            b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
+            b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+            b"/Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n",
+            f"4 0 obj\n<< /Length {len(content)} >>\nstream\n".encode("latin-1")
+            + content + b"\nendstream\nendobj\n",
+            b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n"]
+    body = b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n"
+    offsets = []
+    for o in objs:
+        offsets.append(len(body))
+        body += o
+    xref_pos = len(body)
+    xref = b"xref\n0 6\n0000000000 65535 f \n" + b"".join(
+        f"{o:010d} 00000 n \n".encode("latin-1") for o in offsets)
+    trailer = (f"trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{xref_pos}\n"
+               "%%EOF\n").encode("latin-1")
+    manifest = {"format": SUPPORTED_MANIFEST_FORMAT,
+                "claims": claims,
+                "trust_config": wk.TrustConfig().to_dict()}
+    mline = MANIFEST_PREFIX + json.dumps(manifest, sort_keys=True).encode("utf-8") + b"\n"
+    return body + xref + trailer + mline
+
+
+def receipt_body(parent_sha: str, successor_sha: str, proposal_id: str,
+                 decision_id: str, policy_sha: str, added_claim_id: str,
+                 issuer_pk_hex: str) -> Dict[str, Any]:
+    return {"parent_pdf_sha256": parent_sha.lower(),
+            "successor_pdf_sha256": successor_sha.lower(),
+            "proposal_id": proposal_id.lower(),
+            "decision_id": decision_id.lower(),
+            "policy_sha256": policy_sha.lower(),
+            "added_claim_id": added_claim_id.lower(),
+            "issuer_pk_hex": issuer_pk_hex.lower()}
+
+
+def compute_receipt_id(body: Dict[str, Any]) -> str:
+    return hashlib.sha256(wk.canonical_jcs(body)).hexdigest()
+
+
+def receipt_message(receipt_id: str) -> bytes:
+    return RECEIPT_SIG_DOMAIN + bytes.fromhex(receipt_id)
+
+
+_RECEIPT_FIELDS = {"parent_pdf_sha256", "successor_pdf_sha256", "proposal_id",
+                   "decision_id", "policy_sha256", "added_claim_id", "issuer_pk_hex"}
+
+
+def verify_receipt(raw: bytes, expect_issuer_pk: Optional[str] = None) -> Dict[str, Any]:
+    """Parse and authenticate a transition receipt. The issuer is NOT
+    self-declaring: without a caller-supplied expected issuer key this reports
+    that the issuer was not established, exactly as LI-2's decider does."""
+    if len(raw) > MAX_RECEIPT_BYTES:
+        return _refuse("RECEIPT_TOO_LARGE", f"{len(raw)} bytes")
+    try:
+        doc = json.loads(raw.decode("utf-8"), object_pairs_hook=_no_dupe_pairs)
+    except UnicodeDecodeError as e:
+        return _refuse("RECEIPT_NOT_JSON", f"not UTF-8: {e}")
+    except ValueError as e:
+        name = ("RECEIPT_DUPLICATE_KEYS" if "duplicate JSON key" in str(e)
+                else "RECEIPT_NOT_JSON")
+        return _refuse(name, str(e))
+    if not isinstance(doc, dict):
+        return _refuse("RECEIPT_MALFORMED", f"is {type(doc).__name__}, not an object")
+    if set(doc.keys()) != {"profile", "body", "receipt_id", "receipt_signature_hex"}:
+        return _refuse("RECEIPT_MALFORMED", f"unexpected fields: {sorted(doc.keys())}")
+    if doc["profile"] != TRANSITION_PROFILE:
+        return _refuse("RECEIPT_UNSUPPORTED_PROFILE", f"{doc['profile']!r}")
+    body = doc["body"]
+    if not isinstance(body, dict):
+        return _refuse("RECEIPT_MALFORMED", "body is not an object")
+    if set(body.keys()) != _RECEIPT_FIELDS:
+        return _refuse("RECEIPT_FIELD_MISSING",
+                       f"body fields {sorted(body.keys())} != {sorted(_RECEIPT_FIELDS)}")
+    for f in _RECEIPT_FIELDS:
+        if not _is_hex(body[f], 64):
+            return _refuse("RECEIPT_FIELD_TYPE", f"{f} is not a 64-hex value")
+    if not crypto.is_valid_public_key(body["issuer_pk_hex"]):
+        return _refuse("RECEIPT_FIELD_TYPE", "issuer_pk_hex is not a valid public key")
+    if not _is_hex(doc["receipt_id"], 64):
+        return _refuse("RECEIPT_MALFORMED", "receipt_id is not a 64-hex digest")
+    recomputed = compute_receipt_id(body)
+    if recomputed != doc["receipt_id"].lower():
+        return _refuse("RECEIPT_ID_MISMATCH",
+                       f"stated {doc['receipt_id'][:16]}... != recomputed {recomputed[:16]}...")
+    if not crypto.verify_hex(body["issuer_pk_hex"], receipt_message(recomputed),
+                             doc["receipt_signature_hex"]):
+        return _refuse("RECEIPT_SIGNATURE_INVALID",
+                       "receipt signature does not verify under issuer_pk_hex")
+    issuer_ok = (expect_issuer_pk is not None and
+                 body["issuer_pk_hex"] == str(expect_issuer_pk).strip().lower())
+    if expect_issuer_pk is not None and not issuer_ok:
+        return _refuse("RECEIPT_ISSUER_MISMATCH",
+                       f"issued by {body['issuer_pk_hex'][:16]}..., not the expected issuer")
+    out = dict(body)
+    out.update(issuer_authorized_by_caller=issuer_ok)
+    return _ok(receipt_id=doc["receipt_id"], **out)
+
+
+def _claim_ids(manifest_claims) -> list:
+    out = []
+    for c in manifest_claims:
+        out.append(c.get("claim_id") if isinstance(c, dict) else None)
+    return out
+
+
+def apply_transition(pdf_path: str, proposal_path: str, decision_path: str,
+                     policy_path: str, issuer_key_file: str,
+                     out_path: str, receipt_path: str) -> Dict[str, Any]:
+    """LI-3 `apply`. A saved admitted=true authorises NOTHING: the proposal is
+    re-verified, the parent's exact bytes re-checked, and the evaluation RE-RUN
+    under the caller's current policy at the point of use. The parent file is
+    never written to."""
+    parent = read_parent(pdf_path)
+    if not parent["ok"]:
+        return parent
+    praw, refusal = _read_file(proposal_path, MAX_PROPOSAL_BYTES,
+                               "PROPOSAL_UNREADABLE", "PROPOSAL_TOO_LARGE")
+    if refusal:
+        return refusal
+    proposal = verify_proposal(praw, parent["pdf_sha256"])
+    if not proposal["ok"]:
+        return proposal
+    policy = load_policy(policy_path)
+    if not policy["ok"]:
+        return policy
+    key = load_proposer_key(issuer_key_file)
+    if not key["ok"]:
+        return {"ok": False, "refusal": key["refusal"].replace("PROPOSER_KEY", "ISSUER_KEY"),
+                "detail": key["detail"]}
+
+    draw, refusal = _read_file(decision_path, MAX_DECISION_BYTES,
+                               "DECISION_UNREADABLE", "DECISION_TOO_LARGE")
+    if refusal:
+        return refusal
+    # The stored decision is checked too -- but it is a report, not the reason.
+    decision = verify_decision(draw, expect_proposal_id=proposal["proposal_id"],
+                               expect_parent_sha256=parent["pdf_sha256"],
+                               expect_policy_sha256=policy["policy_sha256"])
+    if not decision["ok"]:
+        return decision
+
+    claim_res = authenticate_claim_document(
+        json.loads(praw.decode("utf-8"))["body"]["claim"])
+    if not claim_res["ok"]:
+        return claim_res
+    claim = claim_res["claim"]
+    requested = getattr(claim.witness, "atp_budget", None)
+    if not _is_nonneg_int(requested):
+        return _refuse("CLAIM_BUDGET_INVALID",
+                       f"witness atp_budget {requested!r} is not a non-negative int")
+
+    # Re-run the evaluation NOW, under the caller's CURRENT policy. The saved
+    # decision cannot carry an authorisation past a policy or parent change.
+    evaluation = evaluate_evidence(claim, policy["trust_config"])
+    admission = decide_admission(evaluation, proposal["operation"], claim_res["grade"],
+                                 policy["allowed_operations"], policy["allowed_grades"])
+    if not admission["admitted"]:
+        return _refuse("NOT_ADMITTED_NOW",
+                       f"re-evaluation under the current policy does not admit this "
+                       f"claim: {admission['reason']} (evidence {evaluation['status']})")
+
+    existing = parent["manifest"]["claims"]
+    if claim.claim_id in _claim_ids(existing):
+        return _refuse("CLAIM_ALREADY_PRESENT",
+                       f"parent already contains claim {claim.claim_id[:16]}...; "
+                       "applying again would double-add")
+
+    successor_claims = list(existing) + [claim_res["claim_dict"]]
+    note = [f"Parent sha256: {parent['pdf_sha256'][:32]}...",
+            f"Added claim:   {claim.claim_id[:32]}...",
+            f"Grade:         {claim_res['grade']} (one bounded check, not a universal truth)",
+            f"Claims:        {len(existing)} preserved + 1 added",
+            _VERIFY_NOTE]
+    successor_bytes = render_successor_pdf(successor_claims, note)
+
+    # ---- staging, then publication; the receipt is published LAST ---------- #
+    stage_out, stage_receipt = out_path + STAGING_SUFFIX, receipt_path + STAGING_SUFFIX
+    for p, name in ((out_path, "OUTPUT_EXISTS"), (receipt_path, "RECEIPT_EXISTS"),
+                    (stage_out, "STAGING_EXISTS"), (stage_receipt, "STAGING_EXISTS")):
+        if os.path.exists(p):
+            return _refuse(name, f"{p} already exists; refusing to overwrite or reuse")
+    try:
+        with open(stage_out, "xb") as f:
+            f.write(successor_bytes)
+    except FileExistsError:
+        return _refuse("STAGING_EXISTS", f"{stage_out} already exists")
+    except OSError as e:
+        return _refuse("OUTPUT_UNWRITABLE", f"{type(e).__name__}: {e}")
+
+    # The successor's address is derived AFTER rendering, from the bytes that
+    # were actually written. No whole-file hash is embedded in the file itself.
+    try:
+        with open(stage_out, "rb") as f:
+            written = f.read()
+    except OSError as e:
+        return _refuse("OUTPUT_UNWRITABLE", f"{type(e).__name__}: {e}")
+    successor_sha = hashlib.sha256(written).hexdigest()
+
+    rbody = receipt_body(parent["pdf_sha256"], successor_sha, proposal["proposal_id"],
+                         decision["decision_id"], policy["policy_sha256"],
+                         claim.claim_id, key["proposer_pk_hex"])
+    rid = compute_receipt_id(rbody)
+    receipt = {"profile": TRANSITION_PROFILE, "body": rbody, "receipt_id": rid,
+               "receipt_signature_hex": crypto.sign_hex(key["secret_key_hex"],
+                                                        receipt_message(rid))}
+    rbytes = json.dumps(receipt, sort_keys=True, indent=2).encode("utf-8") + b"\n"
+    try:
+        with open(stage_receipt, "xb") as f:
+            f.write(rbytes)
+    except OSError as e:
+        return _refuse("RECEIPT_UNWRITABLE", f"{type(e).__name__}: {e}")
+
+    try:
+        os.rename(stage_out, out_path)          # publish the successor
+        os.rename(stage_receipt, receipt_path)  # completion marker, published LAST
+    except OSError as e:
+        return _refuse("PUBLISH_FAILED",
+                       f"{type(e).__name__}: {e}; staged files remain for inspection "
+                       "-- nothing was rolled back")
+
+    return _ok(successor_path=out_path, receipt_path=receipt_path,
+               parent_pdf_sha256=parent["pdf_sha256"],
+               successor_pdf_sha256=successor_sha,
+               receipt_id=rid, added_claim_id=claim.claim_id,
+               claims_before=len(existing), claims_after=len(successor_claims),
+               parent_unchanged=True, status="TRANSITION_COMPLETE",
+               note="successor and receipt published; the parent file was not written to")
+
+
+def explain_transition(parent_path: str, successor_path: str, proposal_path: str,
+                       decision_path: str, receipt_path: str,
+                       expect_issuer_pk: Optional[str] = None) -> Dict[str, Any]:
+    """A fresh verifier: confirm the old claims remain and EXACTLY the proposed
+    claim was added, without regenerating the successor."""
+    parent = read_parent(parent_path)
+    if not parent["ok"]:
+        return parent
+    successor = read_parent(successor_path)
+    if not successor["ok"]:
+        return successor
+    rraw, refusal = _read_file(receipt_path, MAX_RECEIPT_BYTES,
+                               "RECEIPT_UNREADABLE", "RECEIPT_TOO_LARGE")
+    if refusal:
+        return refusal
+    receipt = verify_receipt(rraw, expect_issuer_pk)
+    if not receipt["ok"]:
+        return receipt
+    if receipt["parent_pdf_sha256"] != parent["pdf_sha256"]:
+        return _refuse("RECEIPT_PARENT_MISMATCH",
+                       "receipt does not bind these parent bytes")
+    if receipt["successor_pdf_sha256"] != successor["pdf_sha256"]:
+        return _refuse("RECEIPT_SUCCESSOR_MISMATCH",
+                       "receipt does not bind these successor bytes")
+
+    praw, refusal = _read_file(proposal_path, MAX_PROPOSAL_BYTES,
+                               "PROPOSAL_UNREADABLE", "PROPOSAL_TOO_LARGE")
+    if refusal:
+        return refusal
+    proposal = verify_proposal(praw, parent["pdf_sha256"])
+    if not proposal["ok"]:
+        return proposal
+    if proposal["proposal_id"] != receipt["proposal_id"]:
+        return _refuse("RECEIPT_PROPOSAL_MISMATCH", "receipt names another proposal")
+    draw, refusal = _read_file(decision_path, MAX_DECISION_BYTES,
+                               "DECISION_UNREADABLE", "DECISION_TOO_LARGE")
+    if refusal:
+        return refusal
+    decision = verify_decision(draw, expect_proposal_id=proposal["proposal_id"],
+                               expect_parent_sha256=parent["pdf_sha256"])
+    if not decision["ok"]:
+        return decision
+    if decision["decision_id"] != receipt["decision_id"]:
+        return _refuse("RECEIPT_DECISION_MISMATCH", "receipt names another decision")
+
+    before, after = _claim_ids(parent["manifest"]["claims"]), \
+        _claim_ids(successor["manifest"]["claims"])
+    missing = [c for c in before if c not in after]
+    if missing:
+        return _refuse("PARENT_CLAIMS_DROPPED",
+                       f"{len(missing)} parent claim(s) are absent from the successor")
+    added = list(after)
+    for c in before:
+        added.remove(c)
+    if len(added) != 1:
+        return _refuse("CLAIM_COUNT_UNEXPECTED",
+                       f"successor adds {len(added)} claims; exactly one was proposed")
+    if added[0] != receipt["added_claim_id"] or added[0] != proposal["claim_id"]:
+        return _refuse("ADDED_CLAIM_MISMATCH",
+                       "the added claim is not the proposed one")
+
+    return _ok(transition="COMPLETE",
+               parent_pdf_sha256=parent["pdf_sha256"],
+               successor_pdf_sha256=successor["pdf_sha256"],
+               added_claim_id=added[0],
+               claims_preserved=len(before), claims_after=len(after),
+               admitted_claim_ids=[added[0]],
+               issuer_pk_hex=receipt["issuer_pk_hex"],
+               issuer_authorized_by_caller=receipt["issuer_authorized_by_caller"],
+               regenerated=False,
+               evidence_replayed_by_reader=False,
+               note=("the parent's claims are all present and exactly the proposed "
+                     "claim was added; this asserts one bounded check under one "
+                     "policy, never that the document is universally true"))

@@ -1864,13 +1864,20 @@ def cmd_library(args):
     elif args.action == "add-claim":
         res = li.add_claim(args.pdf, args.expect_parent_sha256, args.claim,
                            args.proposer_key_file, args.out)
+    elif args.action == "apply":
+        res = li.apply_transition(args.pdf, args.proposal, args.decision, args.policy,
+                                  args.issuer_key_file, args.out, args.receipt)
+    elif args.action == "explain-transition":
+        res = li.explain_transition(args.parent, args.successor, args.proposal,
+                                    args.decision, args.receipt,
+                                    getattr(args, "expect_issuer_pk", None))
     elif args.action == "evaluate":
         # Same authoritative call the API exposes; no adapter defaults, and
         # --policy is required so no implicit policy can slip in.
         res = li.evaluate(args.pdf, args.proposal, args.policy,
                           args.decider_key_file, args.out)
     else:
-        print("Usage: python3 cli.py library {inspect,add-claim,evaluate} ...")
+        print("Usage: python3 cli.py library {inspect,add-claim,evaluate,apply,explain-transition} ...")
         sys.exit(1)
 
     if getattr(args, "json", False):
@@ -4424,6 +4431,31 @@ def main():
                             help="File holding the decider Ed25519 secret key")
     p_lib_eval.add_argument("--out", required=True, help="Decision output path (must not exist)")
     p_lib_eval.add_argument("--json", action="store_true", help="Machine-readable output")
+
+    p_lib_apply = lib_subs.add_parser(
+        "apply", help="LI-3: produce an immutable successor PDF and a transition receipt")
+    p_lib_apply.add_argument("--pdf", required=True, help="Parent PDF (never written to)")
+    p_lib_apply.add_argument("--proposal", required=True)
+    p_lib_apply.add_argument("--decision", required=True)
+    p_lib_apply.add_argument("--policy", required=True,
+                             help="REQUIRED: the evaluation is re-run under THIS policy now")
+    p_lib_apply.add_argument("--issuer-key-file", required=True,
+                             help="File holding the receipt issuer's Ed25519 secret key")
+    p_lib_apply.add_argument("--out", required=True, help="Successor PDF path (must not exist)")
+    p_lib_apply.add_argument("--receipt", required=True, help="Receipt path (must not exist)")
+    p_lib_apply.add_argument("--json", action="store_true", help="Machine-readable output")
+
+    p_lib_expl = lib_subs.add_parser(
+        "explain-transition", help="LI-3: verify a received transition without regenerating it")
+    p_lib_expl.add_argument("--parent", required=True)
+    p_lib_expl.add_argument("--successor", required=True)
+    p_lib_expl.add_argument("--proposal", required=True)
+    p_lib_expl.add_argument("--decision", required=True)
+    p_lib_expl.add_argument("--receipt", required=True)
+    p_lib_expl.add_argument("--expect-issuer-pk", default=None,
+                            help="Caller-pinned issuer public key; without it the issuer "
+                                 "is reported as NOT established (a receipt is not self-authorising)")
+    p_lib_expl.add_argument("--json", action="store_true", help="Machine-readable output")
 
     # warrant-kernel (Engine #24: WARRANT-0.2 Epistemic Kernel & Unified Edge-Claims)
     p_wk = subparsers.add_parser(
