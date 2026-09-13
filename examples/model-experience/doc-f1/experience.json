@@ -26,7 +26,7 @@
   "observations": [
     {
       "basis": "reported",
-      "statement": "Ledger attributes discovery to Claude floor-document review and a Codex repeat at 8fed8bb834e37c190bc512ebc74f9440e4a3e8fa. These are historical attributions, not verified model identities. Budget 50: heads I Q vs K Q I on Q suspended equally and audited pass; Q vs I Q on Q suspended differently and audited fail. Repair head 1bb50f66d801342aa74015220f26266062707843 merged as f10856708bb02122ff272edb2ffaaa5ec3d00d69 in PR #49.",
+      "statement": "Ledger attributes discovery to Claude floor-document review and a Codex repeat at 8fed8bb834e37c190bc512ebc74f9440e4a3e8fa. These are historical attributions, not verified model identities. At 8fed8bb834e37c190bc512ebc74f9440e4a3e8fa, before repair #49, with budget 50: heads I Q vs K Q I on Q suspended equally and audited pass; Q vs I Q on Q suspended differently and audited fail. Repair head 1bb50f66d801342aa74015220f26266062707843 merged as f10856708bb02122ff272edb2ffaaa5ec3d00d69 in PR #49.",
       "evidence_ids": [
         "ledger"
       ]
@@ -40,10 +40,18 @@
     },
     {
       "basis": "replayed",
-      "statement": "Current existing module: 10 tests, exit 0. Its precondition test confirms equal and unequal SUSPENDED/SUSPENDED shapes, SETTLED/SUSPENDED and a settled mismatch. Audit cases confirm both suspended shapes and both asymmetric suspension shapes give unverified; settled agreement gives pass, settled mismatch fail. Both fixture orders preserve fail for a settled mismatch mixed with suspension, and unverified for agreement mixed with suspension.",
+      "statement": "The saved run of the existing test_empirical_settlement module reports 10 tests OK, exit 0.",
+      "evidence_ids": [
+        "replay"
+      ]
+    },
+    {
+      "basis": "source_read",
+      "statement": "The precondition test asserts equal and unequal SUSPENDED/SUSPENDED shapes, SETTLED/SUSPENDED and a settled mismatch. Audit tests assert unverified for both suspended shapes and both asymmetric suspension shapes, pass for settled agreement, and fail for a settled mismatch. For both fixture orders, tests assert fail for a settled mismatch mixed with suspension, and unverified for agreement mixed with suspension. The test setup calls crypto.generate_keypair and explicitly trusts its public key; replay helpers call glyph.parse/evaluate and compare glyph.canonical_bytes. These describe the assertions and dependency calls read in source, separately from the saved execution result.",
       "evidence_ids": [
         "tests",
-        "replay"
+        "glyph",
+        "crypto"
       ]
     },
     {
@@ -56,7 +64,7 @@
     },
     {
       "basis": "source_read",
-      "statement": "The EMPIRICAL fixture loop still catches exceptions and returns fail (Fixture execution failed). This record does not establish that such a fail is a checked mathematical negative. The ledger explicitly leaves alignment with other branches unresolved. Exception behavior was not runtime-probed here.",
+      "statement": "The EMPIRICAL fixture loop still catches exceptions and returns fail (Fixture execution failed). This record does not establish that such a fail is a checked mathematical negative. The ledger explicitly leaves alignment with other branches unresolved. Exception behavior was not runtime-probed here. In particular, if a fixture has already been collected as unsettled and a later fixture raises during parsing or evaluation, the exception handler returns fail instead of reaching the post-loop unverified result. This is a source-derived consequence, not a newly executed exception probe.",
       "evidence_ids": [
         "verifier",
         "ledger"
@@ -121,7 +129,8 @@
     "No full suite, security audit, admission/reward measurement, network model calls, OTS or publication was performed.",
     "Fixture exceptions remain fail; do not generalize the normal-return ordering rule to all error paths.",
     "The Git commit pins repository source, not an exhaustive environment/dependency attestation. Runtime is recorded in replay.json; ephemeral keys and test duration need not reproduce byte-for-byte.",
-    "No experience CLI, indexing, signatures or actual cross-model transfer demonstrated; this is a new unsigned data record."
+    "No experience CLI, indexing, signatures or actual cross-model transfer demonstrated; this is a new unsigned data record.",
+    "The saved replay declares source_revision but does not capture git rev-parse HEAD or git status --porcelain output. It is not an independent attestation of the checkout state at execution time; those missing historical measurements are not reconstructed here."
   ],
   "provenance": {
     "compiler": "Codex (declared tool/operator name)",

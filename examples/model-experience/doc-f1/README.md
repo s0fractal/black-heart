@@ -23,7 +23,7 @@ provides no execution authority):
 python3 - <<'PY'
 import hashlib, json, pathlib, subprocess
 base = pathlib.Path('examples/model-experience/doc-f1')
-record = json.loads((base / 'experience.json').read_text())
+record = json.loads((base / 'experience.json').read_text(encoding='utf-8'))
 for e in record['evidence']:
     if e['kind'] == 'git_blob':
         raw = subprocess.check_output(['git', 'show', e['commit'] + ':' + e['path']])
