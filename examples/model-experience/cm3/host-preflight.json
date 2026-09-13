@@ -1,0 +1,30 @@
+{
+  "profile": "black-heart.cm3.local-check.v1",
+  "scope": "Three fixed DOC-F1 regressions. No patch, historical checkout, mutation, identity check or advice acceptance.",
+  "source_commit": "e102b07ee8c83082007d2d2f0b1d38b00dd6780f",
+  "checkout_before": {
+    "head": "d55df308cd13ba63ef573545e674879455f8d749\n",
+    "status_porcelain": ""
+  },
+  "checkout_after": {
+    "head": "d55df308cd13ba63ef573545e674879455f8d749\n",
+    "status_porcelain": "?? __pycache__/\n?? run.json\n"
+  },
+  "conditions": "Receiver snapshot contains only the approved files; test keys are ephemeral; ATP budget is the existing test constant 50.",
+  "argv": [
+    "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "-m",
+    "unittest",
+    "-v",
+    "test_empirical_settlement.EmpiricalSettlementTest.test_an_unsettled_fixture_does_not_mask_a_settled_mismatch",
+    "test_empirical_settlement.EmpiricalSettlementTest.test_both_suspended_on_the_same_term_is_not_a_pass",
+    "test_empirical_settlement.EmpiricalSettlementTest.test_both_suspended_on_different_terms_is_not_a_fail"
+  ],
+  "cwd": "/private/tmp/black-heart-cm3-preflight",
+  "python": "3.14.7 (main, Aug  5 2026, 10:29:49) [Clang 21.0.0 (clang-2100.1.1.101)]",
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "exit_code": 0,
+  "stdout": "",
+  "stderr": "test_an_unsettled_fixture_does_not_mask_a_settled_mismatch (test_empirical_settlement.EmpiricalSettlementTest.test_an_unsettled_fixture_does_not_mask_a_settled_mismatch) ... ok\ntest_both_suspended_on_the_same_term_is_not_a_pass (test_empirical_settlement.EmpiricalSettlementTest.test_both_suspended_on_the_same_term_is_not_a_pass) ... ok\ntest_both_suspended_on_different_terms_is_not_a_fail (test_empirical_settlement.EmpiricalSettlementTest.test_both_suspended_on_different_terms_is_not_a_fail) ... ok\n\n----------------------------------------------------------------------\nRan 3 tests in 0.041s\n\nOK\n",
+  "source_manifest_sha256": "f3eccf020ce5c3abbad1522d67c50a899b698ce38cd511ee78b37416b4f7105a"
+}

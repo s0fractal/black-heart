@@ -41,3 +41,10 @@ This preparation does not implement a general model adapter or runner, shared
 store policy, automatic adoption, LI transition, patch or publication. Packet
 permissions remain owner-only. The receiver has to use the authorized local
 check; model tool restrictions are not claimed as OS sandbox isolation.
+
+[host-preflight.json](host-preflight.json) is the sender's technical rehearsal
+of the fixed check against a separately materialized snapshot, not a receiver
+result. Both records were read through CM-2 and found by component; the three
+regressions passed; a second check refused OUTPUT_EXISTS and preserved the
+report. The real receiver, when authorized, must get a new snapshot without
+this preflight output or the sender's prior conversation.
