@@ -14,7 +14,7 @@ expressions, executes deterministic reductions, and outputs an audit receipt.
 from __future__ import annotations
 import os
 import sys
-import re
+import inspect
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
@@ -198,6 +198,38 @@ class PolyglotDocument:
 
         return output_path
 
+def read_claims(content):
+    """Read the five-field compiler format; announced malformed claims refuse.
+
+    This dependency-free function is also copied into newly generated runners.
+    Recognition is line-start-only. Whitespace after the marker is insignificant;
+    unrelated document lines are ignored. This does not parse PDF structure.
+    """
+    claims = []
+    prefix = "%🖤 CLAIM:".encode("utf-8")
+    for line in content.splitlines():
+        if not line.startswith(prefix):
+            continue
+        raw = line[len(prefix):].decode("utf-8").strip()
+        parts = raw.split("|", 4)
+        if len(parts) != 5:
+            raise ValueError("Malformed CLAIM fields")
+        fields = {}
+        for part in parts:
+            name, sep, value = part.strip().partition("=")
+            if not sep or name in fields:
+                raise ValueError("Missing or repeated CLAIM field")
+            fields[name] = value.strip()
+        if set(fields) != {"id", "expr", "expected", "max_atp", "desc"}:
+            raise ValueError("Unexpected CLAIM fields")
+        if not fields["id"] or any(c.isspace() for c in fields["id"]) or not fields["expr"] or not fields["expected"]:
+            raise ValueError("Empty or invalid CLAIM identifier/expression")
+        budget = fields["max_atp"]
+        if not budget or not budget.isascii() or not budget.isdigit() or len(budget) > 6 or int(budget) > 100000:
+            raise ValueError("CLAIM budget must be an integer from 0 to 100000")
+        claims.append((fields["id"], fields["desc"], fields["expr"], fields["expected"], int(budget)))
+    return claims
+
 def audit_polyglot_claims(target_path: str) -> bool:
     """
     Audits combinatory claims in a polyglot document without running external code.
@@ -206,26 +238,10 @@ def audit_polyglot_claims(target_path: str) -> bool:
     with open(target_path, "rb") as f:
         content = f.read()
 
-    claims = []
-    prefix = "%🖤 CLAIM: ".encode("utf-8")
-    for line in content.splitlines():
-        if line.startswith(prefix):
-            raw = line[len(prefix):].decode("utf-8", errors="replace").strip()
-            parts = raw.split("|", 4)
-            if len(parts) != 5:
-                return False
-            fields = {}
-            for part in parts:
-                name, sep, value = part.strip().partition("=")
-                if not sep or name in fields:
-                    return False
-                fields[name] = value
-            if set(fields) != {"id", "expr", "expected", "max_atp", "desc"} or not fields["max_atp"].isdigit():
-                return False
-            atp = int(fields["max_atp"])
-            if not 0 <= atp <= 100000:
-                return False
-            claims.append((fields["id"], fields["desc"], fields["expr"], fields["expected"], atp))
+    try:
+        claims = read_claims(content)
+    except ValueError:
+        return False
 
     if not claims:
         return False
@@ -280,9 +296,9 @@ def _wrap_text(text: str, max_chars: int) -> List[str]:
 
 def _generate_standalone_runner() -> str:
     """Generates the embedded, self-contained Python verifier that executes upon 'python3 file.pdf'."""
-    return r'''
+    return inspect.getsource(read_claims) + r'''
 # --- BEGIN STANDALONE GLYPH VERIFICATION ENGINE ---
-import os, sys, re, hashlib
+import os, sys, hashlib
 from dataclasses import dataclass
 from typing import Union, Optional, Tuple
 
@@ -391,20 +407,24 @@ def main():
     print("\033[1;36m" + "=" * 65 + "\033[0m")
 
     with open(self_path, "rb") as f:
-        content = f.read().decode("utf-8", errors="replace")
+        content = f.read()
 
-    claims = re.findall(r"%🖤 CLAIM: id=([^\s|]+) \| expr=([^\s|]+(?:\s+[^\s|]+)*) \| expected=([^\s|]+(?:\s+[^\s|]+)*) \| max_atp=(\d+) \| desc=(.+)", content)
+    try:
+        claims = read_claims(content)
+    except ValueError as error:
+        print(f"[!] Invalid claim metadata: {error}")
+        sys.exit(1)
 
     if not claims:
-        print("\033[1;33m[!] No %🖤 claims discovered in PDF comments.\033[0m")
-        sys.exit(0)
+        print("\033[1;33m[!] No %🖤 claims discovered; nothing verified.\033[0m")
+        sys.exit(1)
 
     print(f"\n[+] Discovered {len(claims)} embedded %🖤 claims. Executing deterministic reductions...\n")
 
     passed = 0
     total_atp = 0
 
-    for cid, expr_str, exp_str, max_atp, desc in claims:
+    for cid, desc, expr_str, exp_str, max_atp in claims:
         print(f"  \033[1;34m[CLAIM {cid}]\033[0m {desc}")
         print(f"    Input:    {expr_str}")
         try:
@@ -433,7 +453,7 @@ def main():
     print("\033[1;36m" + "-" * 65 + "\033[0m")
     if passed == len(claims):
         print(f"\033[1;32m[⚓ GREEN] ALL {passed}/{len(claims)} CLAIMS SETTLED DETERMINISTICALLY ({total_atp} ATP burned).\033[0m")
-        print("\033[0;32mDocument integrity & proof verification: 100% SOUND.\033[0m")
+        print("\033[0;32mScope: recognized combinator claims only; document integrity and authorship not verified.\033[0m")
         sys.exit(0)
     else:
         print(f"\033[1;31m[✗ RED] SETTLEMENT BLOCKED: {len(claims) - passed} claims failed!\033[0m")

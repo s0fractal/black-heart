@@ -156,6 +156,7 @@ SUITES = [
     ("Epistemic Sheaf Kernel & Čech Cohomology", "test_sheaf_kernel"),
     ("Sheaf Local Validity: Only Sections That Hold Are Glued", "test_sheaf_local_validity"),
     ("Embedded Runner Claims: Report, Do Not Overclaim", "test_runner_claims"),
+    ("Shared Compiler Claim Recognition", "test_claim_format"),
     ("Sovereign Continuity Quine & Forgetting Membrane", "test_sovereign_continuity"),
     ("Federated Sheaf Agora & Cohomological Constitutionalism", "test_sheaf_agora"),
     ("Findings F01–F12 Comprehensive Remediation", "test_sovereign_remediation"),
