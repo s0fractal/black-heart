@@ -10,11 +10,15 @@ from runtime import VERSION, MODEL, settings
 
 
 def prepare(output):
+    output=output.resolve()
+    if any(output.is_relative_to(Path(p).resolve()) for p in ('/private/tmp','/private/var/tmp',tempfile.gettempdir())):
+        raise ValueError('PACKAGE_OUTPUT_MUST_BE_OUTSIDE_TEMP_STORAGE')
     inputs = verify_inputs()
     output.mkdir(parents=True, exist_ok=False)
     arms = {}
     for arm in 'NTP':
-        with tempfile.TemporaryDirectory(prefix='transfer-build-', dir='/private/tmp') as td:
+        build_root=Path.home()/'transfer1-work'/'build';build_root.mkdir(parents=True,exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix='snapshot-', dir=build_root) as td:
             snapshot = Path(td)
             mapping = {p.name: p for p in (ROOT/'inputs/common').iterdir()}
             if arm in 'TP':
@@ -34,7 +38,7 @@ def prepare(output):
                        'head':git(snapshot,'rev-parse','HEAD'),
                        'files':{name:sha(source) for name,source in sorted(mapping.items())}}
     frozen={'plan_head':PLAN_HEAD,'preparation_head':git(ROOT,'rev-parse','HEAD'),
-            'run_root':str(Path.home()/'.codex'/'transfer1-runs'/uuid.uuid4().hex),
+            'run_root':str(Path.home()/'transfer1-runs'/uuid.uuid4().hex),
             'model':MODEL, 'client_version':VERSION, 'settings':settings(),
             'timeout_seconds':300,'schedule':list(SCHEDULE),'inputs':inputs,'arms':arms,
             'harness':{p.name:sha(p) for p in sorted(Path(__file__).parent.glob('*.py'))},

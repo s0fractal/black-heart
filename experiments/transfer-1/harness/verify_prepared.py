@@ -12,7 +12,8 @@ def verify(package):
     for arm, data in frozen['arms'].items():
         bundle=(package/data['bundle']).resolve()
         assert sha(bundle)==data['sha256']
-        with tempfile.TemporaryDirectory(prefix='receiver-',dir='/private/tmp') as td:
+        work=Path.home()/'transfer1-work'/'readback';work.mkdir(parents=True,exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix='snapshot-',dir=work) as td:
             root=Path(td)
             git(root,'-c','init.templateDir=','init','-q','--object-format=sha1')
             git(root,'bundle','verify',str(bundle))

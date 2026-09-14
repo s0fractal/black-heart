@@ -54,8 +54,12 @@ def preflight(root, run_root=None):
     stale = stale_tmp_snapshots(root)
     if stale:
         return {'version': version, 'pass': False, 'stale_tmp_inputs': stale}
+    from tmp_scan import scan
+    content_scan = scan(root)
+    if not content_scan['pass']:
+        return {'version':version,'pass':False,'tmp_content_scan':content_scan}
     # The real results/archive parent, not the OS-default tempfile location.
-    host_parent = Path(run_root) if run_root else Path.home()/'.codex'/'transfer1-preflight'
+    host_parent = Path(run_root) if run_root else Path.home()/'transfer1-work'/'preflight'
     host_parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='probe-', dir=host_parent) as host_td, \
          tempfile.TemporaryDirectory(prefix='transfer-probe-', dir='/private/tmp') as tmp_td:
@@ -91,7 +95,7 @@ print(json.dumps({'write':True,'protected_read_denied':blocked,'loopback_denied'
                     observed.get('write') is True and observed.get('protected_read_denied') == [True]*3 and
                     observed.get('loopback_denied') is True)
                 return {'version':version, 'probe':result, 'pass':result['pass'],
-                        'stale_tmp_inputs':stale,
+                        'stale_tmp_inputs':stale,'tmp_content_scan':content_scan,
                         'placement':'Prior snapshots and grader receipts are protected under the host home; /private/tmp remains readable.'}
         finally:
             (root/'outside-link').unlink()

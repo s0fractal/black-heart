@@ -1,5 +1,8 @@
 """Host-only checks; does not call a receiver or need authentication."""
 import json
+import hashlib
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -28,6 +31,20 @@ class HarnessTests(unittest.TestCase):
     def test_submission_crash_is_not_infrastructure_failure(self):
         with tempfile.TemporaryDirectory() as td:
             crash_checks(Path(td))
+
+    def test_content_scan_ignores_names_and_detects_hash_only(self):
+        from tmp_scan import SCANNER
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td)
+            (root/'one').write_bytes(b'a'*(1024*1024-4)+b'TRANSFER-1')
+            (root/'two').write_bytes(b'no marker here')
+            request={'roots':[td],'markers_hex':[b'transfer-1'.hex()],
+                     'digests':[hashlib.sha256(b'no marker here').hexdigest()]}
+            result=subprocess.run([sys.executable,'-I','-c',SCANNER],input=json.dumps(request),
+                                  text=True,capture_output=True,check=True,timeout=10)
+            report=json.loads(result.stdout)
+            self.assertEqual({Path(x['path']).name for x in report['matches']},{'one','two'})
+            self.assertEqual(report['errors'],[])
 
     def test_receipt_cannot_overwrite(self):
         with tempfile.TemporaryDirectory() as td:

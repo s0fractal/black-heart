@@ -73,7 +73,7 @@ def audited_rows(root):
 def execute(package, reviewed_head):
     frozen=verify_package(package,reviewed_head)
     root=Path(frozen['run_root'])
-    if root.parent != Path.home()/'.codex'/'transfer1-runs' or not re.fullmatch('[0-9a-f]{32}', root.name):
+    if root.parent != Path.home()/'transfer1-runs' or not re.fullmatch('[0-9a-f]{32}', root.name):
         raise ValueError('INVALID_RUN_ROOT')
     if root.is_symlink(): raise ValueError('SYMLINK_RUN_ROOT')
     root.mkdir(parents=True, exist_ok=True)
@@ -91,7 +91,9 @@ def execute(package, reviewed_head):
                    'reviewed_head':reviewed_head,'freeze_sha256':sha(package/'freeze.json')})
         # Neutral random path; no arm labels or preceding session outputs inside it.
         import tempfile
-        snapshot=Path(tempfile.mkdtemp(prefix='receiver-',dir='/private/tmp'))
+        snapshot_parent=Path.home()/'transfer1-work'/'receivers'
+        snapshot_parent.mkdir(parents=True,exist_ok=True)
+        snapshot=Path(tempfile.mkdtemp(prefix='receiver-',dir=snapshot_parent))
         git(snapshot,'-c','init.templateDir=','init','-q','--object-format=sha1')
         git(snapshot,'bundle','unbundle',str((package/frozen['arms'][arm]['bundle']).resolve()))
         git(snapshot,'checkout','--detach',frozen['arms'][arm]['head'])

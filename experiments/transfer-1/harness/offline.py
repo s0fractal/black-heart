@@ -13,7 +13,7 @@ from controls import sources
 from decision import SCHEDULE, decide
 from grader import grade
 from runtime import preflight, sandbox
-from regressions import crash_checks, isolation_check
+from regressions import crash_checks, isolation_check, content_scan_check
 
 
 def decision_checks():
@@ -43,6 +43,9 @@ def decision_checks():
 
 
 def collect(output):
+    output=output.resolve()
+    if any(output.is_relative_to(Path(p).resolve()) for p in ('/private/tmp','/private/var/tmp',tempfile.gettempdir())):
+        raise ValueError('OFFLINE_OUTPUT_MUST_BE_OUTSIDE_TEMP_STORAGE')
     output.mkdir(parents=True, exist_ok=False)
     inputs = verify_inputs()
     report = {'started_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -71,7 +74,8 @@ def collect(output):
         write_json(output/f'control-{number}.json', result)
         results[name] = {'pass': correct, 'failures': sorted(actual), 'receipt': f'control-{number}.json'}
         print(name, correct, sorted(actual), flush=True)
-    with tempfile.TemporaryDirectory(prefix='transfer-witness-',dir='/private/tmp') as td:
+    work=Path.home()/'transfer1-work'/'offline';work.mkdir(parents=True,exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='witness-',dir=work) as td:
         root = Path(td)
         (root/'witness.py').write_bytes((ROOT/'inputs/packet/witness.py').read_bytes())
         witness = run([*sandbox(root), sys.executable, '-I', 'witness.py'], cwd=root)
@@ -83,7 +87,7 @@ def collect(output):
     for name,result in crash_reports.items(): write_json(output/(name+'.json'),result)
     boundary=isolation_check()
     report['regressions']={'crash_receipts':{name:name+'.json' for name in crash_reports},
-                           'worker_crashes_are_valid_failures':True,'isolation':boundary}
+                           'worker_crashes_are_valid_failures':True,'isolation':boundary,'tmp_content':content_scan_check()}
     report.update(controls=results, witness=witness, isolation=isolation, decisions=decision_checks())
     report['pass'] = all(r['pass'] for r in results.values()) and witness['pass'] and witness['temporary_directory_removed'] and isolation['pass'] and boundary['pass']
     report['finished_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
