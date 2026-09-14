@@ -1,140 +1,142 @@
-# TRANSFER-1 execution package — review required, no receiver run
+# TRANSFER-1 execution package v2 — review required, no receiver run
 
-Claude's ACCEPT review of plan head `0e5d44f22079a6f4f2543b718b18b3968253c2f1`
-was relayed by the owner. PR #60 merged with eight green checks in
-`7a2e7d807fc5640c9c0920d2121ca72967ed4940`. The accepted PLAN.md and all eight
-pinned input/scoring files remain unchanged. Its draft/preparation labels are
-historical; this README records the current stage.
+Plan head `0e5d44f` was accepted in Claude's review relayed by the owner and
+merged by PR #60 in `7a2e7d8`. All eight accepted input/scoring files and PLAN.md
+remain byte-identical. This execution amendment addresses B1/B2 from the review
+of `7684f39`. **No receiver or calibration session has run.** The amended package
+requires review of its exact commit before any receiver call.
 
-**This package needs review before the first receiver call.** No calibration
-or receiver session has run. Preparing and verifying a witness is a host-only
-operation, not a receiver outcome. Do not merge or execute this package merely
-because the plan was accepted.
+## What changed after review
 
-## Retained offline evidence
+### B1: keep protected material outside readable temporary storage
 
-[offline/receipt.json](offline/receipt.json) records the exact committed harness
-source at `49db352`, all source digests, Python/Git versions, input digests,
-start/end times and the individual observations. Each worker has a ten-second
-limit and its own copy of the submission plus an independently rebuilt fixture.
-Expected answers and pass/fail comparisons remain in the parent process.
-This is a bounded grader for these cases, not a proof against a malicious Python
-program deliberately attacking its evaluator.
+The pinned Codex profile permits reads in `/private/tmp`. The earlier canary in
+the OS-default `$TMPDIR` did not test that boundary; the old positive receipt
+must not be interpreted as proof of sibling isolation. Adding a parent deny in
+a local development probe did not remove that access. This revision therefore
+changes placement and lifecycle instead of claiming a stronger sandbox.
 
-| Implementation | Failed concrete cases |
-| --- | --- |
-| Reference repair | None: 15/15 pass |
-| Type check after peeling | Annotated tag and nested annotated tag |
-| Refuse all with INVALID_COMMIT | Both valid commits, plus missing object, missing path and directory path |
-| Accept peelable objects (baseline) | Annotated tag and nested annotated tag |
-| Missing object classified as INVALID_COMMIT | Missing object |
-| Decode/re-encode with replacement | Both valid commits |
+- Bundles stay in the repository, outside the receiver's readable area.
+- The frozen run root is under `~/.codex/transfer1-runs/<id>`, not `/private/tmp`.
+  Receipts, submitted reader.py and prior snapshots are kept there.
+- After the receiver process group stops, its submitted bytes are frozen and its
+  whole snapshot is moved to the slot's protected archive before grading. Normal
+  exception cleanup also archives a remaining snapshot.
+- Before a call, preflight refuses stale `/private/tmp/receiver-*` or
+  `/private/tmp/transfer1-run-*` paths other than the current snapshot. It does
+  not delete another operator's material. Auditing a previous slot also checks
+  that its old ephemeral path no longer exists.
+- Preflight creates real prior-snapshot and grade.json canaries under the actual
+  run root and requires denied reads, including through a symlink. A separate
+  canary beside the current snapshot explicitly records that temporary neighbors
+  remain readable. A readable tmp diagnostic is not labeled “outside denied”.
 
-The extra three refuse-all failures follow from its fixed refusal code; the
-frozen specification's `must_fail` list is a minimum requirement. All expected
-failed sets are checked exactly in the offline verifier, and worker exceptions
-or startup failures cannot satisfy these negative controls. Six malformed-value
-checks expand the ten case families to fifteen concrete checks; the primary
-unit remains one binary outcome per receiver, not fifteen independent samples.
+The regression first leaves a real previous snapshot in `/private/tmp` and
+verifies preflight refuses. It then archives it under home and verifies that a
+new snapshot cannot read the actual archived witness or actual grade.json.
+This protects the harness's allocated material, not arbitrary files another
+process might put in `/private/tmp` under unrelated names. Other operators must
+not stage experiment material there during the pilot. A process killed before
+cleanup needs the recovery procedure below; it cannot silently advance.
 
-The same receipt retains successful witness output, removal of its temporary
-directory, sandbox probes and all 512 binary decision sequences. The first
-uniform block truncates the schedule; attempts to append slots after that stop
-are rejected. An infrastructure failure takes priority over success counts.
+### B2: distinguish submission crashes from worker startup failures
 
-Development attempts are retained separately in `development/attempt-1/` and
-`development/attempt-2/`. Attempt 1 marked the offline suite failed because its
-validator incorrectly demanded only two failures for refuse-all. Attempt 2
-accepted the correct additional failures. These are development runs of trusted
-host controls, not model retries, and are not pooled with receiver results.
-The final receipt comes from the committed harness revision named above.
+The worker flushes `TRANSFER_WORKER_STARTED` immediately before `exec_module`.
+Host comparison records whether that marker arrived. Nonzero exits, missing
+JSON and timeouts after the marker fail the submitted patch while leaving the
+run valid. Failure before the marker remains infrastructure-indeterminate.
+The marker is a lifecycle observation, not a semantic answer from the submission.
 
-## Prepared inputs and isolation
+Regression receipts cover `os._exit(3)` during import and during read_source:
+both yield `valid: true, pass: false` for all fifteen cases. A one-slot decision
+continues normally. A trusted prefix that exits before the worker starts yields
+`valid: false`; that remains an infrastructure failure. A startup timeout without
+a marker likewise cannot be credited to a submitted patch.
 
-[package/freeze.json](package/freeze.json) binds three Git bundles, their heads
-and every receiver-visible file, the fixed nine-slot schedule, CLI settings,
-harness hashes and a single prospective run directory. It does not claim that
-a receiver has been launched. The [readback receipt](prepared-check.json)
-verifies all bundles, exact file sets, one-commit histories and identical T/P
-lesson bytes. The snapshots have no upstream history, remotes, arm names or
-FETCH_HEAD containing the bundle's host path.
+## Current retained evidence
 
-The platform is this macOS host, Codex CLI `0.154.0`, requested model
-`gpt-6-astra`, medium reasoning effort, 300 seconds per receiver. No model
-substitution or API purchase is provided. Runtime-reported model/usage data are
-retained if emitted; requested model identity is not independent attestation.
+- [v2/offline/receipt.json](v2/offline/receipt.json): committed harness revision,
+  source hashes, versions, timestamps, all input hashes and aggregate results.
+- [v2/package/freeze.json](v2/package/freeze.json): new protected run root, three
+  input bundles, settings, fixed schedule, heads and file hashes.
+- [v2/prepared-check.json](v2/prepared-check.json): exact bundle readback,
+  single-commit histories, identical T/P log bytes and no leaked FETCH_HEAD.
 
-The named `transfer` permission profile allows the current snapshot and reads
-of minimal OS resources, Homebrew installations and Apple command-line tools.
-These runtime directories must not contain experiment material. It denies tool
-network access and grants no access to Projects, the home directory, other
-snapshots or host receipts. The offline probe verifies a real external canary
-cannot be read directly or through a symlink, a local listener cannot be reached,
-and Python/Git plus local writes work. A fresh preflight precedes every call.
-These probes test named boundaries, not all possible OS escape techniques.
+The reference passes 15/15 concrete checks. All five original negative controls
+still fail their expected cases. Refuse-all has the documented three additional
+MISSING_SOURCE failures. Crash diagnostics are additional host controls, not new
+receiver tasks. All 512 binary schedules are checked against the fixed decision
+rule; the five portable unit tests include crash classification.
 
-This uses [OpenAI's documented named permission profiles](https://learn.chatgpt.com/docs/config-file/config-reference),
-not the broader default workspace-write read access. The provider connection
-remains available to the host CLI; no request rewriting is used. Tool network
-restrictions do not by themselves disable remote tools, so memory, apps, plugins,
-additional agents, browser and computer tools are disabled explicitly. User
-configuration and rules are ignored, project documentation loading is zero,
-and shell tools inherit only the explicit environment in runtime.py.
-`skip_host_skill_discovery` remains experimental; warnings must be retained.
-This is a new CLI process with observed tool boundaries, not an audit of every
-provider-side context source. Review the actual emitted tool surface and context
-warnings before accepting a slot's validity.
+Each graded case uses a fresh fixture, fresh source copy and a ten-second process
+group limit. Expected answers stay in the host process. This is a bounded grader,
+not a proof against malicious code deliberately attacking its evaluator.
 
-## Review and run procedure
+The original `offline/`, `package/`, `prepared-check.json` and development receipts
+are preserved without rewriting. [v1-notes.md](v1-notes.md) retains the superseded
+description, explicitly marked invalid for launch. Do not launch the old package.
+The new harness rejects its mismatched frozen source hashes.
 
-Reproduce offline checks to a **new** output directory; outputs never overwrite:
+## Reproduction and launch gate
+
+These commands perform no model calls and require new output paths:
 
 ```sh
 python3 experiments/transfer-1/harness/test_harness.py
-python3 experiments/transfer-1/harness/offline.py /private/tmp/transfer1-offline-review
-python3 experiments/transfer-1/harness/verify_prepared.py experiments/transfer-1/execution/package /private/tmp/transfer1-prepared-review.json
+python3 experiments/transfer-1/harness/offline.py /private/tmp/transfer1-v2-offline-review
+python3 experiments/transfer-1/harness/verify_prepared.py experiments/transfer-1/execution/v2/package /private/tmp/transfer1-v2-prepared-review.json
 ```
 
-Offline grading and preflight require the pinned macOS CLI environment. The
-four scheduling/receipt unit tests also run in the existing CI matrix without
-Codex or model authentication. To regenerate bundles after a reviewed amendment,
-use prepare.py with a new directory, preserve the prior freeze and review the
-replacement before calls. Never regenerate to replace launched slots.
+Offline sandbox checks require the pinned macOS CLI `0.154.0`; portable unit tests
+run in the existing CI matrix. The requested receiver is still `gpt-6-astra`,
+medium effort, 300 seconds per slot, no substitution or API purchase. The original
+Latin-square schedule and stopping rules are unchanged.
 
-After explicit review of the exact execution-package commit, run one slot:
+Only after review of the exact amended execution-package commit:
 
 ```sh
-python3 experiments/transfer-1/harness/run_slot.py experiments/transfer-1/execution/package --reviewed-head FULL_ACCEPTED_PACKAGE_COMMIT
+python3 experiments/transfer-1/harness/run_slot.py experiments/transfer-1/execution/v2/package --reviewed-head FULL_ACCEPTED_PACKAGE_COMMIT
 ```
 
-The argument is the operator's record of accepted review; the script checks
-committed bytes, not the existence or independence of a human review. It claims
-the fixed slot before launch, creates a neutral snapshot, runs preflight,
-retains public events and stderr, freezes reader.py, then grades it in sandboxed
-workers. Hidden reasoning events are omitted and counted. Session elapsed time
-excludes subsequent host grading. Timeouts fail the slot; missing output is not
-silently retried. A crash or interrupted claimed slot blocks further progress.
+The argument records the operator's accepted review; the script verifies committed
+bytes, not a review's existence or independence. Each slot is claimed before the
+call; incomplete slots cannot be replaced. Public events and stderr are retained,
+hidden reasoning events are omitted and counted. The session's elapsed time
+excludes host grading. All terminal decisions retain unlaunched slots as NOT_RUN.
 
-Before the same command may launch the next slot, retain `audit.json` inside the
-completed slot's host output directory with:
+Before the next slot, save audit.json in the completed slot's protected output:
 
-- `reviewer`: attribution of the operator/reviewer.
-- `result_sha256`, `events_sha256`: hashes of result.json and public-events.jsonl.
-- `valid`: boolean assessment of scope/context/trace validity, with `evidence`
-  naming public event lines, commands and the basis of the decision. Include
-  prohibited edits even if reverted; a final hash comparison cannot see them.
-- `supplied_witness_run`, `receiver_created_tag`, `tag_check_executed`: each
-  `observed`, `not_observed` or `unknown`, supported by that evidence. Distinguish
-  supplied witness execution from a receiver-authored tag check.
+- `reviewer`, `result_sha256`, `events_sha256`, boolean `valid` and `evidence`
+  identifying public event lines and commands for scope/context validity. Include
+  prohibited edits even if reverted; final hashes cannot detect those alone.
+- `supplied_witness_run`, `receiver_created_tag`, `tag_check_executed`, each
+  `observed`, `not_observed` or `unknown`, supported by that evidence.
 
-This audit never sends grading feedback into a receiver. It is needed because
-shell commands cannot reliably be classified by keyword search. An invalid
-slot stops the pilot as environment-indeterminate; incomplete audits block the
-next call. After slot three, the frozen early-stop rule determines whether six
-slots remain NOT_RUN. Subsequent invocations only report a terminal decision;
-they do not start replacement calls. Report exposed usage and warnings from the
-retained events, including unknown values, without inventing missing metadata.
+No grading feedback is sent to a receiver. Invalid or incomplete audits stop or
+block continuation. After a complete valid first block, the fixed early-stop
+rule determines whether the remaining six slots are NOT_RUN.
 
-The profile, harness, bundles and receipts are offered for review together.
-Automatic live execution, general packet superiority and completion of
-TRANSFER-1 are not claimed.
+## Interrupted runner and remaining limits
+
+If SIGKILL leaves runner.claim, do not unlink it to resume. Verify the old process
+group is gone, preserve the claim, traces and timestamps, and document the crash
+with attribution. Archive any remaining snapshot under the protected slot path,
+retaining its original path and available hashes. Record the claimed slot as
+`valid: false, pass: false`, add its audit, and record remaining slots NOT_RUN with
+ENVIRONMENT_INDETERMINATE. Preserve the stale claim as evidence; this pilot does
+not resume after that infrastructure failure. Any later attempt needs a separately
+reviewed plan/run identity and must not be pooled with this one.
+
+The network probe tests only a listener on `127.0.0.1`; it is not a survey of
+external destinations. Provider traffic from the host CLI remains distinct from
+tool network access. No OAuth request rewriting is used. Home/Projects denial and
+specific canary observations are not a proof against all OS escape techniques.
+
+User configuration/rules and project documentation loading are disabled; memory,
+plugins, apps, additional agents and browser/computer tools are disabled explicitly.
+The profile still grants reads of OS/Homebrew/Apple toolchain resources. See the
+[OpenAI configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference).
+`skip_host_skill_discovery` remains experimental: retain its warnings and inspect
+the actual tool surface in the trace audit. Fresh processes do not establish zero
+provider-side context or model independence. Packet advantage and completion of
+TRANSFER-1 remain unclaimed.
