@@ -1,0 +1,37 @@
+{
+  "status": "DESIGNER_PROPOSED_REVIEW_REQUIRED_NOT_UNIVERSAL_GROUND_TRUTH",
+  "items": {
+    "R1": {
+      "kind": "OPERATION",
+      "state": "SUPPORTED"
+    },
+    "R2": {
+      "kind": "OPERATION",
+      "state": "REFUTED"
+    },
+    "S1": {
+      "kind": "OPERATION",
+      "state": "SUPPORTED"
+    },
+    "S2": {
+      "kind": "IDENTITY_AUTHORITY",
+      "state": "OPEN"
+    },
+    "B1": {
+      "kind": "IDENTITY_AUTHORITY",
+      "state": "REFUTED"
+    },
+    "B2": {
+      "kind": "SEMANTIC_BINDING",
+      "state": "OPEN"
+    },
+    "D1": {
+      "kind": "OPERATION",
+      "state": "SUPPORTED"
+    },
+    "D2": {
+      "kind": "COVERAGE",
+      "state": "REFUTED"
+    }
+  }
+}

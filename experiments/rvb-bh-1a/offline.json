@@ -1,0 +1,69 @@
+{
+  "kind": "OFFLINE_FIXTURE_CHECK_NOT_ANNOTATOR_STUDY",
+  "recorded_at": "2026-09-14T03:19:54.913028+00:00",
+  "repository_head": "d8e3432bfc038b6f2c4ef7884f217fc515d0fe35",
+  "python": "3.14.7",
+  "probe_sha256": "758df110b23ad16437a34c46a4804908a2dc0a3ce8e5ebe83f2b70ef33be74a9",
+  "sources": {
+    "glyph.py": "b30badd37a29f892c5c2ec4c87cb4706afbbea588249c92e82f5f84093b884dd",
+    "crypto.py": "d9c726c4940aedc7e6ec061b2b0740116009b3a577391fac56a7802cc129f263",
+    "tools/sandbox.py": "19c3c267a33770511401084ab4836bd2765fc590ae6899cd176454c3bde6222e",
+    "dialectic_kernel.py": "8a61b83e2e71b6fbb43362bf09caa198544e1115fed3090ca3448360acb9def2"
+  },
+  "observed": {
+    "evaluation": {
+      "budget_0": {
+        "status": "SUSPENDED",
+        "term": "\ud83c\udf3f \ud83d\udda4 \ud83d\udda4 \ud83e\udd0d",
+        "equals_I": false,
+        "steps": 0
+      },
+      "budget_2": {
+        "status": "SETTLED",
+        "term": "\ud83e\udd0d",
+        "equals_I": true,
+        "steps": 2
+      }
+    },
+    "signature": {
+      "valid_payload": true,
+      "changed_payload": false,
+      "public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+      "identity_mapping_supplied": false
+    },
+    "report_predicate": {
+      "empty": false,
+      "one_positive_seal": true,
+      "positive_with_error": false,
+      "scope": "scope: 1 signature(s) and 0 claim(s) positively verified among the recognized elements -- NOT the whole document",
+      "scope_limit": "Synthetic dataclass predicate only; no PDF parsed or audited."
+    }
+  },
+  "checks": {
+    "budget_zero_suspended": true,
+    "budget_two_settled": true,
+    "valid_signature_accepted": true,
+    "changed_payload_refused": true,
+    "empty_not_sound": true,
+    "positive_sound": true,
+    "error_not_sound": true
+  },
+  "receipt_mutation_checks": {
+    "suspension_as_success": [
+      "budget_zero_suspended"
+    ],
+    "accept_changed_bytes": [
+      "changed_payload_refused"
+    ],
+    "empty_report_as_sound": [
+      "empty_not_sound"
+    ],
+    "error_as_sound": [
+      "error_not_sound"
+    ]
+  },
+  "limits": [
+    "Receipt mutations check oracle sensitivity, not implementation mutation coverage.",
+    "No person identity, semantic binding or whole-document correctness was verified."
+  ]
+}
