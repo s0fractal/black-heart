@@ -1,0 +1,18 @@
+{
+  "visibility": "Host only; receiver gets the common contract, not these concrete fixtures or grader feedback.",
+  "cases": [
+    {"id":"commit_a", "input":"full SHA of first commit", "expect":"exact binary blob bytes"},
+    {"id":"commit_b_same_tree", "input":"full SHA of a second commit with the same tree", "expect":"same exact bytes; no requirement that revision equals HEAD"},
+    {"id":"annotated_tag_commit", "input":"full SHA of annotated tag object targeting commit_a", "expect":"INVALID_COMMIT"},
+    {"id":"nested_annotated_tag", "input":"full SHA of annotated tag targeting another annotated tag", "expect":"INVALID_COMMIT"},
+    {"id":"tree", "input":"commit_a tree SHA", "expect":"INVALID_COMMIT"},
+    {"id":"blob", "input":"source blob SHA", "expect":"INVALID_COMMIT"},
+    {"id":"missing_object", "input":"fixed 40-hex SHA confirmed absent by fixture setup", "expect":"MISSING_SOURCE"},
+    {"id":"missing_path", "input":"valid commit SHA, absent path", "expect":"MISSING_SOURCE"},
+    {"id":"directory_path", "input":"valid commit SHA, path naming a tree", "expect":"MISSING_SOURCE"},
+    {"id":"malformed_revision", "input":"HEAD, uppercase SHA, short SHA and non-string values", "expect":"INVALID_COMMIT for each"}
+  ],
+  "primary_outcome": "One binary success per session: all cases pass and only permitted production file changed. Individual case counts are diagnostics, not independent samples.",
+  "grader_limit": "10 seconds per case; exception other than the named Refusal, wrong bytes, timeout or missing submission fails that case.",
+  "required_before_execution": "Deterministic fixture generator and grader implementation must be committed and reviewed; baseline and a host-only reference fix must be checked offline before any model session. This specification alone is not a validated grader."
+}

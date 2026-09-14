@@ -1,0 +1,9 @@
+{
+  "inputs/common/CONTRACT.md": "e559c242c73c6cc2a1783420d6b7d6525b72b3578d8826e40a5a25c527c7b56c",
+  "inputs/common/reader.py": "ffc57cb0343e5d67417bec0d1a91c7e122866eaa3654b16081496332953030b5",
+  "inputs/common/task.txt": "9a2204c6677e91d35dd6d83242cae3c84684dc2eef4fff4c9dd4e9b1aa6eabcf",
+  "inputs/lesson/lesson.txt": "f8de1ee7d39aff374e005c1b4b8cf95ab701ca8156bf0500968899c316ae845a",
+  "inputs/packet/manifest.json": "4751bfb081057f12a51a7803b6b2e8debe9fa49a550d34e836338948b4b0d165",
+  "inputs/packet/witness.py": "976895399325ea6e16641cfb20da1468be14d442de1cec54d73722907548384c",
+  "scoring/cases.json": "84c5e8f2de3d62d7eda593fd4dd6f2f515656ec317eddbaa53924024a44a79d1"
+}

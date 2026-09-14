@@ -1,0 +1,14 @@
+{
+  "profile": "transfer-1.experimental-evidence-bundle.v1",
+  "status": "PREPARED_NOT_EXECUTED",
+  "files": {
+    "lesson.txt": "f8de1ee7d39aff374e005c1b4b8cf95ab701ca8156bf0500968899c316ae845a",
+    "witness.py": "976895399325ea6e16641cfb20da1468be14d442de1cec54d73722907548384c"
+  },
+  "expected_witness_output": {
+    "commit_type": "commit",
+    "tree_type": "tree",
+    "same_path_bytes": true
+  },
+  "meaning": "Digest correspondence only; no signature or empirical success claimed."
+}
