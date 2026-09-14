@@ -88,7 +88,8 @@ def grade(source, command_prefix=()):
             except (ValueError, TypeError):
                 observed = {'invalid_worker_output': True}
             passed = (not result['timed_out'] and result['exit_code'] == 0 and observed == expected)
-            results.append({'id': case_id, 'expected': expected, 'observed': observed,
+            results.append({'id': case_id, 'revision': revision, 'path': path,
+                            'expected': expected, 'observed': observed,
                             'pass': passed, 'worker': result})
     specified = {c['id'] for c in json.loads((ROOT / 'scoring/cases.json').read_text())['cases']}
     assert {c['id'].split('/')[0] for c in results} == specified
