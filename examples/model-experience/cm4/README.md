@@ -97,3 +97,11 @@ retention after retrieval is not a substitute for testing the standalone save
 request. Component filtering retrieved the full example corpus; task-summary
 wording such as “suspended” versus “unsettled” can miss relevant records, so
 partial textual matches should be broadened rather than treated as exhaustive.
+
+## Subsequent route trials
+
+The limitations above describe the accepted lookup slice. Separate
+[save and replay trials](routes/README.md) now record two fresh Codex CLI
+processes with explicit skill loading, frozen inputs and retained outcomes.
+Both completed their bounded tasks; CM-4 remains ACTIVE until that additional
+coverage is reviewed. The original lookup reports and records are unchanged.

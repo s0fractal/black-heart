@@ -1,0 +1,11 @@
+{
+  "route": "replay",
+  "mechanical_checks": "PASS",
+  "new_address": "682272a124f3512f594eb78cc3c86785797a50ad85f6998793d6f9507e63ff69",
+  "records_found": 3,
+  "input_files_unchanged": true,
+  "session_head": "cc649af1a4aa1d56de18c6ae45f2afc73e9754aa",
+  "completed_commands": 8,
+  "failed_commands": [],
+  "scope": "Host byte/state checks; final prose and tool-scope interpretation require review."
+}

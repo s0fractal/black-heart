@@ -1,0 +1,10 @@
+{
+  "exit_code": 0,
+  "timed_out": false,
+  "elapsed_seconds": 40.30737024999689,
+  "omitted_reasoning_events": 0,
+  "head_after": "d22d983eb8392aab31389d283b204bcd93def702",
+  "status_after": "?? store/\n",
+  "finished_at": "2026-09-13T23:45:26.577121+00:00",
+  "public_trace_scope": "Only public command/file/final events retained; no hidden reasoning requested or stored."
+}
