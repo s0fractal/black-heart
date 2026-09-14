@@ -21,9 +21,19 @@ CLAIMS = [
 def sha(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 
 
+PLACES = {}  # absolute host paths -> neutral names, so the published receipt carries no home directory
+
+
+def neutral(text):
+    for path, name in PLACES.items():
+        text = text.replace(path, name)
+    return text
+
+
 def run(argv, cwd):
     r = subprocess.run(argv, cwd=cwd, capture_output=True, text=True, timeout=120)
-    return {"argv": [str(a) for a in argv], "exit": r.returncode, "stdout_tail": r.stdout[-400:], "stderr_tail": r.stderr[-400:]}
+    return {"argv": [neutral(str(a)) for a in argv], "exit": r.returncode,
+            "stdout_tail": neutral(r.stdout[-400:]), "stderr_tail": neutral(r.stderr[-400:])}
 
 
 def build(path):
@@ -41,6 +51,7 @@ def build(path):
 def main(out):
     out = Path(out).resolve()
     out.mkdir(parents=True, exist_ok=False)
+    PLACES.update({str(out): "<output>", str(ROOT): "<repository>", sys.executable: "python3"})
     comp = out / "companion.pdf"
     build(comp)
     again = out / "rebuild.pdf"; build(again)
