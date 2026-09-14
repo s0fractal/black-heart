@@ -1,0 +1,40 @@
+{
+  "pass": true,
+  "freeze_sha256": "6f7ac77a7ba803f7e8eb37d49aa4b9efb483560b2cc82427f982d0e7a2a7a458",
+  "arms": {
+    "N": {
+      "pass": true,
+      "head": "402fd08822cf6f9a127eba1b0ca1cd8a927d6c91",
+      "files": [
+        "CONTRACT.md",
+        "reader.py",
+        "task.txt"
+      ],
+      "history_commits": 1
+    },
+    "T": {
+      "pass": true,
+      "head": "18e622f52b620d9cd96e314e2050e6beeb34cd91",
+      "files": [
+        "CONTRACT.md",
+        "lesson/lesson.txt",
+        "reader.py",
+        "task.txt"
+      ],
+      "history_commits": 1
+    },
+    "P": {
+      "pass": true,
+      "head": "6e9cc1e9058fa0a697f3bf314c7c2c39d726bb48",
+      "files": [
+        "CONTRACT.md",
+        "lesson/lesson.txt",
+        "lesson/manifest.json",
+        "lesson/witness.py",
+        "reader.py",
+        "task.txt"
+      ],
+      "history_commits": 1
+    }
+  }
+}

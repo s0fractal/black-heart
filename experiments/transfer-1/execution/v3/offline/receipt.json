@@ -1,0 +1,332 @@
+{
+  "started_at": "2026-09-14T02:08:54.480547+00:00",
+  "head": "b5a8c3230eac888fe7f1b693bd817a527a3ee158",
+  "status": "",
+  "python": "3.14.7 (main, Aug  5 2026, 10:29:49) [Clang 21.0.0 (clang-2100.1.1.101)]",
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "git": {
+    "exit_code": 0,
+    "timed_out": false,
+    "stdout": "git version 2.54.0 (Apple Git-157)\n",
+    "stderr": ""
+  },
+  "inputs": {
+    "inputs/common/CONTRACT.md": "f78991918989ce86e28b1e8289490b996d25d87536e97537eaf599159e28a245",
+    "inputs/common/reader.py": "ffc57cb0343e5d67417bec0d1a91c7e122866eaa3654b16081496332953030b5",
+    "inputs/common/task.txt": "9a2204c6677e91d35dd6d83242cae3c84684dc2eef4fff4c9dd4e9b1aa6eabcf",
+    "inputs/lesson/lesson.txt": "f9f9eea5c7fbbcd505ba424ee04703dc2d2675d10bb70083fbc7d82b34f23bb9",
+    "inputs/packet/manifest.json": "ebb4cfb63ffafe0e20ac3f0e8428b0b76b6ffbf3fee387269e12aed0205f955f",
+    "inputs/packet/witness.py": "a8f581f0ca77f6c8754796de3e9b4699e07a878ac4ce929957af138a27087572",
+    "scoring/cases.json": "d4804123e49cddc3137a367e99939abfafb2ab89f84f1ce1f17cd2f56daaf60e",
+    "scoring/decision.json": "b6c397d4adf8bc265f09ea28f13c0803ed4f304e5b9c6098617ae64324696702"
+  },
+  "harness": {
+    "common.py": "26c5c6535ee3722f76712dae3b669d41c04b864265598d5a0313b9d9d24abab9",
+    "controls.py": "34bdf99225d346b1337713593c500caee78ed53f14dce01bce5ff308d9c43516",
+    "decision.py": "3d3514fba809b7fe3985e16e0009d460d780db71f81b6d7e8adbd9e5f7c61f97",
+    "grader.py": "ce39d48ff8def26d5c83c73f33c56dba3f8c1db0bcf0a463dbdf877d75f4840a",
+    "offline.py": "9eabe9fad69bebb0b1a23a78ffa62de879efb5c10158b941c51420641267310e",
+    "prepare.py": "0407ab80477e34e569bf6bb9b19224799b3a963b0babfeae5bb3e969cbd14a53",
+    "regressions.py": "bce450ce15f90de8cf827b58b0bf20189a3fa8618d5d9295f9f18dee7f2684bb",
+    "run_slot.py": "4d4020aad0d9c87426d2a88dd73c90310c2e31ba5a8246cae1e556761d28860c",
+    "runtime.py": "17debab80c4386070cc67c7fb2b8c56ebaf8f970535ef6dcda040b9b4eb5fa57",
+    "test_harness.py": "f8968fd802eb20158428b15f2fa6f46d2493b448d8753af8ae45ad6518eb4558",
+    "tmp_scan.py": "595ca4ab78c127efdd94d8c11d73e62f4b025a2a1191edf80c7871bf11a5835d",
+    "verify_prepared.py": "9fd0b0e945aef2da62e330bc04acb559cde5d566b21c3f603985556ef679a5d5"
+  },
+  "scope": "Offline host verification only. No receiver or calibration session.",
+  "regressions": {
+    "crash_receipts": {
+      "exit_during_call": "exit_during_call.json",
+      "exit_during_import": "exit_during_import.json",
+      "exit_before_worker": "exit_before_worker.json"
+    },
+    "worker_crashes_are_valid_failures": true,
+    "isolation": {
+      "pass": true,
+      "stale_snapshot_refused": {
+        "version": {
+          "exit_code": 0,
+          "timed_out": false,
+          "stdout": "codex-cli 0.154.0\n",
+          "stderr": ""
+        },
+        "pass": false,
+        "stale_tmp_inputs": [
+          "/private/tmp/receiver-r127s9vm"
+        ]
+      },
+      "after_archive_preflight": {
+        "version": {
+          "exit_code": 0,
+          "timed_out": false,
+          "stdout": "codex-cli 0.154.0\n",
+          "stderr": ""
+        },
+        "probe": {
+          "exit_code": 0,
+          "timed_out": false,
+          "stdout": "{\"write\": true, \"protected_read_denied\": [true, true, true], \"loopback_denied\": true, \"tmp_neighbor_readable\": true}\n",
+          "stderr": "",
+          "pass": true
+        },
+        "pass": true,
+        "stale_tmp_inputs": [],
+        "tmp_content_scan": {
+          "pass": true,
+          "roots": [
+            "/private/tmp",
+            "/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T",
+            "/private/var/tmp"
+          ],
+          "scan": {
+            "matches": [],
+            "errors": [],
+            "files_read": 4311,
+            "denied": 52,
+            "complete": true
+          },
+          "process": {
+            "exit_code": 0,
+            "timed_out": false,
+            "stdout": "{\"matches\": [], \"errors\": [], \"files_read\": 4311, \"denied\": 52, \"complete\": true}\n",
+            "stderr": ""
+          }
+        },
+        "placement": "Prior snapshots and grader receipts are protected under the host home; /private/tmp remains readable."
+      },
+      "actual_previous_and_grade_denied": {
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout": "[true, true]\n",
+        "stderr": ""
+      },
+      "previous_tmp_path_removed": true
+    },
+    "tmp_content": {
+      "pass": true,
+      "before": {
+        "version": {
+          "exit_code": 0,
+          "timed_out": false,
+          "stdout": "codex-cli 0.154.0\n",
+          "stderr": ""
+        },
+        "probe": {
+          "exit_code": 0,
+          "timed_out": false,
+          "stdout": "{\"write\": true, \"protected_read_denied\": [true, true, true], \"loopback_denied\": true, \"tmp_neighbor_readable\": true}\n",
+          "stderr": "",
+          "pass": true
+        },
+        "pass": true,
+        "stale_tmp_inputs": [],
+        "tmp_content_scan": {
+          "pass": true,
+          "roots": [
+            "/private/tmp",
+            "/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T",
+            "/private/var/tmp"
+          ],
+          "scan": {
+            "matches": [],
+            "errors": [],
+            "files_read": 4311,
+            "denied": 52,
+            "complete": true
+          },
+          "process": {
+            "exit_code": 0,
+            "timed_out": false,
+            "stdout": "{\"matches\": [], \"errors\": [], \"files_read\": 4311, \"denied\": 52, \"complete\": true}\n",
+            "stderr": ""
+          }
+        },
+        "placement": "Prior snapshots and grader receipts are protected under the host home; /private/tmp remains readable."
+      },
+      "arbitrary_reference_blocked": {
+        "version": {
+          "exit_code": 0,
+          "timed_out": false,
+          "stdout": "codex-cli 0.154.0\n",
+          "stderr": ""
+        },
+        "pass": false,
+        "tmp_content_scan": {
+          "pass": false,
+          "roots": [
+            "/private/tmp",
+            "/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T",
+            "/private/var/tmp"
+          ],
+          "scan": {
+            "matches": [
+              {
+                "path": "/private/tmp/ordinary-0024wawj/arbitrary.py",
+                "sha256": "ecf3d3bf255ae9791ad769e907720979d86e9c4516bd3fac7c4081d38f3c9e1a"
+              }
+            ],
+            "errors": [],
+            "files_read": 4312,
+            "denied": 52,
+            "complete": true
+          },
+          "process": {
+            "exit_code": 0,
+            "timed_out": false,
+            "stdout": "{\"matches\": [{\"path\": \"/private/tmp/ordinary-0024wawj/arbitrary.py\", \"sha256\": \"ecf3d3bf255ae9791ad769e907720979d86e9c4516bd3fac7c4081d38f3c9e1a\"}], \"errors\": [], \"files_read\": 4312, \"denied\": 52, \"complete\": true}\n",
+            "stderr": ""
+          }
+        }
+      },
+      "after": {
+        "version": {
+          "exit_code": 0,
+          "timed_out": false,
+          "stdout": "codex-cli 0.154.0\n",
+          "stderr": ""
+        },
+        "probe": {
+          "exit_code": 0,
+          "timed_out": false,
+          "stdout": "{\"write\": true, \"protected_read_denied\": [true, true, true], \"loopback_denied\": true, \"tmp_neighbor_readable\": true}\n",
+          "stderr": "",
+          "pass": true
+        },
+        "pass": true,
+        "stale_tmp_inputs": [],
+        "tmp_content_scan": {
+          "pass": true,
+          "roots": [
+            "/private/tmp",
+            "/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T",
+            "/private/var/tmp"
+          ],
+          "scan": {
+            "matches": [],
+            "errors": [],
+            "files_read": 4311,
+            "denied": 52,
+            "complete": true
+          },
+          "process": {
+            "exit_code": 0,
+            "timed_out": false,
+            "stdout": "{\"matches\": [], \"errors\": [], \"files_read\": 4311, \"denied\": 52, \"complete\": true}\n",
+            "stderr": ""
+          }
+        },
+        "placement": "Prior snapshots and grader receipts are protected under the host home; /private/tmp remains readable."
+      }
+    }
+  },
+  "controls": {
+    "reference": {
+      "pass": true,
+      "failures": [],
+      "receipt": "control-0.json"
+    },
+    "type check only after peeling": {
+      "pass": true,
+      "failures": [
+        "annotated_tag_commit",
+        "nested_annotated_tag"
+      ],
+      "receipt": "control-1.json"
+    },
+    "refuse all revisions": {
+      "pass": true,
+      "failures": [
+        "commit_a",
+        "commit_b_same_tree",
+        "directory_path",
+        "missing_object",
+        "missing_path"
+      ],
+      "receipt": "control-2.json"
+    },
+    "accept any object peelable to commit (flawed baseline)": {
+      "pass": true,
+      "failures": [
+        "annotated_tag_commit",
+        "nested_annotated_tag"
+      ],
+      "receipt": "control-3.json"
+    },
+    "missing object classified as INVALID_COMMIT": {
+      "pass": true,
+      "failures": [
+        "missing_object"
+      ],
+      "receipt": "control-4.json"
+    },
+    "decode blob to text or decode and re-encode with replacement": {
+      "pass": true,
+      "failures": [
+        "commit_a",
+        "commit_b_same_tree"
+      ],
+      "receipt": "control-5.json"
+    }
+  },
+  "witness": {
+    "exit_code": 0,
+    "timed_out": false,
+    "stdout": "{\"commit_type\": \"commit\", \"original_tag_equals_commit\": false, \"peeled_equals_commit\": true, \"same_path_bytes\": true, \"tag_type\": \"tag\"}\n",
+    "stderr": "",
+    "pass": true,
+    "temporary_directory_removed": true
+  },
+  "isolation": {
+    "version": {
+      "exit_code": 0,
+      "timed_out": false,
+      "stdout": "codex-cli 0.154.0\n",
+      "stderr": ""
+    },
+    "probe": {
+      "exit_code": 0,
+      "timed_out": false,
+      "stdout": "{\"write\": true, \"protected_read_denied\": [true, true, true], \"loopback_denied\": true, \"tmp_neighbor_readable\": true}\n",
+      "stderr": "",
+      "pass": true
+    },
+    "pass": true,
+    "stale_tmp_inputs": [],
+    "tmp_content_scan": {
+      "pass": true,
+      "roots": [
+        "/private/tmp",
+        "/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T",
+        "/private/var/tmp"
+      ],
+      "scan": {
+        "matches": [],
+        "errors": [],
+        "files_read": 4311,
+        "denied": 52,
+        "complete": true
+      },
+      "process": {
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout": "{\"matches\": [], \"errors\": [], \"files_read\": 4311, \"denied\": 52, \"complete\": true}\n",
+        "stderr": ""
+      }
+    },
+    "placement": "Prior snapshots and grader receipts are protected under the host home; /private/tmp remains readable."
+  },
+  "decisions": {
+    "pass": true,
+    "all_512_binary_sequences": {
+      "EARLY_UNIFORM_FAILURE": 64,
+      "INDETERMINATE": 200,
+      "FOLLOWUP_CANDIDATE": 48,
+      "NEGATIVE_PILOT_SIGNAL": 136,
+      "EARLY_UNIFORM_SUCCESS": 64
+    },
+    "infrastructure_priority": true
+  },
+  "pass": true,
+  "finished_at": "2026-09-14T02:09:16.263927+00:00"
+}

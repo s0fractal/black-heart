@@ -1,0 +1,250 @@
+{
+  "pass": false,
+  "source_sha256": "a150bd648127644d2442dcbcce6267c02bde25e8a90c218bfbd1509a00c8bf2e",
+  "cases": [
+    {
+      "id": "commit_a",
+      "expected": {
+        "bytes_hex": "00fffe800d0a5452414e534645522d3100656e640a"
+      },
+      "observed": {
+        "bytes_hex": "00fffe800d0a5452414e534645522d3100656e640a"
+      },
+      "pass": true,
+      "worker": {
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout": "{\"bytes_hex\": \"00fffe800d0a5452414e534645522d3100656e640a\"}\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "commit_b_same_tree",
+      "expected": {
+        "bytes_hex": "00fffe800d0a5452414e534645522d3100656e640a"
+      },
+      "observed": {
+        "bytes_hex": "00fffe800d0a5452414e534645522d3100656e640a"
+      },
+      "pass": true,
+      "worker": {
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout": "{\"bytes_hex\": \"00fffe800d0a5452414e534645522d3100656e640a\"}\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "annotated_tag_commit",
+      "expected": {
+        "refusal": "INVALID_COMMIT"
+      },
+      "observed": {
+        "refusal": "INVALID_COMMIT"
+      },
+      "pass": true,
+      "worker": {
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout": "{\"refusal\": \"INVALID_COMMIT\"}\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "nested_annotated_tag",
+      "expected": {
+        "refusal": "INVALID_COMMIT"
+      },
+      "observed": {
+        "refusal": "INVALID_COMMIT"
+      },
+      "pass": true,
+      "worker": {
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout": "{\"refusal\": \"INVALID_COMMIT\"}\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "tree",
+      "expected": {
+        "refusal": "INVALID_COMMIT"
+      },
+      "observed": {
+        "refusal": "INVALID_COMMIT"
+      },
+      "pass": true,
+      "worker": {
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout": "{\"refusal\": \"INVALID_COMMIT\"}\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "blob",
+      "expected": {
+        "refusal": "INVALID_COMMIT"
+      },
+      "observed": {
+        "refusal": "INVALID_COMMIT"
+      },
+      "pass": true,
+      "worker": {
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout": "{\"refusal\": \"INVALID_COMMIT\"}\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "missing_object",
+      "expected": {
+        "refusal": "MISSING_SOURCE"
+      },
+      "observed": {
+        "refusal": "INVALID_COMMIT"
+      },
+      "pass": false,
+      "worker": {
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout": "{\"refusal\": \"INVALID_COMMIT\"}\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "missing_path",
+      "expected": {
+        "refusal": "MISSING_SOURCE"
+      },
+      "observed": {
+        "refusal": "MISSING_SOURCE"
+      },
+      "pass": true,
+      "worker": {
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout": "{\"refusal\": \"MISSING_SOURCE\"}\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "directory_path",
+      "expected": {
+        "refusal": "MISSING_SOURCE"
+      },
+      "observed": {
+        "refusal": "MISSING_SOURCE"
+      },
+      "pass": true,
+      "worker": {
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout": "{\"refusal\": \"MISSING_SOURCE\"}\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "malformed_revision/HEAD",
+      "expected": {
+        "refusal": "INVALID_COMMIT"
+      },
+      "observed": {
+        "refusal": "INVALID_COMMIT"
+      },
+      "pass": true,
+      "worker": {
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout": "{\"refusal\": \"INVALID_COMMIT\"}\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "malformed_revision/uppercase",
+      "expected": {
+        "refusal": "INVALID_COMMIT"
+      },
+      "observed": {
+        "refusal": "INVALID_COMMIT"
+      },
+      "pass": true,
+      "worker": {
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout": "{\"refusal\": \"INVALID_COMMIT\"}\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "malformed_revision/short",
+      "expected": {
+        "refusal": "INVALID_COMMIT"
+      },
+      "observed": {
+        "refusal": "INVALID_COMMIT"
+      },
+      "pass": true,
+      "worker": {
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout": "{\"refusal\": \"INVALID_COMMIT\"}\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "malformed_revision/null",
+      "expected": {
+        "refusal": "INVALID_COMMIT"
+      },
+      "observed": {
+        "refusal": "INVALID_COMMIT"
+      },
+      "pass": true,
+      "worker": {
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout": "{\"refusal\": \"INVALID_COMMIT\"}\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "malformed_revision/integer",
+      "expected": {
+        "refusal": "INVALID_COMMIT"
+      },
+      "observed": {
+        "refusal": "INVALID_COMMIT"
+      },
+      "pass": true,
+      "worker": {
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout": "{\"refusal\": \"INVALID_COMMIT\"}\n",
+        "stderr": ""
+      }
+    },
+    {
+      "id": "malformed_revision/list",
+      "expected": {
+        "refusal": "INVALID_COMMIT"
+      },
+      "observed": {
+        "refusal": "INVALID_COMMIT"
+      },
+      "pass": true,
+      "worker": {
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout": "{\"refusal\": \"INVALID_COMMIT\"}\n",
+        "stderr": ""
+      }
+    }
+  ],
+  "control_verified": true,
+  "expected_failed": [
+    "missing_object"
+  ]
+}

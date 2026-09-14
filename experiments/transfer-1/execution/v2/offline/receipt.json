@@ -1,0 +1,173 @@
+{
+  "started_at": "2026-09-14T01:55:43.898207+00:00",
+  "head": "969f87a3445888f1ed2aa6dc6f7303860d66d0ca",
+  "status": "",
+  "python": "3.14.7 (main, Aug  5 2026, 10:29:49) [Clang 21.0.0 (clang-2100.1.1.101)]",
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "git": {
+    "exit_code": 0,
+    "timed_out": false,
+    "stdout": "git version 2.54.0 (Apple Git-157)\n",
+    "stderr": ""
+  },
+  "inputs": {
+    "inputs/common/CONTRACT.md": "f78991918989ce86e28b1e8289490b996d25d87536e97537eaf599159e28a245",
+    "inputs/common/reader.py": "ffc57cb0343e5d67417bec0d1a91c7e122866eaa3654b16081496332953030b5",
+    "inputs/common/task.txt": "9a2204c6677e91d35dd6d83242cae3c84684dc2eef4fff4c9dd4e9b1aa6eabcf",
+    "inputs/lesson/lesson.txt": "f9f9eea5c7fbbcd505ba424ee04703dc2d2675d10bb70083fbc7d82b34f23bb9",
+    "inputs/packet/manifest.json": "ebb4cfb63ffafe0e20ac3f0e8428b0b76b6ffbf3fee387269e12aed0205f955f",
+    "inputs/packet/witness.py": "a8f581f0ca77f6c8754796de3e9b4699e07a878ac4ce929957af138a27087572",
+    "scoring/cases.json": "d4804123e49cddc3137a367e99939abfafb2ab89f84f1ce1f17cd2f56daaf60e",
+    "scoring/decision.json": "b6c397d4adf8bc265f09ea28f13c0803ed4f304e5b9c6098617ae64324696702"
+  },
+  "harness": {
+    "common.py": "26c5c6535ee3722f76712dae3b669d41c04b864265598d5a0313b9d9d24abab9",
+    "controls.py": "34bdf99225d346b1337713593c500caee78ed53f14dce01bce5ff308d9c43516",
+    "decision.py": "3d3514fba809b7fe3985e16e0009d460d780db71f81b6d7e8adbd9e5f7c61f97",
+    "grader.py": "ce39d48ff8def26d5c83c73f33c56dba3f8c1db0bcf0a463dbdf877d75f4840a",
+    "offline.py": "582033ddbd141cabf8340be082bffe75df3d03dc37363a331f713c368c057fec",
+    "prepare.py": "fda58e1f3d55798f94a6f1cb0d4a6f1c20eb2ad7766c01f450dbdf53aa5ea43d",
+    "regressions.py": "3abe2492c22d08f60807eeaeee9c4327fc8b78537b95f7c125596bbdd096d424",
+    "run_slot.py": "d5996a43d0756a0b9bfba875238c547347a7ddb4d64ae09efc176dcb7e3e8aa6",
+    "runtime.py": "344ca961d668feb658fca6252954eed1a68f8aed51f333a84a2b8bfe37567b54",
+    "test_harness.py": "895606e53b6825677533b2d4a98f650ac7271858c4ae2f3c455345d473b762a0",
+    "verify_prepared.py": "692fc9062cac2f6521c940f2a999637e4df6510d8cc016841f7093f999df8c2b"
+  },
+  "scope": "Offline host verification only. No receiver or calibration session.",
+  "regressions": {
+    "crash_receipts": {
+      "exit_during_call": "exit_during_call.json",
+      "exit_during_import": "exit_during_import.json",
+      "exit_before_worker": "exit_before_worker.json"
+    },
+    "worker_crashes_are_valid_failures": true,
+    "isolation": {
+      "pass": true,
+      "stale_snapshot_refused": {
+        "version": {
+          "exit_code": 0,
+          "timed_out": false,
+          "stdout": "codex-cli 0.154.0\n",
+          "stderr": ""
+        },
+        "pass": false,
+        "stale_tmp_inputs": [
+          "/private/tmp/receiver-nm6diynw"
+        ]
+      },
+      "after_archive_preflight": {
+        "version": {
+          "exit_code": 0,
+          "timed_out": false,
+          "stdout": "codex-cli 0.154.0\n",
+          "stderr": ""
+        },
+        "probe": {
+          "exit_code": 0,
+          "timed_out": false,
+          "stdout": "{\"write\": true, \"protected_read_denied\": [true, true, true], \"loopback_denied\": true, \"tmp_neighbor_readable\": true}\n",
+          "stderr": "",
+          "pass": true
+        },
+        "pass": true,
+        "stale_tmp_inputs": [],
+        "placement": "Prior snapshots and grader receipts are protected under the host home; /private/tmp remains readable."
+      },
+      "actual_previous_and_grade_denied": {
+        "exit_code": 0,
+        "timed_out": false,
+        "stdout": "[true, true]\n",
+        "stderr": ""
+      },
+      "previous_tmp_path_removed": true
+    }
+  },
+  "controls": {
+    "reference": {
+      "pass": true,
+      "failures": [],
+      "receipt": "control-0.json"
+    },
+    "type check only after peeling": {
+      "pass": true,
+      "failures": [
+        "annotated_tag_commit",
+        "nested_annotated_tag"
+      ],
+      "receipt": "control-1.json"
+    },
+    "refuse all revisions": {
+      "pass": true,
+      "failures": [
+        "commit_a",
+        "commit_b_same_tree",
+        "directory_path",
+        "missing_object",
+        "missing_path"
+      ],
+      "receipt": "control-2.json"
+    },
+    "accept any object peelable to commit (flawed baseline)": {
+      "pass": true,
+      "failures": [
+        "annotated_tag_commit",
+        "nested_annotated_tag"
+      ],
+      "receipt": "control-3.json"
+    },
+    "missing object classified as INVALID_COMMIT": {
+      "pass": true,
+      "failures": [
+        "missing_object"
+      ],
+      "receipt": "control-4.json"
+    },
+    "decode blob to text or decode and re-encode with replacement": {
+      "pass": true,
+      "failures": [
+        "commit_a",
+        "commit_b_same_tree"
+      ],
+      "receipt": "control-5.json"
+    }
+  },
+  "witness": {
+    "exit_code": 0,
+    "timed_out": false,
+    "stdout": "{\"commit_type\": \"commit\", \"original_tag_equals_commit\": false, \"peeled_equals_commit\": true, \"same_path_bytes\": true, \"tag_type\": \"tag\"}\n",
+    "stderr": "",
+    "pass": true,
+    "temporary_directory_removed": true
+  },
+  "isolation": {
+    "version": {
+      "exit_code": 0,
+      "timed_out": false,
+      "stdout": "codex-cli 0.154.0\n",
+      "stderr": ""
+    },
+    "probe": {
+      "exit_code": 0,
+      "timed_out": false,
+      "stdout": "{\"write\": true, \"protected_read_denied\": [true, true, true], \"loopback_denied\": true, \"tmp_neighbor_readable\": true}\n",
+      "stderr": "",
+      "pass": true
+    },
+    "pass": true,
+    "stale_tmp_inputs": [],
+    "placement": "Prior snapshots and grader receipts are protected under the host home; /private/tmp remains readable."
+  },
+  "decisions": {
+    "pass": true,
+    "all_512_binary_sequences": {
+      "EARLY_UNIFORM_FAILURE": 64,
+      "INDETERMINATE": 200,
+      "FOLLOWUP_CANDIDATE": 48,
+      "NEGATIVE_PILOT_SIGNAL": 136,
+      "EARLY_UNIFORM_SUCCESS": 64
+    },
+    "infrastructure_priority": true
+  },
+  "pass": true,
+  "finished_at": "2026-09-14T01:56:01.733639+00:00"
+}

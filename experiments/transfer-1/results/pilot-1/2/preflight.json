@@ -1,0 +1,39 @@
+{
+  "version": {
+    "exit_code": 0,
+    "timed_out": false,
+    "stdout": "codex-cli 0.154.0\n",
+    "stderr": ""
+  },
+  "probe": {
+    "exit_code": 0,
+    "timed_out": false,
+    "stdout": "{\"write\": true, \"protected_read_denied\": [true, true, true], \"loopback_denied\": true, \"tmp_neighbor_readable\": true}\n",
+    "stderr": "",
+    "pass": true
+  },
+  "pass": true,
+  "stale_tmp_inputs": [],
+  "tmp_content_scan": {
+    "pass": true,
+    "roots": [
+      "/private/tmp",
+      "/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T",
+      "/private/var/tmp"
+    ],
+    "scan": {
+      "matches": [],
+      "errors": [],
+      "files_read": 4311,
+      "denied": 52,
+      "complete": true
+    },
+    "process": {
+      "exit_code": 0,
+      "timed_out": false,
+      "stdout": "{\"matches\": [], \"errors\": [], \"files_read\": 4311, \"denied\": 52, \"complete\": true}\n",
+      "stderr": ""
+    }
+  },
+  "placement": "Prior snapshots and grader receipts are protected under the host home; /private/tmp remains readable."
+}

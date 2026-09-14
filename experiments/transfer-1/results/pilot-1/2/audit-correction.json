@@ -1,0 +1,5 @@
+{
+  "recorded_at": "2026-09-14T02:28:22.816232+00:00",
+  "operator": "Codex",
+  "correction": "audit.json says 18 public events; the actual line count is 17. All events were inspected; the count was a transcription error. Event identifiers and validity judgment are unchanged. Original audit is retained."
+}

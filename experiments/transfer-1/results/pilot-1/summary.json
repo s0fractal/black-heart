@@ -1,0 +1,57 @@
+{
+  "reviewed_head": "de36fe5c0d7c446fb40c4c03fadf07da87665e9c",
+  "run_root": "/Users/s0fractal/transfer1-runs/009ad73ef06d41dd823c97320ad071be",
+  "slots": [
+    {
+      "slot": 1,
+      "arm": "N",
+      "pass": true,
+      "valid": true,
+      "seconds": 162.3633124580374,
+      "host_cases_passed": 15,
+      "host_cases_total": 15,
+      "public_event_count": 22,
+      "usage": {
+        "input_tokens": 101549,
+        "cached_input_tokens": 88576,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 4710,
+        "reasoning_output_tokens": 377
+      }
+    },
+    {
+      "slot": 2,
+      "arm": "T",
+      "pass": true,
+      "valid": true,
+      "seconds": 65.43812645797152,
+      "host_cases_passed": 15,
+      "host_cases_total": 15,
+      "public_event_count": 17,
+      "usage": {
+        "input_tokens": 58656,
+        "cached_input_tokens": 47616,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1685,
+        "reasoning_output_tokens": 132
+      }
+    },
+    {
+      "slot": 3,
+      "arm": "P",
+      "pass": true,
+      "valid": true,
+      "seconds": 71.70970233296975,
+      "host_cases_passed": 15,
+      "host_cases_total": 15,
+      "public_event_count": 17,
+      "usage": {
+        "input_tokens": 60176,
+        "cached_input_tokens": 41088,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1846,
+        "reasoning_output_tokens": 109
+      }
+    }
+  ]
+}
