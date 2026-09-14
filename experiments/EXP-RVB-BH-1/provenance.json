@@ -1,0 +1,82 @@
+{
+  "status": "RECEIVED_DRAFT_NOT_PREREGISTERED_NOT_EXECUTED",
+  "recorded_at": "2026-09-14T03:14:04.988791+00:00",
+  "received_file": "PROPOSAL-RECEIVED.md",
+  "received_sha256": "fb0f52e8e5f1dc70a14258e1cb1b1a46c0bbdb2e5bd61f5990c3f9b20ea75be2",
+  "attribution": "User-supplied text attributes itself to Claude Fable 5.1; identity/date are reported metadata, not independently authenticated.",
+  "scope": "Source inspection only; no mechanical arm, historical RVB measurement rederivation, model session, policy activation or new CM profile.",
+  "sources": [
+    {
+      "repository": "black-heart",
+      "commit": "d8e3432bfc038b6f2c4ef7884f217fc515d0fe35",
+      "path": "AGENTS.md",
+      "sha256": "3b46ff312638458b188d143e19489d051ab7f96d1ecac58d0e7f29a6e7a58c72",
+      "matches_commit_blob": true,
+      "basis": "source_read"
+    },
+    {
+      "repository": "black-heart",
+      "commit": "d8e3432bfc038b6f2c4ef7884f217fc515d0fe35",
+      "path": "ADDRESS-INDEX.md",
+      "sha256": "b153e64434f3a1f60dfe6ba4429bbc6212a3f8fea03b6bb8935d1c4aea1c76b9",
+      "matches_commit_blob": true,
+      "basis": "source_read"
+    },
+    {
+      "repository": "black-heart",
+      "commit": "d8e3432bfc038b6f2c4ef7884f217fc515d0fe35",
+      "path": "xC010-model-experience.md",
+      "sha256": "e9e731646c8e7d9411dee2779bdb4137f6f5ccb6095892f4d11a465837b7406e",
+      "matches_commit_blob": true,
+      "basis": "source_read"
+    },
+    {
+      "repository": "black-heart",
+      "commit": "d8e3432bfc038b6f2c4ef7884f217fc515d0fe35",
+      "path": "experience.py",
+      "sha256": "29ebb41da214e605813e83b2fad8a52dbfb9eef3b444ce9f5334e7462884e8e0",
+      "matches_commit_blob": true,
+      "basis": "source_read"
+    },
+    {
+      "repository": "black-heart",
+      "commit": "d8e3432bfc038b6f2c4ef7884f217fc515d0fe35",
+      "path": "tools/sandbox.py",
+      "sha256": "19c3c267a33770511401084ab4836bd2765fc590ae6899cd176454c3bde6222e",
+      "matches_commit_blob": true,
+      "basis": "source_read"
+    },
+    {
+      "repository": "black-heart",
+      "commit": "d8e3432bfc038b6f2c4ef7884f217fc515d0fe35",
+      "path": "dialectic_kernel.py",
+      "sha256": "8a61b83e2e71b6fbb43362bf09caa198544e1115fed3090ca3448360acb9def2",
+      "matches_commit_blob": true,
+      "basis": "source_read"
+    },
+    {
+      "repository": "black-heart",
+      "commit": "d8e3432bfc038b6f2c4ef7884f217fc515d0fe35",
+      "path": "cegis_kernel.py",
+      "sha256": "3f5e7fd65769f5b6fbf56462b952c00ac7293052c2c54617aca03f7f5c543961",
+      "matches_commit_blob": true,
+      "basis": "source_read"
+    },
+    {
+      "repository": "black-heart",
+      "commit": "d8e3432bfc038b6f2c4ef7884f217fc515d0fe35",
+      "path": "docs/REMEDIATION-LEDGER.md",
+      "sha256": "fb38093b90bda01f67188336e3831c503d38477447e2b82e3a0bafbbe8f646dd",
+      "matches_commit_blob": true,
+      "basis": "source_read"
+    },
+    {
+      "repository": "manifesto",
+      "commit": "275ef7c5fd26123b92ff7a9a3858271c5f0e87ba",
+      "path": "papers/every-check-spawns-more/CLAIM-LEDGER.md",
+      "sha256": "dba3e72b87afed8bfd32533ac0e0d513168d79ae474ac30508ebda34260a33e3",
+      "matches_commit_blob": true,
+      "basis": "source_read"
+    }
+  ]
+}
