@@ -16,6 +16,38 @@ HERE=Path(__file__).resolve().parent
 BASE=HERE.parent
 
 class Execution(unittest.TestCase):
+    def test_live_init_matches_same_slot_probe(self):
+        for slot in range(1,5):
+            capture=json.loads((HERE/'context'/f'{slot}.json').read_text())
+            model='claude-sonnet-5' if slot in (1,4) else 'claude-opus-5'
+            expected=events.probe_init(capture,model)
+            def trace(init,assistant=True,repeat=False):
+                t=events.Trace(expected,model)
+                if init is not None:t.line(json.dumps(init).encode())
+                if repeat:t.line(json.dumps(init).encode())
+                if assistant:t.line(json.dumps({'type':'assistant','message':{'model':model}}).encode())
+                t.line(b'{"type":"result","result":"bad answer format"}')
+                return t
+            allowed=copy.deepcopy(expected)
+            for name in events.INIT_VARIABLE:allowed[name]='different live value'
+            self.assertTrue(trace(allowed).infrastructure_valid(0,False))
+            mutations=[]
+            for name in events.INIT_EMPTY:mutations.append((name,['unexpected']))
+            mutations += [('model','wrong'),('agents',[]),('permissionMode','changed'),('analytics_disabled',1),('new_field',True)]
+            for name,value in mutations:
+                bad=copy.deepcopy(expected);bad[name]=value
+                self.assertFalse(trace(bad).infrastructure_valid(0,False),name)
+            for name in expected:
+                bad=copy.deepcopy(expected);del bad[name]
+                self.assertFalse(trace(bad).infrastructure_valid(0,False),name)
+            self.assertFalse(trace(expected,repeat=True).infrastructure_valid(0,False))
+            self.assertFalse(trace(None).infrastructure_valid(0,False))
+            self.assertFalse(trace(expected,assistant=False).infrastructure_valid(0,False))
+            self.assertFalse(trace(expected,assistant=False).infrastructure_valid(-9,True))
+            # A timeout after valid init and observed assistant model remains a format failure.
+            t=trace(expected);t.complete=False
+            self.assertTrue(t.infrastructure_valid(-9,True))
+
     def test_no_card_identifiers_outside_cards(self):
         cards={c['id']:c for c in json.loads((BASE/'cards.json').read_text())}
         for slot in json.loads((BASE/'schedule.json').read_text())['slots']:

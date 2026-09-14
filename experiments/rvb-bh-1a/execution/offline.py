@@ -10,6 +10,7 @@ from pathlib import Path
 import context_check
 import context_probe
 import runtime
+import events
 
 HERE=Path(__file__).resolve().parent
 BASE=HERE.parent
@@ -26,7 +27,8 @@ def main(output):
         prompt=(HERE/'stimuli'/f"{slot['slot']}.txt").read_text()
         captured=context_probe.capture(slot['annotator'],prompt,parent)
         (output/f"{slot['slot']}.json").write_text(json.dumps(captured,indent=2)+'\n')
-        checks.append({'slot':slot['slot'],**context_check.check(captured,prompt)})
+        events.probe_init(captured,runtime.MODELS[slot['annotator']])
+        checks.append({'slot':slot['slot'],'init_checked':True,**context_check.check(captured,prompt)})
     prompt='OFFLINE CONTEXT PROBE. Return only probe-ok.'
     for name,unhardened in [('canary-hardened',False),('canary-positive-control',True)]:
         with tempfile.TemporaryDirectory(prefix='synthetic-home-',dir=parent) as home:

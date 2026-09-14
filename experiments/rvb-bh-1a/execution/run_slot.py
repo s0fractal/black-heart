@@ -84,23 +84,25 @@ def execute(head):
             capture=context_probe.capture(slot['annotator'],prompt.decode(),Path.home()/'rvb-bh-1a-work')
             write(folder/'context.json',capture)
             checked=context_check.check(capture,prompt.decode());write(folder/'preflight.json',checked)
+            expected_init=events.probe_init(capture,runtime.MODELS[slot['annotator']])
             argv=runtime.command(slot['annotator'],workspace);env=runtime.environment()
             write(folder/'invocation.json',{'argv':argv,'prompt_sha256':hashlib.sha256(prompt).hexdigest(),
                 'started_at':now(),'version':version,'binary_sha256':sha(binary),
                 'requested_model':runtime.MODELS[slot['annotator']],
                 'explicit_environment':{k:v for k,v in env.items() if k.startswith('CLAUDE_') or k=='DISABLE_AUTOUPDATER'}})
-            trace,code,timed_out=events.run(argv,prompt,workspace,env,folder)
+            trace,code,timed_out=events.run(argv,prompt,workspace,env,folder,
+                expected_init=expected_init,requested_model=runtime.MODELS[slot['annotator']])
             if trace.result is not None:
                 with (folder/'response.txt').open('x') as f:f.write(trace.result)
             format_ok=False
             try:answer(trace.result);format_ok=True
             except (ValueError,TypeError):pass
-            model_ok=all(m==runtime.MODELS[slot['annotator']] or m==runtime.MODELS[slot['annotator']]+'[1m]' for m in trace.models)
-            valid=(code==0 or timed_out) and not trace.tool and not trace.failed and not trace.unknown and model_ok and (not trace.malformed or timed_out) and (trace.complete or timed_out)
+            valid=trace.infrastructure_valid(code,timed_out)
             write(folder/'result.json',{'finished_at':now(),'slot':slot,'exit_code':code,'timed_out':timed_out,
                 'infrastructure_valid':valid,'format_valid':format_ok and not timed_out,
                 'omitted_reasoning_blocks':trace.omitted,'rewritten_lines':trace.rewritten,
                 'malformed_lines':trace.malformed,'tool_event_seen':trace.tool,'unknown_events':trace.unknown,
+                'init_count':trace.init_count,'init_errors':trace.init_errors,
                 'observed_models':trace.models,'trace_audit':'REQUIRED_BEFORE_NEXT_SLOT'})
         except Exception as error:
             (folder/'public-events.jsonl').touch(exist_ok=True)

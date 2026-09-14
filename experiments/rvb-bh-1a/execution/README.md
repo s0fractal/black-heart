@@ -22,6 +22,9 @@ Neither the key nor reviewer comments are supplied to annotators.
 
 Both annotators are Anthropic/Claude. The key reviewer is reported by the owner
 as Claude Opus 5, so B is from the reviewer's model and A from the same family.
+A CANDIDATE_FOR_NEXT_PILOT result would establish only the planned agreement
+within this family, not stability across providers. Shared model ancestry may
+inflate the A1/B1 and A2/B2 comparisons.
 The package designer is Codex/OpenAI. This is a comparison of two requested
 models, not independent providers or an independent reviewer/annotator design.
 Served model identity remains unknown until native runtime metadata is retained;
@@ -84,9 +87,23 @@ recognized private reasoning block must be removed. Removed blocks and rewritten
 lines are counted. Native stderr is retained. Public explanations are requested;
 private reasoning is neither requested nor retained intentionally. Malformed
 transport lines remain unparsed and require audit. The result string is written
-unchanged to `response.txt`. Tool events, client errors, unexpected event types
-and changed observed model metadata invalidate the run. Timeout is a format
-failure, with its partial output retained. No repair, continuation or silent retry.
+unchanged to `response.txt`. The live trace must contain exactly one `system/init`. Its `tools`,
+`mcp_servers`, `skills`, `slash_commands` and `plugins` must each be `[]`, and
+`model` must equal the requested model. Its full field set and all other values
+must match the init captured during that same slot's local preflight, except for
+`cwd`, `session_id`, `uuid` and `apiKeySource`. Added, removed or changed fields
+outside this allowance invalidate the slot. `init_count` and `init_errors` are
+retained in the result. This directly checks the live client's reported surface;
+it still does not establish transport equivalence or inspect provider-side context.
+The probe's builtin `agents` list includes claude, Explore, general-purpose and
+Plan; it is compared unchanged. With no tools they are not callable by the
+annotator. The operator should explicitly note this surface in the audit.
+
+Tool events, client errors, unexpected event types, absent assistant model
+metadata and changed observed model metadata invalidate the run. Timeout is a
+format failure only if the required init and assistant model were observed and
+no infrastructure violation occurred; otherwise the missing evidence makes it
+an infrastructure failure. Partial output is retained. No repair, continuation or silent retry.
 
 `score.py` implements the accepted priority and four comparisons. Tests cover
 exact output schema, duplicate JSON keys/IDs, missing IDs, thresholds, critical
@@ -146,8 +163,11 @@ python3 experiments/rvb-bh-1a/execution/offline.py ~/rvb-bh-1a-work/new-context-
 
 New captures are observations, not byte-identical receipts: directory names,
 request metadata and dates vary. Keep them separate from retained `context/`.
-`context/receipt.json` binds retained captures and source files; `offline-v2.json`
-retains mechanical test output. `offline-check.json` is the unchanged initial
+`context/receipt.json` binds retained captures and historical source files on
+`3e42c3f00eefd22706faef46196855122bb97dbc`; the verifier resolves those sources
+through Git rather than pretending the old capture ran with the amended runner.
+The capture bytes and `offline-v2.json` remain unchanged. `offline-v3.json`
+records validation of the amended runner and live-init mutation tests. `offline-check.json` is the unchanged initial
 six-test draft receipt. `prepare.py` deterministically rebuilds the prompts and
 hashes the package before the first session; it refuses once the run directory
 exists. `launch_ready: true` denotes an implemented runner, not review acceptance

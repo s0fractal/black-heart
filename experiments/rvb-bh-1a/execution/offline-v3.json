@@ -1,0 +1,47 @@
+{
+  "status": "OFFLINE_LIVE_INIT_REGRESSIONS",
+  "model_calls": 0,
+  "head": "3e42c3f00eefd22706faef46196855122bb97dbc",
+  "checkout_state": "Uncommitted amendments identified by source digests; no live Max session. Retained captures and earlier receipts unchanged.",
+  "checks": [
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "experiments/rvb-bh-1a/validate_cards.py"
+      ],
+      "exit_code": 0,
+      "stdout": "{\"ok\": true, \"cards\": 8, \"receipts\": 6, \"synthetic_report_states\": 3, \"model_calls\": 0}\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "experiments/rvb-bh-1a/execution",
+        "-p",
+        "test_*.py",
+        "-v"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "test_audit_is_required_and_bound (test_execution.Execution.test_audit_is_required_and_bound) ... ok\ntest_canary_control (test_execution.Execution.test_canary_control) ... ok\ntest_context_mutations (test_execution.Execution.test_context_mutations) ... ok\ntest_live_init_matches_same_slot_probe (test_execution.Execution.test_live_init_matches_same_slot_probe) ... ok\ntest_no_card_identifiers_outside_cards (test_execution.Execution.test_no_card_identifiers_outside_cards) ... ok\ntest_public_retention_and_hidden_removal (test_execution.Execution.test_public_retention_and_hidden_removal) ... ok\ntest_simulated_client_partial_lines_and_timeout (test_execution.Execution.test_simulated_client_partial_lines_and_timeout) ... ok\ntest_tool_error_and_malformed_events (test_execution.Execution.test_tool_error_and_malformed_events) ... ok\ntest_critical_and_integrity (test_score.Tests.test_critical_and_integrity) ... ok\ntest_missing_duplicate_and_json_keys (test_score.Tests.test_missing_duplicate_and_json_keys) ... ok\ntest_reference_and_order (test_score.Tests.test_reference_and_order) ... ok\ntest_thresholds (test_score.Tests.test_thresholds) ... ok\ntest_uniform_wrong (test_score.Tests.test_uniform_wrong) ... ok\ntest_wrong_key (test_score.Tests.test_wrong_key) ... ok\n\n----------------------------------------------------------------------\nRan 14 tests in 0.268s\n\nOK\n"
+    }
+  ],
+  "sources": {
+    "context_check.py": "8784c468860a6de621436910f05b40a6bce6d8f1270563312f37f950363f4aea",
+    "context_probe.py": "26b6cb4b3e74a68f9273b6a7676866c400e5787cff13252f1f1d5d18599f79f4",
+    "events.py": "957a7645c9b8ec4b6dd2c45bc6b5343ab9adef5bad39bec7965d9c3008311039",
+    "offline.py": "7bf5ebe5f8562752dc74910b96daea0be524dd5172f4203a283d7102c8f40a0f",
+    "prepare.py": "e1b24f84ec985b1d101647bebfa554610d6e2ee19a215e04feabb5515349922a",
+    "run_slot.py": "aac1e5371d58082c3e9c9f84a765d0e4e1e0c93c9ff6abfd128bf1bbac8d19eb",
+    "runtime.py": "30bab3baefe5d530269a95fe78535b0c55f79c0a20504ba49778fb3bbb940397",
+    "score.py": "2f9a8ac186b2a4c25f8d02887025c33accb69ced7b0abedf47e443ca1457ae92",
+    "test_execution.py": "e147c8b32a6007a2e86846f58c3a5ada75acc54c1a9113bcde9fc53c6439b3a5",
+    "test_score.py": "f3825e00657087c9aee631296fa939e160233c27e97f021c3a091aac6486a9d4",
+    "verify_package.py": "f4f86691cb33284b7d100c879d782284125700515547a780cb7568a1d6b83fd0"
+  },
+  "context_receipt_sha256": "6a6c43999d86743bbd548c18827e50dec1b14586cdf8d2851a001c64b5bfbd8c"
+}
