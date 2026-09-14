@@ -1,0 +1,11 @@
+{
+  "kind": "OFFLINE_SCORER_CHECK_NO_MODEL_CALLS",
+  "recorded_at": "2026-09-14T11:00:57.227397+00:00",
+  "exit_code": 0,
+  "stdout": "",
+  "stderr": "......\n----------------------------------------------------------------------\nRan 6 tests in 0.002s\n\nOK\n",
+  "sources": {
+    "score.py": "2f9a8ac186b2a4c25f8d02887025c33accb69ced7b0abedf47e443ca1457ae92",
+    "test_score.py": "f3825e00657087c9aee631296fa939e160233c27e97f021c3a091aac6486a9d4"
+  }
+}

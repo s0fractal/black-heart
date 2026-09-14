@@ -1,0 +1,54 @@
+```json
+{
+  "annotations": [
+    {
+      "id": "B2",
+      "kind": "SEMANTIC_BINDING",
+      "state": "OPEN",
+      "justification": "The type only records that some caller asserted formula_sha256 encodes subject_digest; no proof of actual encoding correctness is supplied, so correctness of the encoding is neither confirmed nor denied."
+    },
+    {
+      "id": "R2",
+      "kind": "OPERATION",
+      "state": "REFUTED",
+      "justification": "The SUSPENDED status at budget 0 is explicitly documented as 'intermediate thunk', not normal form; the code's own enum comments state SETTLED (not SUSPENDED) means normal form reached, directly contradicting the claim."
+    },
+    {
+      "id": "D2",
+      "kind": "COVERAGE",
+      "state": "REFUTED",
+      "justification": "The scope_summary and docstring explicitly state the verdict covers only recognized elements' signatures/claims and is 'NOT the whole document', directly contradicting a claim of whole-PDF correctness."
+    },
+    {
+      "id": "S1",
+      "kind": "OPERATION",
+      "state": "SUPPORTED",
+      "justification": "The receipt directly shows valid_payload true and changed_payload false, matching the specific verify/fail behavior claimed for this fixture run."
+    },
+    {
+      "id": "D1",
+      "kind": "OPERATION",
+      "state": "SUPPORTED",
+      "justification": "The synthetic inputs for the empty report show zero positive evidence, and the receipt confirms is_sound_for_empty_report is false, matching the is_sound() logic requiring positive confirmation."
+    },
+    {
+      "id": "B1",
+      "kind": "IDENTITY_AUTHORITY",
+      "state": "REFUTED",
+      "justification": "The docstring explicitly states 'this type does not authenticate anybody,' directly contradicting the claim that FormalCreditBinding itself authenticates the caller."
+    },
+    {
+      "id": "R1",
+      "kind": "OPERATION",
+      "state": "SUPPORTED",
+      "justification": "The receipt directly reports budget_2 status SETTLED, equals_I true, and steps 2, matching the specific claim for this fixture run."
+    },
+    {
+      "id": "S2",
+      "kind": "IDENTITY_AUTHORITY",
+      "state": "OPEN",
+      "justification": "No person-to-key mapping or identity evidence is supplied (identity_mapping_supplied is false), so whether this key belongs to the intended human author is neither confirmed nor denied by the given context."
+    }
+  ]
+}
+```

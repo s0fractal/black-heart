@@ -1,0 +1,47 @@
+{
+  "status": "OFFLINE_MECHANICAL_CHECKS",
+  "model_calls": 0,
+  "head": "f1dde171bdbb59ea268bea502ebc544380b62142",
+  "checkout_state": "Uncommitted package amendments; sources identified by sha256, not by HEAD alone.",
+  "checks": [
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "experiments/rvb-bh-1a/validate_cards.py"
+      ],
+      "exit_code": 0,
+      "stdout": "{\"ok\": true, \"cards\": 8, \"receipts\": 6, \"synthetic_report_states\": 3, \"model_calls\": 0}\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "experiments/rvb-bh-1a/execution",
+        "-p",
+        "test_*.py",
+        "-v"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "test_audit_is_required_and_bound (test_execution.Execution.test_audit_is_required_and_bound) ... ok\ntest_canary_control (test_execution.Execution.test_canary_control) ... ok\ntest_context_mutations (test_execution.Execution.test_context_mutations) ... ok\ntest_no_card_identifiers_outside_cards (test_execution.Execution.test_no_card_identifiers_outside_cards) ... ok\ntest_public_retention_and_hidden_removal (test_execution.Execution.test_public_retention_and_hidden_removal) ... ok\ntest_simulated_client_partial_lines_and_timeout (test_execution.Execution.test_simulated_client_partial_lines_and_timeout) ... ok\ntest_tool_error_and_malformed_events (test_execution.Execution.test_tool_error_and_malformed_events) ... ok\ntest_critical_and_integrity (test_score.Tests.test_critical_and_integrity) ... ok\ntest_missing_duplicate_and_json_keys (test_score.Tests.test_missing_duplicate_and_json_keys) ... ok\ntest_reference_and_order (test_score.Tests.test_reference_and_order) ... ok\ntest_thresholds (test_score.Tests.test_thresholds) ... ok\ntest_uniform_wrong (test_score.Tests.test_uniform_wrong) ... ok\ntest_wrong_key (test_score.Tests.test_wrong_key) ... ok\n\n----------------------------------------------------------------------\nRan 13 tests in 0.265s\n\nOK\n"
+    }
+  ],
+  "sources": {
+    "context_check.py": "8784c468860a6de621436910f05b40a6bce6d8f1270563312f37f950363f4aea",
+    "context_probe.py": "26b6cb4b3e74a68f9273b6a7676866c400e5787cff13252f1f1d5d18599f79f4",
+    "events.py": "49fec1b63480f4af830ec4a5a066ff729fb4ac51cb303b3d4ace57ec72a48b78",
+    "offline.py": "6b7ad5304b7990ed55cbd22ccaf992c8e7ff8ed63bca6107676fcba33f4c306c",
+    "prepare.py": "e1b24f84ec985b1d101647bebfa554610d6e2ee19a215e04feabb5515349922a",
+    "run_slot.py": "23c802b3d3d592ec278aabc39aa1eed132730cf2b3ff777c744ac06b7b59955e",
+    "runtime.py": "30bab3baefe5d530269a95fe78535b0c55f79c0a20504ba49778fb3bbb940397",
+    "score.py": "2f9a8ac186b2a4c25f8d02887025c33accb69ced7b0abedf47e443ca1457ae92",
+    "test_execution.py": "d0c4a0bea13d6b69b854ef325dc5ea44267637e19c4ce0f5343227550097b2ea",
+    "test_score.py": "f3825e00657087c9aee631296fa939e160233c27e97f021c3a091aac6486a9d4",
+    "verify_package.py": "397676fd3e592a723167def65e9551d2575604177f4c6e0233becedf88ad004c"
+  },
+  "context_receipt_sha256": "6a6c43999d86743bbd548c18827e50dec1b14586cdf8d2851a001c64b5bfbd8c"
+}

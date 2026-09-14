@@ -1,0 +1,91 @@
+{
+  "observed_at": "2026-09-14T11:52:07.292448+00:00",
+  "github": {
+    "headRefOid": "9747164199334e01fb971a369bca8e71ff6f8891",
+    "statusCheckRollup": [
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-09-14T11:49:32Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/s0fractal/black-heart/actions/runs/34839630411/job/103961322525",
+        "name": "Test Suite (Python 3.11 on ubuntu-latest)",
+        "startedAt": "2026-09-14T11:43:19Z",
+        "status": "COMPLETED",
+        "workflowName": "CI - Project Black-Heart"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-09-14T11:50:00Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/s0fractal/black-heart/actions/runs/34839630411/job/103961322790",
+        "name": "Test Suite (Python 3.12 on ubuntu-latest)",
+        "startedAt": "2026-09-14T11:43:17Z",
+        "status": "COMPLETED",
+        "workflowName": "CI - Project Black-Heart"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-09-14T11:47:42Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/s0fractal/black-heart/actions/runs/34839630411/job/103961322701",
+        "name": "Test Suite (Python 3.13 on ubuntu-latest)",
+        "startedAt": "2026-09-14T11:43:18Z",
+        "status": "COMPLETED",
+        "workflowName": "CI - Project Black-Heart"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-09-14T11:49:11Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/s0fractal/black-heart/actions/runs/34839630411/job/103961322811",
+        "name": "Test Suite (Python 3.11 on macos-latest)",
+        "startedAt": "2026-09-14T11:43:22Z",
+        "status": "COMPLETED",
+        "workflowName": "CI - Project Black-Heart"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-09-14T11:51:10Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/s0fractal/black-heart/actions/runs/34839630411/job/103961322697",
+        "name": "Test Suite (Python 3.12 on macos-latest)",
+        "startedAt": "2026-09-14T11:43:24Z",
+        "status": "COMPLETED",
+        "workflowName": "CI - Project Black-Heart"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-09-14T11:51:02Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/s0fractal/black-heart/actions/runs/34839630411/job/103961322712",
+        "name": "Test Suite (Python 3.13 on macos-latest)",
+        "startedAt": "2026-09-14T11:43:24Z",
+        "status": "COMPLETED",
+        "workflowName": "CI - Project Black-Heart"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-09-14T11:43:27Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/s0fractal/black-heart/actions/runs/34839630411/job/103961322851",
+        "name": "R2 external-anchor reader (with OpenTimestamps)",
+        "startedAt": "2026-09-14T11:43:18Z",
+        "status": "COMPLETED",
+        "workflowName": "CI - Project Black-Heart"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-09-14T11:43:26Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://dashboard.gitguardian.com",
+        "name": "GitGuardian Security Checks",
+        "startedAt": "2026-09-14T11:43:13Z",
+        "status": "COMPLETED",
+        "workflowName": ""
+      }
+    ]
+  },
+  "review": "Claude ACCEPT relayed by owner for this exact head; reviewer reported native-Max offline init parity for both models. That additional review is reported, not independently repeated here.",
+  "checkout_status": "",
+  "model_calls_before_first_slot": 0
+}

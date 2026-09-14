@@ -1,0 +1,10 @@
+{
+  "status": "PRE_ANNOTATION_DEVELOPMENT_ONLY",
+  "model_inference_calls": 0,
+  "note": "Local rejection endpoint under OS remote-network denial. Codex candidate A rejected before study: first config parsing failure, later captures still exposed builtin tools. Candidate assignment changed to native Claude Sonnet/Opus before package review. Private development captures are not study evidence or retained public context receipts; hashes identify the local development records only.",
+  "private_record_sha256": {
+    "context-a-dev1.json": "0a090ef28d28dbc73e95bae9c52d58e4327952f042226da35e3f110d36a3ffdd",
+    "context-a-dev2.json": "4ed529a45af8940e91d6869a04a76b9730a4e141db462333d6464dba3d72f47c",
+    "context-a-dev3.json": "39a080fe75ce1b5875902ca1484eae1ffc52d5235cb213456df70ecdfab7c330"
+  }
+}
