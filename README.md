@@ -82,7 +82,8 @@ or certify the whole PDF.
 
 ## Code and further reading
 
-- [Address index](ADDRESS-INDEX.md): contracts, implementation pointers and limits.
+- [Task routes](ADDRESS-INDEX.md#почати-з-задачі): start with the code, regressions
+  and contract for one repair; the same index contains the full area map.
 - [Bounded reduction](x1000-reduction.md): SKIY evaluator and settlement conditions.
 - [Evidence](x6000-evidence.md): supported witness types and verification boundaries.
 - [Library transitions](docs/LIVING-LIBRARY-INTERACTION.md): proposals, caller-policy

@@ -3,6 +3,15 @@
 These instructions apply to the entire repository, including documentation,
 essays, examples, generated artifacts and experiment records.
 
+## Start with the task
+
+Use [the task routes](ADDRESS-INDEX.md#почати-з-задачі) to select the first code,
+regression tests and contract to read. Do not load every floor document for a
+local repair; follow actual dependencies and relevant remediation entries.
+The routes are starting points, not limits on review or required validation.
+Keep experiment status in its owning plan/result rather than copying it into
+navigation. Preserve distinctions between current-code tests and historical replay.
+
 ## All changes go through a pull request
 
 - Never commit directly on, or push directly to, `main` or `master`.
