@@ -1,0 +1,124 @@
+{
+  "annotator": "B",
+  "requests": [
+    {
+      "path": "/v1/messages?beta=true",
+      "body_sha256": "8557c09285bc3d45654d82f6dc06e406489417136e9bae4880eb9f333b3acd6a",
+      "body": {
+        "model": "claude-opus-5",
+        "system": [
+          {
+            "type": "text",
+            "text": "x-anthropic-billing-header: cc_version=2.1.270.fef; cc_entrypoint=sdk-cli;"
+          },
+          {
+            "type": "text",
+            "text": "You are a Claude agent, built on Anthropic's Claude Agent SDK.",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          },
+          {
+            "type": "text",
+            "text": "Annotate the supplied cards only. Use no tools. Return only the requested JSON.",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ],
+        "messages": [
+          {
+            "role": "user",
+            "content": "OFFLINE CONTEXT PROBE. Return only probe-ok."
+          },
+          {
+            "role": "system",
+            "content": [
+              {
+                "type": "text",
+                "text": "# Environment\nYou have been invoked in the following environment: \n - Primary working directory: /Users/s0fractal/rvb-bh-1a-work/native-context-6ewsrwaf\n - Is a git repository: false\n - Platform: darwin\n - Shell: zsh\n - OS Version: Darwin 25.6.0\n\nYou are powered by the model named Opus 5. The exact model ID is claude-opus-5. Assistant knowledge cutoff is May 2026.\n\nToday's date is 2026-09-14.",
+                "cache_control": {
+                  "type": "ephemeral"
+                }
+              }
+            ]
+          }
+        ],
+        "tools": []
+      },
+      "omitted_noncontext_fields": [
+        "context_management",
+        "max_tokens",
+        "metadata",
+        "output_config",
+        "stream",
+        "thinking"
+      ]
+    },
+    {
+      "path": "/v1/messages?beta=true",
+      "body_sha256": "8557c09285bc3d45654d82f6dc06e406489417136e9bae4880eb9f333b3acd6a",
+      "body": {
+        "model": "claude-opus-5",
+        "system": [
+          {
+            "type": "text",
+            "text": "x-anthropic-billing-header: cc_version=2.1.270.fef; cc_entrypoint=sdk-cli;"
+          },
+          {
+            "type": "text",
+            "text": "You are a Claude agent, built on Anthropic's Claude Agent SDK.",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          },
+          {
+            "type": "text",
+            "text": "Annotate the supplied cards only. Use no tools. Return only the requested JSON.",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ],
+        "messages": [
+          {
+            "role": "user",
+            "content": "OFFLINE CONTEXT PROBE. Return only probe-ok."
+          },
+          {
+            "role": "system",
+            "content": [
+              {
+                "type": "text",
+                "text": "# Environment\nYou have been invoked in the following environment: \n - Primary working directory: /Users/s0fractal/rvb-bh-1a-work/native-context-6ewsrwaf\n - Is a git repository: false\n - Platform: darwin\n - Shell: zsh\n - OS Version: Darwin 25.6.0\n\nYou are powered by the model named Opus 5. The exact model ID is claude-opus-5. Assistant knowledge cutoff is May 2026.\n\nToday's date is 2026-09-14.",
+                "cache_control": {
+                  "type": "ephemeral"
+                }
+              }
+            ]
+          }
+        ],
+        "tools": []
+      },
+      "omitted_noncontext_fields": [
+        "context_management",
+        "max_tokens",
+        "metadata",
+        "output_config",
+        "stream",
+        "thinking"
+      ]
+    }
+  ],
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "{\"type\":\"system\",\"subtype\":\"init\",\"cwd\":\"/Users/s0fractal/rvb-bh-1a-work/native-context-6ewsrwaf\",\"session_id\":\"74d5bea0-749a-44df-a560-01c22ae4f642\",\"tools\":[],\"mcp_servers\":[],\"model\":\"claude-opus-5\",\"permissionMode\":\"default\",\"slash_commands\":[],\"apiKeySource\":\"ANTHROPIC_API_KEY\",\"claude_code_version\":\"2.1.270\",\"output_style\":\"default\",\"agents\":[\"claude\",\"Explore\",\"general-purpose\",\"Plan\"],\"skills\":[],\"plugins\":[],\"capabilities\":[\"interrupt_receipt_v1\",\"interrupt_cancel_queued_v1\",\"msg_lifecycle_v1\"],\"analytics_disabled\":true,\"product_feedback_disabled\":true,\"uuid\":\"96e1430f-daff-4e3b-a6d3-9636f93a8ec1\",\"fast_mode_state\":\"off\",\"fast_mode_disabled_reason\":\"sdk_opt_in_required\"}\n{\"type\":\"assistant\",\"message\":{\"diagnostics\":null,\"id\":\"e3af74c1-b14e-4d23-9c60-b5dedb77b1d8\",\"container\":null,\"model\":\"<synthetic>\",\"role\":\"assistant\",\"stop_details\":null,\"stop_reason\":\"stop_sequence\",\"stop_sequence\":\"\",\"type\":\"message\",\"usage\":{\"output_tokens_details\":null,\"input_tokens\":0,\"output_tokens\":0,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"server_tool_use\":{\"web_search_requests\":0,\"web_fetch_requests\":0},\"service_tier\":null,\"cache_creation\":{\"ephemeral_1h_input_tokens\":0,\"ephemeral_5m_input_tokens\":0},\"inference_geo\":null,\"iterations\":null,\"speed\":null},\"content\":[{\"type\":\"text\",\"text\":\"API Error: 400 OFFLINE_CONTEXT_PROBE_NO_INFERENCE\"}],\"context_management\":null},\"parent_tool_use_id\":null,\"session_id\":\"74d5bea0-749a-44df-a560-01c22ae4f642\",\"uuid\":\"0066f238-6bee-4de5-a20b-36ba995d71bd\",\"timestamp\":\"2026-09-14T11:30:13.631Z\",\"error\":\"unknown\",\"is_api_error_message\":true}\n{\"duration_api_ms\":0,\"stop_reason\":\"stop_sequence\",\"session_id\":\"74d5bea0-749a-44df-a560-01c22ae4f642\",\"total_cost_usd\":0,\"usage\":{\"output_tokens_details\":{\"thinking_tokens\":0},\"input_tokens\":0,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"output_tokens\":0,\"server_tool_use\":{\"web_search_requests\":0,\"web_fetch_requests\":0},\"service_tier\":\"standard\",\"cache_creation\":{\"ephemeral_1h_input_tokens\":0,\"ephemeral_5m_input_tokens\":0},\"inference_geo\":\"\",\"iterations\":[],\"speed\":\"standard\"},\"modelUsage\":{},\"permission_denials\":[],\"terminal_reason\":\"api_error\",\"fast_mode_state\":\"off\",\"fast_mode_disabled_reason\":\"sdk_opt_in_required\",\"subagent_stats\":{\"spawned\":0,\"requested\":{\"background\":0,\"foreground\":0,\"unset\":0},\"started_in_background\":0,\"max_depth\":0,\"spawned_by_subagents\":0,\"completed\":0,\"failed\":0,\"killed\":{\"parent\":0,\"user\":0,\"system\":0},\"refused\":{\"depth_limit\":0,\"concurrency_limit\":0,\"budget\":0},\"by_type\":{}},\"is_error\":true,\"num_turns\":1,\"subtype\":\"success\",\"api_error_status\":400,\"result\":\"API Error: 400 OFFLINE_CONTEXT_PROBE_NO_INFERENCE\",\"type\":\"result\",\"duration_ms\":17,\"uuid\":\"6a1d90aa-d130-4932-8459-42194329b5ed\",\"queued_turn_count\":0,\"result_index\":0}\n",
+  "stderr": "",
+  "canary": "RVB_CONTEXT_CANARY_7e29cf1",
+  "workspace": "/Users/s0fractal/rvb-bh-1a-work/native-context-6ewsrwaf",
+  "synthetic_home": "/Users/s0fractal/rvb-bh-1a-work/synthetic-home-iz2sxrv8",
+  "unhardened_control": false,
+  "transport": "loopback stub; sandbox-exec denies remote network",
+  "auth_difference": "Dummy API-key transport for capture; native Max login is not forwarded.",
+  "projection": "Only model/system/messages/tools retained from request bodies; headers never retained; noncontext fields omitted by name and body digest."
+}

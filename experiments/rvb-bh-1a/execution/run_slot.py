@@ -1,15 +1,16 @@
-"""One native CLI session; explicit reviewed head; separate human audit gate."""
+"""One reviewed native session; no retry; separate attributed audit gate."""
 import argparse
 import datetime
 import hashlib
 import json
-import os
-import signal
+import shutil
 import subprocess
-import tempfile
 from pathlib import Path
+import context_check
+import context_probe
+import events
 import runtime
-from score import answer
+from score import answer,score
 HERE=Path(__file__).resolve().parent
 BASE=HERE.parent
 REPO=BASE.parents[1]
@@ -22,6 +23,7 @@ def read(path):return json.loads(path.read_text())
 
 def verify(head):
     if len(head)!=40 or any(c not in '0123456789abcdef' for c in head):raise ValueError('BAD_HEAD')
+    if subprocess.check_output(['git','-C',str(REPO),'cat-file','-t',head]).strip()!=b'commit':raise ValueError('NOT_COMMIT')
     freeze=read(HERE/'freeze.json')
     for name in [*freeze['files'],'freeze.json']:
         p=(HERE/name).resolve()
@@ -30,72 +32,76 @@ def verify(head):
         if raw!=p.read_bytes():raise ValueError('UNREVIEWED_BYTES')
     return freeze
 
+def final(root,status,slots,raws=None,validity=None):
+    result=score(raws,validity) if raws is not None else {'status':status}
+    result['remaining']=[dict(slot=s['slot'],status='NOT_RUN') for s in slots if not (root/str(s['slot'])).exists()]
+    target=root/'decision.json'
+    if target.exists():
+        if read(target)!=result:raise ValueError('DECISION_CHANGED')
+    else:write(target,result)
+    return result
+
+def prior(root,slots):
+    raws=[];validity=[]
+    for slot in slots:
+        folder=root/str(slot['slot'])
+        if not folder.exists():return slot,raws,validity
+        result=read(folder/'result.json');audit=read(folder/'audit.json')
+        if result['slot']!=slot or type(result['infrastructure_valid']) is not bool:raise ValueError('RESULT_SLOT')
+        if type(audit.get('valid')) is not bool or not isinstance(audit.get('reviewer'),str) or not audit['reviewer'].strip() or not audit.get('evidence'):raise ValueError('AUDIT_INVALID')
+        for name in ('result.json','public-events.jsonl','response.txt','context.json'):
+            path=folder/name
+            if audit.get('hashes',{}).get(name)!=(sha(path) if path.exists() else None):raise ValueError('AUDIT_HASH')
+        stamp=datetime.datetime.fromisoformat(audit['audited_at'])
+        if not datetime.datetime.fromisoformat(result['finished_at'])<=stamp<=datetime.datetime.now(datetime.timezone.utc):raise ValueError('AUDIT_CHRONOLOGY')
+        if not audit['valid'] or not result['infrastructure_valid']:
+            return None,None,None
+        validity.append(True)
+        raws.append((folder/'response.txt').read_text() if result['format_valid'] else None)
+    return None,raws,validity
+
 def execute(head):
     freeze=verify(head)
-    if freeze.get('launch_ready') is not True:
-        raise ValueError('ISOLATION_PREFLIGHT_NOT_REVIEWED; NO_MODEL_CALL')
+    if freeze.get('launch_ready') is not True:raise ValueError('PACKAGE_NOT_READY; NO_MODEL_CALL')
     root=Path.home()/'rvb-bh-1a-runs'/freeze['run_id']
+    if root.resolve()!=root or (Path.home()/'Projects') in root.parents:raise ValueError('UNSAFE_RUN_ROOT')
     root.mkdir(parents=True,exist_ok=True)
-    if root.resolve()!=root:raise ValueError('SYMLINK_RUN_ROOT')
-    # SIGKILL leaves this claim. Never remove it to resume a crashed study.
     with (root/'runner.claim').open('x') as f:f.write(now())
     try:
         slots=read(BASE/'schedule.json')['slots']
-        for slot in slots:
-            folder=root/str(slot['slot'])
-            if not folder.exists():break
-            result=read(folder/'result.json');audit=read(folder/'audit.json')
-            for kind in ('result','public-events'):
-                path=folder/(kind+('.jsonl' if kind=='public-events' else '.json'))
-                if audit[kind+'_sha256']!=sha(path):raise ValueError('AUDIT_HASH')
-            if audit.get('valid') is not True or not audit.get('reviewer') or not audit.get('evidence'):
-                raise ValueError('AUDIT_INVALID')
-            if not result['infrastructure_valid']:raise ValueError('STUDY_INVALID_STOP')
-        else:return {'status':'ALL_FOUR_RETAINED; SCORE_AFTER_FINAL_AUDIT'}
-        folder.mkdir();write(folder/'claim.json',{'claimed_at':now(),'slot':slot,'reviewed_head':head})
-        annotator=slot['annotator'];client='codex' if annotator=='A' else 'claude'
+        slot,raws,validity=prior(root,slots)
+        if slot is None:
+            return final(root,'INVALID',slots) if raws is None else final(root,None,slots,raws,validity)
+        folder=root/str(slot['slot']);folder.mkdir()
+        write(folder/'claim.json',{'claimed_at':now(),'slot':slot,'reviewed_head':head})
         try:
-            version=subprocess.check_output([client,'--version'],text=True).strip()
-            if version!=runtime.VERSIONS[annotator]:raise ValueError('CLIENT_VERSION_CHANGED')
+            version=subprocess.check_output(['claude','--version'],text=True).strip()
+            binary=Path(shutil.which('claude')).resolve()
+            if version!=runtime.VERSIONS[slot['annotator']] or sha(binary)!=freeze['claude_binary_sha256']:raise ValueError('CLIENT_CHANGED')
             workspace=folder/'workspace';workspace.mkdir()
-            argv=runtime.command(annotator,workspace)
             prompt=(HERE/'stimuli'/f"{slot['slot']}.txt").read_bytes()
-            env={k:v for k,v in os.environ.items() if k in ('HOME','PATH','USER','LOGNAME','SHELL','LANG','LC_ALL')}
-            # Native login stores remain available, host API/proxy overrides do not.
+            # Local rejection endpoint, OS blocks all remote traffic, no inference.
+            capture=context_probe.capture(slot['annotator'],prompt.decode(),Path.home()/'rvb-bh-1a-work')
+            write(folder/'context.json',capture)
+            checked=context_check.check(capture,prompt.decode());write(folder/'preflight.json',checked)
+            argv=runtime.command(slot['annotator'],workspace);env=runtime.environment()
             write(folder/'invocation.json',{'argv':argv,'prompt_sha256':hashlib.sha256(prompt).hexdigest(),
-                'started_at':now(),'version':version,'requested_model':runtime.MODELS[annotator]})
-            with (folder/'stderr.txt').open('xb') as err:
-                proc=subprocess.Popen(argv,cwd=workspace,env=env,stdin=subprocess.PIPE,stdout=subprocess.PIPE,
-                                      stderr=err,start_new_session=True)
-                timed_out=False
-                try: raw,_=proc.communicate(prompt,timeout=180)
-                except subprocess.TimeoutExpired:
-                    timed_out=True;os.killpg(proc.pid,signal.SIGKILL);raw,_=proc.communicate()
-            events=[];omitted=0;malformed=False;response=None;tools=False
-            try:
-                if annotator=='A':
-                    for line in raw.splitlines():
-                        e=json.loads(line);item=e.get('item',{})
-                        if item.get('type') in ('reasoning','thinking','redacted_thinking'):omitted+=1;continue
-                        events.append(e)
-                        if item.get('type') in ('command_execution','file_change','mcp_tool_call','web_search'):tools=True
-                        if e.get('type')=='item.completed' and item.get('type')=='agent_message':response=item['text']
-                else:
-                    e=json.loads(raw);events=[e];response=e.get('result')
-                    if e.get('is_error'):raise ValueError('CLAUDE_CLIENT_ERROR')
-            except (ValueError,KeyError):malformed=True
-            with (folder/'public-events.jsonl').open('x') as f:
-                for e in events:f.write(json.dumps(e,ensure_ascii=False)+'\n')
-            if response is not None:
-                with (folder/'response.txt').open('x') as f:f.write(response)
+                'started_at':now(),'version':version,'binary_sha256':sha(binary),
+                'requested_model':runtime.MODELS[slot['annotator']],
+                'explicit_environment':{k:v for k,v in env.items() if k.startswith('CLAUDE_') or k=='DISABLE_AUTOUPDATER'}})
+            trace,code,timed_out=events.run(argv,prompt,workspace,env,folder)
+            if trace.result is not None:
+                with (folder/'response.txt').open('x') as f:f.write(trace.result)
             format_ok=False
-            try:answer(response);format_ok=True
+            try:answer(trace.result);format_ok=True
             except (ValueError,TypeError):pass
-            valid=(proc.returncode==0 or timed_out) and not tools and (not malformed or timed_out)
-            write(folder/'result.json',{'finished_at':now(),'slot':slot,'exit_code':proc.returncode,
-                'timed_out':timed_out,'infrastructure_valid':valid,'format_valid':format_ok and not timed_out,
-                'omitted_reasoning_events':omitted,'malformed_events':malformed,'tool_event_seen':tools,
-                'trace_audit':'REQUIRED_BEFORE_NEXT_SLOT'})
+            model_ok=all(m==runtime.MODELS[slot['annotator']] or m==runtime.MODELS[slot['annotator']]+'[1m]' for m in trace.models)
+            valid=(code==0 or timed_out) and not trace.tool and not trace.failed and not trace.unknown and model_ok and (not trace.malformed or timed_out) and (trace.complete or timed_out)
+            write(folder/'result.json',{'finished_at':now(),'slot':slot,'exit_code':code,'timed_out':timed_out,
+                'infrastructure_valid':valid,'format_valid':format_ok and not timed_out,
+                'omitted_reasoning_blocks':trace.omitted,'rewritten_lines':trace.rewritten,
+                'malformed_lines':trace.malformed,'tool_event_seen':trace.tool,'unknown_events':trace.unknown,
+                'observed_models':trace.models,'trace_audit':'REQUIRED_BEFORE_NEXT_SLOT'})
         except Exception as error:
             (folder/'public-events.jsonl').touch(exist_ok=True)
             if not (folder/'result.json').exists():write(folder/'result.json',{'finished_at':now(),
@@ -105,5 +111,5 @@ def execute(head):
     finally:(root/'runner.claim').unlink()
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--reviewed-head',required=True);args=p.parse_args()
-    print(json.dumps(execute(args.reviewed_head),indent=2))
+    p=argparse.ArgumentParser();p.add_argument('--reviewed-head',required=True);a=p.parse_args()
+    print(json.dumps(execute(a.reviewed_head),indent=2))

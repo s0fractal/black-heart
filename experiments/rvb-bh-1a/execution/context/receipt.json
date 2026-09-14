@@ -1,0 +1,78 @@
+{
+  "status": "OFFLINE_CONTEXT_CAPTURE_ONLY",
+  "model_calls": 0,
+  "checks": [
+    {
+      "slot": 1,
+      "ok": true,
+      "requests_checked": 1,
+      "tools": 0,
+      "context": "prompt + pinned system blocks + bounded native environment block"
+    },
+    {
+      "slot": 2,
+      "ok": true,
+      "requests_checked": 2,
+      "tools": 0,
+      "context": "prompt + pinned system blocks + bounded native environment block"
+    },
+    {
+      "slot": 3,
+      "ok": true,
+      "requests_checked": 2,
+      "tools": 0,
+      "context": "prompt + pinned system blocks + bounded native environment block"
+    },
+    {
+      "slot": 4,
+      "ok": true,
+      "requests_checked": 1,
+      "tools": 0,
+      "context": "prompt + pinned system blocks + bounded native environment block"
+    },
+    {
+      "control": "canary-hardened",
+      "marker_visible": false,
+      "ok": true
+    },
+    {
+      "control": "canary-positive-control",
+      "marker_visible": true,
+      "ok": true
+    },
+    {
+      "control": "remote numeric TCP endpoint denied by OS",
+      "exit_code": 0,
+      "stdout": "REMOTE_DENIED\n",
+      "stderr": "",
+      "ok": true
+    }
+  ],
+  "version": "2.1.270 (Claude Code)",
+  "binary_sha256": "a506b6d970a4cf44f6abdb53a81ddcd5d3b0ce042a95c502fe9d1f946bdb8807",
+  "models_requested": {
+    "A": "claude-sonnet-5",
+    "B": "claude-opus-5"
+  },
+  "auth_limit": "Dummy API-key local transport; native Max auth path is not captured or asserted equivalent.",
+  "files": {
+    "1.json": "cf5da817e7b2ecf8cda602cf1e19cfe53a754728b2009b3acd673eedb9089feb",
+    "2.json": "e4c8329a564d43b2321031cfb5e9835a0a53df1042e8f2fc6f95c269d5e5822c",
+    "3.json": "116c1ea8218d9a31e6b6f23fc995ea478a361f79b32c12e9aea9225f65fbd53e",
+    "4.json": "249fc5177b27421e3efeace86b9b839927571cf2bdb350433715b8d4191e3cc7",
+    "canary-hardened.json": "3cf5a438df829a33e3d2e8cac8fad4c828cfb2266602a0d62fd8be0945af98e3",
+    "canary-positive-control.json": "3c7a8e5317af56a9f042033b6fe2de4c1a152c01ffb37a62bcf85a635ee9d6b7"
+  },
+  "sources": {
+    "context_check.py": "8784c468860a6de621436910f05b40a6bce6d8f1270563312f37f950363f4aea",
+    "context_probe.py": "26b6cb4b3e74a68f9273b6a7676866c400e5787cff13252f1f1d5d18599f79f4",
+    "events.py": "49fec1b63480f4af830ec4a5a066ff729fb4ac51cb303b3d4ace57ec72a48b78",
+    "offline.py": "6b7ad5304b7990ed55cbd22ccaf992c8e7ff8ed63bca6107676fcba33f4c306c",
+    "prepare.py": "e1b24f84ec985b1d101647bebfa554610d6e2ee19a215e04feabb5515349922a",
+    "run_slot.py": "23c802b3d3d592ec278aabc39aa1eed132730cf2b3ff777c744ac06b7b59955e",
+    "runtime.py": "30bab3baefe5d530269a95fe78535b0c55f79c0a20504ba49778fb3bbb940397",
+    "score.py": "2f9a8ac186b2a4c25f8d02887025c33accb69ced7b0abedf47e443ca1457ae92",
+    "test_execution.py": "d0c4a0bea13d6b69b854ef325dc5ea44267637e19c4ce0f5343227550097b2ea",
+    "test_score.py": "f3825e00657087c9aee631296fa939e160233c27e97f021c3a091aac6486a9d4"
+  }
+}
