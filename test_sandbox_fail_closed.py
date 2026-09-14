@@ -25,6 +25,7 @@ import json
 import os
 import sys
 import tempfile
+import subprocess
 import unittest
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -177,6 +178,30 @@ class MixedEvidenceTest(_Audit):
         a malformed claim reads SOUND."""
         bad = "%🖤 CLAIM: this does not match the regex".encode("utf-8")
         self.assertFalse(self.sound(self.doc(self.signed_line(), bad)))
+
+
+class EntryPointOutputTest(unittest.TestCase):
+    def test_cli_and_standalone_keep_the_same_scope_and_exit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "fixture.pdf")
+            for claim, expected in [("%🖤 CLAIM: id=c | expr=🤍 x | expected=x", 0),
+                                    ("", 1), ("%🖤 CLAIM: broken", 1)]:
+                with self.subTest(claim=claim):
+                    with open(path, "wb") as f:
+                        f.write(HEADER + claim.encode() + b"\n%%EOF\n")
+                    outputs = []
+                    for entry in [("cli.py", "sandbox"), ("tools/sandbox.py",),
+                                  ("tools/sandbox.py", "--strict")]:
+                        run = subprocess.run([sys.executable, os.path.join(_HERE, entry[0]),
+                                              *entry[1:], path], capture_output=True,
+                                             text=True, timeout=15)
+                        self.assertEqual(run.returncode, expected, run.stdout + run.stderr)
+                        outputs.append((run.stdout, run.stderr))
+                    self.assertEqual(outputs[0], outputs[1])
+                    self.assertEqual(outputs[1], outputs[2])
+                    self.assertIn("not full ISO 32000 compliance", outputs[0][0])
+                    if expected == 0:
+                        self.assertIn("NOT the whole document", outputs[0][0])
 
 
 if __name__ == "__main__":
