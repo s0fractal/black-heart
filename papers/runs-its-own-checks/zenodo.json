@@ -1,0 +1,46 @@
+{
+  "upload_type": "publication",
+  "publication_type": "preprint",
+  "title": "What a Green Check Does Not Establish: A Self-Running PDF Companion and Two Records from Black-Heart",
+  "version": "1.0.0",
+  "creators": [
+    {
+      "name": "Glova, Serhii",
+      "affiliation": "Independent",
+      "orcid": "0009-0001-8010-420X"
+    }
+  ],
+  "description": "A passing check is easy to over-read. This short engineering report examines one file from the Black-Heart repository that is both a PDF and a Python program; its embedded runner reduces the combinator claims written in the file and prints '100% SOUND'. A one-page companion built with the existing PolyglotDocument rebuilds byte-identically and passes its runner, cli.py verify and a static sandbox. Nine controls on copies locate what that covers: a changed claim and a non-terminating claim fail; an appended tautological claim, an edited visible title, a wrong claim made unrecognizable by one space, a file with no recognized claims, and a file that writes to disk under python3 -I all exit 0. The runner and the static sandbox also disagree on which lines are claims. Two records from the same repository illustrate the same boundary: budget-suspended computations credited as results in four consumers (repaired; 20 regression tests pass) and one receiver session that rejected synthetic advice after running a sender-designed check. Related approaches (ActivePapers, ReproZip) are compared; no practical advantage of single-file packaging is claimed. NOT peer-reviewed; produced with language-model assistance; no independent human review; not a measure of general reliability.",
+  "keywords": [
+    "verification",
+    "scope of checks",
+    "executable documents",
+    "polyglot PDF",
+    "reproducible research",
+    "remediation"
+  ],
+  "license": "cc-by-sa-4.0",
+  "notes": "Paper CC BY-SA 4.0. The companion polyglot PDF embeds executable runner code, and measure.py is software: AGPL-3.0-only (repository LICENSE). Measured at black-heart commit 30679a4 (code identical to 62e3e80 plus the measurement script). PDF built byte-reproducibly with pandoc 3.11 + tectonic 0.17.0, DejaVu fonts, SOURCE_DATE_EPOCH=1789344000.",
+  "related_identifiers": [
+    {
+      "relation": "isSupplementTo",
+      "identifier": "https://github.com/s0fractal/black-heart",
+      "scheme": "url"
+    },
+    {
+      "relation": "references",
+      "identifier": "10.5281/zenodo.22750755",
+      "scheme": "doi"
+    },
+    {
+      "relation": "references",
+      "identifier": "10.5281/zenodo.22172098",
+      "scheme": "doi"
+    },
+    {
+      "relation": "references",
+      "identifier": "10.5281/zenodo.22069650",
+      "scheme": "doi"
+    }
+  ]
+}
