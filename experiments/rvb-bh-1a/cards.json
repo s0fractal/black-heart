@@ -76,7 +76,7 @@
   {
     "id": "S2",
     "family": "signature",
-    "claim": "The valid signature establishes that this key belongs to the intended human author.",
+    "claim": "This public key belongs to the intended human author.",
     "context": {
       "receipt": {
         "valid_payload": true,
@@ -125,11 +125,11 @@
     "claim": "For the synthetic report with no positive evidence, is_sound returns false.",
     "context": {
       "receipt": {
-        "empty": false,
-        "one_positive_seal": true,
-        "positive_with_error": false,
         "scope": "scope: 1 signature(s) and 0 claim(s) positively verified among the recognized elements -- NOT the whole document",
-        "scope_limit": "Synthetic dataclass predicate only; no PDF parsed or audited."
+        "scope_limit": "Synthetic dataclass predicate only; no PDF parsed or audited.",
+        "is_sound_for_empty_report": false,
+        "is_sound_with_one_positive_seal": true,
+        "is_sound_with_positive_seal_and_error": false
       },
       "source": {
         "path": "tools/sandbox.py",
@@ -139,7 +139,46 @@
         "end_line": 88,
         "text": "    def scope_summary(self) -> str:\n        \"\"\"What the verdict actually covers. A verified signature attests only\n        its own signed payload, and a settled claim only that claim -- never the\n        whole document. Header presence is not ISO 32000 compliance.\"\"\"\n        return (f\"scope: {self.verified_seal_count} signature(s) and \"\n                f\"{self.passed_claim_count} claim(s) positively verified among the \"\n                f\"recognized elements -- NOT the whole document\")\n\n    def is_sound(self) -> bool:\n        # SOUND requires: valid container; at least one thing POSITIVELY\n        # verified (a signature or a hermetic claim); and nothing that failed,\n        # was left unconfirmed, or errored. \"I could not verify this\" is not\n        # SOUND.\n        positively_confirmed = (self.verified_seal_count + self.passed_claim_count) >= 1\n        nothing_wrong = (\n            self.seal_mismatch_count == 0\n            and self.unconfirmed_seal_count == 0\n            and self.failed_claim_count == 0\n            and self.audit_error_count == 0\n        )\n        return (\n            self.is_valid_iso32000\n            and self.binary_marker_present\n            and positively_confirmed\n            and nothing_wrong\n        )\n"
       },
-      "note": "Synthetic report fields, not an actual parsed PDF. Assess only the stated predicate/scope claim."
+      "note": "Synthetic report states built in probe.py: constructor defaults give zero evidence/error counters, then verified_seal_count is set to 1, then audit_error_count to 1. The named booleans are is_sound() results for those states. No actual PDF was parsed; evaluate only the claimed predicate behavior or scope.",
+      "receipt_field_mapping": {
+        "source": "offline.json#/observed/report_predicate",
+        "empty": "is_sound_for_empty_report",
+        "one_positive_seal": "is_sound_with_one_positive_seal",
+        "positive_with_error": "is_sound_with_positive_seal_and_error",
+        "meaning": "Each boolean is an is_sound() return value, not a flag describing whether the report is empty."
+      },
+      "synthetic_report_inputs": {
+        "is_sound_for_empty_report": {
+          "is_valid_iso32000": true,
+          "binary_marker_present": true,
+          "passed_claim_count": 0,
+          "unconfirmed_seal_count": 0,
+          "seal_mismatch_count": 0,
+          "failed_claim_count": 0,
+          "verified_seal_count": 0,
+          "audit_error_count": 0
+        },
+        "is_sound_with_one_positive_seal": {
+          "is_valid_iso32000": true,
+          "binary_marker_present": true,
+          "passed_claim_count": 0,
+          "unconfirmed_seal_count": 0,
+          "seal_mismatch_count": 0,
+          "failed_claim_count": 0,
+          "verified_seal_count": 1,
+          "audit_error_count": 0
+        },
+        "is_sound_with_positive_seal_and_error": {
+          "is_valid_iso32000": true,
+          "binary_marker_present": true,
+          "passed_claim_count": 0,
+          "unconfirmed_seal_count": 0,
+          "seal_mismatch_count": 0,
+          "failed_claim_count": 0,
+          "verified_seal_count": 1,
+          "audit_error_count": 1
+        }
+      }
     }
   },
   {
@@ -148,11 +187,11 @@
     "claim": "The positive-seal synthetic report establishes correctness of an entire PDF document.",
     "context": {
       "receipt": {
-        "empty": false,
-        "one_positive_seal": true,
-        "positive_with_error": false,
         "scope": "scope: 1 signature(s) and 0 claim(s) positively verified among the recognized elements -- NOT the whole document",
-        "scope_limit": "Synthetic dataclass predicate only; no PDF parsed or audited."
+        "scope_limit": "Synthetic dataclass predicate only; no PDF parsed or audited.",
+        "is_sound_for_empty_report": false,
+        "is_sound_with_one_positive_seal": true,
+        "is_sound_with_positive_seal_and_error": false
       },
       "source": {
         "path": "tools/sandbox.py",
@@ -162,7 +201,46 @@
         "end_line": 88,
         "text": "    def scope_summary(self) -> str:\n        \"\"\"What the verdict actually covers. A verified signature attests only\n        its own signed payload, and a settled claim only that claim -- never the\n        whole document. Header presence is not ISO 32000 compliance.\"\"\"\n        return (f\"scope: {self.verified_seal_count} signature(s) and \"\n                f\"{self.passed_claim_count} claim(s) positively verified among the \"\n                f\"recognized elements -- NOT the whole document\")\n\n    def is_sound(self) -> bool:\n        # SOUND requires: valid container; at least one thing POSITIVELY\n        # verified (a signature or a hermetic claim); and nothing that failed,\n        # was left unconfirmed, or errored. \"I could not verify this\" is not\n        # SOUND.\n        positively_confirmed = (self.verified_seal_count + self.passed_claim_count) >= 1\n        nothing_wrong = (\n            self.seal_mismatch_count == 0\n            and self.unconfirmed_seal_count == 0\n            and self.failed_claim_count == 0\n            and self.audit_error_count == 0\n        )\n        return (\n            self.is_valid_iso32000\n            and self.binary_marker_present\n            and positively_confirmed\n            and nothing_wrong\n        )\n"
       },
-      "note": "Synthetic report fields, not an actual parsed PDF. Assess only the stated predicate/scope claim."
+      "note": "Synthetic report states built in probe.py: constructor defaults give zero evidence/error counters, then verified_seal_count is set to 1, then audit_error_count to 1. The named booleans are is_sound() results for those states. No actual PDF was parsed; evaluate only the claimed predicate behavior or scope.",
+      "receipt_field_mapping": {
+        "source": "offline.json#/observed/report_predicate",
+        "empty": "is_sound_for_empty_report",
+        "one_positive_seal": "is_sound_with_one_positive_seal",
+        "positive_with_error": "is_sound_with_positive_seal_and_error",
+        "meaning": "Each boolean is an is_sound() return value, not a flag describing whether the report is empty."
+      },
+      "synthetic_report_inputs": {
+        "is_sound_for_empty_report": {
+          "is_valid_iso32000": true,
+          "binary_marker_present": true,
+          "passed_claim_count": 0,
+          "unconfirmed_seal_count": 0,
+          "seal_mismatch_count": 0,
+          "failed_claim_count": 0,
+          "verified_seal_count": 0,
+          "audit_error_count": 0
+        },
+        "is_sound_with_one_positive_seal": {
+          "is_valid_iso32000": true,
+          "binary_marker_present": true,
+          "passed_claim_count": 0,
+          "unconfirmed_seal_count": 0,
+          "seal_mismatch_count": 0,
+          "failed_claim_count": 0,
+          "verified_seal_count": 1,
+          "audit_error_count": 0
+        },
+        "is_sound_with_positive_seal_and_error": {
+          "is_valid_iso32000": true,
+          "binary_marker_present": true,
+          "passed_claim_count": 0,
+          "unconfirmed_seal_count": 0,
+          "seal_mismatch_count": 0,
+          "failed_claim_count": 0,
+          "verified_seal_count": 1,
+          "audit_error_count": 1
+        }
+      }
     }
   }
 ]
