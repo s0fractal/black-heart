@@ -1,0 +1,24 @@
+{
+  "status": "EXECUTION_DRAFT_REVIEW_REQUIRED",
+  "launch_ready": false,
+  "accepted_plan_head": "abe9deccfdc5aa6b260d953b94d15e93258bc1a4",
+  "run_id": "rvb-bh-1a-20260914-v1",
+  "files": {
+    "../PLAN.md": "997a01c01bf3579d300f014605e949c7819afae21778a50c0e92ec5d5a29dbdf",
+    "../cards.json": "be8fdc43aa71d9d293edccc080a2d8b44c78954147a282c05280ce8741b5e01a",
+    "../review-key.json": "7870b396f8d26f5ea0ba45aac36989a01af5d7b2cb2155ad45a73059da2e2905",
+    "../schedule.json": "35f3ea37d50cc08bdbd4982279d8256b69d0dddd6c37e3742e9ce3db1c673af4",
+    "../sha256.json": "3f4d3a9b4afa4abdfb9b8fc39d903428a4dd3f0f114005af60980056eb2cfa8c",
+    "README.md": "9477dc8ff8877f49b6c88984e988cad370752331da2c45d57e38fefdc089bf6a",
+    "offline-check.json": "5366c7af892b48506bea13360bcf3f131c8969cfe9748d2b08274f7ec94746e2",
+    "prepare.py": "d95ef28038393713c76689493c7ec9a6aa51dbc2b6bfdedc63ece29f3eeb38c4",
+    "run_slot.py": "e4ed4e2686e2ce88d25c5ae142de61442b6a17b4108edad657045a6ec8380ceb",
+    "runtime.py": "96392d18ed2df724e765e5f95ac2bba0db3fe26d9a1eb975e2bfd61b9a3112ea",
+    "score.py": "2f9a8ac186b2a4c25f8d02887025c33accb69ced7b0abedf47e443ca1457ae92",
+    "stimuli/1.txt": "14fe0c93e2410c80db73034918f041f2ce1db72a557ee9fc8faf9649987ad593",
+    "stimuli/2.txt": "ffa542c9a32b1d25cf2851d3c782acb480d07d31210fad3422780a201401e34d",
+    "stimuli/3.txt": "6aeb59de7595cbe9ac829bdc658b48bd6fc0e950db4d9b197a0cf0096198a6f5",
+    "stimuli/4.txt": "d0deb94dda03d459b05c97dadb18833314e72e4719dfee8cee7e2bec5b2d1158",
+    "test_score.py": "f3825e00657087c9aee631296fa939e160233c27e97f021c3a091aac6486a9d4"
+  }
+}
