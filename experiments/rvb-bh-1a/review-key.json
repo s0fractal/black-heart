@@ -1,0 +1,45 @@
+{
+  "status": "DESIGNER_PROPOSED_REVIEW_REQUIRED_NOT_UNIVERSAL_GROUND_TRUTH",
+  "items": {
+    "R1": {
+      "kind": "OPERATION",
+      "state": "SUPPORTED",
+      "rationale": "The retained run reports SETTLED, structural equality to I and two steps at budget 2; this is a bounded operation claim."
+    },
+    "R2": {
+      "kind": "OPERATION",
+      "state": "REFUTED",
+      "rationale": "The supplied enum explicitly describes SUSPENDED as an intermediate thunk; this result does not certify normal form."
+    },
+    "S1": {
+      "kind": "OPERATION",
+      "state": "SUPPORTED",
+      "rationale": "The receipt reports verification true for the original payload and false for changed bytes; only that operation is claimed."
+    },
+    "S2": {
+      "kind": "IDENTITY_AUTHORITY",
+      "state": "OPEN",
+      "rationale": "This is a direct identity assertion, not a claim about signature proof strength; no information about the intended person or person-to-key mapping is supplied, so neither truth nor falsity is established."
+    },
+    "B1": {
+      "kind": "IDENTITY_AUTHORITY",
+      "state": "REFUTED",
+      "rationale": "Although the family is binding, the target claim is caller authentication; the supplied contract explicitly says this type does not authenticate anybody."
+    },
+    "B2": {
+      "kind": "SEMANTIC_BINDING",
+      "state": "OPEN",
+      "rationale": "No proof or disproof of the particular CNF-to-subject correspondence is supplied; its semantic binding remains open."
+    },
+    "D1": {
+      "kind": "OPERATION",
+      "state": "SUPPORTED",
+      "rationale": "The explicitly named is_sound_for_empty_report result is false for a state whose positive evidence counters are both zero."
+    },
+    "D2": {
+      "kind": "COVERAGE",
+      "state": "REFUTED",
+      "rationale": "The supplied scope explicitly excludes the whole document, and the fixture is not a parsed PDF; a positive synthetic report cannot establish whole-document correctness."
+    }
+  }
+}
