@@ -1,6 +1,6 @@
 # LI-2 — evidence evaluation and an attributed admission decision
 
-Date: 2026-09-13. Status: **contract for the LI-2 implementation in this PR.**
+Contract date: 2026-09-13. Status: **implemented; LI-2 policy and decision contract.**
 Brief: [LIVING-LIBRARY-INTERACTION.md](LIVING-LIBRARY-INTERACTION.md) (§ "LI-2").
 Builds on [LI-1](LIBRARY-INTERACTION-LI1.md). Source inspected: `0cea65e`.
 
