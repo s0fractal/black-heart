@@ -1,0 +1,63 @@
+{
+  "status": "RECEIVED_PROPOSAL_NOT_ADOPTED_NOT_EXECUTED",
+  "received_date": "2026-09-15",
+  "source": "Owner-provided text attachment from an external web conversation; attachment identifier cbdf000f-2e8c-498b-a99b-18dafcb74179",
+  "claimed_author": "Claude Fable 5.1",
+  "author_basis": "reported by owner and supplied text; identity and prior source reading not authenticated",
+  "proposal_file": "PROPOSAL-RECEIVED.md",
+  "proposal_sha256": "daa66bf0b2a137e936b8cdf4bb1962f7863d160daa02bf110d4a12e8acc3e9b7",
+  "proposal_bytes": 14196,
+  "preservation": "Exact attachment bytes, including original absence/presence of final newline",
+  "assessment": "Codex source-based assessment; prior context includes work on the referenced probes, so this is not a blind independent evaluation",
+  "executions": "No proposal scenario, model session or new reproduction run performed",
+  "source_snapshots": [
+    {
+      "repository": "s0fractal/black-heart",
+      "commit": "453663b0eecb4303cafeeeb664ddf71c78820801",
+      "path": "polyglot.py",
+      "sha256": "cd34b6a6d9bd0c014031f9d298a9f29d8d84378abc1c833c78f83a8399afc6ee"
+    },
+    {
+      "repository": "s0fractal/black-heart",
+      "commit": "453663b0eecb4303cafeeeb664ddf71c78820801",
+      "path": "experience.py",
+      "sha256": "29ebb41da214e605813e83b2fad8a52dbfb9eef3b444ce9f5334e7462884e8e0"
+    },
+    {
+      "repository": "s0fractal/black-heart",
+      "commit": "453663b0eecb4303cafeeeb664ddf71c78820801",
+      "path": "library_interaction.py",
+      "sha256": "e8576917642688bbeec987bf80015d6483c796afc8bd7868fca6df185a2f73da"
+    },
+    {
+      "repository": "s0fractal/black-heart",
+      "commit": "453663b0eecb4303cafeeeb664ddf71c78820801",
+      "path": "ADDRESS-INDEX.md",
+      "sha256": "0250b4801a7b6db9319394576916dfca344dd2f21d9d20c02318af70f28c4a7d"
+    },
+    {
+      "repository": "s0fractal/black-heart",
+      "commit": "453663b0eecb4303cafeeeb664ddf71c78820801",
+      "path": "xC010-model-experience.md",
+      "sha256": "e9e731646c8e7d9411dee2779bdb4137f6f5ccb6095892f4d11a465837b7406e"
+    },
+    {
+      "repository": "s0fractal/s0fractal",
+      "commit": "c85f9baf67eae651de0b8cff718665151f13d9c7",
+      "path": "experiments/participation-1/RESULTS.md",
+      "sha256": "22e114ca54a6c24d6455ce417657d5c92229562ab7a0c759f483f0d4c65ca352"
+    },
+    {
+      "repository": "s0fractal/s0fractal",
+      "commit": "c85f9baf67eae651de0b8cff718665151f13d9c7",
+      "path": "experiments/participation-2/run.py",
+      "sha256": "10383a604b37274dea0e75e41b417b353146faba7505e392d0f00b6bafc42db2"
+    },
+    {
+      "repository": "s0fractal/s0fractal",
+      "commit": "c85f9baf67eae651de0b8cff718665151f13d9c7",
+      "path": "experiments/participation-2/RESULTS.md",
+      "sha256": "c9350a360d5788080ecb612949aac9bf1b1c8b1a9a81f60c057588818c0e5410"
+    }
+  ]
+}
