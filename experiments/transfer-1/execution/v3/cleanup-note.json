@@ -1,0 +1,13 @@
+{
+  "basis": "operator_report_with_local_receipt_hashes",
+  "matching_files_before": 33,
+  "relocated_paths": 21,
+  "matching_files_after": 0,
+  "post_relocation_scan_pass": true,
+  "local_receipts": {
+    "/Users/s0fractal/transfer1-work/tmp-exposure-before.json": "f11e87b4a5c07e468595c334c82d4f00f95b91afc16ce0931f0e62a230b2df87",
+    "/Users/s0fractal/transfer1-work/tmp-exposure-after.json": "78f5dd3a4d50f28989f2f4fe321ab4ab24fa0de933e20597ce13b8d61c2535c9",
+    "/Users/s0fractal/transfer1-work/relocation.json": "0482b20309fcb78494d86305111532e2e2eb5d4b5f642a1dace6ac1d3dfb18b4"
+  },
+  "method": "Move files/directories into home quarantine; preserve original tool paths as symlinks to protected targets. Contents of other tools outputs are not published."
+}
