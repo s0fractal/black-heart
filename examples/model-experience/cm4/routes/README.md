@@ -1,6 +1,6 @@
 # CM-4 route trials and next experiments
 
-**ACTIVE / ROUTES EXECUTED, READY FOR REVIEW.** [plan.json](plan.json) fixes two compiler-designed requests
+**COMPLETE / ACCEPTED AND MERGED WITH BOUNDED COVERAGE.** [plan.json](plan.json) fixes two compiler-designed requests
 under the owner's authorization to plan and run the next experiments. The
 accepted lookup trial remains unchanged. Save and replay each get a new Codex
 CLI process, an explicit skill load and a separate materialized repository
@@ -18,27 +18,27 @@ state, timestamps, invocation and public events; hidden reasoning is not retaine
 
 Invocation settings follow the installed CLI help and [official non-interactive
 mode documentation](https://learn.chatgpt.com/docs/non-interactive-mode).
-User config, memories, host skill discovery and hooks are disabled. This is a
+The invocation requests disabling user config, memories, host skill discovery
+and hooks. Host-skill discovery uses an under-development flag with a retained
+warning (see below), so this is not an unconditional isolation guarantee. This is a
 new-session invocation boundary, not inspection of all submitted provider
 context or a proof of model independence. The fixtures expose the relevant code
 and expected differential; this is not blind error discovery or a no-skill
 comparison. The model selects operations within the supplied route prompt.
 
-## Later sequence
+## Later sequence — revised after review
 
-The plan also queues three bounded questions, without implementing them here:
+The `later_experiments` array in frozen `plan.json` records the original order.
+It remains historical; the current order is **TRANSFER-1 → FEEDBACK-1 → BUDGET-1**,
+as specified in [xC010](../../../../xC010-model-experience.md#наступні-досліди--черга-після-cm-4).
+Each experiment gets a separate task and plan, reviewed before any live run.
 
-1. **FEEDBACK-1:** return a stored refutation to a generator and measure its next
-   proposal under unchanged constraints.
-2. **TRANSFER-1:** compare a preregistered held-out task with and without an
-   experience packet in matched fresh sessions.
-3. **BUDGET-1:** turn one witnessed conflict into a finite authorized probe with
-   a stop condition and durable result. Resource cost, available budget and
-   stake remain separate; no stake accounting or schema change here.
-
-Each stage depends on review of the preceding result. Failures stay in the
-record, including client/environment failures. CM-4 remains ACTIVE until its
-behavioral coverage is reviewed; running a trial is not accepting it.
+TRANSFER-1 comes first because a changed proposal after any objection would not
+show that the evidence packet helped. Its plan should compare a new case with
+and without a packet, including a plain-text condition carrying the same claim.
+FEEDBACK-1 can then examine the generator's next action; attributing benefit to
+the packet still needs a plain-text objection control. BUDGET-1 follows review
+of that consumer behavior. None of those trials has been launched here.
 
 ## Recorded outcomes
 
@@ -94,4 +94,28 @@ The save request covered a supplied complete record, not composing experience
 from arbitrary conversation. The replay route did compose a new evidence-bound
 record. These two bounded cases extend observed coverage; they do not establish
 universal natural-language routing, automatic discovery, provider-independent
-behavior, or zero-error memory. CM-4 remains ACTIVE pending review.
+behavior, or zero-error memory. CM-4 is accepted within the bounds below.
+
+## Accepted coverage and client warning
+
+Claude's ACCEPT review relayed by the owner covers exact head
+`cc0cfbe5f0bb75f36ac9547125462c17f0fe3082`. PR #58 was merged normally as
+`1298936a7e5b7e0586c48bacba6deedac5fe6162`; preregistration commit `355f885`
+remains reachable from main. CM-4 is COMPLETE with three explicit limits:
+
+1. Only Codex with explicit skill loading was exercised; Claude Code automatic
+   discovery and execution were not tested.
+2. The replay prompt named `check/receiver_check.py`, authorized one execution,
+   designated `output/`, and explained local Git pins for `relations`. The
+   session executed an operator-prepared check; it did not independently choose
+   a checker from arbitrary repository code as the skill's broader route allows.
+3. Codex designed the tasks and Codex sessions executed them. This supports the
+   bounded adapter workflow, not provider or model independence.
+
+Both public traces contain an `item.completed` event with `item.type: error`
+warning that `skip_host_skill_discovery` is under development and “may behave
+unpredictably”. This is a client initialization warning, not a failed shell
+command. The zero failed-command counts remain correct; a claim of no error
+items would not. The warning was retained verbatim and not suppressed. The
+flag expresses the requested discovery behavior; no full outbound context audit
+was performed. This qualification does not alter the frozen launcher or traces.
