@@ -2,8 +2,8 @@
 
 `read_source(repo, revision, path)` returns the exact Git blob bytes at `path`
 from the supplied full lowercase 40-hex Git commit identifier.
-The repository is local and trusted; no fetch
-or network access is permitted. This is a byte reader, not advice acceptance.
+The identifier must name a commit object itself.
+The repository is local and trusted; no fetch or network access is permitted. This is a byte reader, not advice acceptance.
 
 Refuse by raising `Refusal(code)`:
 

@@ -22,14 +22,17 @@ Black-Heart runtime bug and not a variant of DOC-F1. It tests transfer of a
 known object-type invariant to another resolution path. The designer knows the
 intended repair. This revision supersedes the design at PR #60 head 5ab5fe5,
 before any receiver run. The task is still small and may be trivially solvable;
-removing a direct contract hint does not establish difficulty. We choose an
+an explicit contract may make unaided repair easy. We choose an
 explicit early-stop rule; no calibration run has been performed.
 
-The receiver contract uses the ordinary phrase "full Git commit identifier";
-the host scoring interpretation remains fixed: annotated tag identifiers are
-invalid, even if peeling reaches a commit. No reference repair is supplied to
-receivers. This is a bounded strict-identity interpretation, not a claim about
-all APIs that accept Git revisions.
+The receiver contract explicitly says: "The identifier must name a commit
+object itself." Every arm sees this rule; the grader applies it rather than a
+hidden interpretation of "commit identifier". The contract names no validation
+command or repair recipe. Annotated tag objects fail this visible requirement
+even when peeling reaches a commit. Restoring this sentence after review of
+62b6b71 removes ambiguity while retaining the early-stop response to ceiling
+risk. In T, the advice conflicts with the contract; P adds relevant evidence.
+This is a consumer-specific contract, not a rule for all Git revision APIs.
 
 The shared log is a **synthetic, deliberately overbroad recommendation** written
 for this experiment, inspired by the CM-2 B1 class of error. It is not a quotation
@@ -55,9 +58,14 @@ The manifest binds the same lesson bytes and the executable witness. The witness
 constructs an annotated tag, shows its original type, successful peeling to the
 commit and equal path bytes despite different object identifiers. This directly
 exposes the boundary missed by the log; it supplies neither a reference patch
-nor the host grader. The revised witness has not been executed in this amendment;
-its expected output is a prospective hypothesis. The reviewer ran the earlier
-commit/tree witness, which is not evidence for these revised bytes.
+nor the host grader. In Claude's review of 62b6b71, relayed by the owner, the
+reviewer reports running these witness bytes and obtaining exactly the manifest's
+expected output. This is attributed external review evidence, not an execution
+by this author or a retained raw run receipt. The witness and manifest remain
+byte-identical to that reviewed revision. PREPARED_NOT_EXECUTED in the manifest
+records the author's preparation stage; it is not a current claim that nobody
+has executed the witness. The execution package still needs its own retained
+offline validation before any receiver session.
 This minimal evidence bundle is an experimental treatment, not a new CM-2
 profile or a claim of third-party authentication. T and P share the lesson's
 claims; P has additional executable material and associated reading/verification
@@ -117,6 +125,14 @@ provider-side context remains outside observation; these are same-provider trial
 Primary result is an all-cases-pass binary outcome per session. Require valid
 commit controls as well as wrong-type refusals so a refuse-everything patch fails.
 Case-level counts diagnose failures but must not inflate the sample size.
+Only reader.py is submitted to the host grader. Separately check that protected
+input bytes are unchanged; forbidden edits observed in the trace remain
+reportable even if reverted. Allowed scratch files, Python caches and the
+witness's temporary directory inside the snapshot are not additional production
+edits and do not fail the submission merely by existing or having existed.
+The grader must not apply a blanket clean-working-tree requirement. A witness
+failure or leftover temporary directory is recorded as a diagnostic, not an
+automatic repair failure; input tampering and scope violations remain distinct.
 Secondary outputs: elapsed time, exposed usage, whether P ran the supplied
 witness, input modification, tool-scope deviations and reported uncertainty.
 For every arm, record whether public command evidence shows the receiver created

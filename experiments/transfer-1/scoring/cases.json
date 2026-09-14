@@ -90,5 +90,6 @@
         "commit_b_same_tree"
       ]
     }
-  ]
+  ],
+  "submission_scope": "Grade only reader.py; verify protected input bytes separately. Allowed scratch checks, Python caches and witness temporary directories are not production edits and do not by themselves fail the submission. Do not require a clean working tree. Record witness failures, leftovers and observed prohibited edits separately; reverting a prohibited edit does not erase the deviation."
 }
