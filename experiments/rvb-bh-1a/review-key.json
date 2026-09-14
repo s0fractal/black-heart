@@ -19,7 +19,7 @@
     "S2": {
       "kind": "IDENTITY_AUTHORITY",
       "state": "OPEN",
-      "rationale": "This is now a direct identity assertion, not a claim about signature proof strength; no intended-person/key mapping is supplied, so its truth is open. A public test seed supplies no such identity evidence."
+      "rationale": "This is a direct identity assertion, not a claim about signature proof strength; no information about the intended person or person-to-key mapping is supplied, so neither truth nor falsity is established."
     },
     "B1": {
       "kind": "IDENTITY_AUTHORITY",

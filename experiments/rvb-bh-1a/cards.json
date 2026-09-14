@@ -70,7 +70,7 @@
         "public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
         "identity_mapping_supplied": false
       },
-      "note": "Fixture uses a public deterministic test seed. No mapping from public key to person or authorization is supplied."
+      "note": "No information about the key's owner or any person-to-key mapping is supplied."
     }
   },
   {
@@ -84,7 +84,7 @@
         "public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
         "identity_mapping_supplied": false
       },
-      "note": "Fixture uses a public deterministic test seed. No mapping from public key to person or authorization is supplied."
+      "note": "No information about the key's owner or any person-to-key mapping is supplied."
     }
   },
   {
