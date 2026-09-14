@@ -98,9 +98,10 @@ def main(out):
     hidden = edited.replace(b"expected=y |", b"expected= y |", 1)
     d, p = variant("unrecognized-wrong-claim", hidden)
     controls["wrong_claim_made_unrecognizable"] = {"changed": hidden != edited, **run([sys.executable, "-I", p], d)}
-    none = raw.replace("%🖤 CLAIM: id=".encode(), "%🖤 CLAIM:  id=".encode())
+    # Only the comment lines, which start a line; the runner's own regex text must stay intact.
+    none = raw.replace("\n%🖤 CLAIM: id=".encode(), "\n%🖤 CLAIM:  id=".encode())
     d, p = variant("zero-recognized-claims", none)
-    controls["zero_recognized_claims"] = {"lines_changed": raw.count("%🖤 CLAIM: id=".encode()), **run([sys.executable, "-I", p], d)}
+    controls["zero_recognized_claims"] = {"lines_changed": raw.count("\n%🖤 CLAIM: id=".encode()), **run([sys.executable, "-I", p], d)}
     # -I isolates import paths and user site, not the filesystem: the file can still write.
     wrote = raw.replace(b"import os, sys, re, hashlib\n", b"import os, sys, re, hashlib\nopen('WROTE_MARKER', 'w').write('written')\n", 1)
     d, p = variant("filesystem-write-under-isolation", wrote)
