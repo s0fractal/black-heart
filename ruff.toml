@@ -1,0 +1,7 @@
+# Correctness checks only. No formatting or automatic repairs of evidence files.
+required-version = "==0.16.7"
+target-version = "py311"
+fix = false
+
+[lint]
+select = ["E9", "F631", "F632", "F634", "F821", "F822", "F823"]
