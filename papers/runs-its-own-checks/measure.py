@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Measurements for the paper. Builds the companion polyglot with the existing
-PolyglotDocument, runs it and the repository's own checkers, applies six
+PolyglotDocument, runs it and the repository's own checkers, applies nine
 controls to copies, and reruns the regression modules the paper cites.
 No model calls. Usage: python3 -B measure.py OUTPUT_DIR (must not exist)."""
 import hashlib, json, platform, shutil, subprocess, sys
@@ -93,6 +93,19 @@ def main(out):
                         ("shadow_with_isolation", [sys.executable, "-I", p])):
         r = run(argv, d); r["shadow_executed"] = "SHADOW MODULE EXECUTED" in r["stdout_tail"]
         controls[label] = r
+    # Only recognized claim lines are checked. A space after `expected=` makes the edited
+    # (wrong) first claim unrecognizable, so it silently leaves the check.
+    hidden = edited.replace(b"expected=y |", b"expected= y |", 1)
+    d, p = variant("unrecognized-wrong-claim", hidden)
+    controls["wrong_claim_made_unrecognizable"] = {"changed": hidden != edited, **run([sys.executable, "-I", p], d)}
+    none = raw.replace("%🖤 CLAIM: id=".encode(), "%🖤 CLAIM:  id=".encode())
+    d, p = variant("zero-recognized-claims", none)
+    controls["zero_recognized_claims"] = {"lines_changed": raw.count("%🖤 CLAIM: id=".encode()), **run([sys.executable, "-I", p], d)}
+    # -I isolates import paths and user site, not the filesystem: the file can still write.
+    wrote = raw.replace(b"import os, sys, re, hashlib\n", b"import os, sys, re, hashlib\nopen('WROTE_MARKER', 'w').write('written')\n", 1)
+    d, p = variant("filesystem-write-under-isolation", wrote)
+    r = run([sys.executable, "-I", p], d); r["marker_created"] = (d / "WROTE_MARKER").exists(); r["changed"] = wrote != raw
+    controls["filesystem_write_under_isolation"] = r
     rec["controls"] = controls
 
     rec["suspension_regressions"] = run([sys.executable, "-B", "-m", "unittest", "test_empirical_settlement",
