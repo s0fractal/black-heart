@@ -51,6 +51,7 @@ try:
  with contextlib.redirect_stdout(captured):
   spec=importlib.util.spec_from_file_location('submission', request['source'])
   module=importlib.util.module_from_spec(spec)
+  sys.__stdout__.write('TRANSFER_WORKER_STARTED\\n'); sys.__stdout__.flush()
   spec.loader.exec_module(module)
   try:
    result=module.read_source(request['repo'], request['revision'], request['path'])
@@ -83,17 +84,19 @@ def grade(source, command_prefix=()):
             prefix = command_prefix(root) if callable(command_prefix) else command_prefix
             result = run([*prefix, sys.executable, '-I', '-c', WORKER], cwd=root,
                          stdin=json.dumps(request).encode(), timeout=10)
+            marker, separator, body = result['stdout'].partition('\n')
+            started = bool(separator) and marker == 'TRANSFER_WORKER_STARTED'
             try:
-                observed = json.loads(result['stdout'])
+                observed = json.loads(body if started else result['stdout'])
             except (ValueError, TypeError):
                 observed = {'invalid_worker_output': True}
-            passed = (not result['timed_out'] and result['exit_code'] == 0 and observed == expected)
+            passed = (started and not result['timed_out'] and result['exit_code'] == 0 and observed == expected)
             results.append({'id': case_id, 'revision': revision, 'path': path,
                             'expected': expected, 'observed': observed,
-                            'pass': passed, 'worker': result})
+                            'pass': passed, 'worker_started': started, 'worker': result})
     specified = {c['id'] for c in json.loads((ROOT / 'scoring/cases.json').read_text())['cases']}
     assert {c['id'].split('/')[0] for c in results} == specified
-    return {'valid': all(c['worker']['exit_code'] == 0 or c['worker']['timed_out'] for c in results),
+    return {'valid': all(c['worker_started'] for c in results),
             'pass': all(c['pass'] for c in results), 'source_sha256': sha(source), 'cases': results}
 
 if __name__ == '__main__':

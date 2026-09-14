@@ -13,6 +13,7 @@ from controls import sources
 from decision import SCHEDULE, decide
 from grader import grade
 from runtime import preflight, sandbox
+from regressions import crash_checks, isolation_check
 
 
 def decision_checks():
@@ -78,8 +79,13 @@ def collect(output):
         witness['pass'] = witness['exit_code'] == 0 and json.loads(witness['stdout'] or 'null') == expected
         witness['temporary_directory_removed'] = sorted(p.name for p in root.iterdir()) == ['witness.py']
         isolation = preflight(root)
+    crash_reports=crash_checks(output,sandbox)
+    for name,result in crash_reports.items(): write_json(output/(name+'.json'),result)
+    boundary=isolation_check()
+    report['regressions']={'crash_receipts':{name:name+'.json' for name in crash_reports},
+                           'worker_crashes_are_valid_failures':True,'isolation':boundary}
     report.update(controls=results, witness=witness, isolation=isolation, decisions=decision_checks())
-    report['pass'] = all(r['pass'] for r in results.values()) and witness['pass'] and witness['temporary_directory_removed'] and isolation['pass']
+    report['pass'] = all(r['pass'] for r in results.values()) and witness['pass'] and witness['temporary_directory_removed'] and isolation['pass'] and boundary['pass']
     report['finished_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     write_json(output/'receipt.json', report)
     write_json(output/'sha256.json', {p.name:sha(p) for p in sorted(output.iterdir()) if p.is_file()})

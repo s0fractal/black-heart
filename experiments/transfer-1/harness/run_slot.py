@@ -9,6 +9,7 @@ import json
 import os
 import re
 import signal
+import shutil
 import subprocess
 import threading
 import time
@@ -62,6 +63,8 @@ def audited_rows(root):
                 raise ValueError('INVALID_SECONDARY_OBSERVATION')
         if report['slot']!=i or report['arm']!=arm:
             raise ValueError('WRONG_SLOT_REPORT')
+        if report.get('ephemeral_snapshot') and os.path.lexists(report['ephemeral_snapshot']):
+            raise ValueError('PREVIOUS_SNAPSHOT_NOT_ARCHIVED')
         valid=report['valid'] and audit['valid']
         rows.append({'arm':arm,'pass':report['pass'] and valid,'valid':valid})
     return rows
@@ -70,10 +73,11 @@ def audited_rows(root):
 def execute(package, reviewed_head):
     frozen=verify_package(package,reviewed_head)
     root=Path(frozen['run_root'])
-    if root.parent!=Path('/private/tmp') or not root.name.startswith('transfer1-run-'):
+    if root.parent != Path.home()/'.codex'/'transfer1-runs' or not re.fullmatch('[0-9a-f]{32}', root.name):
         raise ValueError('INVALID_RUN_ROOT')
     if root.is_symlink(): raise ValueError('SYMLINK_RUN_ROOT')
-    root.mkdir(exist_ok=True)
+    root.mkdir(parents=True, exist_ok=True)
+    if root.resolve() != root: raise ValueError('SYMLINK_RUN_PARENT')
     # One host runner at a time; a crash leaves this marker and refuses a retry.
     with (root/'runner.claim').open('x') as f: f.write(utc())
     try:
@@ -95,7 +99,7 @@ def execute(package, reviewed_head):
         if git(snapshot,'rev-parse','HEAD')!=expected['head']: raise ValueError('SNAPSHOT_HEAD')
         for name,digest in expected['files'].items():
             if sha(snapshot/name)!=digest: raise ValueError('SNAPSHOT_BYTES')
-        check=preflight(snapshot)
+        check=preflight(snapshot, root)
         write_json(slot/'preflight.json',check)
         if not check['pass']: raise ValueError('PREFLIGHT_FAILED; NO_MODEL_CALL')
         argv=invocation(snapshot)
@@ -134,6 +138,8 @@ def execute(package, reviewed_head):
         if source.is_file() and not source.is_symlink():
             (slot/'reader.py').write_bytes(source.read_bytes())
         session_elapsed=time.monotonic()-started
+        archived = slot/'snapshot'
+        shutil.move(str(snapshot), str(archived))
         grading=grade(slot/'reader.py',sandbox)
         write_json(slot/'grade.json',grading)
         valid=(all(protected.values()) and malformed==0 and grading.get('valid',True)
@@ -143,8 +149,8 @@ def execute(package, reviewed_head):
                 'protected_inputs':protected,'valid':valid,
                 'pass':valid and code==0 and not timed_out and grading['pass'],
                 'omitted_reasoning_events':omitted,'malformed_events':malformed,
-                'head_after':git(snapshot,'rev-parse','HEAD'),'status_after':git(snapshot,'status','--porcelain'),
-                'snapshot':str(snapshot),'trace_audit':'REQUIRED_BEFORE_NEXT_SLOT'}
+                'head_after':git(archived,'rev-parse','HEAD'),'status_after':git(archived,'status','--porcelain'),
+                'snapshot':str(archived),'ephemeral_snapshot':str(snapshot),'trace_audit':'REQUIRED_BEFORE_NEXT_SLOT'}
         write_json(slot/'result.json',result)
         return result
     except Exception as error:
@@ -158,6 +164,8 @@ def execute(package, reviewed_head):
             write_json(slot/'result.json',failure)
         raise
     finally:
+        if 'snapshot' in locals() and snapshot.exists():
+            shutil.move(str(snapshot), str(slot/'snapshot'))
         (root/'runner.claim').unlink()
 
 if __name__=='__main__':

@@ -7,7 +7,7 @@ from common import verify_inputs, write_json
 from controls import sources
 from decision import decide
 from offline import decision_checks
-from prepare import prepare
+from regressions import crash_checks
 from run_slot import audited_rows
 
 class HarnessTests(unittest.TestCase):
@@ -24,6 +24,10 @@ class HarnessTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);(root/'1').mkdir()
             with self.assertRaises(FileNotFoundError): audited_rows(root)
+
+    def test_submission_crash_is_not_infrastructure_failure(self):
+        with tempfile.TemporaryDirectory() as td:
+            crash_checks(Path(td))
 
     def test_receipt_cannot_overwrite(self):
         with tempfile.TemporaryDirectory() as td:

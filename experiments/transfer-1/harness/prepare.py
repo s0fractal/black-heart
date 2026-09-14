@@ -34,7 +34,7 @@ def prepare(output):
                        'head':git(snapshot,'rev-parse','HEAD'),
                        'files':{name:sha(source) for name,source in sorted(mapping.items())}}
     frozen={'plan_head':PLAN_HEAD,'preparation_head':git(ROOT,'rev-parse','HEAD'),
-            'run_root':'/private/tmp/transfer1-run-'+uuid.uuid4().hex,
+            'run_root':str(Path.home()/'.codex'/'transfer1-runs'/uuid.uuid4().hex),
             'model':MODEL, 'client_version':VERSION, 'settings':settings(),
             'timeout_seconds':300,'schedule':list(SCHEDULE),'inputs':inputs,'arms':arms,
             'harness':{p.name:sha(p) for p in sorted(Path(__file__).parent.glob('*.py'))},
