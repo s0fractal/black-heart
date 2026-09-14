@@ -102,6 +102,7 @@ def main(out):
     none = raw.replace("\n%🖤 CLAIM: id=".encode(), "\n%🖤 CLAIM:  id=".encode())
     d, p = variant("zero-recognized-claims", none)
     controls["zero_recognized_claims"] = {"lines_changed": raw.count("\n%🖤 CLAIM: id=".encode()), **run([sys.executable, "-I", p], d)}
+    controls["zero_recognized_claims"]["sandbox"] = run([sys.executable, "-B", ROOT / "cli.py", "sandbox", p], ROOT)
     # -I isolates import paths and user site, not the filesystem: the file can still write.
     wrote = raw.replace(b"import os, sys, re, hashlib\n", b"import os, sys, re, hashlib\nopen('WROTE_MARKER', 'w').write('written')\n", 1)
     d, p = variant("filesystem-write-under-isolation", wrote)
