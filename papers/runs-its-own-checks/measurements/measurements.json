@@ -1,5 +1,5 @@
 {
-  "commit": "1981386ef4ed37b3c8a593e4350439d2063cbe78",
+  "commit": "30679a4601b1824a8e3132e89464e464927300f3",
   "python": "3.14.7",
   "companion_sha256": "b7a8bab251ff77b1fa10290247a4bef629a1b7762329c0e5a9c72f0f97f2f278",
   "rebuild_identical": true,
@@ -112,6 +112,64 @@
       "stdout_tail": "e8160039⟩\u001b[0m\n\n  \u001b[1;34m[CLAIM S-DIST]\u001b[0m S f g x reduces to f x (g x)\n    Input:    🌿 f g x\n    Result:   f x (g x)\n    Receipt:  \u001b[1;32m⚓ SETTLED ⟨atp:1, hash:81b2889e20ce⟩\u001b[0m\n\n\u001b[1;36m-----------------------------------------------------------------\u001b[0m\n\u001b[1;32m[⚓ GREEN] ALL 3/3 CLAIMS SETTLED DETERMINISTICALLY (5 ATP burned).\u001b[0m\n\u001b[0;32mDocument integrity & proof verification: 100% SOUND.\u001b[0m\n",
       "stderr_tail": "",
       "shadow_executed": false
+    },
+    "wrong_claim_made_unrecognizable": {
+      "changed": true,
+      "argv": [
+        "python3",
+        "-I",
+        "<output>/unrecognized-wrong-claim/companion.pdf"
+      ],
+      "exit": 0,
+      "stdout_tail": "e8160039⟩\u001b[0m\n\n  \u001b[1;34m[CLAIM S-DIST]\u001b[0m S f g x reduces to f x (g x)\n    Input:    🌿 f g x\n    Result:   f x (g x)\n    Receipt:  \u001b[1;32m⚓ SETTLED ⟨atp:1, hash:81b2889e20ce⟩\u001b[0m\n\n\u001b[1;36m-----------------------------------------------------------------\u001b[0m\n\u001b[1;32m[⚓ GREEN] ALL 2/2 CLAIMS SETTLED DETERMINISTICALLY (3 ATP burned).\u001b[0m\n\u001b[0;32mDocument integrity & proof verification: 100% SOUND.\u001b[0m\n",
+      "stderr_tail": "",
+      "sandbox": {
+        "argv": [
+          "python3",
+          "-B",
+          "<repository>/cli.py",
+          "sandbox",
+          "<output>/unrecognized-wrong-claim/companion.pdf"
+        ],
+        "exit": 1,
+        "stdout_tail": "Claim failed settlement: SKK-ID (got x, expected y)\n  [✓] Hermetic claim settled: K-FALSE (🖤 🤍 a b -> b) in 2 ATP.\n  [✓] Hermetic claim settled: S-DIST (🌿 f g x -> f x (g x)) in 1 ATP.\n  [*] Statically evaluated 3 combinator claims under hermetic ATP budget.\n\n======================================================================\n\u001b[1;31m[✗ UNSOUND] Document failed static hermetic verification.\u001b[0m\n",
+        "stderr_tail": ""
+      }
+    },
+    "zero_recognized_claims": {
+      "lines_changed": 3,
+      "argv": [
+        "python3",
+        "-I",
+        "<output>/zero-recognized-claims/companion.pdf"
+      ],
+      "exit": 0,
+      "stdout_tail": "\u001b[1;36m=================================================================\u001b[0m\n\u001b[1;35m  %🖤 BLACK-HEART — SELF-EXECUTING PROOF-CARRYING PDF RUNNER\u001b[0m\n\u001b[0;37m  Target file: companion.pdf (8630 bytes)\u001b[0m\n\u001b[1;36m=================================================================\u001b[0m\n\u001b[1;33m[!] No %🖤 claims discovered in PDF comments.\u001b[0m\n",
+      "stderr_tail": "",
+      "sandbox": {
+        "argv": [
+          "python3",
+          "-B",
+          "<repository>/cli.py",
+          "sandbox",
+          "<output>/zero-recognized-claims/companion.pdf"
+        ],
+        "exit": 0,
+        "stdout_tail": "-DIST (🌿 f g x -> f x (g x)) in 1 ATP.\n  [*] Statically evaluated 3 combinator claims under hermetic ATP budget.\n\n======================================================================\n\u001b[1;32m[✓ SOUND] Recognized elements verified statically without executing host Python.\u001b[0m\n          scope: 0 signature(s) and 3 claim(s) positively verified among the recognized elements -- NOT the whole document\n",
+        "stderr_tail": ""
+      }
+    },
+    "filesystem_write_under_isolation": {
+      "argv": [
+        "python3",
+        "-I",
+        "<output>/filesystem-write-under-isolation/companion.pdf"
+      ],
+      "exit": 0,
+      "stdout_tail": "e8160039⟩\u001b[0m\n\n  \u001b[1;34m[CLAIM S-DIST]\u001b[0m S f g x reduces to f x (g x)\n    Input:    🌿 f g x\n    Result:   f x (g x)\n    Receipt:  \u001b[1;32m⚓ SETTLED ⟨atp:1, hash:81b2889e20ce⟩\u001b[0m\n\n\u001b[1;36m-----------------------------------------------------------------\u001b[0m\n\u001b[1;32m[⚓ GREEN] ALL 3/3 CLAIMS SETTLED DETERMINISTICALLY (5 ATP burned).\u001b[0m\n\u001b[0;32mDocument integrity & proof verification: 100% SOUND.\u001b[0m\n",
+      "stderr_tail": "",
+      "marker_created": true,
+      "changed": true
     }
   },
   "suspension_regressions": {
@@ -126,7 +184,7 @@
     ],
     "exit": 0,
     "stdout_tail": "",
-    "stderr_tail": "....................\n----------------------------------------------------------------------\nRan 20 tests in 5.452s\n\nOK\n"
+    "stderr_tail": "....................\n----------------------------------------------------------------------\nRan 20 tests in 5.654s\n\nOK\n"
   },
   "cm3_saved_exchange": {
     "argv": [
