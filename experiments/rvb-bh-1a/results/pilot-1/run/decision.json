@@ -1,0 +1,17 @@
+{
+  "status": "INVALID",
+  "remaining": [
+    {
+      "slot": 2,
+      "status": "NOT_RUN"
+    },
+    {
+      "slot": 3,
+      "status": "NOT_RUN"
+    },
+    {
+      "slot": 4,
+      "status": "NOT_RUN"
+    }
+  ]
+}

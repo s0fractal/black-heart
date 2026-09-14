@@ -1,0 +1,39 @@
+{
+  "argv": [
+    "claude",
+    "--print",
+    "--safe-mode",
+    "--tools",
+    "",
+    "--disable-slash-commands",
+    "--strict-mcp-config",
+    "--mcp-config",
+    "{\"mcpServers\":{}}",
+    "--setting-sources",
+    "",
+    "--settings",
+    "{\"autoMemoryEnabled\":false}",
+    "--no-session-persistence",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--model",
+    "claude-sonnet-5",
+    "--effort",
+    "medium",
+    "--system-prompt",
+    "Annotate the supplied cards only. Use no tools. Return only the requested JSON."
+  ],
+  "prompt_sha256": "7b41290aabdaa9c1b8a172c8e0bab8079199aeffc5cfed0b5cc9c46c9a19abd5",
+  "started_at": "2026-09-14T11:52:08.708483+00:00",
+  "version": "2.1.270 (Claude Code)",
+  "binary_sha256": "a506b6d970a4cf44f6abdb53a81ddcd5d3b0ce042a95c502fe9d1f946bdb8807",
+  "requested_model": "claude-sonnet-5",
+  "explicit_environment": {
+    "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
+    "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "DISABLE_AUTOUPDATER": "1",
+    "CLAUDE_CODE_DISABLE_ATTACHMENTS": "1"
+  }
+}

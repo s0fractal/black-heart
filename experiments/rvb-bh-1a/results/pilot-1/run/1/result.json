@@ -1,0 +1,36 @@
+{
+  "finished_at": "2026-09-14T11:52:18.967515+00:00",
+  "slot": {
+    "slot": 1,
+    "annotator": "A",
+    "replicate": 1,
+    "order": [
+      "B2",
+      "R2",
+      "D2",
+      "S1",
+      "D1",
+      "B1",
+      "R1",
+      "S2"
+    ]
+  },
+  "exit_code": 0,
+  "timed_out": false,
+  "infrastructure_valid": false,
+  "format_valid": false,
+  "omitted_reasoning_blocks": 0,
+  "rewritten_lines": 0,
+  "malformed_lines": 0,
+  "tool_event_seen": false,
+  "unknown_events": [],
+  "init_count": 1,
+  "init_errors": [
+    "init field set changed",
+    "init field changed: messaging_socket_path"
+  ],
+  "observed_models": [
+    "claude-sonnet-5"
+  ],
+  "trace_audit": "REQUIRED_BEFORE_NEXT_SLOT"
+}

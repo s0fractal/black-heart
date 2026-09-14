@@ -1,0 +1,19 @@
+{
+  "claimed_at": "2026-09-14T11:52:07.790747+00:00",
+  "slot": {
+    "slot": 1,
+    "annotator": "A",
+    "replicate": 1,
+    "order": [
+      "B2",
+      "R2",
+      "D2",
+      "S1",
+      "D1",
+      "B1",
+      "R1",
+      "S2"
+    ]
+  },
+  "reviewed_head": "9747164199334e01fb971a369bca8e71ff6f8891"
+}

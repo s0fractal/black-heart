@@ -1,0 +1,6 @@
+{
+  "ok": true,
+  "requests_checked": 1,
+  "tools": 0,
+  "context": "prompt + pinned system blocks + bounded native environment block"
+}
