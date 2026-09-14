@@ -98,6 +98,7 @@ def main(out):
     hidden = edited.replace(b"expected=y |", b"expected= y |", 1)
     d, p = variant("unrecognized-wrong-claim", hidden)
     controls["wrong_claim_made_unrecognizable"] = {"changed": hidden != edited, **run([sys.executable, "-I", p], d)}
+    controls["wrong_claim_made_unrecognizable"]["sandbox"] = run([sys.executable, "-B", ROOT / "cli.py", "sandbox", p], ROOT)
     # Only the comment lines, which start a line; the runner's own regex text must stay intact.
     none = raw.replace("\n%🖤 CLAIM: id=".encode(), "\n%🖤 CLAIM:  id=".encode())
     d, p = variant("zero-recognized-claims", none)
