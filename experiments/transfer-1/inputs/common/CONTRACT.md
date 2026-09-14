@@ -1,13 +1,13 @@
 # read_source contract
 
 `read_source(repo, revision, path)` returns the exact Git blob bytes at `path`
-from the supplied full lowercase 40-hex Git commit identifier. The identifier
-must name a commit object itself. The repository is local and trusted; no fetch
+from the supplied full lowercase 40-hex Git commit identifier.
+The repository is local and trusted; no fetch
 or network access is permitted. This is a byte reader, not advice acceptance.
 
 Refuse by raising `Refusal(code)`:
 
-- Malformed revision or an existing object of the wrong type: `INVALID_COMMIT`.
+- Malformed revision or an existing revision that is not a valid commit identifier: `INVALID_COMMIT`.
 - Missing revision object, absent path, or a path that is not a blob:
   `MISSING_SOURCE`.
 

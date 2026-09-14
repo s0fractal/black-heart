@@ -1,0 +1,48 @@
+{
+  "scope": "Host-only prospective decision rule; no model outcomes observed.",
+  "schedule": [
+    [
+      "N",
+      "T",
+      "P"
+    ],
+    [
+      "T",
+      "P",
+      "N"
+    ],
+    [
+      "P",
+      "N",
+      "T"
+    ]
+  ],
+  "priority": [
+    {
+      "when": "Any infrastructure, isolation or grading validity failure",
+      "action": "Stop remaining slots; retain launched outcomes; ENVIRONMENT_INDETERMINATE; no effect-based decision."
+    },
+    {
+      "when": "After first complete valid block, all three binary outcomes equal",
+      "action": "Stop remaining six slots as NOT_RUN; EARLY_UNIFORM_SUCCESS or EARLY_UNIFORM_FAILURE; redesign or separately calibrate in a new reviewed study; never pool."
+    },
+    {
+      "when": "After all nine valid slots, all nine succeed or all nine fail",
+      "action": "CEILING_OR_FLOOR; unsuitable task for discrimination; redesign without pooling. This defensive branch is unreachable under the early uniform-block rule."
+    },
+    {
+      "when": "All nine valid slots complete and successes_P - successes_T >= 2",
+      "action": "FOLLOWUP_CANDIDATE only; propose a larger preregistered multi-task study, not demonstrated general advantage."
+    },
+    {
+      "when": "All nine valid slots complete and successes_P < successes_T",
+      "action": "NEGATIVE_PILOT_SIGNAL; do not advance on a claimed packet advantage; inspect costs and failures descriptively."
+    },
+    {
+      "when": "All nine valid slots complete and successes_P - successes_T is 0 or 1",
+      "action": "INDETERMINATE; no positive advancement decision from this pilot."
+    }
+  ],
+  "early_stop_limit": "Three equal results do not establish a population ceiling or floor; the conservation rule can miss a real effect. No arm-wise out-of-three rates or full-pilot threshold after early stop.",
+  "baseline_interpretation": "Always report N. If P exceeds T but does not exceed N, interpret as possible recovery from misleading advice, not improvement over unaided repair."
+}

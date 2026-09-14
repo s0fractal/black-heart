@@ -8,9 +8,10 @@ checks still require implementation and review before any run.
 
 ## Question and specimen
 
-Does access to checkable experience improve a new consumer repair over the same
-lesson stated as plain text? The primary contrast is **P versus T**, not P versus
-no information. N provides a secondary baseline for receiving the lesson at all.
+Can relevant executable evidence help a receiver reject an overly broad repair
+recommendation, compared with receiving exactly the same recommendation as text?
+The primary contrast is **P versus T**, not P versus no information. N measures
+unaided repair and the possible harm of the recommendation.
 
 The real source lesson is CM-2 B1: a shape-valid tree SHA was accepted as a commit
 pin before the repair. See [CM-2 B1](../../examples/model-experience/cm2/README.md#b1-amendment).
@@ -19,7 +20,25 @@ The target is a **new synthetic consumer**, `inputs/common/reader.py`: it peels
 requires the original object itself to be a commit. This is not a newly found
 Black-Heart runtime bug and not a variant of DOC-F1. It tests transfer of a
 known object-type invariant to another resolution path. The designer knows the
-intended repair; the source and contract reveal the problem to a capable reader.
+intended repair. This revision supersedes the design at PR #60 head 5ab5fe5,
+before any receiver run. The task is still small and may be trivially solvable;
+removing a direct contract hint does not establish difficulty. We choose an
+explicit early-stop rule; no calibration run has been performed.
+
+The receiver contract uses the ordinary phrase "full Git commit identifier";
+the host scoring interpretation remains fixed: annotated tag identifiers are
+invalid, even if peeling reaches a commit. No reference repair is supplied to
+receivers. This is a bounded strict-identity interpretation, not a claim about
+all APIs that accept Git revisions.
+
+The shared log is a **synthetic, deliberately overbroad recommendation** written
+for this experiment, inspired by the CM-2 B1 class of error. It is not a quotation
+from CM-2, a genuine historical model observation, or the accepted CM-2 repair.
+It recommends peeling with rev-parse as sufficient validation. T and P receive
+identical text without a correctness label; this host-only plan discloses the
+construction. The experiment concerns resistance to misleading advice, not just
+reuse of correct memory. Designer and planned receivers are Codex gpt-6-astra;
+shared model habits and designer wording are explicit threats to generalization.
 
 ## Frozen conditions
 
@@ -33,9 +52,12 @@ The task prompt refers to optional lesson material in the same way in all arms.
 | P — checkable packet | The same `lesson/lesson.txt`, plus witness.py and manifest.json from `inputs/packet/` |
 
 The manifest binds the same lesson bytes and the executable witness. The witness
-shows commit/tree type and equal path bytes; it does not contain the target
-consumer's tag-peeling cases or a reference patch. It has not been executed as
-part of this planning PR; its expected output is a preregistered hypothesis.
+constructs an annotated tag, shows its original type, successful peeling to the
+commit and equal path bytes despite different object identifiers. This directly
+exposes the boundary missed by the log; it supplies neither a reference patch
+nor the host grader. The revised witness has not been executed in this amendment;
+its expected output is a prospective hypothesis. The reviewer ran the earlier
+commit/tree witness, which is not evidence for these revised bytes.
 This minimal evidence bundle is an experimental treatment, not a new CM-2
 profile or a claim of third-party authentication. T and P share the lesson's
 claims; P has additional executable material and associated reading/verification
@@ -48,11 +70,18 @@ new freeze; never rewrite a launched arm to improve its observed outcome.
 
 ## Units, order and resource limit
 
-Exploratory pilot: **9 new sessions, 3 per arm**, one fixed target task. Sessions
-are repeated trials on one task, not nine independent engineering problems.
+Exploratory pilot: **at most 9 new sessions, up to 3 per arm**, one fixed target
+task. Sessions are repeated trials on one task, not nine independent engineering
+problems.
 Order is fixed now in three balanced blocks: **N,T,P / T,P,N / P,N,T**.
 This reduces simple order imbalance; it is not randomized allocation and does
 not eliminate time effects or service drift. Report raw outcomes by block.
+After the first complete valid block, stop if all three outcomes equal: record
+EARLY_UNIFORM_SUCCESS or EARLY_UNIFORM_FAILURE and six remaining NOT_RUN slots.
+This is a resource-conservation choice with a risk of missing a real effect,
+not measured difficulty or proof of a population ceiling/floor. No further
+outcome-based interim stop is allowed. Otherwise complete the remaining blocks.
+No calibration model session is included or authorized by this plan revision.
 
 Use one pinned Codex model (`gpt-6-astra` requested uniformly), one CLI version,
 same settings, same tool permissions and 300 seconds maximum per session.
@@ -88,25 +117,57 @@ provider-side context remains outside observation; these are same-provider trial
 Primary result is an all-cases-pass binary outcome per session. Require valid
 commit controls as well as wrong-type refusals so a refuse-everything patch fails.
 Case-level counts diagnose failures but must not inflate the sample size.
-Secondary outputs: elapsed time, exposed usage, whether P ran the witness,
-input modification, tool-scope deviations, and concise reported uncertainty.
-Failed/late/missing patches count as failures in the primary table; distinguish
-client failures descriptively without selectively removing them.
+Secondary outputs: elapsed time, exposed usage, whether P ran the supplied
+witness, input modification, tool-scope deviations and reported uncertainty.
+For every arm, record whether public command evidence shows the receiver created
+an annotated tag for a check, and whether the check actually executed. Distinguish
+supplied-witness execution from a receiver-authored check. Use observed / not
+observed / unknown (incomplete trace); absence of a command is not evidence of an
+unobserved reasoning process. Retain supporting event identifiers and commands.
 
-Report N/T/P successes out of 3, per-block results and P−T difference. With this
-small single-task pilot, do not claim statistical significance, generalization,
-model independence or a causal benefit established across tasks. If all arms
-succeed, report a ceiling/no demonstrated advantage; if all fail, report failure
-of the task/setup. Do not replace the task and pool new trials with these nine.
-P≤T, P>T and indeterminate outcomes are all admissible. Any broader experiment
-requires its own reviewed plan.
+Failed, late or missing patches count as primary failures. A normal session
+reaching its 300-second limit is a failure, not grounds for replacement.
+Infrastructure, isolation or grader faults invalidate interpretation: stop,
+retain assigned outcomes and report ENVIRONMENT_INDETERMINATE; do not silently
+exclude or rerun them. A deliberately denied out-of-scope command is a recorded
+deviation, not automatically an infrastructure fault.
+
+[scoring/decision.json](scoring/decision.json) fixes the ordered decision rule:
+
+| First applicable condition | Decision and next action |
+| --- | --- |
+| Infrastructure, isolation or grading validity failure | Stop; environment-indeterminate; repair setup under a new reviewed plan |
+| First block has three successes or three ordinary failures | Stop six remaining slots; early uniform result; redesign or separately calibrate without pooling |
+| Complete pilot ceiling/floor | Unsuitable for discrimination; redesign without pooling (defensive rule, unreachable with the first-block stop) |
+| Complete valid pilot: P minus T successes at least 2 | Candidate for a larger preregistered multi-task study; no general advantage claim |
+| Complete valid pilot: P fewer successes than T | Negative pilot signal; no advancement based on a claimed packet advantage |
+| Complete valid pilot: P minus T successes 0 or 1 | Indeterminate; no positive advancement decision from this pilot |
+
+After early stop, report one observed outcome per arm and six NOT_RUN slots,
+not successes out of three and not the complete-pilot threshold. After all nine,
+report successes out of three per arm, the raw block outcomes and P minus T.
+Always report N alongside that contrast: P > T with P <= N supports, at most,
+recovery from misleading advice, not improvement over unaided repair. P adds
+relevant informational content as well as executability; this design cannot
+isolate the value of execution from simply reading the witness or its expected
+output. Do not condition the primary comparison on whether a receiver ran it.
+
+Thresholds are exploratory resource decisions, not statistical significance.
+One task and same-model sessions cannot establish generalization or model
+independence. Any redesign or follow-up requires a separate reviewed plan and
+must not pool its sessions with this pilot.
 
 ## Gates and next work
 
 1. Review this design and the exact common inputs, plain log, packet and cases.
 2. Implement the deterministic fixture/grader, launcher and snapshot builder in
    this experiment task. Check the flawed baseline and a host-only reference
-   repair offline; freeze and review that execution package before model calls.
+   repair offline. Also demonstrate rejection of every negative control named in
+   cases.json: post-peel type check, refuse-all, peelable-object acceptance,
+   missing/wrong-type confusion and byte decoding. Retain each case result and
+   ensure rejection is semantic, not an import/fixture error. Validate revised
+   witness output and decision branches offline, then freeze and review that
+   execution package before model calls.
 3. Commit/push the approved input snapshots, schedules and digests before the
    first session. Preserve every launched slot and stop at the fixed limit.
 4. Review results before merge or any FEEDBACK-1 work. FEEDBACK-1 must retain

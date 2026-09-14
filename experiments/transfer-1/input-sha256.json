@@ -1,9 +1,10 @@
 {
-  "inputs/common/CONTRACT.md": "e559c242c73c6cc2a1783420d6b7d6525b72b3578d8826e40a5a25c527c7b56c",
+  "inputs/common/CONTRACT.md": "903444ef1b0441654fab8095122d0d1159427e6e8fc73f220d658a15ef9ef7e9",
   "inputs/common/reader.py": "ffc57cb0343e5d67417bec0d1a91c7e122866eaa3654b16081496332953030b5",
   "inputs/common/task.txt": "9a2204c6677e91d35dd6d83242cae3c84684dc2eef4fff4c9dd4e9b1aa6eabcf",
-  "inputs/lesson/lesson.txt": "f8de1ee7d39aff374e005c1b4b8cf95ab701ca8156bf0500968899c316ae845a",
-  "inputs/packet/manifest.json": "4751bfb081057f12a51a7803b6b2e8debe9fa49a550d34e836338948b4b0d165",
-  "inputs/packet/witness.py": "976895399325ea6e16641cfb20da1468be14d442de1cec54d73722907548384c",
-  "scoring/cases.json": "84c5e8f2de3d62d7eda593fd4dd6f2f515656ec317eddbaa53924024a44a79d1"
+  "inputs/lesson/lesson.txt": "f9f9eea5c7fbbcd505ba424ee04703dc2d2675d10bb70083fbc7d82b34f23bb9",
+  "inputs/packet/manifest.json": "ebb4cfb63ffafe0e20ac3f0e8428b0b76b6ffbf3fee387269e12aed0205f955f",
+  "inputs/packet/witness.py": "a8f581f0ca77f6c8754796de3e9b4699e07a878ac4ce929957af138a27087572",
+  "scoring/cases.json": "66db10d83ba1f17ecaf4372b7b526bdc2ad8c9e7447a09313ed7bed636695c5d",
+  "scoring/decision.json": "b6c397d4adf8bc265f09ea28f13c0803ed4f304e5b9c6098617ae64324696702"
 }

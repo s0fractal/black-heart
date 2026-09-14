@@ -15,9 +15,14 @@ def main():
         git('-c','user.name=TRANSFER fixture','-c','user.email=transfer@example.invalid',
             '-c','commit.gpgsign=false','-c','core.hooksPath=/dev/null','commit','-qm','source')
         commit=git('rev-parse','HEAD').decode().strip()
-        tree=git('rev-parse','HEAD^{tree}').decode().strip()
+        git('-c','user.name=TRANSFER fixture','-c','user.email=transfer@example.invalid',
+            '-c','tag.gpgSign=false','tag','-a','sample','-m','source tag',commit)
+        tag=git('rev-parse','refs/tags/sample').decode().strip()
+        peeled=git('rev-parse','--verify',tag+'^{commit}').decode().strip()
         result={'commit_type':git('cat-file','-t',commit).decode().strip(),
-                'tree_type':git('cat-file','-t',tree).decode().strip(),
-                'same_path_bytes':git('show',commit+':source.txt')==git('show',tree+':source.txt')}
+                'tag_type':git('cat-file','-t',tag).decode().strip(),
+                'peeled_equals_commit':peeled==commit,
+                'original_tag_equals_commit':tag==commit,
+                'same_path_bytes':git('show',commit+':source.txt')==git('show',tag+':source.txt')}
         print(json.dumps(result,sort_keys=True))
 if __name__=='__main__': main()
