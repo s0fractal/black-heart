@@ -1,0 +1,19 @@
+{
+  "reviewer": "Codex operator; same provider, not independent review",
+  "audited_at": "2026-09-14T02:30:17.036100+00:00",
+  "result_sha256": "21e9f560e8f9f4da84ec9c0da4fc584a255624ca666432e358f6d2360132b3f2",
+  "events_sha256": "d76c02840d9f93516d465cdf6bb8b9c20a66c4e35dc018af78892308c8133295",
+  "valid": true,
+  "supplied_witness_run": "observed",
+  "receiver_created_tag": "observed",
+  "tag_check_executed": "observed",
+  "evidence": [
+    "Inspected all 17 public JSONL events. Item_3 reads the contract, source and all lesson files. Item_5 changes only reader.py.",
+    "Item_6 executes supplied witness.py once with zero exit and output matching the manifest. No receiver digest-verification command is observed.",
+    "Item_7 independently constructs an annotated tag with mktag in a local scratch repository and runs refusal checks, reporting 26 checks. All four completed command executions exit zero.",
+    "Protected input digests match. No protected modification (including reverted edits), successful foreign experiment-content read or network command is observed. Scratch repositories are inside the snapshot.",
+    "Experimental skill-discovery warning and denied Git cache/ignore accesses are retained. Audit is limited to public events and byte checks, not provider-side hidden context or independent model attestation."
+  ],
+  "completed_commands": 4,
+  "failed_auxiliary_commands": 0
+}

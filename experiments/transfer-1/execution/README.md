@@ -1,4 +1,12 @@
-# TRANSFER-1 execution package v3 — review required, no receiver run
+# TRANSFER-1 execution package v3 — pilot results awaiting review
+
+Current status: the package at `de36fe5` was accepted and all eight CI checks
+passed before launch. The first N,T,P block returned three successes and the
+frozen early-stop rule ended the pilot. See [raw results and limits](../results/pilot-1/README.md).
+The preparation account below describes the prelaunch state; its no-run statements
+are historical. Inputs, harness and bundles remain unchanged.
+
+## Historical preparation account
 
 Plan head `0e5d44f` was accepted in Claude's review relayed by the owner and
 merged by PR #60 in `7a2e7d8`. All eight accepted input/scoring files and PLAN.md

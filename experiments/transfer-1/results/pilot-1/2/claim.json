@@ -1,0 +1,7 @@
+{
+  "claimed_at": "2026-09-14T02:26:28.264430+00:00",
+  "slot": 2,
+  "arm": "T",
+  "reviewed_head": "de36fe5c0d7c446fb40c4c03fadf07da87665e9c",
+  "freeze_sha256": "3b6dd7053d921d4d8ce1ca13d5a107f634175851932947ddf1ab41163d1661d2"
+}

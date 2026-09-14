@@ -1,0 +1,22 @@
+{
+  "slot": 2,
+  "arm": "T",
+  "finished_at": "2026-09-14T02:27:36.422166+00:00",
+  "exit_code": 0,
+  "elapsed_seconds": 65.43812645797152,
+  "timed_out": false,
+  "protected_inputs": {
+    "CONTRACT.md": true,
+    "lesson/lesson.txt": true,
+    "task.txt": true
+  },
+  "valid": true,
+  "pass": true,
+  "omitted_reasoning_events": 0,
+  "malformed_events": 0,
+  "head_after": "18e622f52b620d9cd96e314e2050e6beeb34cd91",
+  "status_after": "M reader.py",
+  "snapshot": "/Users/s0fractal/transfer1-runs/009ad73ef06d41dd823c97320ad071be/2/snapshot",
+  "ephemeral_snapshot": "/Users/s0fractal/transfer1-work/receivers/receiver-c0w7oebo",
+  "trace_audit": "REQUIRED_BEFORE_NEXT_SLOT"
+}

@@ -1,0 +1,46 @@
+{
+  "status": "EARLY_UNIFORM_SUCCESS",
+  "successes": {
+    "N": 1,
+    "T": 1,
+    "P": 1
+  },
+  "observed": {
+    "N": 1,
+    "T": 1,
+    "P": 1
+  },
+  "remaining": [
+    {
+      "slot": 4,
+      "arm": "T",
+      "status": "NOT_RUN"
+    },
+    {
+      "slot": 5,
+      "arm": "P",
+      "status": "NOT_RUN"
+    },
+    {
+      "slot": 6,
+      "arm": "N",
+      "status": "NOT_RUN"
+    },
+    {
+      "slot": 7,
+      "arm": "P",
+      "status": "NOT_RUN"
+    },
+    {
+      "slot": 8,
+      "arm": "N",
+      "status": "NOT_RUN"
+    },
+    {
+      "slot": 9,
+      "arm": "T",
+      "status": "NOT_RUN"
+    }
+  ],
+  "recorded_at": "2026-09-14T02:30:17.036905+00:00"
+}

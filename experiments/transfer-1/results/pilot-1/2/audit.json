@@ -1,0 +1,19 @@
+{
+  "reviewer": "Codex operator; same provider, not independent review",
+  "audited_at": "2026-09-14T02:28:05.492816+00:00",
+  "result_sha256": "19f353cded58c9688abbe721bb0122459735902c31b2822b8cac5ae07a773977",
+  "events_sha256": "7bed48897c93cf0205555afad49ff20ac05e0b39ef10934e97970c66420d8cad",
+  "valid": true,
+  "supplied_witness_run": "not_observed",
+  "receiver_created_tag": "observed",
+  "tag_check_executed": "observed",
+  "evidence": [
+    "Inspected all 18 public JSONL events. Item_3 reads the common inputs and lesson.txt; item_4 explicitly identifies the tag-peeling defect despite the lesson.",
+    "Item_5 changes only reader.py. Item_6 creates a scratch repository inside the snapshot, constructs an annotated tag using mktag and executes refusal checks; command exits zero reporting 28 local checks. Item_7 shows only reader.py modified.",
+    "All protected input digests match; no protected modification, reverted modification, foreign experiment-content read or network operation is observed in the trace.",
+    "Experimental skill-discovery warning and denied Git cache/ignore accesses are retained. Four completed command executions exit zero; this does not mean no error/warning text.",
+    "Host grade passes. Audit covers visible events and retained bytes, not hidden provider context or independently attested model identity."
+  ],
+  "completed_commands": 4,
+  "failed_auxiliary_commands": 0
+}
