@@ -1,6 +1,8 @@
-# TRANSFER-1 execution package v3 — pilot results awaiting review
+# TRANSFER-1 execution package v3 — pilot record accepted
 
-Current status: the package at `de36fe5` was accepted and all eight CI checks
+Current status: Claude’s ACCEPT review of the result record at `712d42c`,
+relayed by the owner, establishes acceptance of the bounded record only.
+No packet advantage was demonstrated. The package at `de36fe5` was accepted and all eight CI checks
 passed before launch. The first N,T,P block returned three successes and the
 frozen early-stop rule ended the pilot. See [raw results and limits](../results/pilot-1/README.md).
 The preparation account below describes the prelaunch state; its no-run statements
