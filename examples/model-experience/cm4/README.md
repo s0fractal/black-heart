@@ -1,6 +1,6 @@
 # CM-4 — local experience skill
 
-**ACTIVE / READY FOR REVIEW.** CM-3 is accepted. This slice chooses
+**COMPLETE / ACCEPTED WITH BOUNDED COVERAGE.** CM-3 is accepted. This slice chooses
 [a skill](../../../.agents/skills/black-heart-experience/SKILL.md) over the existing
 CM-2 CLI: the accepted receiver used shell/file tools successfully, and no new
 server or transport is required for local save, search and inspection.
@@ -90,9 +90,9 @@ Observed agent support is **Codex in this task, with explicit loading of the
 repository skill**. Claude Code automatic discovery and execution have not been
 configured or tested. No cross-agent automatic-discovery claim is made.
 
-CM-4 remains partial / ACTIVE. The owner-selected retrieval request was tested;
+At the PR #57 lookup stage, CM-4 remained partial / ACTIVE. The owner-selected retrieval request was tested;
 a separate natural-language “save this experience” route and the advice-replay
-route still need behavioral trials before claiming full coverage. Record
+route still needed behavioral trials before claiming full coverage. Record
 retention after retrieval is not a substitute for testing the standalone save
 request. Component filtering retrieved the full example corpus; task-summary
 wording such as “suspended” versus “unsettled” can miss relevant records, so
@@ -103,5 +103,17 @@ partial textual matches should be broadened rather than treated as exhaustive.
 The limitations above describe the accepted lookup slice. Separate
 [save and replay trials](routes/README.md) now record two fresh Codex CLI
 processes with explicit skill loading, frozen inputs and retained outcomes.
-Both completed their bounded tasks; CM-4 remains ACTIVE until that additional
-coverage is reviewed. The original lookup reports and records are unchanged.
+Both completed their bounded tasks and were accepted at
+`cc0cfbe5f0bb75f36ac9547125462c17f0fe3082` in PR #58, merged as
+`1298936a7e5b7e0586c48bacba6deedac5fe6162`. CM-4 is COMPLETE within these limits:
+
+- Codex only, with explicit skill loading; Claude Code was not tested.
+- The operator supplied the replay checker, one-run authorization, output path
+  and relation-pinning guidance; autonomous checker selection was not tested.
+- The tasks and sessions used the same provider; independence is not established.
+
+The experimental host-skill-discovery flag emitted a retained warning; see the
+[route qualifications](routes/README.md#accepted-coverage-and-client-warning).
+The original lookup reports and records are unchanged. Remaining research
+questions move to TRANSFER-1 before FEEDBACK-1, with a separate reviewed plan
+before each launch.
