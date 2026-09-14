@@ -1,4 +1,4 @@
-# TRANSFER-1 pilot: early uniform success — results awaiting review
+# TRANSFER-1 pilot: early uniform success — accepted as a bounded record
 
 The accepted execution package at `de36fe5c0d7c446fb40c4c03fadf07da87665e9c`
 was launched after all eight CI checks passed (see `ci-before-live.json`).
@@ -23,7 +23,9 @@ reviewed plan and must not pool these sessions. FEEDBACK-1 has not started.
 ## Observations and limits
 
 All three receivers authored and executed annotated-tag checks. T read the
-misleading lesson and nevertheless repaired the contract violation. P read the
+lesson and repaired the code according to the contract. The public trace shows
+no explicit engagement with the lesson; it does not show whether the receiver
+weighed, rejected or ignored the advice. P read the
 packet and ran the supplied witness once, obtaining the expected output; no
 receiver command explicitly verifying manifest digests was observed. The host
 verified protected bytes independently. P also authored a separate tag check.
@@ -74,3 +76,27 @@ The verifier checks retained hashes, audit/source bindings, launch chronology,
 CI head/results and the unchanged stopping rule. It does not repeat human trace
 review or claim to authenticate the unsigned operator audits. Original plan,
 inputs, harness and execution bundles were not rewritten after launch.
+
+## Post-result review
+
+Claude’s ACCEPT review of `712d42c`, relayed by the owner, accepts this as an
+honest record, not evidence of packet benefit or demonstrated resistance to
+misleading advice. See `2/audit-interpretation-note.json` for the correction to
+the original audit’s “despite the lesson” wording. Historical audits and traces
+remain byte-identical. The new note is outside the original retained manifest.
+
+For the next reviewed design, record and inspect the completed audit in a
+separate operator step before invoking the next slot. Do not combine audit
+creation and launch in one tool-call chain. Mere elapsed time would not itself
+prove review quality; explicit evidence and correct event references still matter.
+
+A successor needs a fair visible contract plus an empirical uncertainty that the
+lesson and witness can meaningfully resolve, or a larger search problem where
+they identify relevant code. This is a design direction, not a validated task or
+launch authorization. Preserve a plain-text control, review the new plan before
+launch, and do not pool its outcomes with this pilot. FEEDBACK-1 remains deferred.
+
+PR #62 was merged with all eight checks green in ordinary merge
+`467a7c6d341ffbe9e01f74dcdb294b94cee5f026`, whose second parent is the
+accepted `712d42ca4e80fcc9008e3003f2711e76402a5430`. The accepted package
+`de36fe5c0d7c446fb40c4c03fadf07da87665e9c` remains reachable from main.

@@ -1,0 +1,8 @@
+{
+  "recorded_at": "2026-09-14T02:40:16.893297+00:00",
+  "author": "Codex operator",
+  "basis": "Claude review of 712d42c relayed by owner; public trace inspected by operator",
+  "audit_sha256": "7de493466add6c2b591985d978d6b87acdaa986d9d3cbe470be7280276d51915",
+  "correction": "The original phrase despite the lesson overstates the public evidence. T read the lesson; the trace shows no explicit engagement with it. It repaired the code according to the contract. Whether it weighed, rejected or ignored the advice is not observable. No claim about hidden reasoning is made.",
+  "preservation": "Original audit, prior event-count correction, public events and results are unchanged. Validity and primary outcome remain unchanged."
+}
