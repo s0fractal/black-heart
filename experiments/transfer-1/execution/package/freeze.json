@@ -1,0 +1,124 @@
+{
+  "plan_head": "0e5d44f22079a6f4f2543b718b18b3968253c2f1",
+  "preparation_head": "49db352c78ad5fa91bb990ba67185a82711f6eb4",
+  "run_root": "/private/tmp/transfer1-run-6fab71bda04c4ee581439c86359321e4",
+  "model": "gpt-6-astra",
+  "client_version": "codex-cli 0.154.0",
+  "settings": [
+    "-c",
+    "default_permissions=\"transfer\"",
+    "-c",
+    "permissions.transfer.filesystem={\":minimal\"=\"read\", \":workspace_roots\"=\"write\", \"/opt/homebrew\"=\"read\", \"/Library/Developer/CommandLineTools\"=\"read\"}",
+    "-c",
+    "permissions.transfer.network.enabled=false",
+    "-c",
+    "project_doc_max_bytes=0",
+    "-c",
+    "model_reasoning_summary=\"none\"",
+    "-c",
+    "hide_agent_reasoning=true",
+    "-c",
+    "web_search=\"disabled\"",
+    "-c",
+    "shell_environment_policy.inherit=\"none\"",
+    "-c",
+    "shell_environment_policy.experimental_use_profile=false",
+    "-c",
+    "shell_environment_policy.set={PATH=\"/opt/homebrew/bin:/Library/Developer/CommandLineTools/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin\", GIT_CONFIG_NOSYSTEM=\"1\", GIT_CONFIG_GLOBAL=\"/dev/null\", LANG=\"C\", LC_ALL=\"C\"}",
+    "-c",
+    "model_reasoning_effort=\"medium\"",
+    "--enable",
+    "skip_host_skill_discovery",
+    "--disable",
+    "memories",
+    "--disable",
+    "external_agent_memory_import",
+    "--disable",
+    "plugins",
+    "--disable",
+    "hooks",
+    "--disable",
+    "apps",
+    "--disable",
+    "multi_agent",
+    "--disable",
+    "shell_snapshot",
+    "--disable",
+    "browser_use",
+    "--disable",
+    "browser_use_external",
+    "--disable",
+    "computer_use"
+  ],
+  "timeout_seconds": 300,
+  "schedule": [
+    "N",
+    "T",
+    "P",
+    "T",
+    "P",
+    "N",
+    "P",
+    "N",
+    "T"
+  ],
+  "inputs": {
+    "inputs/common/CONTRACT.md": "f78991918989ce86e28b1e8289490b996d25d87536e97537eaf599159e28a245",
+    "inputs/common/reader.py": "ffc57cb0343e5d67417bec0d1a91c7e122866eaa3654b16081496332953030b5",
+    "inputs/common/task.txt": "9a2204c6677e91d35dd6d83242cae3c84684dc2eef4fff4c9dd4e9b1aa6eabcf",
+    "inputs/lesson/lesson.txt": "f9f9eea5c7fbbcd505ba424ee04703dc2d2675d10bb70083fbc7d82b34f23bb9",
+    "inputs/packet/manifest.json": "ebb4cfb63ffafe0e20ac3f0e8428b0b76b6ffbf3fee387269e12aed0205f955f",
+    "inputs/packet/witness.py": "a8f581f0ca77f6c8754796de3e9b4699e07a878ac4ce929957af138a27087572",
+    "scoring/cases.json": "d4804123e49cddc3137a367e99939abfafb2ab89f84f1ce1f17cd2f56daaf60e",
+    "scoring/decision.json": "b6c397d4adf8bc265f09ea28f13c0803ed4f304e5b9c6098617ae64324696702"
+  },
+  "arms": {
+    "N": {
+      "bundle": "N.bundle",
+      "sha256": "c38de9d51725f37286c20a8ea14dc1173e75e77693039b44fb141cf05f917305",
+      "head": "402fd08822cf6f9a127eba1b0ca1cd8a927d6c91",
+      "files": {
+        "CONTRACT.md": "f78991918989ce86e28b1e8289490b996d25d87536e97537eaf599159e28a245",
+        "reader.py": "ffc57cb0343e5d67417bec0d1a91c7e122866eaa3654b16081496332953030b5",
+        "task.txt": "9a2204c6677e91d35dd6d83242cae3c84684dc2eef4fff4c9dd4e9b1aa6eabcf"
+      }
+    },
+    "T": {
+      "bundle": "T.bundle",
+      "sha256": "9b1414f88dc51839a69006632f83921d7bf20d204ff77e237f4b8225054f34ed",
+      "head": "18e622f52b620d9cd96e314e2050e6beeb34cd91",
+      "files": {
+        "CONTRACT.md": "f78991918989ce86e28b1e8289490b996d25d87536e97537eaf599159e28a245",
+        "lesson/lesson.txt": "f9f9eea5c7fbbcd505ba424ee04703dc2d2675d10bb70083fbc7d82b34f23bb9",
+        "reader.py": "ffc57cb0343e5d67417bec0d1a91c7e122866eaa3654b16081496332953030b5",
+        "task.txt": "9a2204c6677e91d35dd6d83242cae3c84684dc2eef4fff4c9dd4e9b1aa6eabcf"
+      }
+    },
+    "P": {
+      "bundle": "P.bundle",
+      "sha256": "8b253dca485f244ba30d346419d0dcd893dcb9d00038676a6608663b91c6b05b",
+      "head": "6e9cc1e9058fa0a697f3bf314c7c2c39d726bb48",
+      "files": {
+        "CONTRACT.md": "f78991918989ce86e28b1e8289490b996d25d87536e97537eaf599159e28a245",
+        "lesson/lesson.txt": "f9f9eea5c7fbbcd505ba424ee04703dc2d2675d10bb70083fbc7d82b34f23bb9",
+        "lesson/manifest.json": "ebb4cfb63ffafe0e20ac3f0e8428b0b76b6ffbf3fee387269e12aed0205f955f",
+        "lesson/witness.py": "a8f581f0ca77f6c8754796de3e9b4699e07a878ac4ce929957af138a27087572",
+        "reader.py": "ffc57cb0343e5d67417bec0d1a91c7e122866eaa3654b16081496332953030b5",
+        "task.txt": "9a2204c6677e91d35dd6d83242cae3c84684dc2eef4fff4c9dd4e9b1aa6eabcf"
+      }
+    }
+  },
+  "harness": {
+    "common.py": "26c5c6535ee3722f76712dae3b669d41c04b864265598d5a0313b9d9d24abab9",
+    "controls.py": "34bdf99225d346b1337713593c500caee78ed53f14dce01bce5ff308d9c43516",
+    "decision.py": "3d3514fba809b7fe3985e16e0009d460d780db71f81b6d7e8adbd9e5f7c61f97",
+    "grader.py": "f370b7852e4149e167994b80d21a248d1fb06f35d49d432d4f45a99864a09676",
+    "offline.py": "990ba5bd654bf10cb87941caa2015c217dc83502d95f3b14e6759f9bce2514d6",
+    "prepare.py": "196b3b7b5cf9e7ee1724b172720fb49be5a7db237828df6ca68f8be5438b3bd5",
+    "run_slot.py": "681012b54118312ee7ea2bf5e1e780cdefadbf84171bf7a41be7ec2401fae750",
+    "runtime.py": "592d78fdf0169fb769e7bcb4cbe351d8f042b7376415f3dc3c124610b2d72154",
+    "test_harness.py": "2415001613020b26bca68989b27dee503b34ae8ec75b2f7c6f7ba003e7da6639",
+    "verify_prepared.py": "692fc9062cac2f6521c940f2a999637e4df6510d8cc016841f7093f999df8c2b"
+  },
+  "status": "PREPARED_NOT_LAUNCHED; exact package commit requires review"
+}

@@ -20,7 +20,7 @@
 | `xA000` | [Перетворення та інваріанти](xA000-transformations.md) | draft |
 | `xB000` | [Persona та Organization](xB000-persona-organization.md) | draft |
 | `xC000` | [Бібліотека, історії та зовнішні якорі](xC000-library-history.md) | draft |
-| `xC010` | [Досвід між моделями та черга CM](xC010-model-experience.md) | draft; CM-1–4 complete (bounded); TRANSFER-1 plan review / not run |
+| `xC010` | [Досвід між моделями та черга CM](xC010-model-experience.md) | draft; CM-1–4 complete (bounded); TRANSFER-1 execution package review / not run |
 | `xD000` | [Обмін, реплікація та транспорт](xD000-replication.md) | draft |
 | `xE000` | [Узгодженість, конфлікти та співіснування](xE000-consistency.md) | draft |
 | `xF000` | [Взаємодія людей, агентів і документів](xF000-interoperation.md) | draft |
