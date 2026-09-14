@@ -1,0 +1,60 @@
+# Working in Black-Heart
+
+These instructions apply to the entire repository, including documentation,
+essays, examples, generated artifacts and experiment records.
+
+## All changes go through a pull request
+
+- Never commit directly on, or push directly to, `main` or `master`.
+  “Only documentation”, a conversation transcript, a typo or a solo-author change
+  is not an exception.
+- Before editing, inspect the branch, working-tree status and relevant repository
+  instructions. Treat the main checkout as a read-only integration checkout;
+  update it only by fast-forwarding to the remote integration branch.
+- Use a dedicated topic branch and preferably a separate Git worktree based on
+  the current `origin/main` (or the repository's actual default branch).
+- Keep one bounded task per branch and PR. Do not mix unrelated repairs or
+  experiments into an existing PR. Independent tasks may use separate worktrees.
+- Commit and push the topic branch, then open or update its PR. Explain the
+  resulting behavior, validation and remaining limits.
+- If edits already exist in the main checkout, preserve them and establish their
+  ownership. Move your own changes to a topic branch before committing; never
+  discard another operator's work to make the checkout clean.
+
+## Review and merge
+
+- Before merging, verify the current PR head, applicable review, required checks
+  and relevant local validation. Report pending or failed checks honestly.
+- Merge only within the owner's authorization. Use the exact inspected head:
+  `gh pr merge NUMBER --merge --match-head-commit FULL_HEAD_SHA`.
+- Preserve ordinary merge history when artifacts reference commits. Do not
+  squash or rebase away an evidence, input-freeze or reviewed source commit.
+- Never use an admin bypass, force-push an integration branch, disable protection
+  or loosen a rule merely to get a change through. Repository policy changes
+  require an explicit owner request and a clear account of the change.
+- A green CI run is not an independent review. A review acceptance is not proof
+  that a merge, experiment or publication occurred; verify and report those
+  actions separately.
+
+## Experiments and documentation
+
+- Read the existing corrections in related documents and inspect implementation
+  before repeating technical claims. Distinguish metaphor, proposal, implemented
+  behavior and measured evidence.
+- Follow the experiment's accepted plan and review gates. Plan acceptance alone
+  does not authorize bypassing a separate execution-package review.
+- Preserve frozen inputs, historical signed bytes and raw observations. Record
+  corrections or failed attempts with provenance instead of rewriting history.
+
+## Finish the cycle
+
+- Verify the merged commit and ancestry, then fast-forward a clean main checkout.
+- Remove a completed task's worktree and branch only after confirming it has no
+  uncommitted or untracked work and its commits are reachable from the remote
+  integration branch. Never force-delete a dirty or unmerged worktree.
+
+GitHub enforces the PR requirement for `main` and `master` through the active
+`Integration branches require PRs` ruleset, with no configured bypass actors.
+A second person's approving review is not required by that server rule; any
+additional review requirements of the current task still apply. These written
+instructions also cover local commits, which GitHub cannot prevent.
