@@ -73,3 +73,13 @@ CI also runs pinned lychee 0.24.2 offline on changed Markdown files. Use
 documents are outside this check. These checks cover paths and local links only;
 existing tests and packet verifiers retain responsibility for their own invariants
 and digests. No check establishes document truth or author identity.
+
+## Python static analysis
+
+Run `uvx ruff==0.16.7 check .` (or install `ruff==0.16.7` and run
+`ruff check .`) before submitting Python changes. `ruff.toml` selects a narrow
+correctness set: syntax errors, undefined names/exports/locals, tuple assertions
+and conditions, and literal identity comparisons. CI runs the same pinned version.
+Do not run automatic fixes or formatting over historical evidence. Static checks
+do not inspect Python embedded in string templates or PDFs, execute code, prove
+settlement, or replace regression tests. No type checker is enabled by this setup.
