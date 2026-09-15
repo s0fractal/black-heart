@@ -1,0 +1,41 @@
+--- a/mycelium.py
++++ b/mycelium.py
+@@ -572,6 +572,12 @@
+                     cand_t = parse(self.candidate_expression)
+                     res_orig = evaluate(orig_t, max_atp=2000)
+                     res_cand = evaluate(cand_t, max_atp=2000)
++                    # A divergence is two SETTLED, different normal forms. A
++                    # suspended intermediate proves nothing either way: a true
++                    # one-step identity (Y f vs f (Y f)) suspends on different
++                    # strings and verified as a divergence before this check.
++                    if not res_orig.is_settled() or not res_cand.is_settled():
++                        return False
+                     orig_nf = str(res_orig.term)
+                     cand_nf = str(res_cand.term)
+                     if orig_nf != self.expected_output or cand_nf != self.actual_output:
+@@ -592,6 +598,9 @@
+                     res_orig = evaluate(app_orig, max_atp=2000)
+                     res_cand = evaluate(app_cand, max_atp=2000)
+ 
++                    # Same rule as the unapplied branch: both sides must settle.
++                    if not res_orig.is_settled() or not res_cand.is_settled():
++                        return False
+                     orig_nf = str(res_orig.term)
+                     cand_nf = str(res_cand.term)
+ 
+@@ -892,7 +901,14 @@
+                     # Metabolic viability gate
+                     cand_unapplied = evaluate(cand_t, max_atp=chrom.max_atp)
+                     orig_unapplied = evaluate(t, max_atp=chrom.max_atp)
+-                    if cand_unapplied.term != orig_unapplied.term or not cand_unapplied.is_settled():
++                    if not cand_unapplied.is_settled() or not orig_unapplied.is_settled():
++                        # Not settling within the chromosome budget is a
++                        # rejection of the candidate, not evidence that it
++                        # diverges; no DivergenceRecord is minted from a
++                        # suspended intermediate (it could not verify anyway).
++                        last_rejection_reason = "REJECTED_METABOLIC_VIABILITY_UNSETTLED"
++                        continue
++                    if cand_unapplied.term != orig_unapplied.term:
+                         div = DivergenceRecord.create_and_sign(
+                             rule_name=warrant.rule_name,
+                             target_expr=chrom.expression,

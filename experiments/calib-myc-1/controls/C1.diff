@@ -1,0 +1,20 @@
+--- a/mycelium.py
++++ b/mycelium.py
+@@ -572,6 +572,8 @@
+                     cand_t = parse(self.candidate_expression)
+                     res_orig = evaluate(orig_t, max_atp=2000)
+                     res_cand = evaluate(cand_t, max_atp=2000)
++                    if not res_orig.is_settled() or not res_cand.is_settled():
++                        return False
+                     orig_nf = str(res_orig.term)
+                     cand_nf = str(res_cand.term)
+                     if orig_nf != self.expected_output or cand_nf != self.actual_output:
+@@ -592,6 +594,8 @@
+                     res_orig = evaluate(app_orig, max_atp=2000)
+                     res_cand = evaluate(app_cand, max_atp=2000)
+ 
++                    if not res_orig.is_settled() or not res_cand.is_settled():
++                        return False
+                     orig_nf = str(res_orig.term)
+                     cand_nf = str(res_cand.term)
+ 
