@@ -50,6 +50,7 @@ python3 -m unittest test_empirical_settlement test_experience
 | [Local experience storage](examples/model-experience/cm2/README.md) | Save, read, search and check retained bytes; store disagreements separately | No automatic advice acceptance or authenticated model identity |
 | [CM-3 exchange](examples/model-experience/cm3/README.md) | One fresh Claude session ran a sender-designed differential and rejected synthetic advice | One session; the receiver did not design the check; response defects are documented |
 | [TRANSFER-1](experiments/transfer-1/results/pilot-1/README.md) | The first session in each of three conditions succeeded; the early-stop rule ended the pilot | No advantage of the evidence packet was demonstrated |
+| [CALIB-MYC-1](experiments/calib-myc-1/results/README.md) | Three fresh Claude sessions on the pre-repair `mycelium` revision: 2 PASS / 1 FAIL under hidden checks, AMBIGUOUS by the plan's rule | Calibration closed by owner decision; no comparison run; no experience store was involved |
 | [Executable PDF case study](papers/runs-its-own-checks/paper.md) ([DOI 10.5281/zenodo.22754264](https://doi.org/10.5281/zenodo.22754264)) | A companion and mutation controls show what its checkers accept or miss | Recognized claims, visible text, authorship and document integrity are different properties |
 
 The [experience contract and research queue](xC010-model-experience.md) hold the

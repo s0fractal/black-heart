@@ -1,9 +1,17 @@
 # CALIB-MYC-1 — results
 
 **Block 1 COMPLETE: 3 valid sessions, 2 PASS / 1 FAIL / 0 PARTIAL → the plan's
-selection rule says AMBIGUOUS; no automatic re-run; the decision belongs to the
-result review.** Two earlier INVALID runs are retained as separate records and
-are not counted. No further model call was made after slot 3.
+selection rule says AMBIGUOUS; no automatic re-run.** Two earlier INVALID runs
+are retained as separate records and are not counted. No further model call was
+made after slot 3.
+
+**Decision (owner, 2026-09-15, result review):** the calibration is closed by
+operator decision. No further calibration series and no comparison run on
+`mycelium` will follow. This is an operator choice, not a `TASK_UNSUITABLE`
+finding: three sessions do not support "usually solves". The AMBIGUOUS outcome,
+`decision.json`, the audits and the traces are unchanged. The retained residue
+is the slot-1 false fix (minting re-verified, `verify()` untouched) and the H6
+budget-mismatch boundary, kept as a precedent.
 
 Package: accepted head `6ea19678d9d85647ec6d0d0a75a25cfb2007d408` (revision 6,
 merged `4fd568a`), model `claude-sonnet-5`, Claude Code 2.1.272, snapshot head
