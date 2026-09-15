@@ -1,0 +1,54 @@
+diff --git a/mycelium.py b/mycelium.py
+index 91e8413..d148c5e 100644
+--- a/mycelium.py
++++ b/mycelium.py
+@@ -842,7 +842,9 @@ class LocalImmuneEvaluator:
+         6. Verifies closed unapplied metabolic reduction if viable.
+         7. Tests candidate on evaluator's frozen test fixtures.
+         8. If successful: mints Gen N+1 successor, verifies it, and creates endorsement.
+-        9. If divergence occurs: creates signed DivergenceRecord for swarm.
++        9. If divergence occurs: creates a signed DivergenceRecord and re-verifies it by
++           replay before handing it back; per CONTRACT.md, a record whose exact-counterexample
++           assertion this mechanism has not itself established is discarded, not surfaced.
+         """
+         sk_bytes = _to_bytes(organism_sk)
+ 
+@@ -903,7 +905,12 @@ class LocalImmuneEvaluator:
+                             reporter_sk=sk_bytes
+                         )
+                         last_rejection_reason = "REJECTED_METABOLIC_VIABILITY_MISMATCH"
+-                        last_divergence = div
++                        # CONTRACT.md: the mechanism that creates divergence records must not
++                        # create a record whose assertion it has not itself established. A
++                        # merely-unsettled candidate (out of ATP, but not proven to diverge)
++                        # is not an exact counterexample -- only mint/keep the record once its
++                        # own verify() re-establishes the two-different-normal-forms assertion.
++                        last_divergence = div if div.verify(replay_counterexample=True) else None
+                         continue
+ 
+                     # External Oracle fixture evaluation
+@@ -973,7 +980,11 @@ class LocalImmuneEvaluator:
+                             reporter_sk=sk_bytes
+                         )
+                         last_rejection_reason = "REJECTED_SEMANTIC_MISMATCH"
+-                        last_divergence = div
++                        # Same CONTRACT.md obligation as above: never hand back a record whose
++                        # exact-counterexample assertion this mechanism has not itself replayed
++                        # and established (e.g. a missing/placeholder discrepancy_input would
++                        # otherwise leak an unverifiable record to the caller/swarm).
++                        last_divergence = div if div.verify(replay_counterexample=True) else None
+                         continue
+                     else:
+                         last_rejection_reason = f"REJECTED_{receipt.verdict.name}"
+@@ -1012,5 +1023,10 @@ def export_divergences_from_log(log: ExperimentLog, reporter_sk: Union[bytes, st
+                 actual_out=getattr(rec, "discrepancy_actual", None) or "<DIVERGED>",
+                 reporter_sk=sk_bytes
+             )
+-            records.append(div)
++            # CONTRACT.md: never export/broadcast a divergence record whose exact-counterexample
++            # assertion this mechanism has not itself established by replay. Placeholder
++            # discrepancy fields (e.g. missing input/expected/actual on the log record) must
++            # not silently become an unverifiable "fact" handed to the swarm.
++            if div.verify(replay_counterexample=True):
++                records.append(div)
+     return records

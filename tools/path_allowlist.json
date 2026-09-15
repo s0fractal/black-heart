@@ -36,6 +36,167 @@
         "/private/var/tmp",
         "/private/var/folders"
       ]
+    },
+    {
+      "file": "experiments/calib-myc-1/results/block-1/1/grade.json",
+      "reason": "retained receiver trace/receipt bytes from the calibration run; the host home path of the receiver snapshot and canary targets appears verbatim; digests are pinned in the slot audit and retained-sha256.json, so the bytes are not rewritten",
+      "allowed_substrings": [
+        "/Users/s0fractal/"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/results/block-1/1/invocation.json",
+      "reason": "retained receiver trace/receipt bytes from the calibration run; the host home path of the receiver snapshot and canary targets appears verbatim; digests are pinned in the slot audit and retained-sha256.json, so the bytes are not rewritten",
+      "allowed_substrings": [
+        "/Users/s0fractal/"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/results/block-1/1/preflight.json",
+      "reason": "retained receiver trace/receipt bytes from the calibration run; the host home path of the receiver snapshot and canary targets appears verbatim; digests are pinned in the slot audit and retained-sha256.json, so the bytes are not rewritten",
+      "allowed_substrings": [
+        "/Users/s0fractal/"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/results/block-1/1/public-events.jsonl",
+      "reason": "retained receiver trace/receipt bytes from the calibration run; the host home path of the receiver snapshot and canary targets appears verbatim; digests are pinned in the slot audit and retained-sha256.json, so the bytes are not rewritten",
+      "allowed_substrings": [
+        "/Users/s0fractal/"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/results/block-1/1/result.json",
+      "reason": "retained receiver trace/receipt bytes from the calibration run; the host home path of the receiver snapshot and canary targets appears verbatim; digests are pinned in the slot audit and retained-sha256.json, so the bytes are not rewritten",
+      "allowed_substrings": [
+        "/Users/s0fractal/"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/results/block-1/2/grade.json",
+      "reason": "retained receiver trace/receipt bytes from the calibration run; the host home path of the receiver snapshot and canary targets appears verbatim; digests are pinned in the slot audit and retained-sha256.json, so the bytes are not rewritten",
+      "allowed_substrings": [
+        "/Users/s0fractal/"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/results/block-1/2/invocation.json",
+      "reason": "retained receiver trace/receipt bytes from the calibration run; the host home path of the receiver snapshot and canary targets appears verbatim; digests are pinned in the slot audit and retained-sha256.json, so the bytes are not rewritten",
+      "allowed_substrings": [
+        "/Users/s0fractal/"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/results/block-1/2/preflight.json",
+      "reason": "retained receiver trace/receipt bytes from the calibration run; the host home path of the receiver snapshot and canary targets appears verbatim; digests are pinned in the slot audit and retained-sha256.json, so the bytes are not rewritten",
+      "allowed_substrings": [
+        "/Users/s0fractal/"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/results/block-1/2/public-events.jsonl",
+      "reason": "retained receiver trace/receipt bytes from the calibration run; the host home path of the receiver snapshot and canary targets appears verbatim; digests are pinned in the slot audit and retained-sha256.json, so the bytes are not rewritten",
+      "allowed_substrings": [
+        "/Users/s0fractal/"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/results/block-1/2/result.json",
+      "reason": "retained receiver trace/receipt bytes from the calibration run; the host home path of the receiver snapshot and canary targets appears verbatim; digests are pinned in the slot audit and retained-sha256.json, so the bytes are not rewritten",
+      "allowed_substrings": [
+        "/Users/s0fractal/"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/results/block-1/3/grade.json",
+      "reason": "retained receiver trace/receipt bytes from the calibration run; the host home path of the receiver snapshot and canary targets appears verbatim; digests are pinned in the slot audit and retained-sha256.json, so the bytes are not rewritten",
+      "allowed_substrings": [
+        "/Users/s0fractal/"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/results/block-1/3/invocation.json",
+      "reason": "retained receiver trace/receipt bytes from the calibration run; the host home path of the receiver snapshot and canary targets appears verbatim; digests are pinned in the slot audit and retained-sha256.json, so the bytes are not rewritten",
+      "allowed_substrings": [
+        "/Users/s0fractal/"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/results/block-1/3/preflight.json",
+      "reason": "retained receiver trace/receipt bytes from the calibration run; the host home path of the receiver snapshot and canary targets appears verbatim; digests are pinned in the slot audit and retained-sha256.json, so the bytes are not rewritten",
+      "allowed_substrings": [
+        "/Users/s0fractal/"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/results/block-1/3/public-events.jsonl",
+      "reason": "retained receiver trace/receipt bytes from the calibration run; the host home path of the receiver snapshot and canary targets appears verbatim; digests are pinned in the slot audit and retained-sha256.json, so the bytes are not rewritten",
+      "allowed_substrings": [
+        "/Users/s0fractal/"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/results/block-1/3/result.json",
+      "reason": "retained receiver trace/receipt bytes from the calibration run; the host home path of the receiver snapshot and canary targets appears verbatim; digests are pinned in the slot audit and retained-sha256.json, so the bytes are not rewritten",
+      "allowed_substrings": [
+        "/Users/s0fractal/"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/results/invalid-runs/6cbd7c38/1/grade.json",
+      "reason": "retained receiver trace/receipt bytes from the calibration run; the host home path of the receiver snapshot and canary targets appears verbatim; digests are pinned in the slot audit and retained-sha256.json, so the bytes are not rewritten",
+      "allowed_substrings": [
+        "/Users/s0fractal/"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/results/invalid-runs/6cbd7c38/1/invocation.json",
+      "reason": "retained receiver trace/receipt bytes from the calibration run; the host home path of the receiver snapshot and canary targets appears verbatim; digests are pinned in the slot audit and retained-sha256.json, so the bytes are not rewritten",
+      "allowed_substrings": [
+        "/Users/s0fractal/"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/results/invalid-runs/6cbd7c38/1/preflight.json",
+      "reason": "retained receiver trace/receipt bytes from the calibration run; the host home path of the receiver snapshot and canary targets appears verbatim; digests are pinned in the slot audit and retained-sha256.json, so the bytes are not rewritten",
+      "allowed_substrings": [
+        "/Users/s0fractal/"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/results/invalid-runs/6cbd7c38/1/public-events.jsonl",
+      "reason": "retained receiver trace/receipt bytes from the calibration run; the host home path of the receiver snapshot and canary targets appears verbatim; digests are pinned in the slot audit and retained-sha256.json, so the bytes are not rewritten",
+      "allowed_substrings": [
+        "/Users/s0fractal/"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/results/invalid-runs/e6b293fa/1/grade.json",
+      "reason": "retained receiver trace/receipt bytes from the calibration run; the host home path of the receiver snapshot and canary targets appears verbatim; digests are pinned in the slot audit and retained-sha256.json, so the bytes are not rewritten",
+      "allowed_substrings": [
+        "/Users/s0fractal/"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/results/invalid-runs/e6b293fa/1/invocation.json",
+      "reason": "retained receiver trace/receipt bytes from the calibration run; the host home path of the receiver snapshot and canary targets appears verbatim; digests are pinned in the slot audit and retained-sha256.json, so the bytes are not rewritten",
+      "allowed_substrings": [
+        "/Users/s0fractal/"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/results/invalid-runs/e6b293fa/1/preflight.json",
+      "reason": "retained receiver trace/receipt bytes from the calibration run; the host home path of the receiver snapshot and canary targets appears verbatim; digests are pinned in the slot audit and retained-sha256.json, so the bytes are not rewritten",
+      "allowed_substrings": [
+        "/Users/s0fractal/"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/results/invalid-runs/e6b293fa/1/public-events.jsonl",
+      "reason": "retained receiver trace/receipt bytes from the calibration run; the host home path of the receiver snapshot and canary targets appears verbatim; digests are pinned in the slot audit and retained-sha256.json, so the bytes are not rewritten",
+      "allowed_substrings": [
+        "/Users/s0fractal/"
+      ]
     }
   ]
 }

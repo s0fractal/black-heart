@@ -1,0 +1,64 @@
+{
+  "slot": 1,
+  "condition": "S1",
+  "finished_at": "2026-09-15T17:04:47.332401+00:00",
+  "exit_code": -9,
+  "elapsed_seconds": 600.008761624922,
+  "timed_out": true,
+  "protected_inputs": {
+    "CONTRACT.md": true,
+    "task.txt": true
+  },
+  "infrastructure_valid": false,
+  "init_errors": [],
+  "classification": "INVALID",
+  "grader_outcome": "PASS",
+  "checks": {
+    "H1": true,
+    "H2": true,
+    "H3": true,
+    "H4": true,
+    "H5": true,
+    "H6": true,
+    "H7": true
+  },
+  "omitted_reasoning_events": 0,
+  "malformed_events": 0,
+  "unknown_event_types": [
+    "tool_progress",
+    "tool_progress",
+    "tool_progress",
+    "tool_progress",
+    "tool_progress",
+    "tool_progress"
+  ],
+  "tool_uses": 73,
+  "tool_use_names": [
+    "Bash",
+    "Edit",
+    "Grep",
+    "Read"
+  ],
+  "head_after": "d1fb31919f7c77e4094e1d16dea5c5411bccf5fd",
+  "status_after": "M mycelium.py\n M test_mycelium.py",
+  "model_reported": [
+    "claude-sonnet-5"
+  ],
+  "api_key_source": "none",
+  "usage": {
+    "usage": null,
+    "modelUsage": null,
+    "num_turns": null,
+    "duration_ms": null,
+    "duration_api_ms": null,
+    "total_cost_usd": null,
+    "stop_reason": null,
+    "subtype": null,
+    "is_error": null,
+    "permission_denials": null,
+    "terminal_reason": null
+  },
+  "snapshot": "~/calib1-runs/e6b293fa618b43e9af6107b3f4857d27/1/snapshot",
+  "ephemeral_snapshot": "~/calib1-work/receivers/receiver-y48d5qkt",
+  "trace_audit": "REQUIRED_BEFORE_NEXT_SLOT"
+}

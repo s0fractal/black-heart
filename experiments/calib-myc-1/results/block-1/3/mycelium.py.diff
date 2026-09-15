@@ -1,0 +1,45 @@
+diff --git a/mycelium.py b/mycelium.py
+index 91e8413..ecdd13b 100644
+--- a/mycelium.py
++++ b/mycelium.py
+@@ -572,6 +572,12 @@ class DivergenceRecord:
+                     cand_t = parse(self.candidate_expression)
+                     res_orig = evaluate(orig_t, max_atp=2000)
+                     res_cand = evaluate(cand_t, max_atp=2000)
++                    # Both sides must have actually settled into a normal form.
++                    # A suspended (out-of-budget) term is not a normal form, so
++                    # its stringified state cannot establish "reduces to a
++                    # different normal form" per CONTRACT.md.
++                    if not res_orig.is_settled() or not res_cand.is_settled():
++                        return False
+                     orig_nf = str(res_orig.term)
+                     cand_nf = str(res_cand.term)
+                     if orig_nf != self.expected_output or cand_nf != self.actual_output:
+@@ -592,6 +598,10 @@ class DivergenceRecord:
+                     res_orig = evaluate(app_orig, max_atp=2000)
+                     res_cand = evaluate(app_cand, max_atp=2000)
+ 
++                    # Both sides must have actually settled into a normal form.
++                    if not res_orig.is_settled() or not res_cand.is_settled():
++                        return False
++
+                     orig_nf = str(res_orig.term)
+                     cand_nf = str(res_cand.term)
+ 
+@@ -892,7 +902,15 @@ class LocalImmuneEvaluator:
+                     # Metabolic viability gate
+                     cand_unapplied = evaluate(cand_t, max_atp=chrom.max_atp)
+                     orig_unapplied = evaluate(t, max_atp=chrom.max_atp)
+-                    if cand_unapplied.term != orig_unapplied.term or not cand_unapplied.is_settled():
++                    if not orig_unapplied.is_settled() or not cand_unapplied.is_settled():
++                        # Neither side has established a normal form within budget:
++                        # a divergence record would assert "two different normal
++                        # forms" without either normal form being established.
++                        # CONTRACT.md forbids creating such an unestablished record.
++                        last_rejection_reason = "REJECTED_METABOLIC_VIABILITY_UNSETTLED"
++                        last_divergence = None
++                        continue
++                    if cand_unapplied.term != orig_unapplied.term:
+                         div = DivergenceRecord.create_and_sign(
+                             rule_name=warrant.rule_name,
+                             target_expr=chrom.expression,

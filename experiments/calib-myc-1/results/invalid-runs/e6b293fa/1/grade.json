@@ -1,0 +1,92 @@
+{
+  "snapshot": "/Users/s0fractal/calib1-runs/e6b293fa618b43e9af6107b3f4857d27/1/snapshot",
+  "checks": {
+    "H1": {
+      "pass": true,
+      "detail": {
+        "orig": "SUSPENDED",
+        "cand": "SUSPENDED",
+        "verify": false,
+        "accepted": false,
+        "known": false
+      }
+    },
+    "H2": {
+      "pass": true,
+      "detail": {
+        "orig": "SUSPENDED",
+        "cand": "SUSPENDED",
+        "verify": false,
+        "accepted": false,
+        "known": false
+      }
+    },
+    "H3": {
+      "pass": true,
+      "detail": {
+        "fwd": {
+          "orig": "SETTLED",
+          "cand": "SUSPENDED",
+          "verify": false,
+          "accepted": false,
+          "known": false
+        },
+        "rev": {
+          "orig": "SUSPENDED",
+          "cand": "SETTLED",
+          "verify": false,
+          "accepted": false,
+          "known": false
+        }
+      }
+    },
+    "H4": {
+      "pass": true,
+      "detail": {
+        "fwd": {
+          "orig": "SETTLED",
+          "cand": "SUSPENDED",
+          "verify": false,
+          "accepted": false,
+          "known": false
+        },
+        "rev": {
+          "orig": "SUSPENDED",
+          "cand": "SETTLED",
+          "verify": false,
+          "accepted": false,
+          "known": false
+        }
+      }
+    },
+    "H5": {
+      "pass": true,
+      "detail": {
+        "orig": "SETTLED",
+        "cand": "SETTLED",
+        "verify": true,
+        "accepted": true,
+        "known": true
+      }
+    },
+    "H6": {
+      "pass": true,
+      "detail": {
+        "adopted": false,
+        "reason": "REJECTED_METABOLIC_BUDGET_EXCEEDED",
+        "divergence_record_is_none": true
+      }
+    },
+    "H7": {
+      "pass": true,
+      "detail": "Ran 8 tests in 0.787s\n\nOK"
+    }
+  },
+  "timeouts": {
+    "check": 120,
+    "h7": 600
+  },
+  "outcome": "PASS",
+  "baseline_sha256": "883b7c625fbe3531f4d9302e904f95b6d81359cba46422f38da94af6fbc69a16",
+  "grader_sha256": "739e97032abf98fbe31913a520b57e15e0b940ba53f90425194588be9449aae6"
+}

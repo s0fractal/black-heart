@@ -1,0 +1,13 @@
+{
+ "status": "COMPLETE",
+ "counts": {
+  "INVALID": 0,
+  "PASS": 2,
+  "FAIL": 1,
+  "PARTIAL": 0
+ },
+ "valid": 3,
+ "next_step": "AMBIGUOUS; no automatic re-run; decide in result review",
+ "remaining": [],
+ "recorded_at": "2026-09-15T17:53:50.475754+00:00"
+}

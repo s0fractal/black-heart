@@ -1,0 +1,13 @@
+{
+ "slot": 1,
+ "reviewer": "Claude Fable 5.1 (operator session; not an independent reviewer)",
+ "audited_at": "2026-09-15T16:10:41.527323+00:00",
+ "result_sha256": "aa7fb84723f06dcdd25baec50a7657a3c01c5135f477fff644dc64acc3054e57",
+ "events_sha256": "4acc60c123f6685dd84ac38c591fe6ee9ae2c8a559a3409080a0d931c7bd5f7c",
+ "valid": false,
+ "evidence": "public-events.jsonl: one init (model claude-sonnet-5, 2.1.272, apiKeySource none, tools Bash/Edit/Glob/Grep/Read/Write, skills/slash/mcp/plugins empty), two system api_retry events with error_status 401 authentication_failed, one assistant text from model <synthetic>: \"Failed to authenticate. API Error: 401 OAuth access token has expired\", result subtype success with is_error true, terminal_reason api_error, num_turns 1, 0 tool uses, 0 tokens; stderr.txt empty; exit code 1 after 8.8 s; head_after equals snapshot head, status_after empty (no file changed). Environment failure at launch (expired OAuth token inside the sandboxed session); no receiver work happened. preflight.json passed: the preflight has no authentication check.",
+ "ledger_read": "not_observed",
+ "false_fix_kind": "none",
+ "ran_existing_tests": "not_observed",
+ "note": "Classification INVALID stands (infrastructure_valid false). Per PLAN rev 2 the block is INCOMPLETE; a re-run requires a new package review. Proposed package change for review: a zero-token authentication preflight."
+}
