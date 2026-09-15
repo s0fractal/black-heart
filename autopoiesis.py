@@ -678,6 +678,9 @@ def init_autopoietic_organism(
 # 6. IN-PLACE AUTONOMOUS EVOLUTION (ISO 32000 §7.5.6 INCREMENTAL UPDATE)
 # ============================================================================
 
+GUARD_ATP = 25  # reduction budget of the guard's gene-settlement measurement
+
+
 def check_palimpsest_guard(
     current_org: Organism,
     candidate_org: Organism,
@@ -755,6 +758,41 @@ def check_palimpsest_guard(
                 f"{sorted(s.value for s in policy.proceed_on)}."
             ), None
 
+    # 2. Gene settlement, measured ONCE per organism and used for both the
+    #    decision and the returned evidence (review of PR #91: an aggregate
+    #    "all genes settle" hid a second gene's loss behind a first gene that
+    #    already did not settle).
+    #    What is measured: each chromosome parses and its reduction SETTLES
+    #    within GUARD_ATP. A suspended reduction is not a normal form (DOC-F1).
+    #    The fixture prompts are NOT evaluated — the organism has no way to
+    #    answer a prompt — so the drift tensor's per-fixture traces all carry
+    #    the same organism-level measurement, and its "virtue" deltas mean loss
+    #    or gain of gene settlement between generations, nothing else.
+    def _settlement(expression):
+        try:
+            res = evaluate(parse(expression), max_atp=GUARD_ATP)
+            return {"expression": expression, "status": res.status.value, "atp_spent": res.atp_spent,
+                    "normal_form_sha256_8": (hashlib.sha256(str(res.term).encode("utf-8")).hexdigest()[:8]
+                                             if res.is_settled() else None)}
+        except Exception as e:
+            # Same shape as the settled case (review of PR #91: a missing key
+            # turned an evaluator failure into an unhandled KeyError).
+            return {"expression": expression, "status": "ERROR", "atp_spent": None,
+                    "normal_form_sha256_8": None, "error": type(e).__name__}
+
+    current_settlement = {c.gene_id: _settlement(c.expression) for c in current_org.chromosomes}
+    candidate_settlement = {c.gene_id: _settlement(c.expression) for c in candidate_org.chromosomes}
+    evidence = []
+    for gene_id, cand in candidate_settlement.items():
+        cur = current_settlement.get(gene_id)
+        evidence.append({
+            "measurement": "gene_settlement", "budget_atp": GUARD_ATP, "gene_id": gene_id,
+            "current": cur, "candidate": cand,
+            "settlement_lost": bool(cur and cur["status"] == "SETTLED" and cand["status"] != "SETTLED"),
+            "fixture_prompts_evaluated": False,
+        })
+    lost = [e for e in evidence if e["settlement_lost"]]
+
     fixtures = build_default_fixtures()
     axioms_curr = [
         ReasoningAxiom(c.gene_id, c.gene_name, c.expression)
@@ -767,48 +805,51 @@ def check_palimpsest_guard(
     skel_curr = ReasoningSkeleton.create(current_org.generation, axioms_curr)
     skel_succ = ReasoningSkeleton.create(candidate_org.generation, axioms_succ)
 
-    def _evaluate_traces_on_fixtures(org, gen):
+    def _matrix_from_settlement(settlement, gen):
+        """One organism-level measurement, recorded once per fixture id (no fixture is run)."""
         matrix = BehavioralTraceMatrix(gen)
+        all_settled = all(v["status"] == "SETTLED" for v in settlement.values())
+        steps = sum((v["atp_spent"] or 1) for v in settlement.values())
+        resp_hash = "_".join((v["normal_form_sha256_8"] or v["status"].lower()) for v in settlement.values()) or "none"
         for fid, fix in fixtures.items():
-            total_steps = 0
-            hashes = []
-            cand_ok = True
-            for c in org.chromosomes:
-                try:
-                    t = parse(c.expression)
-                    res = evaluate(t, max_atp=25)
-                    total_steps += res.steps_spent
-                    hashes.append(hashlib.sha256(str(res.normal_form).encode("utf-8")).hexdigest()[:8])
-                except Exception:
-                    cand_ok = False
-                    total_steps += 1
-                    hashes.append("err")
-
-            resp_hash = "_".join(hashes) if hashes else "none"
-            actual = fix.expected_behavior if cand_ok else ExpectedBehavior.REFUSE
-            compliant = (actual == fix.expected_behavior) and cand_ok
+            actual = fix.expected_behavior if all_settled else ExpectedBehavior.REFUSE
+            compliant = (actual == fix.expected_behavior) and all_settled
             matrix.traces[fid] = BehavioralTrace(
                 fixture_id=fid,
                 generation=gen,
                 actual_behavior=actual,
-                response_hash=f"resp_{gen}_{resp_hash}",
+                response_hash=resp_hash,
                 confidence=0.95 if compliant else 0.1,
                 is_compliant=compliant,
-                execution_steps=max(1, total_steps)
+                execution_steps=max(1, steps)
             )
         matrix.compute_scores(fixtures)
         return matrix
 
-    mat_curr = _evaluate_traces_on_fixtures(current_org, current_org.generation)
-    mat_succ = _evaluate_traces_on_fixtures(candidate_org, candidate_org.generation)
+    mat_curr = _matrix_from_settlement(current_settlement, current_org.generation)
+    mat_succ = _matrix_from_settlement(candidate_settlement, candidate_org.generation)
 
     analyzer = PalimpsestDriftAnalyzer(tombstone_registry, fixtures)
     tensor = analyzer.analyze_drift(skel_curr, skel_succ, mat_curr, mat_succ)
-
+    # The report carries the measured evidence, never unrun fixture prompts,
+    # and the decision is taken from the same evidence: any existing gene that
+    # settled and no longer settles refuses the candidate, whatever the other
+    # genes do.
+    tensor.counterexamples = lost
+    if lost:
+        tensor.verdict = PalimpsestVerdict.EROSION
+        names = ", ".join(e["gene_id"] for e in lost)
+        return False, (f"Palimpsest drift detected EROSION: gene settlement within {GUARD_ATP} ATP lost "
+                       f"for {names} (asymmetry={tensor.asymmetry_score:.3f})"), tensor
     if tensor.verdict == PalimpsestVerdict.EROSION:
-        return False, f"Palimpsest drift detected EROSION (asymmetry={tensor.asymmetry_score:.3f})", tensor
+        # The analyzer's aggregate ("all genes settle") can flip on a NEW gene
+        # that does not settle, which is not a loss of any existing gene and is
+        # allowed by this guard. The returned verdict must agree with the
+        # decision: a change without measured loss is DRIFT, not EROSION.
+        tensor.verdict = PalimpsestVerdict.DRIFT
 
-    return True, "Palimpsest guard verified: non-eroded transition", tensor
+    return True, ("Palimpsest guard verified: tombstone and refutation gates passed; no existing gene lost "
+                  f"settlement within {GUARD_ATP} ATP (fixture prompts are not evaluated)"), tensor
 
 
 def evolve_autopoietic_organism(
