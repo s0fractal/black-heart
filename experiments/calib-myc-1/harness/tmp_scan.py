@@ -27,6 +27,19 @@ while stack:
  p=stack.pop()
  try:
   info=os.stat(p)
+ except FileNotFoundError:
+  # Only here: a symlink whose target does not exist (Chromium-style
+  # SingletonCookie links) has no readable content and cannot leak; it is
+  # recorded, not an error. Anything that vanishes AFTER a successful stat
+  # is a genuine disappearance during the scan (handled below).
+  if os.path.islink(p) and not os.path.exists(p): dangling.append(p)
+  else: errors.append({'path':p,'error':'DISAPPEARED_DURING_SCAN'})
+  continue
+ except PermissionError:
+  denied+=1;continue
+ except OSError as e:
+  errors.append({'path':p,'error':type(e).__name__});continue
+ try:
   key=(info.st_dev,info.st_ino)
   if key in seen: continue
   seen.add(key)
@@ -49,11 +62,7 @@ while stack:
  except PermissionError:
   denied+=1
  except FileNotFoundError:
-  # A symlink whose target does not exist (Chromium-style SingletonCookie
-  # links of running or long-gone apps) has no readable content and cannot
-  # leak anything; it is recorded, not treated as a scan failure.
-  if os.path.islink(p) and not os.path.exists(p): dangling.append(p)
-  else: errors.append({'path':p,'error':'DISAPPEARED_DURING_SCAN'})
+  errors.append({'path':p,'error':'DISAPPEARED_DURING_SCAN'})
  except OSError as e:
   errors.append({'path':p,'error':type(e).__name__})
 print(json.dumps({'matches':matches,'errors':errors,'dangling_symlinks':dangling,'files_read':files,'denied':denied,'complete':True}))

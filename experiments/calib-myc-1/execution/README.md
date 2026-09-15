@@ -105,6 +105,15 @@ checkout; C0's digest is the snapshot's own file and is excluded).
   `dangling_symlinks` instead of `errors`; a genuine disappearance during the
   scan is still an error. Regression: a dangling symlink next to marker files
   is recorded and the scan passes. This is the only change in revision 3.
+- **Revision 4 — the exception is narrowed to the initial `stat`.** Review
+  showed revision 3's handler also covered the read: a target that exists at
+  `stat` time and vanishes before `open` was filed as dangling. Now only a
+  `FileNotFoundError` from the initial `os.stat` of a dangling symlink is
+  recorded; any `FileNotFoundError` after a successful `stat` stays
+  `DISAPPEARED_DURING_SCAN`. Regression: the target is removed between the
+  scanner's `stat` and its `open` (via a patched `open` in the scanner's
+  namespace) and must be reported as an error, not dangling; the regression
+  fails against the revision 3 scanner. Only change in revision 4.
 
 ## Decision points for the package reviewer
 

@@ -253,8 +253,28 @@ def scan_boundary_check():
         assert {Path(x['path']).name for x in report['matches']} == {'one', 'two', 'three'}, report
         assert report['errors'] == [] and report['files_read'] == 4, report
         assert [Path(x).name for x in report['dangling_symlinks']] == ['SingletonCookie'], report
+    # Transition case (review): the target exists at stat time and vanishes
+    # before open. That is a genuine DISAPPEARED_DURING_SCAN, never dangling.
+    import builtins, io, contextlib
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td); target = root / 'target'; target.write_bytes(b'CALIB-MYC-1 inside')
+        link = root / 'SingletonCookie'; os.symlink(target.name, link)
+        real_open = builtins.open
+        def vanishing_open(path, *a, **k):
+            if os.fspath(path) == str(link) and target.exists():
+                target.unlink()          # after the scanner's successful stat, before its read
+            return real_open(path, *a, **k)
+        ns = {'__builtins__': dict(vars(builtins), open=vanishing_open)}
+        request = {'roots': [td], 'markers_hex': [m.hex() for m in MARKERS], 'digests': []}
+        out = io.StringIO()
+        with mock.patch('sys.stdin', io.StringIO(json.dumps(request))), contextlib.redirect_stdout(out):
+            exec(SCANNER, ns)
+        report = json.loads(out.getvalue())
+        errors = {(Path(e['path']).name, e['error']) for e in report['errors']}
+        assert ('SingletonCookie', 'DISAPPEARED_DURING_SCAN') in errors, report
+        assert report['dangling_symlinks'] == [], report
     return {'pass': True, 'split_boundary_marker': True, 'digest_only_match': True, 'case_insensitive': True,
-            'dangling_symlink_recorded_not_error': True}
+            'dangling_symlink_recorded_not_error': True, 'disappearance_after_stat_is_error': True}
 
 
 def public_filter_check():
