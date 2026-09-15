@@ -132,6 +132,23 @@ checkout; C0's digest is the snapshot's own file and is excluded).
   new run root. Whether the sandbox blocks a mid-session refresh is not
   established; the margin makes a refresh during a slot unnecessary.
 
+- **Revision 6 — `tool_progress` is a known stream event.** Run `e6b293fa…`
+  slot 1 (revision 5): a fresh `claude-sonnet-5` session produced a full
+  repair (grader PASS on H1–H7, no in-tree hint read, 73 tool uses, killed at
+  600 s while running the full test suite) but was classified INVALID solely
+  because six `tool_progress` events — CLI heartbeats for Bash calls longer
+  than 30 s, no model or user content — were not in `KNOWN_TYPES`. That
+  record and its audit stay under the old run root as INVALID; the block is
+  INCOMPLETE by the plan and this revision freezes a new run root. Change:
+  `tool_progress` added to `KNOWN_TYPES`; regression: heartbeat events keep a
+  trace valid, an unknown type still invalidates. The observed `system`
+  subtypes (`api_retry`, `permission_denied`, `task_started`,
+  `task_notification`) are named, not policed beyond `init`. Not changed on
+  purpose: the Bash allowlist pattern `Bash(python3 *)` does not match
+  multi-line `python3 -c "…"` commands (two denials in slot 1; the receiver
+  continued). Widening it would change receiver conditions between slots; it
+  is a reviewer decision.
+
 ## Decision points for the package reviewer
 
 - **Model id.** Frozen as `claude-sonnet-5` (a fresh Claude model that is not

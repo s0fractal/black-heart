@@ -36,7 +36,13 @@ OPTIONAL = ('messaging_socket_path',)
 API_KEY_SOURCES = ('none', 'ANTHROPIC_API_KEY')  # live Max login reports 'none'; the offline stub 'ANTHROPIC_API_KEY'
 UUID = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
 SOCKET = re.compile(r'^/tmp/cc-socks/\d+\.sock$')
-KNOWN_TYPES = ('system', 'assistant', 'user', 'result', 'rate_limit_event')
+# tool_progress: CLI heartbeat for a tool call running longer than 30 s
+# (tool_use_id suffix -heartbeat-N, elapsed_time_seconds, heartbeat: true).
+# Observed in run e6b293fa slot 1, where it alone invalidated a trace whose
+# grader outcome was PASS. It carries no model or user content.
+KNOWN_TYPES = ('system', 'assistant', 'user', 'result', 'rate_limit_event', 'tool_progress')
+# system subtypes seen live (2.1.272): init, api_retry, permission_denied,
+# task_started, task_notification. Recorded, not policed beyond init.
 
 
 def policy():
