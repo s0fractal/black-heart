@@ -26,8 +26,8 @@ import tempfile
 from pathlib import Path
 from common import (HARNESS, REPO, ROOT, RUNS, WORK, git, inputs_digests, portable, portable_json, read_json, refuse_temp,
                     run, sha, sha_bytes, write_json)
-from regressions import (argv_check, decision_check, environment_check, init_policy_check, overwrite_check,
-                         public_filter_check, scan_boundary_check, trace_check)
+from regressions import (argv_check, decision_check, environment_check, grader_hang_check, init_policy_check,
+                         overwrite_check, public_filter_check, scan_boundary_check, trace_check)
 from runtime import PROTECTED, STUB_NETWORK, TOOLS, client_identity, preflight, sandbox
 from tmp_scan import MARKERS
 from verify_prepared import materialize, verify
@@ -140,7 +140,8 @@ def collect(package, output):
     print('regressions ...', flush=True)
     regressions = {'init_policy': init_policy_check(init, model), 'decision': decision_check(), 'trace': trace_check(init, model),
                    'overwrite': overwrite_check(), 'scan_boundary': scan_boundary_check(), 'public_filter': public_filter_check(),
-                   'environment': environment_check(), 'argv': argv_check(model)}
+                   'environment': environment_check(), 'argv': argv_check(model),
+                   'grader_hang': grader_hang_check(REPO, work)}
     scan = pre['tmp_content_scan']
     report.update(controls=controls, readback=readback, determinism=determinism,
                   store_canary={'pass': pre['store_canary']['pass'], 'observed': pre['store_canary']['observed'],

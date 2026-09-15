@@ -72,6 +72,29 @@ checkout; C0's digest is the snapshot's own file and is excluded).
    `ledger_read`, `false_fix_kind`, `ran_existing_tests`). The runner refuses
    the next slot without it. Do not combine audit and launch in one step.
 
+## Amendments after package review (revision 2 of the package)
+
+- **B1 — a hanging submission is a graded failure, not INVALID.** The grader
+  now runs an import probe and one child per check, each with its own
+  deadline (`CALIB_GRADER_CHECK_TIMEOUT`, default 120 s), and the H7 baseline
+  run with `CALIB_GRADER_H7_TIMEOUT` (default 600 s); the sum stays below the
+  launcher's 1800 s. A deadline hit is recorded as that check failing with a
+  "timed out" detail; the grader never surfaces `TimeoutExpired`. Regression
+  `grader_hang_check` (three synthetic submissions on the pinned tree, 2 s
+  deadlines: hang at import, hang inside `verify()`, hang inside the H7 run)
+  yields outcome FAIL each time, no grader error; it is part of the offline
+  receipt and of `test_harness.py`.
+- **B2 — signs of foreign context invalidate automatically.** `skills`,
+  `slash_commands`, `mcp_servers` and `plugins` must be `[]` (and equal to the
+  capture); any unknown stream event type invalidates the trace; a `user`
+  event is accepted only when every content block is a `tool_result` (the
+  task prompt may echo once; the live stream does not echo it), any other
+  text or a string content is recorded as foreign and invalidates. `agents`
+  lists Claude Code's built-in agents and is compared for equality only.
+  Regressions cover non-empty skills/slash_commands, an unknown event type,
+  a foreign `user` text block, string content, tool-result-only `user` events
+  and the prompt-echo rule.
+
 ## Decision points for the package reviewer
 
 - **Model id.** Frozen as `claude-sonnet-5` (a fresh Claude model that is not

@@ -1,8 +1,8 @@
 {
   "type": "system",
   "subtype": "init",
-  "cwd": "~/calib1-work/receivers/receiver-uqj7ykkr",
-  "session_id": "4154a4f9-d164-43ac-9f4f-3cbfa3df1a12",
+  "cwd": "~/calib1-work/receivers/receiver-dwhpwq_4",
+  "session_id": "4f4174c1-c497-40c3-bd0c-8e886b0d882f",
   "tools": [
     "Bash",
     "Edit",
@@ -33,8 +33,8 @@
   ],
   "analytics_disabled": true,
   "product_feedback_disabled": true,
-  "uuid": "5beaf35d-5a5c-424b-8e0d-e2d84bcd9212",
-  "messaging_socket_path": "/tmp/cc-socks/49534.sock",
+  "uuid": "a020c347-caba-41e6-8373-7b3175497355",
+  "messaging_socket_path": "/tmp/cc-socks/63000.sock",
   "fast_mode_state": "off",
   "fast_mode_disabled_reason": "sdk_opt_in_required"
 }

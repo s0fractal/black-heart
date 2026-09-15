@@ -26,9 +26,12 @@ HIDDEN = {'thinking', 'redacted_thinking', 'reasoning', 'thinking_delta', 'signa
 STRUCTURAL = ('type', 'subtype')
 EQUAL = ('model', 'claude_code_version', 'tools', 'mcp_servers', 'plugins', 'permissionMode', 'agents',
          'capabilities', 'analytics_disabled', 'product_feedback_disabled', 'fast_mode_state',
-         'fast_mode_disabled_reason')
+         'fast_mode_disabled_reason', 'skills', 'slash_commands')
+# skills and slash_commands are also required to be EMPTY regardless of the
+# expected capture: a non-empty list is a sign of foreign context (review B2).
+MUST_BE_EMPTY = ('skills', 'slash_commands', 'mcp_servers', 'plugins')  # agents lists built-ins; EQUAL-compared only
 PATTERN = ('cwd', 'session_id', 'uuid', 'apiKeySource', 'messaging_socket_path')
-RECORD_ONLY = ('skills', 'slash_commands', 'output_style')
+RECORD_ONLY = ('output_style',)
 OPTIONAL = ('messaging_socket_path',)
 API_KEY_SOURCES = ('none', 'ANTHROPIC_API_KEY')  # live Max login reports 'none'; the offline stub 'ANTHROPIC_API_KEY'
 UUID = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
@@ -37,8 +40,10 @@ KNOWN_TYPES = ('system', 'assistant', 'user', 'result', 'rate_limit_event')
 
 
 def policy():
-    return {'structural': list(STRUCTURAL), 'equal': list(EQUAL), 'pattern': list(PATTERN), 'record_only': list(RECORD_ONLY),
+    return {'structural': list(STRUCTURAL), 'equal': list(EQUAL), 'must_be_empty': list(MUST_BE_EMPTY),
+            'pattern': list(PATTERN), 'record_only': list(RECORD_ONLY),
             'optional': list(OPTIONAL), 'api_key_sources': list(API_KEY_SOURCES),
+            'unknown_event_type': 'invalid', 'user_events': 'tool_result blocks only; the prompt echo once; any other text is foreign',
             'cwd_prefix': '~/' + WORK + '/receivers/', 'socket_regex': SOCKET.pattern,
             'model_accepts_1m_suffix': True, 'unknown_field': 'error'}
 
@@ -60,6 +65,9 @@ def init_errors(event, expected, model):
         # JSON serialization also distinguishes false from 0 and [] from null.
         elif json.dumps(event[name], sort_keys=True) != json.dumps(expected[name], sort_keys=True):
             errors.append('init field changed: ' + name)
+    for name in MUST_BE_EMPTY:
+        if name in event and event[name] != []:
+            errors.append(name + ' must be []')
     for name in PATTERN + RECORD_ONLY:
         if name not in event and name not in OPTIONAL:
             errors.append('missing init field: ' + name)
@@ -130,11 +138,34 @@ def tool_uses(value, found):
     return found
 
 
+def foreign_user_blocks(event, prompt_text, prompt_seen):
+    """Blocks of a `user` event that are not tool results. The task prompt may echo once."""
+    message = event.get('message')
+    content = message.get('content') if isinstance(message, dict) else None
+    if isinstance(content, str):
+        content = [{'type': 'text', 'text': content}]
+    if not isinstance(content, list):
+        return ['user event without a content list']
+    foreign = []
+    for block in content:
+        kind = block.get('type') if isinstance(block, dict) else None
+        if kind == 'tool_result':
+            continue
+        if (kind == 'text' and prompt_text is not None and not prompt_seen[0]
+                and isinstance(block.get('text'), str) and block['text'].strip() == prompt_text.strip()):
+            prompt_seen[0] = True
+            continue
+        foreign.append(kind or 'non-dict block')
+    return foreign
+
+
 class Trace:
-    def __init__(self, expected_init, requested_model):
+    def __init__(self, expected_init, requested_model, prompt=None):
         self.omitted = 0; self.rewritten = 0; self.malformed = 0; self.lines = 0; self.last_malformed = False
         self.result = None; self.result_event = None; self.failed = False; self.unknown = []; self.models = []
-        self.complete = False; self.tools = []
+        self.complete = False; self.tools = []; self.foreign_user = []
+        self.prompt_text = prompt.decode('utf-8', 'replace') if isinstance(prompt, bytes) else prompt
+        self.prompt_seen = [False]
         self.expected_init = expected_init; self.requested_model = requested_model
         self.init_count = 0; self.init_errors = []; self.init_event = None
 
@@ -158,6 +189,8 @@ class Trace:
         t = event.get('type')
         if t not in KNOWN_TYPES:
             self.unknown.append(t)
+        if t == 'user':
+            self.foreign_user.extend(foreign_user_blocks(event, self.prompt_text, self.prompt_seen))
         if t == 'assistant':
             model = event.get('message', {}).get('model')
             if model and model not in self.models:
@@ -182,17 +215,19 @@ class Trace:
         malformed_ok = self.malformed == 0 or (timed_out and self.malformed == 1 and self.last_malformed)
         return (self.expected_init is not None and self.init_count == 1 and not self.init_errors
                 and self.models_ok() and (code == 0 or timed_out) and not self.failed
-                and malformed_ok and (self.complete or timed_out))
+                and malformed_ok and (self.complete or timed_out)
+                and not self.unknown and not self.foreign_user)
 
     def summary(self):
         return {'init_count': self.init_count, 'init_errors': self.init_errors, 'observed_models': self.models,
                 'omitted_reasoning_events': self.omitted, 'rewritten_lines': self.rewritten,
                 'malformed_events': self.malformed, 'lines': self.lines, 'unknown_event_types': self.unknown,
-                'tool_uses': self.tools, 'result_event_seen': self.complete, 'result_is_error': self.failed}
+                'tool_uses': self.tools, 'result_event_seen': self.complete, 'result_is_error': self.failed,
+                'foreign_user_blocks': self.foreign_user}
 
 
 def run(argv, prompt, cwd, env, output, timeout, expected_init, requested_model):
-    trace = Trace(expected_init, requested_model); expired = []
+    trace = Trace(expected_init, requested_model, prompt); expired = []
     with (output / 'stderr.txt').open('xb') as err, (output / 'public-events.jsonl').open('xb') as out:
         proc = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                 stderr=err, start_new_session=True)

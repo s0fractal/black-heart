@@ -1,7 +1,7 @@
 {
-  "started_at": "2026-09-15T14:54:24.134366+00:00",
-  "head": "4ad65c8a7018a5e76894cdd7dd3e7456467f1b92",
-  "status": "A experiments/calib-myc-1/controls/C0.diff\n A experiments/calib-myc-1/controls/C0.json\n A experiments/calib-myc-1/controls/C1.diff\n A experiments/calib-myc-1/controls/C1.json\n A experiments/calib-myc-1/controls/C2.diff\n A experiments/calib-myc-1/controls/C2.json\n A experiments/calib-myc-1/controls/C3.diff\n A experiments/calib-myc-1/controls/C3.json\n A experiments/calib-myc-1/controls/C4.diff\n A experiments/calib-myc-1/controls/C4.json\n A experiments/calib-myc-1/controls/C5.diff\n A experiments/calib-myc-1/controls/C5.json\n A experiments/calib-myc-1/controls/SUMMARY.json\n A experiments/calib-myc-1/execution/offline/context.json\n A experiments/calib-myc-1/execution/offline/expected-init.json\n A experiments/calib-myc-1/execution/offline/receipt.json\n A experiments/calib-myc-1/execution/offline/sha256.json\n A experiments/calib-myc-1/execution/offline/tool-probe.json\n A experiments/calib-myc-1/execution/quarantine-note.json\n A experiments/calib-myc-1/harness/common.py\n A experiments/calib-myc-1/harness/context_probe.py\n A experiments/calib-myc-1/harness/decision.py\n A experiments/calib-myc-1/harness/events.py\n A experiments/calib-myc-1/harness/grade_checks.py\n A experiments/calib-myc-1/harness/offline.py\n A experiments/calib-myc-1/harness/prepare.py\n A experiments/calib-myc-1/harness/regressions.py\n A experiments/calib-myc-1/harness/run_controls.py\n A experiments/calib-myc-1/harness/run_slot.py\n A experiments/calib-myc-1/harness/runtime.py\n A experiments/calib-myc-1/harness/test_harness.py\n A experiments/calib-myc-1/harness/tmp_scan.py\n A experiments/calib-myc-1/harness/verify_prepared.py\n A experiments/calib-myc-1/inputs/CONTRACT.md\n A experiments/calib-myc-1/inputs/task.txt\n A experiments/calib-myc-1/inputs/test_mycelium.baseline-198f9e2.py\n M tools/path_allowlist.json\n?? experiments/calib-myc-1/execution/package/",
+  "started_at": "2026-09-15T15:20:42.076885+00:00",
+  "head": "26a3168d92801ad00b6dac58d1b3d15bbb1621b3",
+  "status": "M experiments/calib-myc-1/controls/C0.json\n M experiments/calib-myc-1/controls/C1.json\n M experiments/calib-myc-1/controls/C2.json\n M experiments/calib-myc-1/controls/C3.json\n M experiments/calib-myc-1/controls/C4.json\n M experiments/calib-myc-1/controls/C5.json\n M experiments/calib-myc-1/controls/SUMMARY.json\n D experiments/calib-myc-1/execution/offline/context.json\n D experiments/calib-myc-1/execution/offline/expected-init.json\n D experiments/calib-myc-1/execution/offline/receipt.json\n D experiments/calib-myc-1/execution/offline/sha256.json\n D experiments/calib-myc-1/execution/offline/tool-probe.json\n M experiments/calib-myc-1/execution/package/freeze.json\n M experiments/calib-myc-1/harness/events.py\n M experiments/calib-myc-1/harness/grade_checks.py\n M experiments/calib-myc-1/harness/offline.py\n M experiments/calib-myc-1/harness/regressions.py\n M experiments/calib-myc-1/harness/test_harness.py",
   "python": "3.14.7 (main, Aug  5 2026, 10:29:49) [Clang 21.0.0 (clang-2100.1.1.101)]",
   "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
   "git": "git version 2.54.0 (Apple Git-157)",
@@ -14,20 +14,20 @@
     "common.py": "7aca18d6464710e601ad42ebfcf825428735a71cb8f82f6740ac7ebf6002ecf1",
     "context_probe.py": "cfef70f3da0f250e74afe026c4a02f2a09ec3967e15be92f66a8dc3a4905bead",
     "decision.py": "7e739f65d0236022393b031e91f9d5d43a2c61d1d30f3ecb6b6d553d3b2f1a77",
-    "events.py": "562e52ae3e90447bbdeacddc0cf14a12cf179dcd6500f9e1a8f68bf3546035b6",
-    "grade_checks.py": "ab2cd08236a2e44a9eb3d257b0004305c3cdfaf9807ad964265a5acc6152e240",
-    "offline.py": "b4eba0473c00510fe99c861c8ffea38bc456dd9b8febfe391f53df17c9411a98",
+    "events.py": "10f842d432011e8a0f5d9049f9e54e1a584c56bb090ba0db9cf8d580a4591e1b",
+    "grade_checks.py": "739e97032abf98fbe31913a520b57e15e0b940ba53f90425194588be9449aae6",
+    "offline.py": "b16e2cfaf5fe167be7a502892444bc7a69393408f1465a0441247c6db2aa146b",
     "prepare.py": "4c1dda531b99d4c1197c67e322a7e4ac6c65b3911fd5acbf368c62e1f916a45d",
-    "regressions.py": "6fd3417ed8a43224165a16675e57ca93ee7bd24bdebad42a5ca52309332e1449",
+    "regressions.py": "1d28abf25ba9c379c9fcdb04fc34343270d6281beeec0810d896420b7495756c",
     "run_controls.py": "8c74e627fbec05d08f9e57ebf151037be345373f09fa9b8941d819592de2bdd3",
     "run_slot.py": "ffdcfa189e51cb17be5280dbf58e6d0bc1a74dcc240513bc09295bd042ee7706",
     "runtime.py": "327e83c672ce11a9090a159875deff701ecf1e2060df6897cbd7a4397cdef4dd",
-    "test_harness.py": "2880be8c4e2a8b2118a95e31a97147eb2ce6a295a2dfe6f9ae941be93818d9db",
+    "test_harness.py": "95facc0f13f2f27fe498896bf42fb5d863ba53222bbea2f9554e5ab74a7258c5",
     "tmp_scan.py": "a6e350d040739003a4d74f32bcb77e97fccadf9623cda7e106cccaf24d7fdc31",
     "verify_prepared.py": "ceb112ad91984c1d302bb1df326620e0975d127d0298b802a36db47815c39361"
   },
   "package": "~/Projects/.worktrees/black-heart-calib-package/experiments/calib-myc-1/execution/package",
-  "freeze_sha256": "2b87ab3acab34d09759d5634496167d8c5bc6ebdb57aa2ce628fb0d6c15998c4",
+  "freeze_sha256": "8fafc835d3e06850c10d8b0e54335e12fd6a7559a7aad49aa77deec2836f054e",
   "snapshot": {
     "bundle": "snapshot.bundle",
     "sha256": "418a0fee0d6920031d1da6062546603dbdc0d71624dd32788c880540844fde9d",
@@ -54,8 +54,8 @@
     "pass": true,
     "all_as_predicted": true,
     "byte_identical_to_committed": true,
-    "regenerated_sha256": "5153ecdb356973e774fc4abfcf34cd45161ca41bfb3f417aece96976389ce59b",
-    "committed_sha256": "5153ecdb356973e774fc4abfcf34cd45161ca41bfb3f417aece96976389ce59b",
+    "regenerated_sha256": "c2a3a54ae20b4d4d3dd4923b8bbe9365d0f1db204c9f5533499e523a15b48c53",
+    "committed_sha256": "c2a3a54ae20b4d4d3dd4923b8bbe9365d0f1db204c9f5533499e523a15b48c53",
     "outcomes": {
       "C0": "FAIL",
       "C1": "PARTIAL",
@@ -64,20 +64,20 @@
       "C4": "PASS",
       "C5": "FAIL"
     },
-    "grader_sha256": "ab2cd08236a2e44a9eb3d257b0004305c3cdfaf9807ad964265a5acc6152e240",
+    "grader_sha256": "739e97032abf98fbe31913a520b57e15e0b940ba53f90425194588be9449aae6",
     "baseline_test_sha256": "883b7c625fbe3531f4d9302e904f95b6d81359cba46422f38da94af6fbc69a16",
     "control_trees_redirected_from_tmp": [
-      "calib-C0-psqc909m",
-      "calib-C1-f7fz58z3",
-      "calib-C2-6o8f4s05",
-      "calib-C3-n0mn6ymv",
-      "calib-C4-jl5s_3ms",
-      "calib-C5-q13qw4zz"
+      "calib-C0-epvw2l85",
+      "calib-C1-gut_970q",
+      "calib-C2-3v_5s92k",
+      "calib-C3-erf_fhjd",
+      "calib-C4-tddlj4ae",
+      "calib-C5-mbk2y4z7"
     ]
   },
   "readback": {
     "pass": true,
-    "freeze_sha256": "2b87ab3acab34d09759d5634496167d8c5bc6ebdb57aa2ce628fb0d6c15998c4",
+    "freeze_sha256": "8fafc835d3e06850c10d8b0e54335e12fd6a7559a7aad49aa77deec2836f054e",
     "bundle_sha256": "418a0fee0d6920031d1da6062546603dbdc0d71624dd32788c880540844fde9d",
     "head": "d1fb31919f7c77e4094e1d16dea5c5411bccf5fd",
     "tracked_entries": 565,
@@ -140,8 +140,8 @@
       "package:controls": "~/Projects/.worktrees/black-heart-calib-package/experiments/calib-myc-1/controls",
       "package:execution": "~/Projects/.worktrees/black-heart-calib-package/experiments/calib-myc-1/execution",
       "package:inputs": "~/Projects/.worktrees/black-heart-calib-package/experiments/calib-myc-1/inputs",
-      "run_root": "~/calib1-runs/offline-canary-nzdvwb0y",
-      "sibling_receiver": "~/calib1-work/receivers/receiver-canary-5db_mjsa/canary.txt"
+      "run_root": "~/calib1-runs/offline-canary-59kz_ngn",
+      "sibling_receiver": "~/calib1-work/receivers/receiver-canary-rmqi8o9u/canary.txt"
     }
   },
   "client_pins_match": true,
@@ -156,7 +156,7 @@
       "<TMPDIR>",
       "/private/var/tmp"
     ],
-    "files_read": 39525,
+    "files_read": 39587,
     "denied": 83,
     "matches": [
       {
@@ -165,7 +165,7 @@
       },
       {
         "path": "/private/tmp/claude-501/bash-edit-diff/15405273227858518145-8479161462899785919-1120d63016888031/index",
-        "sha256": "00db5e6f5a14263f623a4c5f978394b2477cdf1c672d06965a8448858f8bcee0"
+        "sha256": "93b9b17776ef1d413982072111ba66dc153729626ddd7cf7308f4c9fd4061615"
       }
     ],
     "errors": [
@@ -266,7 +266,7 @@
     "native_messages_after_prompt": [
       {
         "role": "system",
-        "text": "<system-reminder>\n# Environment\nYou have been invoked in the following environment: \n - Primary working directory: ~/calib1-work/receivers/receiver-uqj7ykkr\n - Is a git repository: true\n - Platform: darwin\n - Shell: zsh\n - OS Version: Darwin 25.6.0\n</system-reminder>\n\n<system-reminder>\nYou are powered by the model named Sonnet 5. The exact model ID is claude-sonnet-5. Assistant knowledge cutoff is January 2026.\n</system-reminder>\n\n<system-reminder>\nToday's date is 2026-09-15.\n</system-reminder>"
+        "text": "<system-reminder>\n# Environment\nYou have been invoked in the following environment: \n - Primary working directory: ~/calib1-work/receivers/receiver-dwhpwq_4\n - Is a git repository: true\n - Platform: darwin\n - Shell: zsh\n - OS Version: Darwin 25.6.0\n</system-reminder>\n\n<system-reminder>\nYou are powered by the model named Sonnet 5. The exact model ID is claude-sonnet-5. Assistant knowledge cutoff is January 2026.\n</system-reminder>\n\n<system-reminder>\nToday's date is 2026-09-15.\n</system-reminder>"
       }
     ],
     "markers_in_model_visible_context": [],
@@ -298,6 +298,8 @@
         "api_key_source_unexpected": true,
         "api_key_sources_accepted": true,
         "record_only_may_differ": true,
+        "skills_must_be_empty": true,
+        "slash_commands_must_be_empty": true,
         "bad_uuid": true,
         "not_init": true,
         "false_vs_zero_distinguished": true
@@ -327,7 +329,15 @@
         "no_result_without_timeout_invalid": true,
         "no_result_with_timeout_valid": true,
         "nonzero_exit_without_timeout_invalid": true,
-        "init_policy_error_invalid": true
+        "init_policy_error_invalid": true,
+        "skills_nonempty_invalid": true,
+        "slash_commands_nonempty_invalid": true,
+        "unknown_event_type_invalid": true,
+        "user_tool_result_valid": true,
+        "user_foreign_text_invalid": true,
+        "user_string_content_invalid": true,
+        "prompt_echo_once_valid": true,
+        "prompt_echo_twice_invalid": true
       }
     },
     "overwrite": {
@@ -368,6 +378,53 @@
     },
     "argv": {
       "pass": true
+    },
+    "grader_hang": {
+      "pass": true,
+      "cases": {
+        "hang_at_import": {
+          "outcome": "FAIL",
+          "exit_code": 0,
+          "timed_out_checks": [
+            "H1",
+            "H2",
+            "H3",
+            "H4",
+            "H5",
+            "H6",
+            "H7"
+          ],
+          "pass": true
+        },
+        "hang_in_verify": {
+          "outcome": "FAIL",
+          "exit_code": 0,
+          "timed_out_checks": [
+            "H1",
+            "H2",
+            "H3",
+            "H4",
+            "H5",
+            "H7"
+          ],
+          "pass": true
+        },
+        "hang_in_baseline": {
+          "outcome": "FAIL",
+          "exit_code": 0,
+          "timed_out_checks": [
+            "H1",
+            "H2",
+            "H3",
+            "H4",
+            "H5",
+            "H6",
+            "H7"
+          ],
+          "pass": true
+        }
+      },
+      "deadline_seconds": 2
     }
   },
   "sandbox_notes": {
@@ -375,5 +432,5 @@
     "why": "CLI started, ran the Bash tool and finished with the whole of ~/.claude and ~/.claude.json read-denied and all writes outside the snapshot, /private/tmp, /private/var/folders and /dev denied."
   },
   "pass": true,
-  "finished_at": "2026-09-15T14:55:30.104016+00:00"
+  "finished_at": "2026-09-15T15:22:23.637293+00:00"
 }

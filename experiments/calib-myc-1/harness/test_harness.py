@@ -138,6 +138,14 @@ class SandboxTests(unittest.TestCase):
 
 
 class ControlTests(unittest.TestCase):
+    def test_grader_hangs_are_check_failures_not_errors(self):
+        from regressions import grader_hang_check
+        from common import REPO, WORK
+        work = Path.home() / WORK / 'test-hang'; work.mkdir(parents=True, exist_ok=True)
+        r = grader_hang_check(REPO, work)
+        self.assertTrue(r['pass'])
+        self.assertEqual({c['outcome'] for c in r['cases'].values()}, {'FAIL'})
+
     def test_controls_all_as_predicted_and_identical(self):
         from offline import controls_check
         work = Path.home() / WORK / 'tests'; work.mkdir(parents=True, exist_ok=True)

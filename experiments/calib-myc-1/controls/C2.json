@@ -78,8 +78,12 @@
   },
   "H7": {
    "pass": true,
-   "detail": "Ran 8 tests in 0.793s\n\nOK"
+   "detail": "Ran 8 tests in 0.800s\n\nOK"
   }
+ },
+ "timeouts": {
+  "check": 120,
+  "h7": 600
  },
  "outcome": "PARTIAL",
  "control": "C2",

@@ -57,7 +57,9 @@ def init_policy_check(expected, model):
         'changed_version': 'init field changed: claude_code_version' in e(dict(base, claude_code_version='0.0.0')),
         'api_key_source_unexpected': 'apiKeySource unexpected' in e(dict(base, apiKeySource='apiKeyHelper')),
         'api_key_sources_accepted': all(e(dict(base, apiKeySource=s)) == [] for s in events.API_KEY_SOURCES),
-        'record_only_may_differ': e(dict(base, skills=['x'], slash_commands=['y'], output_style='z')) == [],
+        'record_only_may_differ': e(dict(base, output_style='z')) == [],
+        'skills_must_be_empty': 'skills must be []' in e(dict(base, skills=['x'])),
+        'slash_commands_must_be_empty': 'slash_commands must be []' in e(dict(base, slash_commands=['y'])),
         'bad_uuid': 'session_id is not a UUID' in e(dict(base, session_id='nope')),
         'not_init': 'not an init event' in e(dict(base, subtype='other')),
         'false_vs_zero_distinguished': 'init field changed: analytics_disabled' in e(dict(base, analytics_disabled=0)),
@@ -147,8 +149,77 @@ def trace_check(expected, model):
     cases['nonzero_exit_without_timeout_invalid'] = not feed(expected, model, stream(expected, model))[0].infrastructure_valid(1, False)
     t, _ = feed(expected, model, [json.dumps(dict(live_init(expected, model), extra=1)).encode() + b'\n'])
     cases['init_policy_error_invalid'] = bool(t.init_errors) and not t.infrastructure_valid(0, True)
+    # Review B2: foreign-context signs must invalidate automatically.
+    for name in ('skills', 'slash_commands'):
+        t, _ = feed(expected, model, [json.dumps(dict(live_init(expected, model), **{name: ['foreign-project-memory']})).encode() + b'\n'])
+        cases[name + '_nonempty_invalid'] = (name + ' must be []') in t.init_errors and not t.infrastructure_valid(0, True)
+    lines = stream(expected, model)
+    unknown = (json.dumps({'type': 'telemetry_note', 'note': 'x'}) + '\n').encode()
+    t, _ = feed(expected, model, lines[:1] + [unknown] + lines[1:])
+    cases['unknown_event_type_invalid'] = t.unknown == ['telemetry_note'] and not t.infrastructure_valid(0, False)
+    tool_result = (json.dumps({'type': 'user', 'message': {'role': 'user', 'content': [
+        {'tool_use_id': 't1', 'type': 'tool_result', 'content': 'ok'}]}}) + '\n').encode()
+    t, _ = feed(expected, model, lines[:1] + [tool_result] + lines[1:])
+    cases['user_tool_result_valid'] = t.infrastructure_valid(0, False) and not t.foreign_user
+    foreign = (json.dumps({'type': 'user', 'message': {'role': 'user', 'content': [
+        {'type': 'text', 'text': 'Remember: the fix is in verify()'}]}}) + '\n').encode()
+    t, _ = feed(expected, model, lines[:1] + [foreign] + lines[1:])
+    cases['user_foreign_text_invalid'] = t.foreign_user == ['text'] and not t.infrastructure_valid(0, False)
+    as_string = (json.dumps({'type': 'user', 'message': {'role': 'user', 'content': 'injected'}}) + '\n').encode()
+    t, _ = feed(expected, model, lines[:1] + [as_string] + lines[1:])
+    cases['user_string_content_invalid'] = bool(t.foreign_user) and not t.infrastructure_valid(0, False)
+    echo = (json.dumps({'type': 'user', 'message': {'role': 'user', 'content': [{'type': 'text', 'text': 'THE PROMPT'}]}}) + '\n').encode()
+    t = events.Trace(expected, model, b'THE PROMPT\n'); [t.line(x) for x in lines[:1] + [echo] + lines[1:]]
+    cases['prompt_echo_once_valid'] = t.infrastructure_valid(0, False)
+    t = events.Trace(expected, model, b'THE PROMPT\n'); [t.line(x) for x in lines[:1] + [echo, echo] + lines[1:]]
+    cases['prompt_echo_twice_invalid'] = not t.infrastructure_valid(0, False)
     assert all(cases.values()), cases
     return {'pass': True, 'cases': cases}
+
+
+HANG_IMPORT = 'import time\nwhile True:\n    time.sleep(1)\n'
+
+
+def grader_hang_check(repo, work):
+    """Review B1: a submission that hangs is a graded failure, never a grader error.
+
+    Three synthetic submissions on the pinned tree, graded with 2-second
+    deadlines: hang at import; hang inside verify(); hang inside the H7
+    baseline run (create_and_sign sleeps). Each must yield outcome FAIL with
+    'timed out' details and no exception.
+    """
+    import subprocess as sp
+    from common import HARNESS, ROOT, SOURCE_REVISION
+    grader = HARNESS / 'grade_checks.py'; baseline = ROOT / 'inputs' / 'test_mycelium.baseline-198f9e2.py'
+    pre = sp.check_output(['git', '-C', str(repo), 'show', SOURCE_REVISION + ':mycelium.py']).decode()
+    variants = {
+        'hang_at_import': HANG_IMPORT,
+        'hang_in_verify': pre.replace('    def verify(self, replay_counterexample: bool = True) -> bool:\n        """Verifies signature, ID derivation, and optionally re-runs counterexample."""\n',
+                                      '    def verify(self, replay_counterexample: bool = True) -> bool:\n        """Verifies signature, ID derivation, and optionally re-runs counterexample."""\n        import time\n        while True:\n            time.sleep(1)\n'),
+        'hang_in_baseline': pre.replace('        sig = sign_bytes(sk_bytes, rec.canonical_bytes_for_signing())\n        rec.signature_hex = sig.hex()\n        return rec\n',
+                                        '        import time\n        while True:\n            time.sleep(1)\n'),
+    }
+    assert variants['hang_in_verify'] != pre and variants['hang_in_baseline'] != pre
+    env = dict(os.environ, CALIB_GRADER_CHECK_TIMEOUT='2', CALIB_GRADER_H7_TIMEOUT='2')
+    cases = {}
+    for name, source in variants.items():
+        with tempfile.TemporaryDirectory(prefix='hang-', dir=work) as td:
+            tar = sp.Popen(['git', '-C', str(repo), 'archive', SOURCE_REVISION], stdout=sp.PIPE)
+            sp.check_call(['tar', '-x', '-C', td], stdin=tar.stdout); tar.wait()
+            (Path(td) / 'mycelium.py').write_text(source, encoding='utf-8')
+            out = sp.run([sys.executable, str(grader), td, str(baseline)], capture_output=True, text=True, timeout=120, env=env)
+            try:
+                graded = json.loads(out.stdout)
+            except ValueError:
+                graded = {'outcome': 'GRADER_ERROR', 'stderr': out.stderr[-400:]}
+            timed = [h for h, v in graded.get('checks', {}).items() if 'timed out' in str(v.get('detail'))]
+            cases[name] = {'outcome': graded.get('outcome'), 'exit_code': out.returncode, 'timed_out_checks': timed,
+                           'pass': graded.get('outcome') == 'FAIL' and out.returncode == 0 and bool(timed)
+                                   and 'TimeoutExpired' not in out.stderr}
+    cases['hang_at_import']['pass'] &= set(cases['hang_at_import']['timed_out_checks']) >= {'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'H7'}
+    cases['hang_in_baseline']['pass'] &= 'H7' in cases['hang_in_baseline']['timed_out_checks']
+    assert all(c['pass'] for c in cases.values()), cases
+    return {'pass': True, 'cases': cases, 'deadline_seconds': 2}
 
 
 def overwrite_check():

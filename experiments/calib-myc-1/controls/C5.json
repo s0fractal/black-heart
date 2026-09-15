@@ -78,8 +78,12 @@
   },
   "H7": {
    "pass": false,
-   "detail": "Ran 8 tests in 0.794s\n\nFAILED (failures=2)"
+   "detail": "Ran 8 tests in 0.790s\n\nFAILED (failures=2)"
   }
+ },
+ "timeouts": {
+  "check": 120,
+  "h7": 600
  },
  "outcome": "FAIL",
  "control": "C5",
