@@ -10,6 +10,7 @@ import os
 import sys
 import json
 import tempfile
+import shutil
 import unittest
 import subprocess
 
@@ -369,6 +370,60 @@ class TestAutopoiesisEngine(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             evolve_autopoietic_organism(self.pdf_path, tombstone_registry=reg)
         self.assertIn("Palimpsest Autonomic Guard rejected", str(ctx.exception))
+
+
+class TestPalimpsestGuardSettlement(unittest.TestCase):
+    """PAL4 behavioural half (ledger: dead code before this repair).
+
+    The guard's matrix measures one thing: every gene parses and SETTLES
+    within GUARD_ATP. A successor whose gene stops settling is EROSION; a
+    successor whose gene changes meaning but still settles is not.
+    """
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.pdf = os.path.join(self.dir, "guard.pdf")
+        self.org0, _ = init_autopoietic_organism(self.pdf)
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def _successor(self, gene_id, expression):
+        import copy
+        succ = copy.deepcopy(self.org0)
+        succ.generation = self.org0.generation + 1
+        for c in succ.chromosomes:
+            if c.gene_id == gene_id:
+                c.expression = expression
+        succ.organism_hash = succ.compute_hash()
+        return succ
+
+    def test_identity_transition_passes_and_names_what_is_measured(self):
+        from autopoiesis import check_palimpsest_guard
+        ok, msg, tensor = check_palimpsest_guard(self.org0, self.org0)
+        self.assertTrue(ok, msg)
+        self.assertIn("fixture prompts are not evaluated", msg)
+        self.assertIsNotNone(tensor)
+
+    def test_gene_that_stops_settling_is_erosion(self):
+        from autopoiesis import check_palimpsest_guard
+        from glyph import parse, evaluate
+        omega = "🌿 🤍 🤍 (🌿 🤍 🤍)"
+        self.assertFalse(evaluate(parse(omega), max_atp=25).is_settled())
+        succ = self._successor("GENE-OPT-04", omega)
+        ok, msg, tensor = check_palimpsest_guard(self.org0, succ)
+        self.assertFalse(ok, msg)
+        self.assertIn("EROSION", msg)
+        self.assertIn("gene settlement", msg)
+
+    def test_settled_semantic_change_is_not_erosion(self):
+        from autopoiesis import check_palimpsest_guard
+        from glyph import parse, evaluate
+        changed = "🖤 OtherNutrient EntropyNoise"   # K a b -> a, settles in one step
+        self.assertTrue(evaluate(parse(changed), max_atp=25).is_settled())
+        succ = self._successor("GENE-METAB-02", changed)
+        ok, msg, tensor = check_palimpsest_guard(self.org0, succ)
+        self.assertTrue(ok, msg)
 
 
 if __name__ == "__main__":

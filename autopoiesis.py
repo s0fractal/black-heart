@@ -678,6 +678,9 @@ def init_autopoietic_organism(
 # 6. IN-PLACE AUTONOMOUS EVOLUTION (ISO 32000 §7.5.6 INCREMENTAL UPDATE)
 # ============================================================================
 
+GUARD_ATP = 25  # reduction budget of the guard's gene-settlement measurement
+
+
 def check_palimpsest_guard(
     current_org: Organism,
     candidate_org: Organism,
@@ -768,6 +771,19 @@ def check_palimpsest_guard(
     skel_succ = ReasoningSkeleton.create(candidate_org.generation, axioms_succ)
 
     def _evaluate_traces_on_fixtures(org, gen):
+        """Organism-level gene settlement, recorded once per fixture id.
+
+        What is measured: every chromosome of `org` parses and its reduction
+        SETTLES within the guard budget (GUARD_ATP). A chromosome that is
+        suspended at the budget is not a normal form (DOC-F1) and counts as
+        non-compliant, as does one that raises. The fixture prompts themselves
+        are NOT evaluated: the organism has no way to answer a prompt, so each
+        fixture receives the same organism-level measurement and the resulting
+        "virtue" deltas mean one thing only — loss or gain of gene settlement
+        between generations. Before this repair the loop read a field that
+        `EvalResult` does not have, so every trace was an error in both
+        generations and the matrix compared nothing (ledger, PAL4 row).
+        """
         matrix = BehavioralTraceMatrix(gen)
         for fid, fix in fixtures.items():
             total_steps = 0
@@ -776,9 +792,13 @@ def check_palimpsest_guard(
             for c in org.chromosomes:
                 try:
                     t = parse(c.expression)
-                    res = evaluate(t, max_atp=25)
-                    total_steps += res.steps_spent
-                    hashes.append(hashlib.sha256(str(res.normal_form).encode("utf-8")).hexdigest()[:8])
+                    res = evaluate(t, max_atp=GUARD_ATP)
+                    total_steps += res.atp_spent
+                    if not res.is_settled():
+                        cand_ok = False
+                        hashes.append("suspended")
+                    else:
+                        hashes.append(hashlib.sha256(str(res.term).encode("utf-8")).hexdigest()[:8])
                 except Exception:
                     cand_ok = False
                     total_steps += 1
@@ -806,9 +826,11 @@ def check_palimpsest_guard(
     tensor = analyzer.analyze_drift(skel_curr, skel_succ, mat_curr, mat_succ)
 
     if tensor.verdict == PalimpsestVerdict.EROSION:
-        return False, f"Palimpsest drift detected EROSION (asymmetry={tensor.asymmetry_score:.3f})", tensor
+        return False, (f"Palimpsest drift detected EROSION: gene settlement within {GUARD_ATP} ATP lost "
+                       f"between generations (asymmetry={tensor.asymmetry_score:.3f})"), tensor
 
-    return True, "Palimpsest guard verified: non-eroded transition", tensor
+    return True, ("Palimpsest guard verified: tombstone and refutation gates passed; gene settlement "
+                  f"within {GUARD_ATP} ATP not lost (fixture prompts are not evaluated)"), tensor
 
 
 def evolve_autopoietic_organism(
