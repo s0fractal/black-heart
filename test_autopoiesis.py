@@ -431,6 +431,51 @@ class TestPalimpsestGuardSettlement(unittest.TestCase):
             self.assertNotIn(key, ce)
         self.assertTrue(all("prompt_or_term" not in c for c in tensor.counterexamples))
 
+    def _slow_finite_term(self):
+        # church_numeral(5) f x: a finite chain that suspends at 25 ATP and settles at 100 (27 steps).
+        from glyph import church_numeral, App, Var, evaluate
+        t = App(App(church_numeral(5), Var("f")), Var("x"))
+        self.assertFalse(evaluate(t, max_atp=25).is_settled())
+        self.assertTrue(evaluate(t, max_atp=100).is_settled())
+        return str(t)
+
+    def test_second_gene_loss_is_not_masked_by_a_first_unsettled_gene(self):
+        """Review of PR #91: an aggregate 'all genes settle' was already false in
+        both generations when one gene did not settle, so a second gene losing
+        settlement passed. The decision must come from per-gene evidence."""
+        from autopoiesis import check_palimpsest_guard
+        slow = self._slow_finite_term()
+        current = self._successor("GENE-OPT-04", slow)          # already does not settle at 25
+        current.generation = self.org0.generation
+        current.organism_hash = current.compute_hash()
+        candidate = self._successor("GENE-OPT-04", slow)
+        for c in candidate.chromosomes:
+            if c.gene_id == "GENE-METAB-02":
+                c.expression = slow                               # a second gene loses settlement
+        candidate.organism_hash = candidate.compute_hash()
+        ok, msg, tensor = check_palimpsest_guard(current, candidate)
+        self.assertFalse(ok, msg)
+        self.assertIn("EROSION", msg)
+        self.assertIn("GENE-METAB-02", msg)
+        self.assertEqual([c["gene_id"] for c in tensor.counterexamples], ["GENE-METAB-02"])
+        self.assertEqual(tensor.counterexamples[0]["current"]["status"], "SETTLED")
+        self.assertEqual(tensor.counterexamples[0]["candidate"]["status"], "SUSPENDED")
+        self.assertEqual(tensor.verdict.value, "EROSION")
+
+    def test_unsettled_gene_kept_unchanged_is_not_a_new_loss(self):
+        from autopoiesis import check_palimpsest_guard
+        slow = self._slow_finite_term()
+        current = self._successor("GENE-OPT-04", slow)
+        current.generation = self.org0.generation
+        current.organism_hash = current.compute_hash()
+        import copy
+        candidate = copy.deepcopy(current)
+        candidate.generation = current.generation + 1
+        candidate.organism_hash = candidate.compute_hash()
+        ok, msg, tensor = check_palimpsest_guard(current, candidate)
+        self.assertTrue(ok, msg)
+        self.assertEqual(tensor.counterexamples, [])
+
     def test_settled_semantic_change_is_not_erosion(self):
         from autopoiesis import check_palimpsest_guard
         from glyph import parse, evaluate
