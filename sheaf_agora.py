@@ -524,6 +524,12 @@ class FederatedAgoraParliament:
 
         # Fail-closed theorem check (F10 / A4)
         if prop.proposal_type == ProposalType.THEOREM_CONGRUENCE:
+            # Chamber order must not decide the outcome. A settled counterexample
+            # in any chamber slashes; an unsettled or erroring chamber is only
+            # remembered and the remaining chambers are still checked. Breaking
+            # on the first suspension let `{Y I, K}` be UNVERIFIED while
+            # `{K, Y I}` was SLASHED for the same settled divergence K != I.
+            unverified_reason = None
             for ch_id, term_expr in prop.chamber_terms.items():
                 ch = self.chambers.get(ch_id)
                 if not ch:
@@ -537,21 +543,24 @@ class FederatedAgoraParliament:
                     # A suspended intermediate is neither agreement nor
                     # divergence, so it cannot ground a slash.
                     if not eval_res.is_settled() or not exp_eval.is_settled():
-                        status = RatificationStatus.UNVERIFIED_AUDIT_BUDGET
-                        rejection_reason = (f"Theorem reduction did not settle within "
-                                            f"{ch.context.budget_ceiling} ATP in {ch.name}; "
-                                            f"not a refutation, stake not slashed")
-                        break
+                        if unverified_reason is None:
+                            unverified_reason = (f"Theorem reduction did not settle within "
+                                                 f"{ch.context.budget_ceiling} ATP in {ch.name}; "
+                                                 f"not a refutation, stake not slashed")
+                        continue
                     if eval_res.normal_form != exp_eval.normal_form and str(eval_res.normal_form) != prop.target_nf:
                         slashed_stake = prop.stake_atp
                         status = RatificationStatus.SLASHED_AUDIT_FAILED
                         rejection_reason = f"Theorem reduction divergence in {ch.name}: expected '{exp_eval.normal_form}', got '{eval_res.normal_form}'"
                         break
                 except Exception as e:
-                    status = RatificationStatus.UNVERIFIED_AUDIT_BUDGET
-                    rejection_reason = (f"Theorem evaluation error in {ch.name}: {e}; "
-                                        f"not a refutation, stake not slashed")
-                    break
+                    if unverified_reason is None:
+                        unverified_reason = (f"Theorem evaluation error in {ch.name}: {e}; "
+                                             f"not a refutation, stake not slashed")
+                    continue
+            if status != RatificationStatus.SLASHED_AUDIT_FAILED and unverified_reason is not None:
+                status = RatificationStatus.UNVERIFIED_AUDIT_BUDGET
+                rejection_reason = unverified_reason
 
         if status in (RatificationStatus.SLASHED_AUDIT_FAILED, RatificationStatus.UNVERIFIED_AUDIT_BUDGET):
             # Slashed, or unverified: halt before the political and cohomology gates (F10 / A4)
