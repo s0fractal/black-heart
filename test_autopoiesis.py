@@ -476,6 +476,49 @@ class TestPalimpsestGuardSettlement(unittest.TestCase):
         self.assertTrue(ok, msg)
         self.assertEqual(tensor.counterexamples, [])
 
+    def test_evaluator_failure_on_a_gene_is_evidence_not_a_crash(self):
+        """Review of PR #91: an evaluator exception for a syntactically valid gene must
+        yield a refusal with ERROR evidence, never an unhandled KeyError."""
+        from unittest import mock
+        import glyph
+        from autopoiesis import check_palimpsest_guard
+        target = "🖤 OtherNutrient EntropyNoise"
+        succ = self._successor("GENE-METAB-02", target)
+        real = glyph.evaluate
+        def failing(term, *a, **k):
+            if str(term) == str(glyph.parse(target)):
+                raise RuntimeError("controlled evaluator failure")
+            return real(term, *a, **k)
+        with mock.patch.object(glyph, "evaluate", failing):
+            ok, msg, tensor = check_palimpsest_guard(self.org0, succ)
+        self.assertFalse(ok, msg)
+        self.assertEqual([c["gene_id"] for c in tensor.counterexamples], ["GENE-METAB-02"])
+        ce = tensor.counterexamples[0]
+        self.assertEqual(ce["current"]["status"], "SETTLED")
+        self.assertEqual(ce["candidate"]["status"], "ERROR")
+        self.assertEqual(ce["candidate"]["error"], "RuntimeError")
+        self.assertIsNone(ce["candidate"]["normal_form_sha256_8"])
+        self.assertTrue(ce["settlement_lost"])
+
+    def test_added_unsettled_gene_is_allowed_and_verdict_agrees(self):
+        """Review of PR #91: a NEW gene that does not settle is not a loss of any existing
+        gene; the guard allows it and the returned verdict must not stay EROSION."""
+        import copy
+        from autopoiesis import check_palimpsest_guard
+        slow = self._slow_finite_term()
+        succ = copy.deepcopy(self.org0)
+        succ.generation = self.org0.generation + 1
+        new_gene = copy.deepcopy(succ.chromosomes[0])
+        new_gene.gene_id = "GENE-NEW-06"
+        new_gene.gene_name = "NewSlowGene"
+        new_gene.expression = slow
+        succ.chromosomes.append(new_gene)
+        succ.organism_hash = succ.compute_hash()
+        ok, msg, tensor = check_palimpsest_guard(self.org0, succ)
+        self.assertTrue(ok, msg)
+        self.assertEqual(tensor.counterexamples, [])
+        self.assertNotEqual(tensor.verdict.value, "EROSION")
+
     def test_settled_semantic_change_is_not_erosion(self):
         from autopoiesis import check_palimpsest_guard
         from glyph import parse, evaluate

@@ -775,7 +775,10 @@ def check_palimpsest_guard(
                     "normal_form_sha256_8": (hashlib.sha256(str(res.term).encode("utf-8")).hexdigest()[:8]
                                              if res.is_settled() else None)}
         except Exception as e:
-            return {"expression": expression, "status": "ERROR", "atp_spent": None, "error": type(e).__name__}
+            # Same shape as the settled case (review of PR #91: a missing key
+            # turned an evaluator failure into an unhandled KeyError).
+            return {"expression": expression, "status": "ERROR", "atp_spent": None,
+                    "normal_form_sha256_8": None, "error": type(e).__name__}
 
     current_settlement = {c.gene_id: _settlement(c.expression) for c in current_org.chromosomes}
     candidate_settlement = {c.gene_id: _settlement(c.expression) for c in candidate_org.chromosomes}
@@ -838,6 +841,12 @@ def check_palimpsest_guard(
         names = ", ".join(e["gene_id"] for e in lost)
         return False, (f"Palimpsest drift detected EROSION: gene settlement within {GUARD_ATP} ATP lost "
                        f"for {names} (asymmetry={tensor.asymmetry_score:.3f})"), tensor
+    if tensor.verdict == PalimpsestVerdict.EROSION:
+        # The analyzer's aggregate ("all genes settle") can flip on a NEW gene
+        # that does not settle, which is not a loss of any existing gene and is
+        # allowed by this guard. The returned verdict must agree with the
+        # decision: a change without measured loss is DRIFT, not EROSION.
+        tensor.verdict = PalimpsestVerdict.DRIFT
 
     return True, ("Palimpsest guard verified: tombstone and refutation gates passed; no existing gene lost "
                   f"settlement within {GUARD_ATP} ATP (fixture prompts are not evaluated)"), tensor
