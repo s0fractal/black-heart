@@ -293,6 +293,34 @@ class TestFederatedSheafAgora(unittest.TestCase):
         self.assertEqual(receipt.status, RatificationStatus.REJECTED_PLUTOCRACY_CEILING)
         self.assertGreaterEqual(receipt.federation_gini, 0.65)
 
+    def test_06b_unsettled_theorem_is_unverified_not_slashed(self):
+        """FSA5 (S-verif-8): a reduction that does not settle within the chamber budget is
+        UNVERIFIED_AUDIT_BUDGET — no ratification, no slash, stake untouched. Before this
+        rule `omega omega` reached the cohomology gate mislabelled as a fracture, and a true
+        identity `Y f` vs `f (Y f)` was SLASHED_AUDIT_FAILED."""
+        parliament = FederatedAgoraParliament("Rigorous Agora")
+        ctx = EpistemicContext.create("Math Chamber", ["algebra"], 100)
+        ch = FederatedChamber("ch_math", "Math Chamber", ctx)
+        parliament.register_chamber(ch)
+        for pid, term, target in (("prop_omega", "S I I (S I I)", "I"), ("prop_yf", "Y f", "f (Y f)")):
+            prop = FederatedProposal(
+                proposal_id=pid, title="Unsettled Theorem",
+                proposal_type=ProposalType.THEOREM_CONGRUENCE, claim_name=f"claim {pid}",
+                sponsor_pk_hex=self.pk_sponsor, stake_atp=80,
+                chamber_terms={"ch_math": term}, target_nf=target
+            )
+            prop.sign(self.sk_sponsor)
+            parliament.table_proposal(prop)
+            b = FederatedBallot(voter_pk_hex=self.pk_voter1, chamber_id="ch_math",
+                                proposal_id=pid, pledged_atp=49, direction=VoteDirection.AYE)
+            b.sign(self.sk_voter1)
+            parliament.cast_ballot(b)
+            receipt = parliament.resolve_session(pid)
+            self.assertEqual(receipt.status, RatificationStatus.UNVERIFIED_AUDIT_BUDGET, pid)
+            self.assertEqual(receipt.slashed_stake, 0, pid)
+            self.assertIn("did not settle", receipt.rejection_reason)
+            self.assertFalse(receipt.is_ratified)
+
     def test_06_fail_closed_theorem_slashing(self):
         """FSA5: Proposal claiming equivalence that reduces to false is slashed."""
         parliament = FederatedAgoraParliament("Rigorous Agora")
