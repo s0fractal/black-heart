@@ -115,6 +115,23 @@ checkout; C0's digest is the snapshot's own file and is excluded).
   namespace) and must be reported as an error, not dangling; the regression
   fails against the revision 3 scanner. Only change in revision 4.
 
+- **Revision 5 — zero-token authentication preflight.** Slot 1 of run
+  `6cbd7c38…` (package revision 4) was INVALID: the sandboxed session
+  received `401 OAuth access token has expired` on its first request (model
+  `<synthetic>`, `terminal_reason api_error`, 8.8 s, no tool use, no tokens);
+  the host CLI token had expired at 2026-09-14T19:52Z and the in-session
+  refresh failed. The preflight had no authentication check. It now reads the
+  CLI's OAuth expiry from the login keychain (`security find-generic-password
+  -s "Claude Code-credentials" -w`, piped through a parser that returns only
+  the expiry, the seconds remaining and whether a refresh token is present)
+  and refuses `AUTH_TOKEN_EXPIRED_OR_EXPIRING` when fewer than
+  `TIMEOUT + 300` s remain, or `AUTH_STATE_UNREADABLE` when the entry is
+  missing or malformed. No provider contact; no secret is stored or logged.
+  Re-authentication is the operator's action, never the harness's. The slot 1
+  record and its audit stay under the old run root; this revision freezes a
+  new run root. Whether the sandbox blocks a mid-session refresh is not
+  established; the margin makes a refresh during a slot unnecessary.
+
 ## Decision points for the package reviewer
 
 - **Model id.** Frozen as `claude-sonnet-5` (a fresh Claude model that is not

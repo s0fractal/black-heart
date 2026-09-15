@@ -131,6 +131,44 @@ def client_identity():
             'is_shell_wrapper': head == b'#!', 'claude_binary_sha256': sha(binary)}
 
 
+AUTH_MARGIN = TIMEOUT + 300  # the token must outlive the slot plus grading
+KEYCHAIN_SERVICE = 'Claude Code-credentials'
+
+
+def parse_auth_expiry(blob, now):
+    """Return {'expires_at', 'seconds_remaining', 'refresh_token_present'} from the CLI credential JSON.
+
+    The blob is the secret; only the expiry and a boolean leave this function.
+    Malformed or absent data is reported, never guessed.
+    """
+    try:
+        data = json.loads(blob)
+        oauth = data.get('claudeAiOauth') or {}
+        expires_ms = oauth.get('expiresAt')
+        if not isinstance(expires_ms, (int, float)):
+            return {'error': 'NO_EXPIRY_IN_CREDENTIALS'}
+        return {'expires_at': int(expires_ms) // 1000, 'seconds_remaining': int(expires_ms // 1000 - now),
+                'refresh_token_present': bool(oauth.get('refreshToken'))}
+    except (ValueError, AttributeError, TypeError):
+        return {'error': 'CREDENTIALS_NOT_JSON'}
+
+
+def auth_expiry():
+    """Zero-token authentication preflight: read the CLI's OAuth expiry from the login keychain.
+
+    Slot 1 of run 6cbd7c38 was INVALID because the sandboxed session hit
+    '401 OAuth access token has expired' (the host token had expired 20 h
+    earlier and the in-session refresh failed). Nothing here contacts the
+    provider; the secret is piped through parse_auth_expiry and never stored.
+    """
+    import time
+    r = run(['/usr/bin/security', 'find-generic-password', '-s', KEYCHAIN_SERVICE, '-w'],
+            cwd=Path.home(), env=environment(), timeout=30)
+    if r['exit_code'] != 0:
+        return {'error': 'CREDENTIALS_NOT_IN_KEYCHAIN', 'service': KEYCHAIN_SERVICE}
+    return dict(parse_auth_expiry(r['stdout'].strip(), time.time()), service=KEYCHAIN_SERVICE, margin_seconds=AUTH_MARGIN)
+
+
 def stale_tmp_snapshots(current):
     """Do not delete unknown files. Refuse to launch with stale experiment inputs."""
     current = Path(current).resolve()
@@ -222,7 +260,12 @@ def preflight(root, run_root, frozen):
     canary = store_canary(root, run_root)
     if not canary['pass']:
         refusals.append('STORE_CANARY_FAILED')
+    auth = auth_expiry()
+    if 'error' in auth:
+        refusals.append('AUTH_STATE_UNREADABLE')
+    elif auth['seconds_remaining'] < AUTH_MARGIN:
+        refusals.append('AUTH_TOKEN_EXPIRED_OR_EXPIRING')
     return {'pass': not refusals, 'refusals': refusals, 'client': client, 'stale_tmp_inputs': stale,
-            'stale_receiver_snapshots': siblings, 'tmp_content_scan': content, 'store_canary': canary,
+            'stale_receiver_snapshots': siblings, 'tmp_content_scan': content, 'store_canary': canary, 'auth': auth,
             'placement': 'Slot archives and grade receipts live under ~/calib1-runs (denied); '
                          'the snapshot is the only readable path under ~/calib1-work; /private/tmp stays readable.'}
