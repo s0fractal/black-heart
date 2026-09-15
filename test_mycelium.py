@@ -371,11 +371,37 @@ class TestDivergenceSettlement(unittest.TestCase):
         self.assertFalse(o.is_settled()); self.assertFalse(c.is_settled())
         self.assertFalse(div.verify(replay_counterexample=True))
 
-    def test_one_settled_side_is_not_a_divergence(self):
-        # target settles to x; candidate never settles: difference of strings, not of normal forms
-        div, o, c = self._record("🖤 x", "🖤 (🌿 🤍 🤍 (🌿 🤍 🤍)) x", "<UNAPPLIED_METABOLISM>")
-        self.assertTrue(o.is_settled()); self.assertFalse(c.is_settled())
+    # One-sided cases: exactly one side settles. A difference of strings between a
+    # normal form and a suspended intermediate is not a difference of normal forms.
+    # All four combinations (branch x which side suspends) must refuse, and the
+    # registry must not accept the record.
+    OMEGA = "🌿 🤍 🤍 (🌿 🤍 🤍)"
+
+    def _assert_one_sided_refused(self, target, cand, inp, settled_side):
+        div, o, c = self._record(target, cand, inp)
+        if settled_side == "original":
+            self.assertTrue(o.is_settled()); self.assertFalse(c.is_settled())
+        else:
+            self.assertFalse(o.is_settled()); self.assertTrue(c.is_settled())
+        self.assertNotEqual(str(o.term), str(c.term))
         self.assertFalse(div.verify(replay_counterexample=True))
+        reg = EpistemicRegistry()
+        self.assertFalse(reg.add_divergence(div, verify_first=True))
+        self.assertFalse(reg.has_known_divergence("MUTATION_TEST", target, cand))
+
+    def test_unapplied_settled_original_unsettled_candidate(self):
+        # K x settles as is; K (omega omega) x reduces to omega omega and never settles
+        self._assert_one_sided_refused("🖤 x", f"🖤 ({self.OMEGA}) x", "<UNAPPLIED_METABOLISM>", "original")
+
+    def test_unapplied_unsettled_original_settled_candidate(self):
+        self._assert_one_sided_refused(f"🖤 ({self.OMEGA}) x", "🖤 x", "<UNAPPLIED_METABOLISM>", "candidate")
+
+    def test_applied_settled_original_unsettled_candidate(self):
+        # applied to x: K x settles; K (omega omega) x never settles
+        self._assert_one_sided_refused("🖤", f"🖤 ({self.OMEGA})", "x", "original")
+
+    def test_applied_unsettled_original_settled_candidate(self):
+        self._assert_one_sided_refused(f"🖤 ({self.OMEGA})", "🖤", "x", "candidate")
 
     def test_settled_counterexample_still_verifies(self):
         div, o, c = self._record("🖤", "🤍", "🤍")
