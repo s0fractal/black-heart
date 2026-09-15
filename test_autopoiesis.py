@@ -404,6 +404,7 @@ class TestPalimpsestGuardSettlement(unittest.TestCase):
         self.assertTrue(ok, msg)
         self.assertIn("fixture prompts are not evaluated", msg)
         self.assertIsNotNone(tensor)
+        self.assertEqual(tensor.counterexamples, [])
 
     def test_gene_that_stops_settling_is_erosion(self):
         from autopoiesis import check_palimpsest_guard
@@ -415,6 +416,20 @@ class TestPalimpsestGuardSettlement(unittest.TestCase):
         self.assertFalse(ok, msg)
         self.assertIn("EROSION", msg)
         self.assertIn("gene settlement", msg)
+        # The returned report carries the measured evidence, not unrun fixture prompts.
+        self.assertEqual(len(tensor.counterexamples), 1)
+        ce = tensor.counterexamples[0]
+        self.assertEqual(ce["measurement"], "gene_settlement")
+        self.assertEqual(ce["budget_atp"], 25)
+        self.assertEqual(ce["gene_id"], "GENE-OPT-04")
+        self.assertEqual(ce["current"]["status"], "SETTLED")
+        self.assertEqual(ce["candidate"]["status"], "SUSPENDED")
+        self.assertEqual(ce["candidate"]["expression"], omega)
+        self.assertTrue(ce["settlement_lost"])
+        self.assertFalse(ce["fixture_prompts_evaluated"])
+        for key in ("fixture_id", "prompt_or_term", "coercion", "expected_behavior"):
+            self.assertNotIn(key, ce)
+        self.assertTrue(all("prompt_or_term" not in c for c in tensor.counterexamples))
 
     def test_settled_semantic_change_is_not_erosion(self):
         from autopoiesis import check_palimpsest_guard
@@ -424,6 +439,7 @@ class TestPalimpsestGuardSettlement(unittest.TestCase):
         succ = self._successor("GENE-METAB-02", changed)
         ok, msg, tensor = check_palimpsest_guard(self.org0, succ)
         self.assertTrue(ok, msg)
+        self.assertEqual(tensor.counterexamples, [])
 
 
 if __name__ == "__main__":

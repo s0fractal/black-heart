@@ -825,6 +825,31 @@ def check_palimpsest_guard(
     analyzer = PalimpsestDriftAnalyzer(tombstone_registry, fixtures)
     tensor = analyzer.analyze_drift(skel_curr, skel_succ, mat_curr, mat_succ)
 
+    # The analyzer's counterexamples name fixture prompts that were never run
+    # (review of PR #91). Replace them with the evidence that WAS measured:
+    # per gene, the reduction status of the current and candidate expressions
+    # at the guard budget. Only a gene that settled and no longer settles is a
+    # counterexample of this guard.
+    def _settlement(expression):
+        try:
+            res = evaluate(parse(expression), max_atp=GUARD_ATP)
+            return {"expression": expression, "status": res.status.value, "atp_spent": res.atp_spent}
+        except Exception as e:
+            return {"expression": expression, "status": "ERROR", "atp_spent": None, "error": type(e).__name__}
+    candidate_by_gene = {c.gene_id: c.expression for c in candidate_org.chromosomes}
+    evidence = []
+    for gene_id, cand_expr in candidate_by_gene.items():
+        cur_expr = current_by_gene.get(gene_id)
+        cur = _settlement(cur_expr) if cur_expr is not None else None
+        cand = _settlement(cand_expr)
+        evidence.append({
+            "measurement": "gene_settlement", "budget_atp": GUARD_ATP, "gene_id": gene_id,
+            "current": cur, "candidate": cand,
+            "settlement_lost": bool(cur and cur["status"] == "SETTLED" and cand["status"] != "SETTLED"),
+            "fixture_prompts_evaluated": False,
+        })
+    tensor.counterexamples = [e for e in evidence if e["settlement_lost"]]
+
     if tensor.verdict == PalimpsestVerdict.EROSION:
         return False, (f"Palimpsest drift detected EROSION: gene settlement within {GUARD_ATP} ATP lost "
                        f"between generations (asymmetry={tensor.asymmetry_score:.3f})"), tensor
