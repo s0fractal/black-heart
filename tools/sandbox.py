@@ -15,7 +15,7 @@ It analyzes:
 
 Usage:
   python3 tools/sandbox.py <document.pdf>
-  python3 tools/sandbox.py --strict <document.pdf>
+  python3 tools/sandbox.py <document.pdf>
 """
 
 from __future__ import annotations
@@ -286,10 +286,17 @@ def print_audit_report(report):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python3 tools/sandbox.py [--strict] <document.pdf>")
+        print("Usage: python3 tools/sandbox.py <document.pdf>")
         sys.exit(1)
 
     args = sys.argv[1:]
+    # No options are defined. A former --strict flag was accepted and ignored
+    # by this tool and by `cli.py sandbox`; an unknown option is refused rather
+    # than silently dropped, so a caller cannot believe a stricter audit ran.
+    options = [a for a in args if a.startswith("--")]
+    if options:
+        print(f"Error: unknown option(s) {' '.join(options)}; this auditor takes no options.")
+        sys.exit(2)
     files = [a for a in args if not a.startswith("--")]
 
     if not files:
