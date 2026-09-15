@@ -696,10 +696,21 @@ def audit_contract_polyglot(target_path: str) -> bool:
             ch.update(raw)
 
             t = parse(c_node["expression"])
-            norm = evaluate(t, max_atp=c_node["atp_budget"]).term
+            result = evaluate(t, max_atp=c_node["atp_budget"])
+            # A budget-suspended reduction is not a normal form. Comparing
+            # result.term without this check let a clause whose expression
+            # never settles (periodic `Y I` at any even budget, or `S I I (S I I)`
+            # at the default 100000) audit as verified whenever the expected
+            # side suspended on the same intermediate. Both sides must settle;
+            # the bool contract of this auditor maps "not settled" to False
+            # (refused), it has no separate unverified slot.
+            if not result.is_settled():
+                return False
             exp_t = parse(c_node["expected_normal_form"])
-            exp_norm = evaluate(exp_t).term
-            if str(norm) != str(exp_norm):
+            exp_result = evaluate(exp_t)
+            if not exp_result.is_settled():
+                return False
+            if str(result.term) != str(exp_result.term):
                 return False
 
         if ch.hexdigest() != man["code_root_hash"]:
