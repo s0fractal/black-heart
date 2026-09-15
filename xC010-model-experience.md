@@ -232,14 +232,10 @@ replay; контракт запису — вище. Модельні метад�
    [План](experiments/transfer-1/PLAN.md), [стенд](experiments/transfer-1/execution/README.md),
    [результати](experiments/transfer-1/results/pilot-1/README.md) — статус, спостереження
    та вимоги до наступного дизайну лише там. Нові сесії з цим пілотом не об’єднувати.
-2. **CALIB-MYC-1 — BLOCK 1 COMPLETE / AMBIGUOUS / CLOSED.** Калібрування складності
-   задачі `DivergenceRecord.verify` на доремонтній ревізії `198f9e2`:
-   [план](experiments/calib-myc-1/PLAN.md), [пакет](experiments/calib-myc-1/execution/README.md),
-   [результати](experiments/calib-myc-1/results/README.md) — три валідні сесії, 2 PASS / 1 FAIL,
-   за правилом плану AMBIGUOUS. Рішення власника 2026-09-15: калібрування закрито без
-   додаткової серії, порівняння на `mycelium` не запускається; це операторський вибір,
-   не висновок про непридатність задачі. Залишок — хибний ремонт «переверифікувати щойно
-   скарбоване» і межа H6 через розбіжність бюджетів, описані в результатах.
+2. **CALIB-MYC-1 — BLOCK 1 COMPLETE / AMBIGUOUS / CLOSED.**
+   [План](experiments/calib-myc-1/PLAN.md), [пакет](experiments/calib-myc-1/execution/README.md),
+   [результати й рішення про закриття](experiments/calib-myc-1/results/README.md) — статус,
+   рішення власника та залишок лише там.
 3. **FEEDBACK-1 — DEFERRED; NEW TRANSFER DESIGN REVIEW NEEDED.** Перевірити наступну дію
    генератора після повернення спростування. Контроль із тим самим запереченням
    простим текстом потрібен, якщо висновок стосуватиметься переваги пакета.
