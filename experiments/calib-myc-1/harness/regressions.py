@@ -157,6 +157,10 @@ def trace_check(expected, model):
     unknown = (json.dumps({'type': 'telemetry_note', 'note': 'x'}) + '\n').encode()
     t, _ = feed(expected, model, lines[:1] + [unknown] + lines[1:])
     cases['unknown_event_type_invalid'] = t.unknown == ['telemetry_note'] and not t.infrastructure_valid(0, False)
+    heartbeat = (json.dumps({'type': 'tool_progress', 'tool_use_id': 'toolu_x-heartbeat-0', 'tool_name': 'Bash',
+                             'parent_tool_use_id': 'toolu_x', 'elapsed_time_seconds': 30, 'heartbeat': True}) + '\n').encode()
+    t, _ = feed(expected, model, lines[:1] + [heartbeat, heartbeat] + lines[1:])
+    cases['tool_progress_heartbeat_valid'] = t.unknown == [] and t.infrastructure_valid(0, False)
     tool_result = (json.dumps({'type': 'user', 'message': {'role': 'user', 'content': [
         {'tool_use_id': 't1', 'type': 'tool_result', 'content': 'ok'}]}}) + '\n').encode()
     t, _ = feed(expected, model, lines[:1] + [tool_result] + lines[1:])
