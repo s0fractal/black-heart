@@ -293,6 +293,82 @@ class TestFederatedSheafAgora(unittest.TestCase):
         self.assertEqual(receipt.status, RatificationStatus.REJECTED_PLUTOCRACY_CEILING)
         self.assertGreaterEqual(receipt.federation_gini, 0.65)
 
+    def test_06b_unsettled_theorem_is_unverified_not_slashed(self):
+        """FSA5 (S-verif-8): a reduction that does not settle within the chamber budget is
+        UNVERIFIED_AUDIT_BUDGET — no ratification, no slash, stake untouched. Before this
+        rule `omega omega` reached the cohomology gate mislabelled as a fracture, and a true
+        identity `Y f` vs `f (Y f)` was SLASHED_AUDIT_FAILED."""
+        parliament = FederatedAgoraParliament("Rigorous Agora")
+        ctx = EpistemicContext.create("Math Chamber", ["algebra"], 100)
+        ch = FederatedChamber("ch_math", "Math Chamber", ctx)
+        parliament.register_chamber(ch)
+        for pid, term, target in (("prop_omega", "S I I (S I I)", "I"), ("prop_yf", "Y f", "f (Y f)")):
+            prop = FederatedProposal(
+                proposal_id=pid, title="Unsettled Theorem",
+                proposal_type=ProposalType.THEOREM_CONGRUENCE, claim_name=f"claim {pid}",
+                sponsor_pk_hex=self.pk_sponsor, stake_atp=80,
+                chamber_terms={"ch_math": term}, target_nf=target
+            )
+            prop.sign(self.sk_sponsor)
+            parliament.table_proposal(prop)
+            b = FederatedBallot(voter_pk_hex=self.pk_voter1, chamber_id="ch_math",
+                                proposal_id=pid, pledged_atp=49, direction=VoteDirection.AYE)
+            b.sign(self.sk_voter1)
+            parliament.cast_ballot(b)
+            receipt = parliament.resolve_session(pid)
+            self.assertEqual(receipt.status, RatificationStatus.UNVERIFIED_AUDIT_BUDGET, pid)
+            self.assertEqual(receipt.slashed_stake, 0, pid)
+            self.assertIn("did not settle", receipt.rejection_reason)
+            self.assertFalse(receipt.is_ratified)
+
+    def test_06c_chamber_order_does_not_decide_slash(self):
+        """FSA5 (S-verif-8 amendment): a settled counterexample in any chamber slashes,
+        whatever the dictionary order; an unsettled or erroring chamber never hides it.
+        Before the amendment `{Y I, K}` was UNVERIFIED and `{K, Y I}` was SLASHED."""
+        cases = [
+            ("unsettled+counterexample", [("ch_a", "Y I"), ("ch_b", "K")]),
+            ("counterexample+unsettled", [("ch_b", "K"), ("ch_a", "Y I")]),
+            ("error+counterexample", [("ch_a", "(("), ("ch_b", "K")]),
+            ("counterexample+error", [("ch_b", "K"), ("ch_a", "((")]),
+        ]
+        for label, terms in cases:
+            parliament = FederatedAgoraParliament("Rigorous Agora")
+            for cid, name in (("ch_a", "Chamber A"), ("ch_b", "Chamber B")):
+                ctx = EpistemicContext.create(name, ["algebra"], 100)
+                parliament.register_chamber(FederatedChamber(cid, name, ctx))
+            prop = FederatedProposal(
+                proposal_id=f"prop_{label}", title="Order test",
+                proposal_type=ProposalType.THEOREM_CONGRUENCE, claim_name=f"claim {label}",
+                sponsor_pk_hex=self.pk_sponsor, stake_atp=80,
+                chamber_terms=dict(terms), target_nf="I"
+            )
+            prop.sign(self.sk_sponsor)
+            parliament.table_proposal(prop)
+            b = FederatedBallot(voter_pk_hex=self.pk_voter1, chamber_id="ch_a",
+                                proposal_id=prop.proposal_id, pledged_atp=49, direction=VoteDirection.AYE)
+            b.sign(self.sk_voter1)
+            parliament.cast_ballot(b)
+            receipt = parliament.resolve_session(prop.proposal_id)
+            self.assertEqual(receipt.status, RatificationStatus.SLASHED_AUDIT_FAILED, label)
+            self.assertEqual(receipt.slashed_stake, 80, label)
+            self.assertIn("Chamber B", receipt.rejection_reason, label)
+
+        # No settled counterexample anywhere: unsettled + error is UNVERIFIED, not slashed
+        parliament = FederatedAgoraParliament("Rigorous Agora")
+        for cid, name in (("ch_a", "Chamber A"), ("ch_b", "Chamber B")):
+            parliament.register_chamber(FederatedChamber(cid, name, EpistemicContext.create(name, ["algebra"], 100)))
+        prop = FederatedProposal(
+            proposal_id="prop_unsettled_error", title="Order test",
+            proposal_type=ProposalType.THEOREM_CONGRUENCE, claim_name="claim ue",
+            sponsor_pk_hex=self.pk_sponsor, stake_atp=80,
+            chamber_terms={"ch_a": "Y I", "ch_b": "(("}, target_nf="I"
+        )
+        prop.sign(self.sk_sponsor)
+        parliament.table_proposal(prop)
+        receipt = parliament.resolve_session("prop_unsettled_error")
+        self.assertEqual(receipt.status, RatificationStatus.UNVERIFIED_AUDIT_BUDGET)
+        self.assertEqual(receipt.slashed_stake, 0)
+
     def test_06_fail_closed_theorem_slashing(self):
         """FSA5: Proposal claiming equivalence that reduces to false is slashed."""
         parliament = FederatedAgoraParliament("Rigorous Agora")
