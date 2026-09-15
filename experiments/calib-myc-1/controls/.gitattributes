@@ -1,0 +1,2 @@
+# Retained unified diffs of the grader controls: evidence bytes, not source.
+*.diff -whitespace

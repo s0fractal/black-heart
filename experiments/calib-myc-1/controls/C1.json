@@ -1,0 +1,112 @@
+{
+ "checks": {
+  "H1": {
+   "pass": true,
+   "detail": {
+    "orig": "SUSPENDED",
+    "cand": "SUSPENDED",
+    "verify": false,
+    "accepted": false,
+    "known": false
+   }
+  },
+  "H2": {
+   "pass": true,
+   "detail": {
+    "orig": "SUSPENDED",
+    "cand": "SUSPENDED",
+    "verify": false,
+    "accepted": false,
+    "known": false
+   }
+  },
+  "H3": {
+   "pass": true,
+   "detail": {
+    "fwd": {
+     "orig": "SETTLED",
+     "cand": "SUSPENDED",
+     "verify": false,
+     "accepted": false,
+     "known": false
+    },
+    "rev": {
+     "orig": "SUSPENDED",
+     "cand": "SETTLED",
+     "verify": false,
+     "accepted": false,
+     "known": false
+    }
+   }
+  },
+  "H4": {
+   "pass": true,
+   "detail": {
+    "fwd": {
+     "orig": "SETTLED",
+     "cand": "SUSPENDED",
+     "verify": false,
+     "accepted": false,
+     "known": false
+    },
+    "rev": {
+     "orig": "SUSPENDED",
+     "cand": "SETTLED",
+     "verify": false,
+     "accepted": false,
+     "known": false
+    }
+   }
+  },
+  "H5": {
+   "pass": true,
+   "detail": {
+    "orig": "SETTLED",
+    "cand": "SETTLED",
+    "verify": true,
+    "accepted": true,
+    "known": true
+   }
+  },
+  "H6": {
+   "pass": false,
+   "detail": {
+    "adopted": false,
+    "reason": "REJECTED_METABOLIC_VIABILITY_MISMATCH",
+    "divergence_record_is_none": false
+   }
+  },
+  "H7": {
+   "pass": true,
+   "detail": "Ran 8 tests in 0.810s\n\nOK"
+  }
+ },
+ "timeouts": {
+  "check": 120,
+  "h7": 600
+ },
+ "outcome": "PARTIAL",
+ "control": "C1",
+ "description": "verify fixed in both branches, minting untouched",
+ "predicted": "PARTIAL",
+ "expected_checks": {
+  "H1": true,
+  "H2": true,
+  "H3": true,
+  "H4": true,
+  "H5": true,
+  "H6": false,
+  "H7": true
+ },
+ "checks_as_predicted": {
+  "H1": true,
+  "H2": true,
+  "H3": true,
+  "H4": true,
+  "H5": true,
+  "H6": true,
+  "H7": true
+ },
+ "as_predicted": true,
+ "patched_mycelium_sha256": "74e01522aa2b753613a0370d9716f4b590b8701e6766802bb0b561e66a50775e"
+}

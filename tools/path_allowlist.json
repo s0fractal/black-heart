@@ -1,1 +1,41 @@
-{"ignore_globs": [], "allowed_entries": []}
+{
+  "ignore_globs": [],
+  "allowed_entries": [
+    {
+      "file": "experiments/calib-myc-1/harness/common.py",
+      "reason": "OS-wide temporary root scanned by the receiver-permission content scan (transfer-1 practice); not a machine-local path",
+      "allowed_substrings": [
+        "/private/var/tmp"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/harness/tmp_scan.py",
+      "reason": "OS-wide temporary root scanned by the receiver-permission content scan (transfer-1 practice); not a machine-local path",
+      "allowed_substrings": [
+        "/private/var/tmp"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/harness/runtime.py",
+      "reason": "macOS per-user temp parent allowed for writes in the sandbox profile; not a machine-local path (user segment never spelled out)",
+      "allowed_substrings": [
+        "/private/var/folders"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/harness/offline.py",
+      "reason": "macOS per-user temp parent allowed for writes in the sandbox profile; not a machine-local path (user segment never spelled out)",
+      "allowed_substrings": [
+        "/private/var/folders"
+      ]
+    },
+    {
+      "file": "experiments/calib-myc-1/execution/offline/receipt.json",
+      "reason": "offline receipt lists the scan roots and the profile note; host-specific temp paths are already rewritten to <TMPDIR>",
+      "allowed_substrings": [
+        "/private/var/tmp",
+        "/private/var/folders"
+      ]
+    }
+  ]
+}
