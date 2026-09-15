@@ -21,7 +21,7 @@ SCANNER = r'''import hashlib,json,os,stat,sys
 request=json.load(sys.stdin)
 markers=[bytes.fromhex(x) for x in request['markers_hex']]
 digests=set(request['digests'])
-seen=set();matches=[];errors=[];files=0;denied=0
+seen=set();matches=[];errors=[];dangling=[];files=0;denied=0
 stack=list(request['roots'])
 while stack:
  p=stack.pop()
@@ -49,10 +49,14 @@ while stack:
  except PermissionError:
   denied+=1
  except FileNotFoundError:
-  errors.append({'path':p,'error':'DISAPPEARED_DURING_SCAN'})
+  # A symlink whose target does not exist (Chromium-style SingletonCookie
+  # links of running or long-gone apps) has no readable content and cannot
+  # leak anything; it is recorded, not treated as a scan failure.
+  if os.path.islink(p) and not os.path.exists(p): dangling.append(p)
+  else: errors.append({'path':p,'error':'DISAPPEARED_DURING_SCAN'})
  except OSError as e:
   errors.append({'path':p,'error':type(e).__name__})
-print(json.dumps({'matches':matches,'errors':errors,'files_read':files,'denied':denied,'complete':True}))
+print(json.dumps({'matches':matches,'errors':errors,'dangling_symlinks':dangling,'files_read':files,'denied':denied,'complete':True}))
 '''
 
 

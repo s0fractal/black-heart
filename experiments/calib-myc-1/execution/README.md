@@ -95,6 +95,17 @@ checkout; C0's digest is the snapshot's own file and is excluded).
   a foreign `user` text block, string content, tool-result-only `user` events
   and the prompt-echo rule.
 
+- **Revision 3 — dangling symlinks in temp storage.** The dry preflight on
+  the accepted revision 2 refused on `DISAPPEARED_DURING_SCAN` for
+  Chromium-style `SingletonCookie` entries of Codex and Chrome under the OS
+  temp dir: symlinks to a random number that is not a path, some dating from
+  2026-09-04 (instances long closed). `os.stat` follows the link and raises
+  `FileNotFoundError`. A dangling symlink has no readable content and cannot
+  leak anything, so the scanner now records such entries under
+  `dangling_symlinks` instead of `errors`; a genuine disappearance during the
+  scan is still an error. Regression: a dangling symlink next to marker files
+  is recorded and the scan passes. This is the only change in revision 3.
+
 ## Decision points for the package reviewer
 
 - **Model id.** Frozen as `claude-sonnet-5` (a fresh Claude model that is not

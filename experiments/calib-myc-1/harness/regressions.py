@@ -243,14 +243,18 @@ def scan_boundary_check():
         (root / 'two').write_bytes(b'no marker here')
         (root / 'three').write_bytes(b'S-VERIF-7 mentioned')
         (root / 'four').write_bytes(b'nothing of interest')
+        # A dangling symlink (SingletonCookie style) is recorded, never an error.
+        os.symlink('14045559217030737018', root / 'SingletonCookie')
         request = {'roots': [td], 'markers_hex': [m.hex() for m in MARKERS],
                    'digests': [hashlib.sha256(b'no marker here').hexdigest()]}
         result = subprocess.run([sys.executable, '-I', '-c', SCANNER], input=json.dumps(request),
                                 text=True, capture_output=True, check=True, timeout=30)
         report = json.loads(result.stdout)
         assert {Path(x['path']).name for x in report['matches']} == {'one', 'two', 'three'}, report
-        assert report['errors'] == [] and report['files_read'] == 4
-    return {'pass': True, 'split_boundary_marker': True, 'digest_only_match': True, 'case_insensitive': True}
+        assert report['errors'] == [] and report['files_read'] == 4, report
+        assert [Path(x).name for x in report['dangling_symlinks']] == ['SingletonCookie'], report
+    return {'pass': True, 'split_boundary_marker': True, 'digest_only_match': True, 'case_insensitive': True,
+            'dangling_symlink_recorded_not_error': True}
 
 
 def public_filter_check():
