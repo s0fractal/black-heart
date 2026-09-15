@@ -331,5 +331,80 @@ class TestMycelium(unittest.TestCase):
         self.assertEqual(w_trial.epistemic_grade, WarrantEpistemicGrade.PROPOSED.value)
         self.assertTrue(w_trial.verify())
 
+class TestDivergenceSettlement(unittest.TestCase):
+    """A divergence is two SETTLED, different normal forms; suspension proves nothing.
+
+    Reproduced at 198f9e2: target `Y f`, candidate `f (Y f)` (a true one-step
+    identity) on input `x` both suspend at the fixed 2000-ATP replay on different
+    intermediate strings, and DivergenceRecord.verify() returned True in both the
+    applied and the <UNAPPLIED_METABOLISM> branch; EpistemicRegistry.add_divergence
+    accepted it. Same class as DOC-F1 / S-verif-5 / S-verif-6, inequality side.
+    """
+
+    def setUp(self):
+        self.sk, self.pk = generate_keypair()
+
+    def _record(self, target, cand, inp, budget=2000):
+        from glyph import parse, evaluate, App
+        if inp == "<UNAPPLIED_METABOLISM>":
+            o = evaluate(parse(target), max_atp=budget)
+            c = evaluate(parse(cand), max_atp=budget)
+        else:
+            o = evaluate(App(parse(target), parse(inp)), max_atp=budget)
+            c = evaluate(App(parse(cand), parse(inp)), max_atp=budget)
+        return DivergenceRecord.create_and_sign(
+            rule_name="MUTATION_TEST",
+            target_expr=target, cand_expr=cand, counterexample_input=inp,
+            expected_out=str(o.term), actual_out=str(c.term), reporter_sk=self.sk
+        ), o, c
+
+    def test_true_identity_suspended_is_not_a_divergence_applied(self):
+        div, o, c = self._record("🔁 f", "f (🔁 f)", "x")
+        self.assertFalse(o.is_settled()); self.assertFalse(c.is_settled())
+        self.assertFalse(div.verify(replay_counterexample=True))
+        reg = EpistemicRegistry()
+        self.assertFalse(reg.add_divergence(div, verify_first=True))
+        self.assertFalse(reg.has_known_divergence("MUTATION_TEST", "🔁 f", "f (🔁 f)"))
+
+    def test_true_identity_suspended_is_not_a_divergence_unapplied(self):
+        div, o, c = self._record("🤍 (🌿 🤍 🤍 (🌿 🤍 🤍))", "🌿 🤍 🤍 (🌿 🤍 🤍)", "<UNAPPLIED_METABOLISM>")
+        self.assertFalse(o.is_settled()); self.assertFalse(c.is_settled())
+        self.assertFalse(div.verify(replay_counterexample=True))
+
+    def test_one_settled_side_is_not_a_divergence(self):
+        # target settles to x; candidate never settles: difference of strings, not of normal forms
+        div, o, c = self._record("🖤 x", "🖤 (🌿 🤍 🤍 (🌿 🤍 🤍)) x", "<UNAPPLIED_METABOLISM>")
+        self.assertTrue(o.is_settled()); self.assertFalse(c.is_settled())
+        self.assertFalse(div.verify(replay_counterexample=True))
+
+    def test_settled_counterexample_still_verifies(self):
+        div, o, c = self._record("🖤", "🤍", "🤍")
+        self.assertTrue(o.is_settled() and c.is_settled())
+        self.assertTrue(div.verify(replay_counterexample=True))
+        self.assertTrue(EpistemicRegistry().add_divergence(div, verify_first=True))
+
+    def test_unsettled_candidate_is_rejected_without_divergence_record(self):
+        # Gene `K x (omega omega)` settles to x in one step; a root operand swap
+        # gives `(omega omega) (K x)`, which never settles at the 100-ATP budget.
+        omega = "🌿 🤍 🤍 (🌿 🤍 🤍)"
+        pre = f"🖤 x ({omega})"
+        post = f"{omega} (🖤 x)"
+        p = create_genesis_organism()
+        p.chromosomes = [Chromosome('G', 'gene', pre, pre, 100)]
+        p.organism_hash = p.compute_hash()
+        receipt = MetamorphicTransitionReceipt(
+            parent_hash="0"*64, successor_hash="1"*64, gene_id="G", site_address=(),
+            rule_name="MUTATION_OPERAND_SWAP", pre_term=pre,
+            post_term=post, atp_saved=-1, size_saved=0,
+            fixtures_fingerprint=FrozenEvaluator().fixtures_fingerprint, experiment_id="exp_omega"
+        )
+        sk_b, _ = generate_keypair()
+        warrant = export_warrant_from_receipt(receipt, sk_b)
+        verdict = LocalImmuneEvaluator().audition_warrant(p, warrant, self.sk)
+        self.assertFalse(verdict.adopted)
+        self.assertEqual(verdict.reason, "REJECTED_METABOLIC_VIABILITY_UNSETTLED")
+        self.assertIsNone(verdict.divergence_record)
+
+
 if __name__ == "__main__":
     unittest.main()
