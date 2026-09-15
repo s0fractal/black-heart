@@ -222,6 +222,27 @@ def grader_hang_check(repo, work):
     return {'pass': True, 'cases': cases, 'deadline_seconds': 2}
 
 
+def auth_check():
+    """The zero-token auth preflight parses expiry only and refuses expired, expiring or unreadable state."""
+    from runtime import parse_auth_expiry, AUTH_MARGIN
+    now = 1_800_000_000
+    blob = lambda exp, rt=True: json.dumps({'claudeAiOauth': {'accessToken': 'SECRET', 'refreshToken': 'SECRET2' if rt else None, 'expiresAt': exp * 1000}})  # noqa: E731
+    fresh = parse_auth_expiry(blob(now + AUTH_MARGIN + 60), now)
+    expiring = parse_auth_expiry(blob(now + AUTH_MARGIN - 1), now)
+    expired = parse_auth_expiry(blob(now - 3600), now)
+    cases = {
+        'fresh_has_margin': fresh['seconds_remaining'] >= AUTH_MARGIN and fresh['refresh_token_present'],
+        'expiring_below_margin': expiring['seconds_remaining'] < AUTH_MARGIN,
+        'expired_negative': expired['seconds_remaining'] < 0,
+        'no_refresh_token_recorded': parse_auth_expiry(blob(now + 99999, rt=False), now)['refresh_token_present'] is False,
+        'not_json_reported': parse_auth_expiry('not json', now) == {'error': 'CREDENTIALS_NOT_JSON'},
+        'no_expiry_reported': parse_auth_expiry(json.dumps({'claudeAiOauth': {}}), now) == {'error': 'NO_EXPIRY_IN_CREDENTIALS'},
+        'secret_never_returned': all('SECRET' not in json.dumps(v) for v in (fresh, expiring, expired)),
+    }
+    assert all(cases.values()), cases
+    return {'pass': True, 'cases': cases, 'margin_seconds': AUTH_MARGIN}
+
+
 def overwrite_check():
     with tempfile.TemporaryDirectory() as td:
         path = Path(td) / 'receipt.json'; write_json(path, {'first': True})

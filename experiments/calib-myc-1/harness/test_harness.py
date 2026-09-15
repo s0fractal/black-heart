@@ -48,6 +48,10 @@ class HarnessTests(unittest.TestCase):
     def test_public_filter_environment_argv(self):
         self.assertTrue(public_filter_check()['pass'] and environment_check()['pass'] and argv_check(MODEL)['pass'])
 
+    def test_auth_preflight_parses_expiry_only(self):
+        from regressions import auth_check
+        self.assertTrue(auth_check()['pass'])
+
     def test_receipt_cannot_overwrite(self):
         self.assertTrue(overwrite_check()['pass'])
 
