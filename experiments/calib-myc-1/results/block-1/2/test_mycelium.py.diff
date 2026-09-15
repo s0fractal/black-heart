@@ -1,0 +1,127 @@
+diff --git a/test_mycelium.py b/test_mycelium.py
+index f501e1e..496a1a8 100644
+--- a/test_mycelium.py
++++ b/test_mycelium.py
+@@ -125,6 +125,62 @@ class TestMycelium(unittest.TestCase):
+         div_tamp.counterexample_input = "🖤"
+         self.assertFalse(div_tamp.verify())
+ 
++    def test_divergence_record_rejects_unsettled_candidate_on_replay(self):
++        """
++        CONTRACT: a DivergenceRecord asserts that, for the recorded input, target
++        and candidate reduce to two *different normal forms*. A candidate that
++        merely fails to settle within the replay budget (SUSPENDED, not a normal
++        form) must never verify as an established divergence -- regardless of
++        which input path (applied or <UNAPPLIED_METABOLISM>) produced it.
++        """
++        # Non-terminating candidate under SKI leftmost-outermost reduction:
++        # (S I I) (S I I) unfolds forever and never reaches a normal form.
++        target = "🤍 🤍"          # I I -> settles to I
++        cand = "🌿 🤍 🤍 (🌿 🤍 🤍)"  # (S I I) (S I I) -> never settles
++
++        orig_t = parse(target)
++        cand_t = parse(cand)
++        res_orig = evaluate(orig_t, max_atp=2000)
++        res_cand = evaluate(cand_t, max_atp=2000)
++        self.assertTrue(res_orig.is_settled())
++        self.assertFalse(res_cand.is_settled())
++
++        # <UNAPPLIED_METABOLISM> path
++        div_unapplied = DivergenceRecord.create_and_sign(
++            rule_name="FAKE_NONTERMINATION",
++            target_expr=target,
++            cand_expr=cand,
++            counterexample_input="<UNAPPLIED_METABOLISM>",
++            expected_out=str(res_orig.term),
++            actual_out=str(res_cand.term),
++            reporter_sk=self.sk_a
++        )
++        self.assertFalse(div_unapplied.verify(replay_counterexample=True))
++
++        # Applied-input path: same non-termination, reached via App(cand, input)
++        app_target = "🤍"  # I
++        app_cand = "🌿 🤍 🤍"  # S I I ; (S I I) x loops for suitable x
++        inp = "🌿 🤍 🤍"       # feed it itself to force non-termination: (S I I)(S I I)
++
++        inp_t = parse(inp)
++        app_orig_t = parse(app_target)
++        app_cand_t = parse(app_cand)
++        res_app_orig = evaluate(App(app_orig_t, inp_t), max_atp=2000)
++        res_app_cand = evaluate(App(app_cand_t, inp_t), max_atp=2000)
++        self.assertTrue(res_app_orig.is_settled())
++        self.assertFalse(res_app_cand.is_settled())
++
++        div_applied = DivergenceRecord.create_and_sign(
++            rule_name="FAKE_NONTERMINATION_APPLIED",
++            target_expr=app_target,
++            cand_expr=app_cand,
++            counterexample_input=inp,
++            expected_out=str(res_app_orig.term),
++            actual_out=str(res_app_cand.term),
++            reporter_sk=self.sk_a
++        )
++        self.assertFalse(div_applied.verify(replay_counterexample=True))
++
+     # ========================================================================
+     # 4. Epistemic Registry Persistence & Merkle Root
+     # ========================================================================
+@@ -243,6 +299,59 @@ class TestMycelium(unittest.TestCase):
+         self.assertIsNotNone(verdict.divergence_record)
+         self.assertTrue(verdict.divergence_record.verify())
+ 
++    def test_local_immune_evaluator_no_divergence_record_for_unsettled_candidate(self):
++        """
++        CONTRACT: the mechanism that creates divergence records must not create a
++        record whose assertion (two differing *normal forms*) it has not itself
++        established. If the metabolic viability gate only shows the candidate is
++        SUSPENDED (budget-exhausted, not a normal form) rather than settling to a
++        differing normal form, no DivergenceRecord may be minted -- even though
++        the warrant is still correctly rejected.
++        """
++        # Chromosome "(K I) ((S I I)(S I I))" settles to I within budget: K's
++        # second argument -- the non-terminating self-application (S I I)(S I I)
++        # -- is discarded by the K-rule without ever being reduced.
++        chrom_expr = "🖤 🤍 (🌿 🤍 🤍 (🌿 🤍 🤍))"
++        p = create_genesis_organism()
++        p.chromosomes = [
++            Chromosome('LOOP', 'Loop test', chrom_expr, chrom_expr, 300)
++        ]
++        p.organism_hash = p.compute_hash()
++        self.assertTrue(p.verify())
++
++        # Swapping the root App's children turns the discarded, never-evaluated
++        # loop into the *function* position, forcing it to be reduced: the
++        # candidate never reaches a normal form within the ATP budget, so no
++        # divergence (two different normal forms) can be established.
++        pre_pattern = chrom_expr
++        post_pattern = "🌿 🤍 🤍 (🌿 🤍 🤍) (🖤 🤍)"
++        cand_expr = post_pattern
++        cand_res = evaluate(parse(cand_expr), max_atp=300)
++        self.assertFalse(cand_res.is_settled())
++
++        receipt = MetamorphicTransitionReceipt(
++            parent_hash="0"*64,
++            successor_hash="1"*64,
++            gene_id="LOOP",
++            site_address=(),
++            rule_name="MUTATION_OPERAND_SWAP",
++            pre_term=pre_pattern,
++            post_term=post_pattern,
++            atp_saved=-1,
++            size_saved=0,
++            fixtures_fingerprint=FrozenEvaluator().fixtures_fingerprint,
++            experiment_id="exp_loop"
++        )
++        warrant = export_warrant_from_receipt(receipt, self.sk_b)
++        self.assertTrue(warrant.verify())
++
++        immune = LocalImmuneEvaluator(evaluator=FrozenEvaluator())
++        verdict = immune.audition_warrant(p, warrant, self.sk_a)
++
++        self.assertFalse(verdict.adopted)
++        self.assertEqual(verdict.reason, "REJECTED_METABOLIC_VIABILITY_MISMATCH")
++        self.assertIsNone(verdict.divergence_record)
++
+     # ========================================================================
+     # 7. P2P Epistemic Mesh Gossip Sync
+     # ========================================================================

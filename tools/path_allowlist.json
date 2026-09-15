@@ -1,5 +1,29 @@
 {
-  "ignore_globs": [],
+  "ignore_globs": [
+    "experiments/calib-myc-1/results/block-1/1/grade.json",
+    "experiments/calib-myc-1/results/block-1/1/invocation.json",
+    "experiments/calib-myc-1/results/block-1/1/preflight.json",
+    "experiments/calib-myc-1/results/block-1/1/public-events.jsonl",
+    "experiments/calib-myc-1/results/block-1/1/result.json",
+    "experiments/calib-myc-1/results/block-1/2/grade.json",
+    "experiments/calib-myc-1/results/block-1/2/invocation.json",
+    "experiments/calib-myc-1/results/block-1/2/preflight.json",
+    "experiments/calib-myc-1/results/block-1/2/public-events.jsonl",
+    "experiments/calib-myc-1/results/block-1/2/result.json",
+    "experiments/calib-myc-1/results/block-1/3/grade.json",
+    "experiments/calib-myc-1/results/block-1/3/invocation.json",
+    "experiments/calib-myc-1/results/block-1/3/preflight.json",
+    "experiments/calib-myc-1/results/block-1/3/public-events.jsonl",
+    "experiments/calib-myc-1/results/block-1/3/result.json",
+    "experiments/calib-myc-1/results/invalid-runs/6cbd7c38/1/grade.json",
+    "experiments/calib-myc-1/results/invalid-runs/6cbd7c38/1/invocation.json",
+    "experiments/calib-myc-1/results/invalid-runs/6cbd7c38/1/preflight.json",
+    "experiments/calib-myc-1/results/invalid-runs/6cbd7c38/1/public-events.jsonl",
+    "experiments/calib-myc-1/results/invalid-runs/e6b293fa/1/grade.json",
+    "experiments/calib-myc-1/results/invalid-runs/e6b293fa/1/invocation.json",
+    "experiments/calib-myc-1/results/invalid-runs/e6b293fa/1/preflight.json",
+    "experiments/calib-myc-1/results/invalid-runs/e6b293fa/1/public-events.jsonl"
+  ],
   "allowed_entries": [
     {
       "file": "experiments/calib-myc-1/harness/common.py",

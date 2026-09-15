@@ -1,0 +1,44 @@
+diff --git a/mycelium.py b/mycelium.py
+index 91e8413..4919870 100644
+--- a/mycelium.py
++++ b/mycelium.py
+@@ -572,6 +572,12 @@ class DivergenceRecord:
+                     cand_t = parse(self.candidate_expression)
+                     res_orig = evaluate(orig_t, max_atp=2000)
+                     res_cand = evaluate(cand_t, max_atp=2000)
++                    # The assertion is about *normal forms*: a term suspended at the
++                    # replay budget has not been reduced to a normal form, so its
++                    # divergence has not been established. Fail closed rather than
++                    # comparing intermediate, possibly-still-convergent thunks.
++                    if not res_orig.is_settled() or not res_cand.is_settled():
++                        return False
+                     orig_nf = str(res_orig.term)
+                     cand_nf = str(res_cand.term)
+                     if orig_nf != self.expected_output or cand_nf != self.actual_output:
+@@ -592,6 +598,11 @@ class DivergenceRecord:
+                     res_orig = evaluate(app_orig, max_atp=2000)
+                     res_cand = evaluate(app_cand, max_atp=2000)
+ 
++                    # Same rationale as above: only a settled normal form on both
++                    # sides can support an exact-counterexample divergence claim.
++                    if not res_orig.is_settled() or not res_cand.is_settled():
++                        return False
++
+                     orig_nf = str(res_orig.term)
+                     cand_nf = str(res_cand.term)
+ 
+@@ -892,7 +903,13 @@ class LocalImmuneEvaluator:
+                     # Metabolic viability gate
+                     cand_unapplied = evaluate(cand_t, max_atp=chrom.max_atp)
+                     orig_unapplied = evaluate(t, max_atp=chrom.max_atp)
+-                    if cand_unapplied.term != orig_unapplied.term or not cand_unapplied.is_settled():
++                    if not cand_unapplied.is_settled() or not orig_unapplied.is_settled():
++                        # Neither side has reached a normal form within budget: no
++                        # divergence assertion can be established from this replay,
++                        # so no DivergenceRecord may be minted (CONTRACT.md).
++                        last_rejection_reason = "REJECTED_METABOLIC_BUDGET_EXCEEDED"
++                        continue
++                    if cand_unapplied.term != orig_unapplied.term:
+                         div = DivergenceRecord.create_and_sign(
+                             rule_name=warrant.rule_name,
+                             target_expr=chrom.expression,

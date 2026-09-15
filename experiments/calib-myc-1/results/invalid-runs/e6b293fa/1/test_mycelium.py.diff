@@ -1,0 +1,114 @@
+diff --git a/test_mycelium.py b/test_mycelium.py
+index f501e1e..08dd313 100644
+--- a/test_mycelium.py
++++ b/test_mycelium.py
+@@ -125,6 +125,109 @@ class TestMycelium(unittest.TestCase):
+         div_tamp.counterexample_input = "🖤"
+         self.assertFalse(div_tamp.verify())
+ 
++    # ------------------------------------------------------------------
++    # CONTRACT.md regression: a divergence assertion requires BOTH sides
++    # to actually settle into a normal form under replay. A candidate that
++    # merely fails to settle within the replay budget (SUSPENDED) is not
++    # an established counterexample and must not verify, even if someone
++    # signed a record claiming it diverges.
++    # ------------------------------------------------------------------
++    def test_divergence_record_rejects_unsettled_candidate_unapplied(self):
++        """verify() must fail-closed when the candidate never reaches a normal form
++        (CONTRACT.md: the assertion of two different normal forms must be
++        re-established by replay, not inferred from a suspended thunk)."""
++        target = "🤍 🤍"   # I I -> settles to I
++        cand = "🔁 🤍"     # Y I -> never settles (grows without bound)
++
++        orig_res = evaluate(parse(target), max_atp=2000)
++        cand_res = evaluate(parse(cand), max_atp=2000)
++        self.assertTrue(orig_res.is_settled())
++        self.assertFalse(cand_res.is_settled())
++
++        div = DivergenceRecord.create_and_sign(
++            rule_name="FORGED_RULE",
++            target_expr=target,
++            cand_expr=cand,
++            counterexample_input="<UNAPPLIED_METABOLISM>",
++            expected_out=str(orig_res.term),
++            actual_out=str(cand_res.term),
++            reporter_sk=self.sk_a
++        )
++        # Signature/ID are well-formed, but the divergence assertion itself
++        # has not been established by replay: must be rejected.
++        self.assertFalse(div.verify(replay_counterexample=True))
++
++        # EpistemicRegistry must therefore refuse to admit it too.
++        reg = EpistemicRegistry()
++        self.assertFalse(reg.add_divergence(div))
++        self.assertNotIn(div.record_id, reg.divergences)
++
++    def test_divergence_record_rejects_unsettled_candidate_applied(self):
++        """Same guarantee for the counterexample-input (applied) replay path."""
++        target = "🖤"       # K
++        cand = "🔁"         # Y
++        inp = "🤍"          # I
++
++        app_orig = App(parse(target), parse(inp))
++        app_cand = App(parse(cand), parse(inp))
++        orig_res = evaluate(app_orig, max_atp=2000)
++        cand_res = evaluate(app_cand, max_atp=2000)
++        self.assertTrue(orig_res.is_settled())
++        self.assertFalse(cand_res.is_settled())
++
++        div = DivergenceRecord.create_and_sign(
++            rule_name="FORGED_RULE_2",
++            target_expr=target,
++            cand_expr=cand,
++            counterexample_input=inp,
++            expected_out=str(orig_res.term),
++            actual_out=str(cand_res.term),
++            reporter_sk=self.sk_a
++        )
++        self.assertFalse(div.verify(replay_counterexample=True))
++
++        reg = EpistemicRegistry()
++        self.assertFalse(reg.add_divergence(div))
++
++    def test_immune_evaluator_does_not_mint_divergence_on_budget_exhaustion(self):
++        """LocalImmuneEvaluator must not mint a DivergenceRecord for a candidate that
++        merely fails to settle within the metabolic ATP budget: that is not an
++        established divergence, only an inconclusive replay (CONTRACT.md)."""
++        # MUTATION_OPERAND_SWAP on "I Y" (settles immediately to "Y") produces
++        # "Y I" (never settles: Y I -> I (Y I) -> I (I (Y I)) -> ...). The
++        # candidate is genuinely non-terminating, not merely different, so this
++        # must be reported as an inconclusive/budget-exceeded replay rather than
++        # an established divergence.
++        p = create_genesis_organism()
++        p.chromosomes = [
++            Chromosome('LOOP', 'Loop test', '🤍 🔁', '🔁', 50)
++        ]
++        p.organism_hash = p.compute_hash()
++        self.assertTrue(p.verify())
++
++        receipt = MetamorphicTransitionReceipt(
++            parent_hash="0" * 64,
++            successor_hash="1" * 64,
++            gene_id="LOOP",
++            site_address=(),
++            rule_name="MUTATION_OPERAND_SWAP",
++            pre_term="🤍 🔁",
++            post_term="🔁 🤍",
++            atp_saved=-1,
++            size_saved=0,
++            fixtures_fingerprint=FrozenEvaluator().fixtures_fingerprint,
++            experiment_id="exp_loop"
++        )
++        warrant = export_warrant_from_receipt(receipt, self.sk_b)
++        self.assertTrue(warrant.verify())
++
++        immune = LocalImmuneEvaluator()
++        verdict = immune.audition_warrant(p, warrant, self.sk_a)
++
++        self.assertFalse(verdict.adopted)
++        self.assertEqual(verdict.reason, "REJECTED_METABOLIC_BUDGET_EXCEEDED")
++        self.assertIsNone(verdict.divergence_record)
++
+     # ========================================================================
+     # 4. Epistemic Registry Persistence & Merkle Root
+     # ========================================================================

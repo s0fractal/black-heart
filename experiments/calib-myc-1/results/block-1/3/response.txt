@@ -1,0 +1,19 @@
+Все проходить (109/109). Готово.
+
+## Підсумок
+
+**Порушення CONTRACT.md:** `DivergenceRecord` мав стверджувати, що target і candidate зводяться до **двох різних нормальних форм**. Але і в `DivergenceRecord.verify()`, і в механізмі-створювачі (`LocalImmuneEvaluator.audition_warrant`, "metabolic viability gate") результат `evaluate()` порівнювався по `.term` без перевірки `is_settled()`. Якщо candidate (або target) просто зависав/вибивав бюджет (`SUSPENDED`, не нормальна форма), запис усе одно міг бути створений і успішно верифікований — твердження "reduces to a different normal form" фактично не встановлювалось.
+
+**Що змінив (`mycelium.py`):**
+1. `DivergenceRecord.verify()` — в обох гілках реплею (`<UNAPPLIED_METABOLISM>` і звичайний вхід) додав перевірку `is_settled()` для обох сторін; якщо хоч одна suspended — `verify()` повертає `False`.
+2. `LocalImmuneEvaluator.audition_warrant` — метаболічний "viability gate" тепер спочатку перевіряє, що обидві сторони settled; якщо ні — не мінтить `DivergenceRecord` (причина `REJECTED_METABOLIC_VIABILITY_UNSETTLED`), і лише якщо обидві settled і terms різні — створює record.
+
+**Що перевірив:**
+- Усі 13 тестів у `test_mycelium.py` (8 старих + 5 нових) проходять.
+- 4 з 5 нових тестів явно провалились на старому коді (підтвердив через `git stash` виправлення) — це підтверджує, що вони ловлять саме цю регресію.
+- Повний прогін залежних модулів (`test_rule_identity`, `test_ipfs_diary`, `test_colony`) — 109/109 тестів проходять, нічого не зламано.
+- `CONTRACT.md` не змінювався.
+
+**Що лишилось неперевіреним:**
+- Не запускав повний тестовий набір усього репозиторію (сотні файлів test_*.py) — перевірив тільки mycelium.py та його прямих споживачів (`cli.py`, `agora.py` імпортують mycelium, але для них немає окремих unit-тестів у моєму прогоні — вважаю ризик низьким, оскільки змінена поведінка лише звужує прийняття/мінтинг записів, не розширює).
+- Не тестував сценарій, де `orig`/`target` вихідна сторона suspended у реальному `audition_warrant` через organism pipeline (Organism.verify() вимагає, щоб усі хромосоми settled, тож target-suspended сценарій у цьому шляху практично недосяжний) — покрив його окремим прямим unit-тестом на рівні `DivergenceRecord.verify()`.
