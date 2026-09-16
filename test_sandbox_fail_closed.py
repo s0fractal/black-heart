@@ -200,12 +200,15 @@ class EntryPointOutputTest(unittest.TestCase):
                     # A former --strict flag was accepted and ignored by both entry
                     # points. It is now refused by both, with a non-audit exit code,
                     # so no caller can believe a stricter audit ran.
+                    # A short unknown option after the path was silently swallowed
+                    # by the standalone tool's hand-written parser (review of #94).
                     for entry in [("cli.py", "sandbox"), ("tools/sandbox.py",)]:
-                        run = subprocess.run([sys.executable, os.path.join(_HERE, entry[0]),
-                                              *entry[1:], "--strict", path], capture_output=True,
-                                             text=True, timeout=15)
-                        self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
-                        self.assertNotIn("SOUND", run.stdout)
+                        for extra in (["--strict", path], [path, "-s"], ["--unknown", path]):
+                            run = subprocess.run([sys.executable, os.path.join(_HERE, entry[0]),
+                                                  *entry[1:], *extra], capture_output=True,
+                                                 text=True, timeout=15)
+                            self.assertEqual(run.returncode, 2, (extra, run.stdout + run.stderr))
+                            self.assertNotIn("SOUND", run.stdout, extra)
                     self.assertIn("not full ISO 32000 compliance", outputs[0][0])
                     if expected == 0:
                         self.assertIn("NOT the whole document", outputs[0][0])

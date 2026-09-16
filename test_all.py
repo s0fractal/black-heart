@@ -2,8 +2,8 @@
 """
 test_all.py — Unified Test Suite Runner for Project Black-Heart (%🖤).
 
-Runs every module listed in SUITES below (every test_*.py in this checkout except
-this runner); the number of modules and tests is printed at run time, never
+Runs every module listed in SUITES below (every test_*.py in the repository root
+except this runner; nested experiment tests are not covered); the number of modules and tests is printed at run time, never
 stated here. A green aggregate establishes only the named checks of those
 modules, not the correctness of Black-Heart as a whole.
 """
