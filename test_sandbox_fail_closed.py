@@ -190,15 +190,25 @@ class EntryPointOutputTest(unittest.TestCase):
                     with open(path, "wb") as f:
                         f.write(HEADER + claim.encode() + b"\n%%EOF\n")
                     outputs = []
-                    for entry in [("cli.py", "sandbox"), ("tools/sandbox.py",),
-                                  ("tools/sandbox.py", "--strict")]:
+                    for entry in [("cli.py", "sandbox"), ("tools/sandbox.py",)]:
                         run = subprocess.run([sys.executable, os.path.join(_HERE, entry[0]),
                                               *entry[1:], path], capture_output=True,
                                              text=True, timeout=15)
                         self.assertEqual(run.returncode, expected, run.stdout + run.stderr)
                         outputs.append((run.stdout, run.stderr))
                     self.assertEqual(outputs[0], outputs[1])
-                    self.assertEqual(outputs[1], outputs[2])
+                    # A former --strict flag was accepted and ignored by both entry
+                    # points. It is now refused by both, with a non-audit exit code,
+                    # so no caller can believe a stricter audit ran.
+                    # A short unknown option after the path was silently swallowed
+                    # by the standalone tool's hand-written parser (review of #94).
+                    for entry in [("cli.py", "sandbox"), ("tools/sandbox.py",)]:
+                        for extra in (["--strict", path], [path, "-s"], ["--unknown", path]):
+                            run = subprocess.run([sys.executable, os.path.join(_HERE, entry[0]),
+                                                  *entry[1:], *extra], capture_output=True,
+                                                 text=True, timeout=15)
+                            self.assertEqual(run.returncode, 2, (extra, run.stdout + run.stderr))
+                            self.assertNotIn("SOUND", run.stdout, extra)
                     self.assertIn("not full ISO 32000 compliance", outputs[0][0])
                     if expected == 0:
                         self.assertIn("NOT the whole document", outputs[0][0])

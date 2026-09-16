@@ -15,7 +15,6 @@ It analyzes:
 
 Usage:
   python3 tools/sandbox.py <document.pdf>
-  python3 tools/sandbox.py --strict <document.pdf>
 """
 
 from __future__ import annotations
@@ -285,18 +284,16 @@ def print_audit_report(report):
         return 1
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python3 tools/sandbox.py [--strict] <document.pdf>")
-        sys.exit(1)
-
-    args = sys.argv[1:]
-    files = [a for a in args if not a.startswith("--")]
-
-    if not files:
-        print("Error: No file specified.")
-        sys.exit(1)
-
-    target = files[0]
+    # One positional path and no options. argparse refuses any unknown
+    # option — long or short, before or after the path — with exit 2 and no
+    # audit output. A former --strict flag was accepted and ignored by this
+    # tool and by `cli.py sandbox`; a hand-written parser that dropped only
+    # `--`-prefixed arguments still swallowed `-s` (review of PR #94).
+    import argparse
+    parser = argparse.ArgumentParser(prog="tools/sandbox.py",
+                                     description="Static, non-executing polyglot auditor.")
+    parser.add_argument("document", help="path to the document to audit")
+    target = parser.parse_args().document
     print_audit_header(target)
 
     report = audit_polyglot_hermetic(target)

@@ -4004,7 +4004,6 @@ def main():
     # sandbox
     p_sandbox = subparsers.add_parser("sandbox", help="Hermetic static non-executing polyglot auditor")
     p_sandbox.add_argument("file", help="Path to polyglot PDF file to audit without host execution")
-    p_sandbox.add_argument("--strict", action="store_true", help="Fail if any warnings or non-critical anomalies appear")
 
     # compile
     p_compile = subparsers.add_parser("compile", help="Compile a proof-carrying polyglot PDF")
