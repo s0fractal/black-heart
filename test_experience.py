@@ -248,6 +248,37 @@ class ExperienceTest(unittest.TestCase):
         self.assertEqual(list(self.store.iterdir()), [predecessor])
         self.assertEqual(ex.read(self.store, first)[0], self.raw)
 
+    def test_search_task_scans_context_and_applicability(self):
+        """--task covers task.summary, task.context and task.applicability; --component stays exact.
+
+        Reproduced miss before this change: `--task settlement` found nothing although two
+        records carried the word in task.context / task.applicability (summary only was scanned).
+        """
+        self.require_history()
+        base = self.save()['address']
+        self.r['id'] = 'synthetic-context-word'
+        self.r['task']['context'] = self.r['task']['context'] + ' Marker only here: zebraword.'
+        self.write(self.r)
+        in_context = self.save()['address']
+        self.r = json.loads(self.raw)
+        self.r['id'] = 'synthetic-applicability-word'
+        self.r['task']['applicability'] = self.r['task']['applicability'] + ' Marker only here: quaggaword.'
+        self.write(self.r)
+        in_applicability = self.save()['address']
+        addresses = lambda **kw: {m['address'] for m in ex.search(self.store, **kw)['matches']}  # noqa: E731
+        self.assertEqual(addresses(task='zebraword'), {in_context})
+        self.assertEqual(addresses(task='QUAGGAWORD'), {in_applicability})
+        self.assertEqual(addresses(task='absentword'), set())
+        # previous summary hits are preserved, and the AND with --component still applies
+        self.assertEqual(addresses(task='suspended'), {base, in_context, in_applicability})
+        self.assertEqual(addresses(task='zebraword', component='EMPIRICAL'), {in_context})
+        self.assertEqual(addresses(task='zebraword', component='nonexistent'), set())
+        # --component does not scan the task text
+        self.assertEqual(addresses(component='zebraword'), set())
+        # the CLI entry point agrees
+        out = json.loads(self.cli('search', '--task', 'quaggaword').stdout)
+        self.assertEqual([m['address'] for m in out['matches']], [in_applicability])
+
     def test_disagreement_control_preserves_exact_predecessor(self):
         self.require_history()
         first = self.save()['address']
