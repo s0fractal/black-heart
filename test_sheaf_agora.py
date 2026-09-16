@@ -443,6 +443,126 @@ class TestFederatedSheafAgora(unittest.TestCase):
         self.assertEqual(receipt.status, RatificationStatus.RATIFIED_GLOBAL)
         self.assertEqual(receipt.total_yeas, 6)
 
+    def _session_with_two_honest_nays(self):
+        """A theorem session that the cohomology and theorem gates pass, with
+        two honest NAY ballots of pledge 36 (6 effective nays each)."""
+        parliament = FederatedAgoraParliament("Ballot Weight Federation")
+        ctx1 = EpistemicContext.create("Logic Chamber", ["logic"], 120)
+        ctx2 = EpistemicContext.create("Computation Chamber", ["computation"], 150)
+        parliament.register_chamber(FederatedChamber("ch1", "Logic Chamber", ctx1))
+        parliament.register_chamber(FederatedChamber("ch2", "Computation Chamber", ctx2))
+        prop = FederatedProposal(
+            proposal_id="prop_weight", title="Identity", proposal_type=ProposalType.THEOREM_CONGRUENCE,
+            claim_name="(K I) (K I) == I", sponsor_pk_hex=self.pk_sponsor, stake_atp=50,
+            chamber_terms={"ch1": "(K I) (K I)", "ch2": "I"}, target_nf="I")
+        prop.sign(self.sk_sponsor)
+        parliament.table_proposal(prop)
+        for ch, sk, pk in (("ch1", self.sk_voter1, self.pk_voter1), ("ch2", self.sk_voter2, self.pk_voter2)):
+            b = FederatedBallot(voter_pk_hex=pk, chamber_id=ch, proposal_id="prop_weight",
+                                pledged_atp=36, direction=VoteDirection.NAY)
+            b.sign(sk)
+            parliament.cast_ballot(b)
+        return parliament
+
+    def test_09_ballot_weight_is_derived_from_the_pledge_not_declared(self):
+        """Scan `e549de3` finding 13: a signer must not choose `effective_votes`.
+
+        Before the fix a ballot with `pledged_atp=1` and a signed
+        `effective_votes=1_000_000` was RATIFIED_GLOBAL against twelve honest
+        nays, through both the in-memory object and `from_dict`; the honest
+        control with the same pledge was REJECTED_POLITICAL_VOTE."""
+        sk_att, pk_att = generate_keypair()
+
+        # Control: the honest weight for a pledge of 1 is 1 and it loses 1:12.
+        parliament = self._session_with_two_honest_nays()
+        honest = FederatedBallot(voter_pk_hex=pk_att, chamber_id="ch1", proposal_id="prop_weight",
+                                 pledged_atp=1, direction=VoteDirection.AYE)
+        honest.sign(sk_att)
+        parliament.cast_ballot(honest)
+        receipt = parliament.resolve_session("prop_weight")
+        self.assertEqual((receipt.total_yeas, receipt.total_nays), (1, 12))
+        self.assertEqual(receipt.status, RatificationStatus.REJECTED_POLITICAL_VOTE)
+
+        # Attack 1: mutate the object after construction, then sign the mutation.
+        parliament = self._session_with_two_honest_nays()
+        forged = FederatedBallot(voter_pk_hex=pk_att, chamber_id="ch1", proposal_id="prop_weight",
+                                 pledged_atp=1, direction=VoteDirection.AYE)
+        forged.effective_votes = 10 ** 6
+        forged.sign(sk_att)
+        self.assertFalse(forged.verify(), "a signed but non-derived weight must not verify")
+        with self.assertRaises(ValueError):
+            parliament.cast_ballot(forged)
+        receipt = parliament.resolve_session("prop_weight")
+        self.assertEqual((receipt.total_yeas, receipt.total_nays), (0, 12))
+        self.assertEqual(receipt.status, RatificationStatus.REJECTED_POLITICAL_VOTE)
+
+        # Attack 2: the inflated weight arrives in a dict and is signed as such.
+        parliament = self._session_with_two_honest_nays()
+        d = dict(voter_pk_hex=pk_att, chamber_id="ch1", proposal_id="prop_weight",
+                 pledged_atp=1, direction="AYE", effective_votes=10 ** 6)
+        from_wire = FederatedBallot.from_dict(d)
+        self.assertEqual(from_wire.effective_votes, 1, "from_dict derives the weight; it does not copy it")
+        from_wire.effective_votes = 10 ** 6
+        from_wire.sign(sk_att)
+        received = FederatedBallot.from_dict(from_wire.to_dict())
+        self.assertFalse(received.verify())
+        with self.assertRaises(ValueError):
+            parliament.cast_ballot(received)
+
+        # The NAY side is covered by the same rule (the tally takes abs()).
+        nay = FederatedBallot(voter_pk_hex=pk_att, chamber_id="ch1", proposal_id="prop_weight",
+                              pledged_atp=1, direction=VoteDirection.NAY)
+        nay.effective_votes = -(10 ** 6)
+        nay.sign(sk_att)
+        self.assertFalse(nay.verify())
+
+        # An honest ballot still round-trips through to_dict/from_dict and verifies.
+        honest = FederatedBallot(voter_pk_hex=pk_att, chamber_id="ch1", proposal_id="prop_weight",
+                                 pledged_atp=49, direction=VoteDirection.NAY)
+        honest.sign(sk_att)
+        again = FederatedBallot.from_dict(honest.to_dict())
+        self.assertEqual(again.effective_votes, -7)
+        self.assertTrue(again.verify())
+
+    def test_10_ballot_mutated_after_admission_does_not_change_the_decision(self):
+        """Owner AMEND on #96: the chamber must not keep the caller's object.
+
+        Before the amendment `cast_ballot` stored the very object the voter
+        handed in; `b.effective_votes = 1_000_000` after admission, with no new
+        signature, turned 1/12 REJECTED into 1000000/12 RATIFIED_GLOBAL while
+        `b.verify()` was already False."""
+        sk_att, pk_att = generate_keypair()
+        parliament = self._session_with_two_honest_nays()
+        mine = FederatedBallot(voter_pk_hex=pk_att, chamber_id="ch1", proposal_id="prop_weight",
+                               pledged_atp=1, direction=VoteDirection.AYE)
+        mine.sign(sk_att)
+        parliament.cast_ballot(mine)
+        stored = parliament.chambers["ch1"].ballots[pk_att]
+        self.assertIsNot(stored, mine, "the chamber must hold a detached snapshot")
+
+        # Mutate weight, pledge and direction on the object the voter kept.
+        mine.effective_votes = 10 ** 6
+        mine.pledged_atp = 10 ** 12
+        mine.direction = VoteDirection.NAY
+        self.assertEqual((stored.effective_votes, stored.pledged_atp, stored.direction),
+                         (1, 1, VoteDirection.AYE))
+        receipt = parliament.resolve_session("prop_weight")
+        self.assertEqual((receipt.total_yeas, receipt.total_nays), (1, 12))
+        self.assertEqual(receipt.status, RatificationStatus.REJECTED_POLITICAL_VOTE)
+
+        # Re-signing the mutated object changes nothing already admitted either.
+        mine.sign(sk_att)
+        receipt = parliament.resolve_session("prop_weight")
+        self.assertEqual((receipt.total_yeas, receipt.total_nays), (1, 12))
+
+        # Tampering with the stored snapshot itself is refused at tally time,
+        # not counted and not silently dropped.
+        stored.effective_votes = 10 ** 6
+        with self.assertRaises(ValueError):
+            parliament.resolve_session("prop_weight")
+        with self.assertRaises(ValueError):
+            parliament.compute_federation_gini()
+
     def test_08_iso32000_pdf_polyglot_and_cli_execution(self):
         """FSA6: ISO 32000 PDF polyglot generation and standalone execution."""
         parliament = FederatedAgoraParliament("Polyglot Parliament")
