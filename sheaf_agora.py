@@ -97,14 +97,23 @@ class FederatedBallot:
     effective_votes: int = 0
     signature_hex: str = ""
 
+    @staticmethod
+    def derive_effective_votes(pledged_atp: int, direction: VoteDirection) -> int:
+        """The only admissible weight for a pledge: sign(direction) * floor(sqrt(|pledge|)).
+
+        A ballot's weight is a function of what it pledges, never a field the
+        signer chooses. Scan `e549de3` finding 13 reproduced a voter signing
+        `pledged_atp=1, effective_votes=1_000_000` and ratifying against
+        twelve honest nays; Gini saw the pledge, the tally saw the weight."""
+        mag = math.isqrt(max(0, abs(pledged_atp)))
+        if direction == VoteDirection.AYE:
+            return mag
+        if direction == VoteDirection.NAY:
+            return -mag
+        return 0
+
     def __post_init__(self):
-        mag = math.isqrt(max(0, abs(self.pledged_atp)))
-        if self.direction == VoteDirection.AYE:
-            self.effective_votes = mag
-        elif self.direction == VoteDirection.NAY:
-            self.effective_votes = -mag
-        else:
-            self.effective_votes = 0
+        self.effective_votes = self.derive_effective_votes(self.pledged_atp, self.direction)
 
     def canonical_bytes(self) -> bytes:
         data = {
@@ -124,6 +133,10 @@ class FederatedBallot:
 
     def verify(self) -> bool:
         if not self.voter_pk_hex or not self.signature_hex:
+            return False
+        # A valid signature over a chosen weight is still not a valid ballot:
+        # the signer authenticates the pledge, the parliament derives the weight.
+        if self.effective_votes != self.derive_effective_votes(self.pledged_atp, self.direction):
             return False
         try:
             pk_bytes = bytes.fromhex(self.voter_pk_hex)
@@ -154,7 +167,9 @@ class FederatedBallot:
             direction=VoteDirection(d["direction"]),
             signature_hex=d.get("signature_hex", "")
         )
-        b.effective_votes = d.get("effective_votes", b.effective_votes)
+        # `effective_votes` in the input is not trusted: the constructor derives
+        # it, and a dict whose declared weight differs from the derived one no
+        # longer matches its own signed canonical bytes, so `verify()` refuses it.
         return b
 
     @classmethod
