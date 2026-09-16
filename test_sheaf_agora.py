@@ -524,6 +524,45 @@ class TestFederatedSheafAgora(unittest.TestCase):
         self.assertEqual(again.effective_votes, -7)
         self.assertTrue(again.verify())
 
+    def test_10_ballot_mutated_after_admission_does_not_change_the_decision(self):
+        """Owner AMEND on #96: the chamber must not keep the caller's object.
+
+        Before the amendment `cast_ballot` stored the very object the voter
+        handed in; `b.effective_votes = 1_000_000` after admission, with no new
+        signature, turned 1/12 REJECTED into 1000000/12 RATIFIED_GLOBAL while
+        `b.verify()` was already False."""
+        sk_att, pk_att = generate_keypair()
+        parliament = self._session_with_two_honest_nays()
+        mine = FederatedBallot(voter_pk_hex=pk_att, chamber_id="ch1", proposal_id="prop_weight",
+                               pledged_atp=1, direction=VoteDirection.AYE)
+        mine.sign(sk_att)
+        parliament.cast_ballot(mine)
+        stored = parliament.chambers["ch1"].ballots[pk_att]
+        self.assertIsNot(stored, mine, "the chamber must hold a detached snapshot")
+
+        # Mutate weight, pledge and direction on the object the voter kept.
+        mine.effective_votes = 10 ** 6
+        mine.pledged_atp = 10 ** 12
+        mine.direction = VoteDirection.NAY
+        self.assertEqual((stored.effective_votes, stored.pledged_atp, stored.direction),
+                         (1, 1, VoteDirection.AYE))
+        receipt = parliament.resolve_session("prop_weight")
+        self.assertEqual((receipt.total_yeas, receipt.total_nays), (1, 12))
+        self.assertEqual(receipt.status, RatificationStatus.REJECTED_POLITICAL_VOTE)
+
+        # Re-signing the mutated object changes nothing already admitted either.
+        mine.sign(sk_att)
+        receipt = parliament.resolve_session("prop_weight")
+        self.assertEqual((receipt.total_yeas, receipt.total_nays), (1, 12))
+
+        # Tampering with the stored snapshot itself is refused at tally time,
+        # not counted and not silently dropped.
+        stored.effective_votes = 10 ** 6
+        with self.assertRaises(ValueError):
+            parliament.resolve_session("prop_weight")
+        with self.assertRaises(ValueError):
+            parliament.compute_federation_gini()
+
     def test_08_iso32000_pdf_polyglot_and_cli_execution(self):
         """FSA6: ISO 32000 PDF polyglot generation and standalone execution."""
         parliament = FederatedAgoraParliament("Polyglot Parliament")

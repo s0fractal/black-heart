@@ -245,18 +245,33 @@ class FederatedChamber:
     def cast_ballot(self, ballot: FederatedBallot) -> None:
         if not ballot.verify():
             raise ValueError("Ballot signature verification failed!")
-        self.ballots[ballot.voter_pk_hex] = ballot
+        # Keep a detached snapshot, not the caller's object: the caller keeps a
+        # reference and could change weight, pledge or direction after
+        # admission without signing again (owner AMEND on #96, reproduced).
+        snapshot = FederatedBallot.from_dict(ballot.to_dict())
+        if not snapshot.verify():
+            raise ValueError("Ballot snapshot does not verify!")
+        self.ballots[snapshot.voter_pk_hex] = snapshot
+
+    def verified_ballots(self, proposal_id: Optional[str] = None) -> List[FederatedBallot]:
+        """The stored ballots, re-verified before anything is counted. A stored
+        ballot that no longer verifies is a tamper, not a vote to skip: the
+        chamber refuses to tally rather than counting or silently dropping it."""
+        b_list = [b for b in self.ballots.values() if proposal_id is None or b.proposal_id == proposal_id]
+        for b in b_list:
+            if not b.verify():
+                raise ValueError(f"Stored ballot of {b.voter_pk_hex[:12]} no longer verifies; tally refused")
+        return b_list
 
     def local_tally(self, proposal_id: Optional[str] = None) -> Tuple[int, int]:
-        """Returns (effective_yeas, effective_nays)."""
-        b_list = [b for b in self.ballots.values() if proposal_id is None or b.proposal_id == proposal_id]
+        """Returns (effective_yeas, effective_nays) over re-verified ballots."""
+        b_list = self.verified_ballots(proposal_id)
         yeas = sum(b.effective_votes for b in b_list if b.direction == VoteDirection.AYE)
         nays = sum(abs(b.effective_votes) for b in b_list if b.direction == VoteDirection.NAY)
         return yeas, nays
 
     def local_gini(self, proposal_id: Optional[str] = None) -> float:
-        b_list = [b for b in self.ballots.values() if proposal_id is None or b.proposal_id == proposal_id]
-        return calculate_gini([b.pledged_atp for b in b_list])
+        return calculate_gini([b.pledged_atp for b in self.verified_ballots(proposal_id)])
 
 
 @dataclass
@@ -479,7 +494,7 @@ class FederatedAgoraParliament:
     def compute_federation_gini(self) -> float:
         all_stakes: List[int] = []
         for ch in self.chambers.values():
-            all_stakes.extend(b.pledged_atp for b in ch.ballots.values())
+            all_stakes.extend(b.pledged_atp for b in ch.verified_ballots())
         return calculate_gini(all_stakes)
 
     def resolve_session(
@@ -512,7 +527,7 @@ class FederatedAgoraParliament:
             total_yeas += yeas
             total_nays += nays
             chamber_tallies[ch_id] = (yeas, nays)
-            total_staked_atp += sum(b.pledged_atp for b in ch.ballots.values() if b.proposal_id == proposal_id)
+            total_staked_atp += sum(b.pledged_atp for b in ch.verified_ballots(proposal_id))
 
         total_votes = total_yeas + total_nays
         fed_gini = self.compute_federation_gini()
