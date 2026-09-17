@@ -92,3 +92,7 @@ and conditions, and literal identity comparisons. CI runs the same pinned versio
 Do not run automatic fixes or formatting over historical evidence. Static checks
 do not inspect Python embedded in string templates or PDFs, execute code, prove
 settlement, or replace regression tests. No type checker is enabled by this setup.
+
+## Retired context
+
+The triad ecosystem, TRIAD-1 proposal and retired integration sketch are excluded from default context. Follow `history/TRIAD-RETIREMENT.md`; historical access carries ARCHIVED status and cannot resume plans or re-adopt them. All triad references in frozen experiment records are historical provenance only, with no active import or continuation obligation. This also applies to copies retrieved from old Git revisions.
