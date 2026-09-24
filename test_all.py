@@ -145,6 +145,7 @@ SUITES = [
     ("CEGIS Credit: Operand-Bound Equivalence", "test_cegis_credit"),
     ("Scoped Re-Admission & Conditional Reopening", "test_scoped_admission"),
     ("Scoped Re-Admission: Semantic Dominance", "test_scoped_admission_semantic_dominance"),
+    ("Test Runner: Every Root Suite Listed", "test_test_all_coverage"),
     ("Dialectical Discovery & Automated Hypothesis Generation", "test_dialectic_kernel"),
     ("Review 12 Remediation & Probe Defenses (f2e05e6)", "test_remediation_f2e05e6"),
     ("Epistemic Palimpsest — Value Drift Cartography", "test_palimpsest_kernel"),
@@ -158,6 +159,20 @@ SUITES = [
 ]
 
 
+
+
+# The runner itself is the only root test_*.py module that is not a suite.
+EXCLUDED = frozenset({"test_all"})
+
+
+def root_test_modules(directory: str = _HERE) -> set:
+    return {os.path.splitext(f)[0] for f in os.listdir(directory)
+            if f.startswith("test_") and f.endswith(".py")}
+
+
+def suite_coverage(root_modules, suites, excluded=EXCLUDED):
+    """Stub: the guard is registered by its tests first."""
+    return [], []
 
 
 def run_all_tests() -> bool:
