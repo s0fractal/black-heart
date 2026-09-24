@@ -489,6 +489,11 @@ class ScopedAdmissionRegistry:
         self.admissions_granted_count: int = 0
         self.default_timeout_sec: float = default_timeout_sec
 
+    @staticmethod
+    def _authenticated(refusal: RefusalRecord) -> bool:
+        """A refusal speaks only if its evidence is present and its id recomputes."""
+        return bool(refusal.evidence_bytes) and refusal.record_id == refusal.compute_record_id()
+
     def register_refusal(self, refusal: RefusalRecord) -> str:
         """
         Register an immutable refusal record with its evidence bytes.
@@ -527,8 +532,7 @@ class ScopedAdmissionRegistry:
             return ReevalEligibility.POLICY_CHANGE_REQUIRES_SEPARATE_DECISION, "Policy or evaluator change requires separate authorization."
 
         # Verify evidence and refusal integrity against canonical hash (R2 fix: self-comparison bug eliminated)
-        computed_refusal_id = refusal.compute_record_id()
-        if not refusal.evidence_bytes or refusal.record_id != computed_refusal_id:
+        if not self._authenticated(refusal):
             return ReevalEligibility.APPLICABILITY_UNKNOWN, "Evidence bytes missing or corrupted."
 
         # Semantic counterexample cannot be cured by budget expansion
@@ -541,17 +545,27 @@ class ScopedAdmissionRegistry:
         # ...nor by retesting through another refusal of the same triple. A resource refusal
         # and a semantic counterexample may both be true and both stay registered (SA1); the
         # semantic fact dominates whether the candidate may run again. inputs_digest is the
-        # witness's provenance, not the scope of this authority.
+        # witness's provenance, not the scope of this authority. Only an authenticated record
+        # may block: unverified evidence is neither a permission nor a prohibition.
+        unverified = None
         for other in self.refusals.values():
             if (other.outcome_type == RefusalReason.SEMANTIC_COUNTEREXAMPLE
                     and other.candidate_digest == refusal.candidate_digest
                     and other.evaluator_digest == refusal.evaluator_digest
                     and other.requirement_digest == refusal.requirement_digest):
-                return (
-                    ReevalEligibility.BLOCKED_BY_EXISTING_EVIDENCE,
-                    f"Semantic counterexample {other.record_id[:16]} for this candidate, evaluator and "
-                    f"requirement dominates the resource path; retesting another refusal does not cure it."
-                )
+                if self._authenticated(other):
+                    return (
+                        ReevalEligibility.BLOCKED_BY_EXISTING_EVIDENCE,
+                        f"Semantic counterexample {other.record_id[:16]} for this candidate, evaluator and "
+                        f"requirement dominates the resource path; retesting another refusal does not cure it."
+                    )
+                unverified = other
+        if unverified is not None:
+            return (
+                ReevalEligibility.APPLICABILITY_UNKNOWN,
+                f"A semantic-shaped record {str(unverified.record_id)[:16]} for this triple does not "
+                f"authenticate (record_id or evidence); it neither blocks nor permits."
+            )
 
         # Check quota limit using attempt ledger
         spent = self.attempts_spent.get(refusal.record_id, 0)
