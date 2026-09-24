@@ -538,6 +538,21 @@ class ScopedAdmissionRegistry:
                 "Semantic counterexample is permanent under unchanged requirement; increasing budget does not cure invalid logic."
             )
 
+        # ...nor by retesting through another refusal of the same triple. A resource refusal
+        # and a semantic counterexample may both be true and both stay registered (SA1); the
+        # semantic fact dominates whether the candidate may run again. inputs_digest is the
+        # witness's provenance, not the scope of this authority.
+        for other in self.refusals.values():
+            if (other.outcome_type == RefusalReason.SEMANTIC_COUNTEREXAMPLE
+                    and other.candidate_digest == refusal.candidate_digest
+                    and other.evaluator_digest == refusal.evaluator_digest
+                    and other.requirement_digest == refusal.requirement_digest):
+                return (
+                    ReevalEligibility.BLOCKED_BY_EXISTING_EVIDENCE,
+                    f"Semantic counterexample {other.record_id[:16]} for this candidate, evaluator and "
+                    f"requirement dominates the resource path; retesting another refusal does not cure it."
+                )
+
         # Check quota limit using attempt ledger
         spent = self.attempts_spent.get(refusal.record_id, 0)
         if spent >= self.MAX_ATTEMPTS_PER_REFUSAL_FAMILY:
