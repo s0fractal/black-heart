@@ -517,7 +517,8 @@ class ScopedAdmissionRegistry:
           - Evaluator or requirement changes require separate policy decisions.
           - Missing or unproven evidence rejects retest.
           - Only targeted budget increases following RESOURCE_LIMIT are eligible.
-          - Durable attempt quota limits survive registry instance restarts.
+          - Attempt counts in retained or imported state never decrease (import_state is monotonic);
+            crash durability extends only to the last persisted export (SA4).
         """
         refusal = self.refusals.get(request.refusal_id)
         if not refusal:
@@ -762,25 +763,58 @@ class ScopedAdmissionRegistry:
         }
 
     def import_state(self, state: Dict[str, Any]):
-        """Import previously exported registry state."""
-        self.executed_runs_count = int(state.get("executed_runs_count", 0))
-        self.admissions_granted_count = int(state.get("admissions_granted_count", 0))
-        self.attempts_spent.update(state.get("attempts_spent", {}))
+        """Merge a previously exported state into this registry.
 
-        for k, v in state.get("refusals", {}).items():
-            self.refusals[k] = RefusalRecord.from_dict(v)
-        for k, v in state.get("requests", {}).items():
-            self.requests[k] = ReevaluationRequest.from_dict(v)
-        for k, v in state.get("retest_results", {}).items():
-            res = RetestResult.from_dict(v)
+        Counters already in the registry never decrease (D1): attempts per refusal and
+        both global counters are merged by maximum, and executed runs stay at least the
+        attempts spent. The snapshot is validated whole before anything changes; one that
+        contradicts itself is refused with ValueError and the registry is left unchanged.
+        This is monotonicity of retained and imported state, not crash durability: an
+        attempt reserved after the last export is not in any snapshot (SA4).
+        """
+        if not isinstance(state, dict):
+            raise ValueError("Registry snapshot must be an object.")
+
+        def count(name, value):
+            if type(value) is not int or value < 0:
+                raise ValueError(f"Registry snapshot {name} must be a non-negative integer, got {value!r}.")
+            return value
+
+        attempts = state.get("attempts_spent", {})
+        if not isinstance(attempts, dict):
+            raise ValueError("Registry snapshot attempts_spent must be an object.")
+        for key, value in attempts.items():
+            if not isinstance(key, str) or count("attempts_spent[" + str(key)[:16] + "]", value) > self.MAX_ATTEMPTS_PER_REFUSAL_FAMILY:
+                raise ValueError(f"Registry snapshot spends {value!r} attempts on {str(key)[:16]}, above the quota.")
+        runs = count("executed_runs_count", state.get("executed_runs_count", 0))
+        granted = count("admissions_granted_count", state.get("admissions_granted_count", 0))
+        if runs < sum(attempts.values()):
+            raise ValueError(f"Registry snapshot records {runs} executed runs for {sum(attempts.values())} spent attempts.")
+        try:
+            refusals = {k: RefusalRecord.from_dict(v) for k, v in state.get("refusals", {}).items()}
+            requests = {k: ReevaluationRequest.from_dict(v) for k, v in state.get("requests", {}).items()}
+            results = {k: RetestResult.from_dict(v) for k, v in state.get("retest_results", {}).items()}
+            admissions = [ScopedAdmission.from_dict(v) for v in state.get("admissions", [])]
+        except (KeyError, TypeError, ValueError, AttributeError) as exc:
+            raise ValueError(f"Registry snapshot record is malformed: {type(exc).__name__}: {exc}") from exc
+        if granted < len(admissions):
+            raise ValueError(f"Registry snapshot records {granted} grants for {len(admissions)} admissions.")
+
+        # Validated: merge. Nothing above changed the registry.
+        for key, value in attempts.items():
+            self.attempts_spent[key] = max(self.attempts_spent.get(key, 0), value)
+        self.refusals.update(refusals)
+        self.requests.update(requests)
+        for k, res in results.items():
             self.retest_results[k] = res
             req = self.requests.get(res.request_id)
             if req:
                 self.canonical_retest_results[req.compute_request_id()] = res
-        for v in state.get("admissions", []):
-            adm = ScopedAdmission.from_dict(v)
+        for adm in admissions:
             scope_key = (adm.candidate_digest, adm.context_digest, adm.evaluator_digest, adm.requirement_digest)
             self.admissions[scope_key] = adm
+        self.executed_runs_count = max(self.executed_runs_count, runs, sum(self.attempts_spent.values()))
+        self.admissions_granted_count = max(self.admissions_granted_count, granted, len(self.admissions))
 
 
 # ============================================================================

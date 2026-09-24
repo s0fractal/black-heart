@@ -145,6 +145,7 @@ SUITES = [
     ("CEGIS Credit: Operand-Bound Equivalence", "test_cegis_credit"),
     ("Scoped Re-Admission & Conditional Reopening", "test_scoped_admission"),
     ("Scoped Re-Admission: Semantic Dominance", "test_scoped_admission_semantic_dominance"),
+    ("Scoped Re-Admission: Monotonic Import", "test_scoped_admission_import_monotonic"),
     ("Dialectical Discovery & Automated Hypothesis Generation", "test_dialectic_kernel"),
     ("Review 12 Remediation & Probe Defenses (f2e05e6)", "test_remediation_f2e05e6"),
     ("Epistemic Palimpsest — Value Drift Cartography", "test_palimpsest_kernel"),
