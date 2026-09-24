@@ -2,8 +2,9 @@
 """
 test_all.py — Unified Test Suite Runner for Project Black-Heart (%🖤).
 
-Runs every module listed in SUITES below (every test_*.py in the repository root
-except this runner; nested experiment tests are not covered); the number of modules and tests is printed at run time, never
+Runs every module listed in SUITES below, and refuses to run anything when SUITES differs
+from the test_*.py modules in the repository root minus EXCLUDED (this runner); nested
+experiment tests are not covered; the number of modules and tests is printed at run time, never
 stated here. A green aggregate establishes only the named checks of those
 modules, not the correctness of Black-Heart as a whole.
 """
@@ -171,14 +172,23 @@ def root_test_modules(directory: str = _HERE) -> set:
 
 
 def suite_coverage(root_modules, suites, excluded=EXCLUDED):
-    """Stub: the guard is registered by its tests first."""
-    return [], []
+    """Root test modules not in SUITES, and SUITES modules with no root file."""
+    expected, listed = set(root_modules) - set(excluded), set(suites)
+    return sorted(expected - listed), sorted(listed - expected)
 
 
 def run_all_tests() -> bool:
     print("\033[1;36m" + "=" * 70)
     print("  %🖤 PROJECT BLACK-HEART — UNIFIED TEST SUITE RUNNER")
     print("=" * 70 + "\033[0m\n")
+
+    # Refuse before any suite runs: a green aggregate that silently skipped a suite
+    # would claim what it did not check.
+    unlisted, missing = suite_coverage(root_test_modules(), [m for _, m in SUITES])
+    if unlisted or missing:
+        print("\033[1;31m[✗] SUITES does not match the root test_*.py modules: "
+              f"not listed {unlisted}, listed without a file {missing}. Nothing was run.\033[0m")
+        return False
 
     loader = unittest.TestLoader()
     total_passed = 0
