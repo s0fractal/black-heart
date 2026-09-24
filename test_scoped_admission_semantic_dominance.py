@@ -8,9 +8,15 @@ At 3893fad a SEMANTIC_COUNTEREXAMPLE was blocked only on its own record: registe
 RESOURCE_LIMIT refusal for the same triple opened a retest and an admission (SA2). Both
 records stay registered (SA1); the semantic fact is stronger when deciding whether the
 candidate may be executed again. Reproducer: stargate examples/semantic-seal.
+
+Only an authenticated semantic record (record_id recomputes, evidence non-empty) may block:
+unverified evidence is neither a permission nor a prohibition. A semantic-shaped record
+that does not authenticate makes the decision APPLICABILITY_UNKNOWN, unless a valid one
+of the same triple blocks anyway.
 """
 
 from __future__ import annotations
+import dataclasses
 import unittest
 
 from scoped_admission import (
@@ -28,7 +34,7 @@ def refusal(kind, *, candidate=CANDIDATE, evaluator=EVALUATOR, requirement=REQUI
             inputs="i" * 64, evidence=None, budget=100):
     return RefusalRecord.create(
         candidate_digest=candidate, evaluator_digest=evaluator, requirement_digest=requirement,
-        inputs_digest=inputs, evidence_bytes=evidence or kind.value.encode("utf-8"),
+        inputs_digest=inputs, evidence_bytes=kind.value.encode("utf-8") if evidence is None else evidence,
         context={"budget_steps": budget}, outcome_type=kind, steps_executed=budget)
 
 
@@ -105,6 +111,63 @@ class SemanticDominance(unittest.TestCase):
         restarted.import_state(self.registry.export_state())
         self.assertEqual(restarted.assess_request(request(resource))[0],
                          ReevalEligibility.BLOCKED_BY_EXISTING_EVIDENCE)
+
+
+class SemanticAuthentication(unittest.TestCase):
+    """Codex review of #99: the dominance scan must not trust outcome_type alone."""
+
+    def setUp(self):
+        self.registry = ScopedAdmissionRegistry()
+        self.calls = []
+        self.resource = refusal(RefusalReason.RESOURCE_LIMIT, budget=10)
+        self.valid = refusal(RefusalReason.SEMANTIC_COUNTEREXAMPLE, budget=100)
+        self.forged = dataclasses.replace(self.valid, record_id="f" * 64)
+        self.empty = refusal(RefusalReason.SEMANTIC_COUNTEREXAMPLE, evidence=b"", budget=100)
+
+    def executor(self, code, context):
+        self.calls.append(context["budget_steps"])
+        return RetestOutcome.SUCCESS, 10, b"SUCCESS"
+
+    def eligibility(self, *records, registry=None):
+        registry = registry or self.registry
+        for ref in records:
+            registry.register_refusal(ref)
+        return registry.assess_request(request(self.resource))[0]
+
+    def test_7_a_forged_semantic_id_does_not_block_it_is_unknown(self):
+        self.assertEqual(self.eligibility(self.forged, self.resource), ReevalEligibility.APPLICABILITY_UNKNOWN)
+
+    def test_8_empty_semantic_evidence_does_not_block_it_is_unknown(self):
+        self.assertEqual(self.empty.record_id, self.empty.compute_record_id())
+        self.assertEqual(self.eligibility(self.empty, self.resource), ReevalEligibility.APPLICABILITY_UNKNOWN)
+
+    def test_9_order_does_not_matter_for_an_unauthenticated_record(self):
+        self.assertEqual(self.eligibility(self.resource, self.forged), ReevalEligibility.APPLICABILITY_UNKNOWN)
+
+    def test_10_a_valid_semantic_wins_over_an_invalid_one_in_either_order(self):
+        # Green before and after: a valid seal blocks whatever else is registered.
+        for records in ((self.forged, self.valid, self.resource), (self.resource, self.valid, self.forged)):
+            self.assertEqual(self.eligibility(*records, registry=ScopedAdmissionRegistry()),
+                             ReevalEligibility.BLOCKED_BY_EXISTING_EVIDENCE)
+
+    def test_11_an_imported_forged_semantic_does_not_block(self):
+        self.eligibility(self.resource)
+        state = self.registry.export_state()
+        forged = self.valid.to_dict()
+        forged["record_id"] = "f" * 64
+        state["refusals"]["f" * 64] = forged
+        restarted = ScopedAdmissionRegistry()
+        restarted.import_state(state)
+        self.assertEqual(restarted.assess_request(request(self.resource))[0],
+                         ReevalEligibility.APPLICABILITY_UNKNOWN)
+
+    def test_12_unknown_runs_nothing_spends_nothing_admits_nothing(self):
+        # Green before and after: blocked or unknown, neither may run the executor.
+        self.eligibility(self.forged, self.resource)
+        with self.assertRaises(PermissionError):
+            self.registry.execute_retest(request(self.resource), CODE, self.executor)
+        self.assertEqual((self.calls, self.registry.attempts_spent[self.resource.record_id]), ([], 0))
+        self.assertIsNone(self.registry.admission_for(CANDIDATE, {"budget_steps": 200}, REQUIREMENT, EVALUATOR))
 
 
 if __name__ == "__main__":
