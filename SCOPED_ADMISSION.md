@@ -81,6 +81,7 @@ BLOCKED_BY_EXISTING_EVIDENCE   POLICY_CHANGE_REQUIRES      ELIGIBLE_FOR_RETEST
 ### Інваріант SA2: Strict Cause-Awareness (Суворе Розрізнення Причин Зупинки)
 - Відмова типу `RESOURCE_LIMIT` є умовною: вона дозволяє перехід у статус `ELIGIBLE_FOR_RETEST` виключно за умови строгого розширення обчислювального бюджету ($\text{budget}_{\text{new}} > \text{budget}_{\text{old}}$).
 - Відмова типу `SEMANTIC_COUNTEREXAMPLE` є безумовною щодо бюджету: будь-яке збільшення ліміту кроків повертає `BLOCKED_BY_EXISTING_EVIDENCE`.
+- Семантичний контрприклад домінує над resource-шляхом тієї самої трійки `(candidate, evaluator, requirement)`: запит через іншу відмову `RESOURCE_LIMIT` цієї трійки теж повертає `BLOCKED_BY_EXISTING_EVIDENCE`, незалежно від порядку реєстрації та `inputs_digest`. Обидва записи лишаються в реєстрі (SA1). Блокує лише автентифікований запис (непорожні evidence-байти, `record_id` перераховується); семантичний за формою запис, що не автентифікується, дає `APPLICABILITY_UNKNOWN` — неперевірене evidence не є ні дозволом, ні забороною, — а валідний запис тієї ж трійки блокує попри невалідний.
 
 ### Інваріант SA3: Scope Non-Leakage (Невитікання Контекстного Допуску)
 Допуск реєструється як кортеж чотирьох дайджестів:
@@ -116,6 +117,8 @@ $$\text{Scope} = \langle \text{candidate\_digest}, \text{context\_digest}, \text
 | **10** | Підміна кандидата перед запуском | `ValueError: Candidate tampering detected` | **✓ PASS** |
 | **11** | Повтор того самого запиту | Кешований reuse результату, нуль нових витрат | **✓ PASS** |
 | **12** | Таймаут / crash після резервування | `INCONCLUSIVE`, спроба згоріла, допуск відхилено | **✓ PASS** |
+| **13** | Семантичний контрприклад + окрема `RESOURCE_LIMIT`-відмова тієї ж трійки | `BLOCKED_BY_EXISTING_EVIDENCE`, 0 запусків, 0 спроб, без допуску; також після import ([test_scoped_admission_semantic_dominance.py](test_scoped_admission_semantic_dominance.py)) | **✓ PASS** |
+| **14** | Семантичний за формою запис із підробленим `record_id` або порожнім evidence (також після import) | `APPLICABILITY_UNKNOWN`, 0 запусків; валідний семантичний запис усе одно блокує | **✓ PASS** |
 
 ### Негативні Мутації (Контроль Чутливості Тестів):
 - **Mutation 1:** Штучне ігнорування `context_digest` призводить до витоку прав і фіксується тестом.
