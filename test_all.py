@@ -2,9 +2,9 @@
 """
 test_all.py — Unified Test Suite Runner for Project Black-Heart (%🖤).
 
-Runs every module listed in SUITES below, and refuses to run anything when SUITES differs
-from the test_*.py modules in the repository root minus EXCLUDED (this runner); nested
-experiment tests are not covered; the number of modules and tests is printed at run time, never
+Runs every module listed in SUITES below; the command-line run refuses to run anything
+when SUITES differs from the test_*.py modules in the repository root minus EXCLUDED (this
+runner); nested experiment tests are not covered; the number of modules and tests is printed at run time, never
 stated here. A green aggregate establishes only the named checks of those
 modules, not the correctness of Black-Heart as a whole.
 """
@@ -182,14 +182,6 @@ def run_all_tests() -> bool:
     print("  %🖤 PROJECT BLACK-HEART — UNIFIED TEST SUITE RUNNER")
     print("=" * 70 + "\033[0m\n")
 
-    # Refuse before any suite runs: a green aggregate that silently skipped a suite
-    # would claim what it did not check.
-    unlisted, missing = suite_coverage(root_test_modules(), [m for _, m in SUITES])
-    if unlisted or missing:
-        print("\033[1;31m[✗] SUITES does not match the root test_*.py modules: "
-              f"not listed {unlisted}, listed without a file {missing}. Nothing was run.\033[0m")
-        return False
-
     loader = unittest.TestLoader()
     total_passed = 0
     total_ran = 0
@@ -241,6 +233,18 @@ def run_all_tests() -> bool:
 
     return all_success
 
+def main() -> int:
+    """The command-line run (CI): refuse before any suite runs when SUITES does not cover
+    the root test modules -- a green aggregate that silently skipped a suite would claim
+    what it did not check. run_all_tests() itself still runs whatever SUITES says, so a
+    test may run a chosen subset through it."""
+    unlisted, missing = suite_coverage(root_test_modules(), [m for _, m in SUITES])
+    if unlisted or missing:
+        print("\033[1;31m[✗] SUITES does not match the root test_*.py modules: "
+              f"not listed {unlisted}, listed without a file {missing}. Nothing was run.\033[0m")
+        return 1
+    return 0 if run_all_tests() else 1
+
+
 if __name__ == "__main__":
-    success = run_all_tests()
-    sys.exit(0 if success else 1)
+    sys.exit(main())

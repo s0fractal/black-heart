@@ -36,7 +36,7 @@ class Coverage(unittest.TestCase):
         self.assertEqual(test_all.suite_coverage({"test_all", "test_a"}, ["test_a", "test_gone"]),
                          ([], ["test_gone"]))
 
-    def test_the_runner_refuses_before_running_any_suite(self):
+    def test_the_command_line_run_refuses_before_running_any_suite(self):
         loaded = []
 
         def load(self_loader, name, module=None):
@@ -46,8 +46,8 @@ class Coverage(unittest.TestCase):
         with mock.patch.object(test_all, "SUITES", dropped), \
                 mock.patch.object(unittest.TestLoader, "loadTestsFromName", load), \
                 mock.patch("builtins.print"):
-            ok = test_all.run_all_tests()
-        self.assertEqual((ok, loaded), (False, []))
+            code = test_all.main()
+        self.assertEqual((code, loaded), (1, []))
 
 
 if __name__ == "__main__":
