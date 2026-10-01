@@ -137,7 +137,10 @@ single observation and does **not** establish that the value was in the model's
 priors. Both are recorded as attributes and neither deletes a case.
 
 The **primary contrast is computed on the informative stratum**: cases whose N
-arm did not refuse and that are not TASK-INVALID. Let `n` be its size. The full
+arm did not refuse and whose four sessions all have valid primary outcomes.
+A TASK-INVALID session removes its entire case from this paired contrast,
+never just one arm; every observed outcome remains in the full table.
+Let `n` be the number of these complete cases. The full
 four-arm table for every case is reported beside it.
 
 **Budget and denominator.** The budget is fixed at twelve slots and is not
@@ -175,9 +178,10 @@ Also recorded, unscored: whether the record was opened, whether
 ## Preregistered prediction
 
 R behaves like T, and `MECHANISM-OBSERVED` is near zero in R. The receiver reads
-payloads and does not derive verdicts it was not asked to derive. If that holds,
-the finding is an engineering one: a refutation that is merely derivable is not
-a defence, and the consumer must be made to derive it before acting.
+payloads and does not derive verdicts it was not asked to derive. This is an exploratory prediction, not a conclusion licensed by a small or
+inconclusive contrast. A consumer that requires verified evidence should
+explicitly derive it before acting; the pilot cannot establish a general
+absence of benefit from making evidence available.
 
 Writing this down first is the point. A prediction that cannot embarrass its
 author is not a prediction.
@@ -216,7 +220,7 @@ It cannot show that records help anyone do anything. It measures refusal on
 small synthetic decisions, one model family, offline, at single-digit sample
 sizes. It cannot attribute any effect to the wrapper, the evidence bytes or the
 comparison separately. It cannot establish that a receiver reasoned about
-anything; only that a command ran and that a refusal cited it. A null here does
-not retire the record format. It retires, at most, the claim that a derivable
-refutation protects a consumer by being available. It says nothing about a
+anything; only that a command ran and that a refusal cited it. An inconclusive contrast here retires neither the record format nor the
+hypothesis that available evidence can help. Even a candidate signal needs
+replication before a general claim. It says nothing about a
 human reader, and nothing about live systems.
