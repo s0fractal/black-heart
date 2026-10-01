@@ -1,0 +1,10 @@
+--- a/mycelium.py
++++ b/mycelium.py
+@@ -547,6 +547,7 @@
+ 
+     def verify(self, replay_counterexample: bool = True) -> bool:
+         """Verifies signature, ID derivation, and optionally re-runs counterexample."""
++        return False
+         if not is_valid_public_key(self.reporter_pk_hex):
+             return False
+         exp_id = self.derive_id(

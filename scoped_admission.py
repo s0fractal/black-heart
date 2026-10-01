@@ -489,6 +489,11 @@ class ScopedAdmissionRegistry:
         self.admissions_granted_count: int = 0
         self.default_timeout_sec: float = default_timeout_sec
 
+    @staticmethod
+    def _authenticated(refusal: RefusalRecord) -> bool:
+        """A refusal speaks only if its evidence is present and its id recomputes."""
+        return bool(refusal.evidence_bytes) and refusal.record_id == refusal.compute_record_id()
+
     def register_refusal(self, refusal: RefusalRecord) -> str:
         """
         Register an immutable refusal record with its evidence bytes.
@@ -512,7 +517,8 @@ class ScopedAdmissionRegistry:
           - Evaluator or requirement changes require separate policy decisions.
           - Missing or unproven evidence rejects retest.
           - Only targeted budget increases following RESOURCE_LIMIT are eligible.
-          - Durable attempt quota limits survive registry instance restarts.
+          - Attempt counts in retained or imported state never decrease (import_state is monotonic);
+            crash durability extends only to the last persisted export (SA4).
         """
         refusal = self.refusals.get(request.refusal_id)
         if not refusal:
@@ -527,8 +533,7 @@ class ScopedAdmissionRegistry:
             return ReevalEligibility.POLICY_CHANGE_REQUIRES_SEPARATE_DECISION, "Policy or evaluator change requires separate authorization."
 
         # Verify evidence and refusal integrity against canonical hash (R2 fix: self-comparison bug eliminated)
-        computed_refusal_id = refusal.compute_record_id()
-        if not refusal.evidence_bytes or refusal.record_id != computed_refusal_id:
+        if not self._authenticated(refusal):
             return ReevalEligibility.APPLICABILITY_UNKNOWN, "Evidence bytes missing or corrupted."
 
         # Semantic counterexample cannot be cured by budget expansion
@@ -536,6 +541,31 @@ class ScopedAdmissionRegistry:
             return (
                 ReevalEligibility.BLOCKED_BY_EXISTING_EVIDENCE,
                 "Semantic counterexample is permanent under unchanged requirement; increasing budget does not cure invalid logic."
+            )
+
+        # ...nor by retesting through another refusal of the same triple. A resource refusal
+        # and a semantic counterexample may both be true and both stay registered (SA1); the
+        # semantic fact dominates whether the candidate may run again. inputs_digest is the
+        # witness's provenance, not the scope of this authority. Only an authenticated record
+        # may block: unverified evidence is neither a permission nor a prohibition.
+        unverified = None
+        for other in self.refusals.values():
+            if (other.outcome_type == RefusalReason.SEMANTIC_COUNTEREXAMPLE
+                    and other.candidate_digest == refusal.candidate_digest
+                    and other.evaluator_digest == refusal.evaluator_digest
+                    and other.requirement_digest == refusal.requirement_digest):
+                if self._authenticated(other):
+                    return (
+                        ReevalEligibility.BLOCKED_BY_EXISTING_EVIDENCE,
+                        f"Semantic counterexample {other.record_id[:16]} for this candidate, evaluator and "
+                        f"requirement dominates the resource path; retesting another refusal does not cure it."
+                    )
+                unverified = other
+        if unverified is not None:
+            return (
+                ReevalEligibility.APPLICABILITY_UNKNOWN,
+                f"A semantic-shaped record {str(unverified.record_id)[:16]} for this triple does not "
+                f"authenticate (record_id or evidence); it neither blocks nor permits."
             )
 
         # Check quota limit using attempt ledger
@@ -733,25 +763,58 @@ class ScopedAdmissionRegistry:
         }
 
     def import_state(self, state: Dict[str, Any]):
-        """Import previously exported registry state."""
-        self.executed_runs_count = int(state.get("executed_runs_count", 0))
-        self.admissions_granted_count = int(state.get("admissions_granted_count", 0))
-        self.attempts_spent.update(state.get("attempts_spent", {}))
+        """Merge a previously exported state into this registry.
 
-        for k, v in state.get("refusals", {}).items():
-            self.refusals[k] = RefusalRecord.from_dict(v)
-        for k, v in state.get("requests", {}).items():
-            self.requests[k] = ReevaluationRequest.from_dict(v)
-        for k, v in state.get("retest_results", {}).items():
-            res = RetestResult.from_dict(v)
+        Counters already in the registry never decrease (D1): attempts per refusal and
+        both global counters are merged by maximum, and executed runs stay at least the
+        attempts spent. The snapshot is validated whole before anything changes; one that
+        contradicts itself is refused with ValueError and the registry is left unchanged.
+        This is monotonicity of retained and imported state, not crash durability: an
+        attempt reserved after the last export is not in any snapshot (SA4).
+        """
+        if not isinstance(state, dict):
+            raise ValueError("Registry snapshot must be an object.")
+
+        def count(name, value):
+            if type(value) is not int or value < 0:
+                raise ValueError(f"Registry snapshot {name} must be a non-negative integer, got {value!r}.")
+            return value
+
+        attempts = state.get("attempts_spent", {})
+        if not isinstance(attempts, dict):
+            raise ValueError("Registry snapshot attempts_spent must be an object.")
+        for key, value in attempts.items():
+            if not isinstance(key, str) or count("attempts_spent[" + str(key)[:16] + "]", value) > self.MAX_ATTEMPTS_PER_REFUSAL_FAMILY:
+                raise ValueError(f"Registry snapshot spends {value!r} attempts on {str(key)[:16]}, above the quota.")
+        runs = count("executed_runs_count", state.get("executed_runs_count", 0))
+        granted = count("admissions_granted_count", state.get("admissions_granted_count", 0))
+        if runs < sum(attempts.values()):
+            raise ValueError(f"Registry snapshot records {runs} executed runs for {sum(attempts.values())} spent attempts.")
+        try:
+            refusals = {k: RefusalRecord.from_dict(v) for k, v in state.get("refusals", {}).items()}
+            requests = {k: ReevaluationRequest.from_dict(v) for k, v in state.get("requests", {}).items()}
+            results = {k: RetestResult.from_dict(v) for k, v in state.get("retest_results", {}).items()}
+            admissions = [ScopedAdmission.from_dict(v) for v in state.get("admissions", [])]
+        except (KeyError, TypeError, ValueError, AttributeError) as exc:
+            raise ValueError(f"Registry snapshot record is malformed: {type(exc).__name__}: {exc}") from exc
+        if granted < len(admissions):
+            raise ValueError(f"Registry snapshot records {granted} grants for {len(admissions)} admissions.")
+
+        # Validated: merge. Nothing above changed the registry.
+        for key, value in attempts.items():
+            self.attempts_spent[key] = max(self.attempts_spent.get(key, 0), value)
+        self.refusals.update(refusals)
+        self.requests.update(requests)
+        for k, res in results.items():
             self.retest_results[k] = res
             req = self.requests.get(res.request_id)
             if req:
                 self.canonical_retest_results[req.compute_request_id()] = res
-        for v in state.get("admissions", []):
-            adm = ScopedAdmission.from_dict(v)
+        for adm in admissions:
             scope_key = (adm.candidate_digest, adm.context_digest, adm.evaluator_digest, adm.requirement_digest)
             self.admissions[scope_key] = adm
+        self.executed_runs_count = max(self.executed_runs_count, runs, sum(self.attempts_spent.values()))
+        self.admissions_granted_count = max(self.admissions_granted_count, granted, len(self.admissions))
 
 
 # ============================================================================

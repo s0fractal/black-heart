@@ -23,9 +23,10 @@ do not add fields to it.
   observations and available evidence. Do not fill unknown historical model,
   session, timing, revision or output fields by guessing. Save and read back
   the original bytes; report the address, store and bounded result.
-- **What have we tried?** Search task summary or component, then read matching
-  records. CM-2 search is case-insensitive substring matching, AND across both
-  filters; it does not search every observation or rank by quality. Start with
+- **What have we tried?** Search the task text (summary, context, applicability)
+  or the declared component, then read matching records. CM-2 search is
+  case-insensitive substring matching, AND across both filters; it does not
+  search observations or advice, and does not rank by quality. Start with
   one relevant filter. If it misses, broaden before concluding there is no
   relevant stored record. Present incompatible advice together, with scope,
   basis and source; never silently select the newest as true.

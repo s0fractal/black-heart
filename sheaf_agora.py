@@ -78,6 +78,9 @@ class RatificationStatus(str, Enum):
     REJECTED_COHOMOLOGICAL_FRACTURE = "REJECTED_COHOMOLOGICAL_FRACTURE"
     REJECTED_PLUTOCRACY_CEILING = "REJECTED_PLUTOCRACY_CEILING"
     SLASHED_AUDIT_FAILED = "SLASHED_AUDIT_FAILED"
+    # The theorem check did not settle within the chamber budget or errored:
+    # not a refutation. No ratification, no slash; the stake is not touched.
+    UNVERIFIED_AUDIT_BUDGET = "UNVERIFIED_AUDIT_BUDGET"
 
 
 @dataclass
@@ -94,14 +97,23 @@ class FederatedBallot:
     effective_votes: int = 0
     signature_hex: str = ""
 
+    @staticmethod
+    def derive_effective_votes(pledged_atp: int, direction: VoteDirection) -> int:
+        """The only admissible weight for a pledge: sign(direction) * floor(sqrt(|pledge|)).
+
+        A ballot's weight is a function of what it pledges, never a field the
+        signer chooses. Scan `e549de3` finding 13 reproduced a voter signing
+        `pledged_atp=1, effective_votes=1_000_000` and ratifying against
+        twelve honest nays; Gini saw the pledge, the tally saw the weight."""
+        mag = math.isqrt(max(0, abs(pledged_atp)))
+        if direction == VoteDirection.AYE:
+            return mag
+        if direction == VoteDirection.NAY:
+            return -mag
+        return 0
+
     def __post_init__(self):
-        mag = math.isqrt(max(0, abs(self.pledged_atp)))
-        if self.direction == VoteDirection.AYE:
-            self.effective_votes = mag
-        elif self.direction == VoteDirection.NAY:
-            self.effective_votes = -mag
-        else:
-            self.effective_votes = 0
+        self.effective_votes = self.derive_effective_votes(self.pledged_atp, self.direction)
 
     def canonical_bytes(self) -> bytes:
         data = {
@@ -121,6 +133,10 @@ class FederatedBallot:
 
     def verify(self) -> bool:
         if not self.voter_pk_hex or not self.signature_hex:
+            return False
+        # A valid signature over a chosen weight is still not a valid ballot:
+        # the signer authenticates the pledge, the parliament derives the weight.
+        if self.effective_votes != self.derive_effective_votes(self.pledged_atp, self.direction):
             return False
         try:
             pk_bytes = bytes.fromhex(self.voter_pk_hex)
@@ -151,7 +167,9 @@ class FederatedBallot:
             direction=VoteDirection(d["direction"]),
             signature_hex=d.get("signature_hex", "")
         )
-        b.effective_votes = d.get("effective_votes", b.effective_votes)
+        # `effective_votes` in the input is not trusted: the constructor derives
+        # it, and a dict whose declared weight differs from the derived one no
+        # longer matches its own signed canonical bytes, so `verify()` refuses it.
         return b
 
     @classmethod
@@ -227,18 +245,33 @@ class FederatedChamber:
     def cast_ballot(self, ballot: FederatedBallot) -> None:
         if not ballot.verify():
             raise ValueError("Ballot signature verification failed!")
-        self.ballots[ballot.voter_pk_hex] = ballot
+        # Keep a detached snapshot, not the caller's object: the caller keeps a
+        # reference and could change weight, pledge or direction after
+        # admission without signing again (owner AMEND on #96, reproduced).
+        snapshot = FederatedBallot.from_dict(ballot.to_dict())
+        if not snapshot.verify():
+            raise ValueError("Ballot snapshot does not verify!")
+        self.ballots[snapshot.voter_pk_hex] = snapshot
+
+    def verified_ballots(self, proposal_id: Optional[str] = None) -> List[FederatedBallot]:
+        """The stored ballots, re-verified before anything is counted. A stored
+        ballot that no longer verifies is a tamper, not a vote to skip: the
+        chamber refuses to tally rather than counting or silently dropping it."""
+        b_list = [b for b in self.ballots.values() if proposal_id is None or b.proposal_id == proposal_id]
+        for b in b_list:
+            if not b.verify():
+                raise ValueError(f"Stored ballot of {b.voter_pk_hex[:12]} no longer verifies; tally refused")
+        return b_list
 
     def local_tally(self, proposal_id: Optional[str] = None) -> Tuple[int, int]:
-        """Returns (effective_yeas, effective_nays)."""
-        b_list = [b for b in self.ballots.values() if proposal_id is None or b.proposal_id == proposal_id]
+        """Returns (effective_yeas, effective_nays) over re-verified ballots."""
+        b_list = self.verified_ballots(proposal_id)
         yeas = sum(b.effective_votes for b in b_list if b.direction == VoteDirection.AYE)
         nays = sum(abs(b.effective_votes) for b in b_list if b.direction == VoteDirection.NAY)
         return yeas, nays
 
     def local_gini(self, proposal_id: Optional[str] = None) -> float:
-        b_list = [b for b in self.ballots.values() if proposal_id is None or b.proposal_id == proposal_id]
-        return calculate_gini([b.pledged_atp for b in b_list])
+        return calculate_gini([b.pledged_atp for b in self.verified_ballots(proposal_id)])
 
 
 @dataclass
@@ -461,7 +494,7 @@ class FederatedAgoraParliament:
     def compute_federation_gini(self) -> float:
         all_stakes: List[int] = []
         for ch in self.chambers.values():
-            all_stakes.extend(b.pledged_atp for b in ch.ballots.values())
+            all_stakes.extend(b.pledged_atp for b in ch.verified_ballots())
         return calculate_gini(all_stakes)
 
     def resolve_session(
@@ -494,7 +527,7 @@ class FederatedAgoraParliament:
             total_yeas += yeas
             total_nays += nays
             chamber_tallies[ch_id] = (yeas, nays)
-            total_staked_atp += sum(b.pledged_atp for b in ch.ballots.values() if b.proposal_id == proposal_id)
+            total_staked_atp += sum(b.pledged_atp for b in ch.verified_ballots(proposal_id))
 
         total_votes = total_yeas + total_nays
         fed_gini = self.compute_federation_gini()
@@ -521,6 +554,12 @@ class FederatedAgoraParliament:
 
         # Fail-closed theorem check (F10 / A4)
         if prop.proposal_type == ProposalType.THEOREM_CONGRUENCE:
+            # Chamber order must not decide the outcome. A settled counterexample
+            # in any chamber slashes; an unsettled or erroring chamber is only
+            # remembered and the remaining chambers are still checked. Breaking
+            # on the first suspension let `{Y I, K}` be UNVERIFIED while
+            # `{K, Y I}` was SLASHED for the same settled divergence K != I.
+            unverified_reason = None
             for ch_id, term_expr in prop.chamber_terms.items():
                 ch = self.chambers.get(ch_id)
                 if not ch:
@@ -530,19 +569,31 @@ class FederatedAgoraParliament:
                     eval_res = evaluate(t, max_atp=ch.context.budget_ceiling)
                     exp_t = parse(prop.target_nf)
                     exp_eval = evaluate(exp_t, max_atp=ch.context.budget_ceiling)
+                    # FSA5: only two SETTLED, different normal forms refute.
+                    # A suspended intermediate is neither agreement nor
+                    # divergence, so it cannot ground a slash.
+                    if not eval_res.is_settled() or not exp_eval.is_settled():
+                        if unverified_reason is None:
+                            unverified_reason = (f"Theorem reduction did not settle within "
+                                                 f"{ch.context.budget_ceiling} ATP in {ch.name}; "
+                                                 f"not a refutation, stake not slashed")
+                        continue
                     if eval_res.normal_form != exp_eval.normal_form and str(eval_res.normal_form) != prop.target_nf:
                         slashed_stake = prop.stake_atp
                         status = RatificationStatus.SLASHED_AUDIT_FAILED
                         rejection_reason = f"Theorem reduction divergence in {ch.name}: expected '{exp_eval.normal_form}', got '{eval_res.normal_form}'"
                         break
                 except Exception as e:
-                    slashed_stake = prop.stake_atp
-                    status = RatificationStatus.SLASHED_AUDIT_FAILED
-                    rejection_reason = f"Theorem evaluation crashed in {ch.name}: {e}"
-                    break
+                    if unverified_reason is None:
+                        unverified_reason = (f"Theorem evaluation error in {ch.name}: {e}; "
+                                             f"not a refutation, stake not slashed")
+                    continue
+            if status != RatificationStatus.SLASHED_AUDIT_FAILED and unverified_reason is not None:
+                status = RatificationStatus.UNVERIFIED_AUDIT_BUDGET
+                rejection_reason = unverified_reason
 
-        if status == RatificationStatus.SLASHED_AUDIT_FAILED:
-            # Slashed! Halt immediately fail-closed (F10 / A4)
+        if status in (RatificationStatus.SLASHED_AUDIT_FAILED, RatificationStatus.UNVERIFIED_AUDIT_BUDGET):
+            # Slashed, or unverified: halt before the political and cohomology gates (F10 / A4)
             pass
         elif not passed_political:
             # status and rejection_reason already set above (F08 / A1, A2)

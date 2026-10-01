@@ -89,13 +89,14 @@ class TestImmuneAuditingAndSlashing(unittest.TestCase):
 
     def test_theorem_audit(self):
         # Sound: 🌿 🖤 🤍 -> 🤍
+        from agora import TheoremAuditStatus
         ok, msg = audit_combinator_theorem("🌿 🖤 🤍", "🤍")
-        self.assertTrue(ok)
+        self.assertEqual(ok, TheoremAuditStatus.SOUND)
         self.assertIn("Sound", msg)
 
         # Contradiction: 🖤 Truth False reduces to Truth, not False
         ok_bad, msg_bad = audit_combinator_theorem("🖤 Truth False", "False")
-        self.assertFalse(ok_bad)
+        self.assertEqual(ok_bad, TheoremAuditStatus.REFUTED)
         self.assertIn("Contradiction", msg_bad)
 
     def test_slashing_execution_in_engine(self):
@@ -147,6 +148,88 @@ class TestImmuneAuditingAndSlashing(unittest.TestCase):
         self.assertEqual(engine.citizen_balances[pk_voter], 575)
         # Author lost stake: remaining 300
         self.assertEqual(engine.citizen_balances[pk_auth], 300)
+
+
+class TestTheoremAuditSettlement(unittest.TestCase):
+    """A suspended reduction is neither a sound equivalence nor a refutation (S-verif-8).
+
+    Reproduced at 4affbf5: the DOC-F1 pair `I (ωω)` vs `K (ωω) I` suspended on the
+    same intermediate at the default 5000 ATP and audited "Sound" — the engine then
+    RATIFIED it and paid the author stake + 50; `Y f` vs `f (Y f)`, a true one-step
+    identity, audited "Contradiction" and was SLASHED. Both are UNVERIFIED now: no
+    ratification, no slash, no bounty, stake returned.
+    """
+    OMEGA = "🌿 🤍 🤍 (🌿 🤍 🤍)"
+
+    def test_same_intermediate_suspension_is_unverified(self):
+        from agora import TheoremAuditStatus
+        st, msg = audit_combinator_theorem(f"🤍 ({self.OMEGA})", f"🖤 ({self.OMEGA}) 🤍")
+        self.assertEqual(st, TheoremAuditStatus.UNVERIFIED)
+        self.assertIn("did not settle", msg)
+
+    def test_true_identity_suspension_is_unverified_not_refuted(self):
+        from agora import TheoremAuditStatus
+        st, msg = audit_combinator_theorem("🔁 f", "f (🔁 f)")
+        self.assertEqual(st, TheoremAuditStatus.UNVERIFIED)
+
+    def test_extensional_suspension_is_unverified_not_refuted(self):
+        # `Y` and `I` are both normal forms unapplied and differ; applied to $x the
+        # left side never settles, so the extensional test cannot refute.
+        from agora import TheoremAuditStatus
+        st, msg = audit_combinator_theorem("🔁", "🤍")
+        self.assertEqual(st, TheoremAuditStatus.UNVERIFIED)
+        self.assertIn("extensional", msg)
+
+    def test_evaluation_error_is_unverified_not_refuted(self):
+        from agora import TheoremAuditStatus
+        st, msg = audit_combinator_theorem("((", "🤍")
+        self.assertEqual(st, TheoremAuditStatus.UNVERIFIED)
+
+    def _settle(self, pre, post):
+        engine = AgoraConsensusEngine()
+        sk_auth, pk_auth = generate_keypair()
+        sk_voter, pk_voter = generate_keypair()
+        engine.register_citizen(pk_auth, initial_atp=500)
+        engine.register_citizen(pk_voter, initial_atp=500)
+        prop = AgoraProposal(
+            proposal_id="PROP_UNSETTLED",
+            proposal_type=ProposalType.THEOREM_CONGRUENCE.value,
+            title="Unsettled Equivalence", statement="pre == post",
+            pre_term=pre, post_term=post, author_public_key="",
+            stake_atp=200, timestamp_utc="2026-09-15T12:00:00Z"
+        )
+        prop.sign(sk_auth)
+        engine.table_proposal(prop)
+        self.assertEqual(engine.citizen_balances[pk_auth], 300)
+        ballot = AgoraBallot(proposal_id="PROP_UNSETTLED", voter_public_key=pk_voter,
+                             direction=VoteDirection.NAY.value, atp_burned=25,
+                             quadratic_weight=5, reason="cannot tell")
+        ballot.sign(sk_voter)
+        engine.cast_ballot(ballot)
+        return engine, pk_auth, pk_voter
+
+    def test_engine_returns_stake_without_reward_or_bounty(self):
+        engine, pk_auth, pk_voter = self._settle(f"🤍 ({self.OMEGA})", f"🖤 ({self.OMEGA}) 🤍")
+        receipt = engine.evaluate_and_settle("PROP_UNSETTLED")
+        self.assertEqual(receipt.status, ProposalStatus.UNVERIFIED.value)
+        self.assertIsNone(receipt.slashing_receipt)
+        self.assertFalse(receipt.quorum_reached)
+        self.assertFalse(receipt.supermajority_reached)
+        # stake returned, no +50 reward
+        self.assertEqual(engine.citizen_balances[pk_auth], 500)
+        # Nay voter burned 25 and received no bounty
+        self.assertEqual(engine.citizen_balances[pk_voter], 475)
+        self.assertEqual(engine.proposals["PROP_UNSETTLED"].status, ProposalStatus.UNVERIFIED.value)
+        # idempotent: a second call returns the same receipt and moves no ATP
+        again = engine.evaluate_and_settle("PROP_UNSETTLED")
+        self.assertIs(again, receipt)
+        self.assertEqual(engine.citizen_balances[pk_auth], 500)
+
+    def test_true_identity_is_not_slashed_by_the_engine(self):
+        engine, pk_auth, pk_voter = self._settle("🔁 f", "f (🔁 f)")
+        receipt = engine.evaluate_and_settle("PROP_UNSETTLED")
+        self.assertEqual(receipt.status, ProposalStatus.UNVERIFIED.value)
+        self.assertEqual(engine.citizen_balances[pk_auth], 500)
 
 
 class TestConsensusQuorumAndSettlement(unittest.TestCase):

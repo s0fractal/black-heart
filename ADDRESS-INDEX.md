@@ -5,6 +5,34 @@
 Назви, адреси й розподіл відповідальності ще потребують прийняття.
 [Контракт неймінгу](docs/NAMING-CONTRACT-DRAFT.md).
 
+## Почати з задачі
+
+Для ремонту оберіть один маршрут нижче. Це навігація до чинного checkout,
+не новий контракт і не повний список залежностей. Читайте реалізацію та названі
+тести, далі — потрібний розділ контракту й запис дефекту. До інших поверхів
+переходьте, коли їх викликає змінюваний шлях або цього потребує інваріант.
+
+| Задача | Початковий код і регресії | Контракт або межа |
+| --- | --- | --- |
+| Зберегти, знайти чи перевірити байти досвіду | [experience.py](experience.py), [test_experience.py](test_experience.py) | [CLI CM-2](examples/model-experience/cm2/README.md); [xC010](xC010-model-experience.md) — сенс запису й черга, не специфікація виконання команд |
+| Розібрати PASS / FAIL / UNVERIFIED при незавершеній редукції | [warrant_kernel.py](warrant_kernel.py), [glyph.py](glyph.py), [test_empirical_settlement.py](test_empirical_settlement.py) | [DOC-F1](examples/model-experience/doc-f1/README.md); [x6000](x6000-evidence.md) — карта типів свідчення |
+| Розпізнавання тверджень у нових PDF і host-перевірці | [polyglot.py](polyglot.py), [test_claim_format.py](test_claim_format.py), [test_polyglot_suspended_nf.py](test_polyglot_suspended_nf.py) | [Межі перевірки](README.md#execution-and-trust-boundaries); статичний [tools/sandbox.py](tools/sandbox.py) має інший діалект, його регресії — [test_sandbox_fail_closed.py](test_sandbox_fail_closed.py) |
+| Довіра до автора, adjudication або кеш вердикту | [cli.py](cli.py) (`cmd_adjudicate`), [warrant_kernel.py](warrant_kernel.py), [test_adjudication_trust.py](test_adjudication_trust.py), [test_verify_cached.py](test_verify_cached.py) | [x6000](x6000-evidence.md); не ототожнювати цей маршрут із `cmd_verify` |
+| Пропозиція, оцінка політики чи наступник бібліотеки | [library_interaction.py](library_interaction.py), [test_library_interaction.py](test_library_interaction.py) | [LI-1–LI-3](docs/LIVING-LIBRARY-INTERACTION.md) |
+
+Названі тести — початок перевірки, не гарантія покриття всіх наслідків зміни.
+Для локального запуску використовуйте `python3 -m unittest <назви_модулів>`;
+розширюйте перевірку за залежностями та правилами CI.
+
+Історію конкретного дефекту шукайте за його ID або іменем споживача в
+[реєстрі ремонтів](docs/REMEDIATION-LEDGER.md). Для історичного replay потрібна
+ревізія з пакета; успішний тест поточного checkout не замінює цього повторення.
+Стани дослідів і дозволи запуску читайте в їхніх власних планах та результатах;
+нижче вони не дублюються. Ця карта скорочує початкове читання, але прискорення
+роботи моделей окремо не вимірювалося.
+
+## Карта областей
+
 | Адреса | Основний документ | Статус |
 | --- | --- | --- |
 | `x0000` | [Субстрат і середовище виконання](x0000-substrate.md) | draft |
@@ -20,7 +48,7 @@
 | `xA000` | [Перетворення та інваріанти](xA000-transformations.md) | draft |
 | `xB000` | [Persona та Organization](xB000-persona-organization.md) | draft |
 | `xC000` | [Бібліотека, історії та зовнішні якорі](xC000-library-history.md) | draft |
-| `xC010` | [Досвід між моделями та черга CM](xC010-model-experience.md) | draft; CM-1–4 complete (bounded); TRANSFER-1 pilot accepted; early uniform success, no packet advantage demonstrated |
+| `xC010` | [Досвід між моделями та черга CM](xC010-model-experience.md) | draft; поточний стан — у xC010 |
 | `xD000` | [Обмін, реплікація та транспорт](xD000-replication.md) | draft |
 | `xE000` | [Узгодженість, конфлікти та співіснування](xE000-consistency.md) | draft |
 | `xF000` | [Взаємодія людей, агентів і документів](xF000-interoperation.md) | draft |

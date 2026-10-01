@@ -1,0 +1,150 @@
+diff --git a/test_mycelium.py b/test_mycelium.py
+index f501e1e..ec8a35a 100644
+--- a/test_mycelium.py
++++ b/test_mycelium.py
+@@ -20,13 +20,15 @@ import tempfile
+ import json
+ import time
+ 
++import mycelium
+ from crypto import generate_keypair, public_key_from_secret
+-from glyph import parse, evaluate, S, K, I, App
++from glyph import parse, evaluate, EvalResult, EvalStatus, S, K, I, App
+ from organism import Organism, Chromosome, create_genesis_organism
+ from metamorphosis import (
+     contemplate_and_evolve,
+     FrozenEvaluator,
+     ExperimentLog,
++    ExperimentRecord,
+     MetamorphicTransitionReceipt,
+     MutationVerdict
+ )
+@@ -331,5 +333,128 @@ class TestMycelium(unittest.TestCase):
+         self.assertEqual(w_trial.epistemic_grade, WarrantEpistemicGrade.PROPOSED.value)
+         self.assertTrue(w_trial.verify())
+ 
++    # ========================================================================
++    # 9. CONTRACT.md Regression: never surface an unestablished divergence
++    # ========================================================================
++    def test_metabolic_viability_gate_never_leaks_unverified_divergence(self):
++        """
++        CONTRACT.md: "The mechanism that creates divergence records does not create
++        a record whose assertion it has not itself established."
++
++        A candidate that is merely SUSPENDED (out of ATP) but whose unreduced term
++        string happens to equal the original's is *not* an exact counterexample of
++        two different normal forms. LocalImmuneEvaluator must not hand back such a
++        record: it must re-verify by replay and discard it if replay fails.
++        """
++        p = create_genesis_organism()
++        p.chromosomes = [
++            # Whole gene body is exactly the S(K I) redex pattern; unapplied, it is
++            # already its own normal form (S needs a third argument to fire).
++            Chromosome('GENE', 'Test', '🌿 (🖤 🤍)', '🌿 (🖤 🤍)', max_atp=1000)
++        ]
++        p.organism_hash = p.compute_hash()
++        self.assertTrue(p.verify())
++
++        receipt = MetamorphicTransitionReceipt(
++            parent_hash="0"*64,
++            successor_hash="1"*64,
++            gene_id="GENE",
++            site_address=(),
++            rule_name="S(K I) -> I",
++            pre_term="🌿 (🖤 🤍)",
++            post_term="🤍",
++            atp_saved=-1,
++            size_saved=-1,
++            fixtures_fingerprint=FrozenEvaluator().fixtures_fingerprint,
++            experiment_id="exp_gate"
++        )
++        warrant = export_warrant_from_receipt(receipt, self.sk_b)
++
++        same_unsettled = EvalResult(
++            term=parse('🌿 (🖤 🤍)'),
++            steps=0,
++            atp_spent=0,
++            peak_size=4,
++            hash="deadbeef",
++            status=EvalStatus.SUSPENDED,
++        )
++
++        # Force both the original's and the candidate's "unapplied metabolism" evaluation
++        # to report the exact same unreduced term, with the candidate merely SUSPENDED
++        # (not proven to diverge in normal form -- just out of ATP).
++        original_evaluate = mycelium.evaluate
++
++        def fake_evaluate(term, max_atp=100_000, raise_on_limit=False):
++            if str(term) in ('🌿 (🖤 🤍)', '🤍'):
++                return same_unsettled
++            return original_evaluate(term, max_atp=max_atp, raise_on_limit=raise_on_limit)
++
++        mycelium.evaluate = fake_evaluate
++        try:
++            immune = LocalImmuneEvaluator()
++            verdict = immune.audition_warrant(p, warrant, self.sk_a)
++        finally:
++            mycelium.evaluate = original_evaluate
++
++        self.assertFalse(verdict.adopted)
++        self.assertEqual(verdict.reason, "REJECTED_METABOLIC_VIABILITY_MISMATCH")
++        # The crux of the regression: no unverified/unestablished record is surfaced.
++        self.assertIsNone(verdict.divergence_record)
++
++    def test_export_divergences_from_log_never_leaks_unverified_divergence(self):
++        """
++        CONTRACT.md: export_divergences_from_log must not convert an ExperimentRecord
++        with missing/placeholder discrepancy fields into a broadcastable DivergenceRecord
++        whose exact-counterexample assertion was never actually established by replay.
++        """
++        log = ExperimentLog()
++        bogus_rec = ExperimentRecord(
++            experiment_id="exp_bogus",
++            timestamp_utc="2026-09-09T03:30:00Z",
++            gene_id="GENE",
++            rule_name="I x -> x",
++            site_address=(),
++            original_subterm="🤍 🖤",
++            proposed_subterm="🖤",
++            original_term="🤍 🖤",
++            candidate_term="🖤",
++            verdict=MutationVerdict.REJECTED_SEMANTIC_MISMATCH,
++            atp_original=0,
++            atp_candidate=0,
++            atp_delta=0,
++            size_original=2,
++            size_candidate=1,
++            size_delta=-1,
++            test_inputs_count=1,
++            # No discrepancy_input/expected/actual recorded -- placeholders would kick in.
++            discrepancy_detail=None,
++            discrepancy_input=None,
++            discrepancy_expected=None,
++            discrepancy_actual=None,
++        )
++        log.records.append(bogus_rec)
++
++        divs = export_divergences_from_log(log, self.sk_a)
++
++        self.assertEqual(divs, [])
++
++    def test_divergence_record_verify_rejects_unproven_metabolic_stall(self):
++        """
++        A DivergenceRecord asserting divergence via the unapplied-metabolism path must
++        fail verify() when the two recorded outputs are not actually different (i.e.
++        no real counterexample was established), per CONTRACT.md's exact-counterexample
++        requirement.
++        """
++        div = DivergenceRecord.create_and_sign(
++            rule_name="I x -> x",
++            target_expr="🤍 🖤",
++            cand_expr="🤍 🖤",
++            counterexample_input="<UNAPPLIED_METABOLISM>",
++            expected_out="🤍 🖤",
++            actual_out="🤍 🖤",
++            reporter_sk=self.sk_a
++        )
++        self.assertFalse(div.verify(replay_counterexample=True))
++
+ if __name__ == "__main__":
+     unittest.main()

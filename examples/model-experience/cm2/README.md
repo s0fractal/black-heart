@@ -50,8 +50,11 @@ predecessor packet must still exist and pass its byte checks; no recursive
 relation traversal or endorsement is performed. Copy those packets when moving
 related records. Different advice gets a different record, never an update.
 
-Search is a case-insensitive substring scan of task summary / component, with
-AND when both filters are supplied. It returns applicability and exact addresses;
+Search is a case-insensitive substring scan: `--task` over the task's summary,
+context and applicability, `--component` over the declared component only (a
+module named in an observation is not a declared component), with AND when
+both filters are supplied. Observations, interpretation and advice are not
+scanned. It returns applicability and exact addresses;
 there is no ranking, inferred equivalence or latest-wins rule. Empty search
 returns all valid records. It checks every packet: corrupt/non-supported entries
 and unfinished staging files produce an `errors` array and exit 2 even when

@@ -1,0 +1,157 @@
+{
+  "slot": 1,
+  "condition": "S1",
+  "finished_at": "2026-09-15T17:35:55.314029+00:00",
+  "exit_code": 0,
+  "elapsed_seconds": 552.3206495420309,
+  "timed_out": false,
+  "protected_inputs": {
+    "CONTRACT.md": true,
+    "task.txt": true
+  },
+  "infrastructure_valid": true,
+  "init_errors": [],
+  "classification": "FAIL",
+  "grader_outcome": "FAIL",
+  "checks": {
+    "H1": false,
+    "H2": false,
+    "H3": false,
+    "H4": false,
+    "H5": true,
+    "H6": true,
+    "H7": true
+  },
+  "omitted_reasoning_events": 0,
+  "malformed_events": 0,
+  "unknown_event_types": [],
+  "tool_uses": 88,
+  "tool_use_names": [
+    "Bash",
+    "Edit",
+    "Grep",
+    "Read",
+    "Write"
+  ],
+  "head_after": "d1fb31919f7c77e4094e1d16dea5c5411bccf5fd",
+  "status_after": "M mycelium.py\n M test_mycelium.py",
+  "model_reported": [
+    "claude-sonnet-5"
+  ],
+  "api_key_source": "none",
+  "usage": {
+    "usage": {
+      "input_tokens": 166,
+      "cache_creation_input_tokens": 91877,
+      "cache_read_input_tokens": 4873670,
+      "output_tokens": 33741,
+      "output_tokens_details": {
+        "thinking_tokens": 0
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 91877,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-sonnet-5": {
+        "inputTokens": 166,
+        "outputTokens": 33741,
+        "cacheReadInputTokens": 4873670,
+        "cacheCreationInputTokens": 91877,
+        "webSearchRequests": 0,
+        "costUSD": 1.679984,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 64000,
+        "thinkingTokens": 0,
+        "canonicalModel": "claude-sonnet-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "num_turns": 89,
+    "duration_ms": 546119,
+    "duration_api_ms": 535231,
+    "total_cost_usd": 1.679984,
+    "stop_reason": "end_turn",
+    "subtype": "success",
+    "is_error": false,
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01R6VCWCGpbGq9jkQAvjDwLn",
+        "tool_input": {
+          "command": "python3 -c \"\nfrom glyph import parse, evaluate, App\n# Try to find a case where cand doesn't settle but term string equals orig\n\"\ngrep -n \"def is_settled\\|class EvalResult\\|class Result\\|is_settled\" glyph.py | head -30"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01CWeze47W23jSwYeX9ZFzJd",
+        "tool_input": {
+          "command": "python3 -c \"\nfrom glyph import parse, evaluate, App\n# Try a term whose reduction needs many steps, with low ATP budget causing both orig and cand to suspend at same intermediate term string.\nexpr = parse('🌿 🖤 🖤 🤍')\nres = evaluate(expr, max_atp=0)\nprint(res.status, res.term, res.is_settled())\n\"\n",
+          "description": "Explore evaluate() with zero ATP budget"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01KKqKqvJ9cBEV4hweXt1zRo",
+        "tool_input": {
+          "command": "python3 -c \"\nfrom glyph import parse, evaluate, App, tree_size\n\n# Find a chromosome-like case: original term reduces to normal form quickly,\n# candidate term (same shape, larger) needs more ATP and suspends BEFORE any reduction step,\n# so its unreduced term string equals its own source (not orig's).\n# We need cand_unapplied.term == orig_unapplied.term while cand not settled.\n\n# Simplest: orig is already a normal form (irreducible atom), cand is same atom too but\n# wrapped so that it requires reduction steps yet suspends at step 0 with same string representation as orig (impossible since term differs by structure).\n# Instead: use identical *source* expression for orig and cand (candidate transform is no-op) but restrict candidate's budget artificially lower via chrom.max_atp so it suspends while orig (evaluated with same budget) settles because fewer steps needed due to caching order? \n# Actually both use same chrom.max_atp in mycelium.py. Let's replicate exactly.\n\ntarget = '🖤'  # K, irreducible, settles immediately\ncand = '🖤'    # identical candidate (name collision aside) but let's engineer real divergence in settledness with same displayed term.\n\norig_t = parse(target)\ncand_t = parse(cand)\nres_o = evaluate(orig_t, max_atp=100)\nres_c = evaluate(cand_t, max_atp=100)\nprint('orig', res_o.status, res_o.term, res_o.is_settled())\nprint('cand', res_c.status, res_c.term, res_c.is_settled())\n\"\n",
+          "description": "Explore trivial evaluate equality case"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01Q13Zw2TskiT6bT7xQg6nwc",
+        "tool_input": {
+          "command": "rm -f /Users/s0fractal/calib1-work/receivers/receiver-sditriqb/_scratch_explore.py /Users/s0fractal/calib1-work/receivers/receiver-sditriqb/_scratch_explore2.py /Users/s0fractal/calib1-work/receivers/receiver-sditriqb/_scratch_explore3.py",
+          "description": "Remove scratch exploration scripts"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_015cNoMphueWTCK9m283EBEk",
+        "tool_input": {
+          "command": "rm _scratch_explore.py",
+          "description": "Remove scratch file 1"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01Ke6EDampWyxEW8d1s4UZZs",
+        "tool_input": {
+          "command": "rm _scratch_explore2.py",
+          "description": "Remove scratch file 2"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01EksLFgJwMMfzvxCgWaekf9",
+        "tool_input": {
+          "command": "rm _scratch_explore3.py",
+          "description": "Remove scratch file 3"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01NG9XZq9889xMD75CVL5Vvc",
+        "tool_input": {
+          "command": "rm -f \"_scratch_explore.py\"",
+          "description": "Delete first scratch script"
+        }
+      }
+    ],
+    "terminal_reason": "completed"
+  },
+  "snapshot": "~/calib1-runs/c9daa675907b42c9934bb6ed50cc9b43/1/snapshot",
+  "ephemeral_snapshot": "~/calib1-work/receivers/receiver-sditriqb",
+  "trace_audit": "REQUIRED_BEFORE_NEXT_SLOT"
+}

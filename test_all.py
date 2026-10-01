@@ -2,16 +2,11 @@
 """
 test_all.py — Unified Test Suite Runner for Project Black-Heart (%🖤).
 
-Runs all 46 mathematical and polyglot tests across all nine engines:
-  - test_glyph.py: SKIY combinators, ATP fuel budgets, Church booleans (9 tests)
-  - test_monad.py: Dual trees, visual & semantic streams, AST compilation (7 tests)
-  - test_living_ledger.py: Incremental PDF updates, multi-block chains (5 tests)
-  - test_interaction.py: Symmetric interaction combinators, O(1) rewiring (6 tests)
-  - test_organism.py: Self-reproducing polyglot automata, quines (4 tests)
-  - test_cross_proof.py: Bilateral cross-proofs & embedded code vaults (3 tests)
-  - test_continuum.py: Suspended continuum thunks & incremental resumption (4 tests)
-  - test_zk_glyph.py: Pure-Python Ed25519 zero-knowledge proofs & NIZK (5 tests)
-  - test_mesh.py: Peer-to-peer living polyglot mesh sync & gossip (3 tests)
+Runs every module listed in SUITES below; the command-line run refuses to run anything
+when SUITES differs from the test_*.py modules in the repository root minus EXCLUDED (this
+runner); nested experiment tests are not covered; the number of modules and tests is printed at run time, never
+stated here. A green aggregate establishes only the named checks of those
+modules, not the correctness of Black-Heart as a whole.
 """
 
 import os
@@ -150,18 +145,37 @@ SUITES = [
     ("Counterexample-Guided Inductive Synthesis (CEGIS)", "test_cegis_kernel"),
     ("CEGIS Credit: Operand-Bound Equivalence", "test_cegis_credit"),
     ("Scoped Re-Admission & Conditional Reopening", "test_scoped_admission"),
+    ("Scoped Re-Admission: Semantic Dominance", "test_scoped_admission_semantic_dominance"),
+    ("Scoped Re-Admission: Monotonic Import", "test_scoped_admission_import_monotonic"),
+    ("Test Runner: Every Root Suite Listed", "test_test_all_coverage"),
     ("Dialectical Discovery & Automated Hypothesis Generation", "test_dialectic_kernel"),
     ("Review 12 Remediation & Probe Defenses (f2e05e6)", "test_remediation_f2e05e6"),
     ("Epistemic Palimpsest — Value Drift Cartography", "test_palimpsest_kernel"),
     ("Epistemic Sheaf Kernel & Čech Cohomology", "test_sheaf_kernel"),
     ("Sheaf Local Validity: Only Sections That Hold Are Glued", "test_sheaf_local_validity"),
     ("Embedded Runner Claims: Report, Do Not Overclaim", "test_runner_claims"),
+    ("Shared Compiler Claim Recognition", "test_claim_format"),
     ("Sovereign Continuity Quine & Forgetting Membrane", "test_sovereign_continuity"),
     ("Federated Sheaf Agora & Cohomological Constitutionalism", "test_sheaf_agora"),
     ("Findings F01–F12 Comprehensive Remediation", "test_sovereign_remediation"),
 ]
 
 
+
+
+# The runner itself is the only root test_*.py module that is not a suite.
+EXCLUDED = frozenset({"test_all"})
+
+
+def root_test_modules(directory: str = _HERE) -> set:
+    return {os.path.splitext(f)[0] for f in os.listdir(directory)
+            if f.startswith("test_") and f.endswith(".py")}
+
+
+def suite_coverage(root_modules, suites, excluded=EXCLUDED):
+    """Root test modules not in SUITES, and SUITES modules with no root file."""
+    expected, listed = set(root_modules) - set(excluded), set(suites)
+    return sorted(expected - listed), sorted(listed - expected)
 
 
 def run_all_tests() -> bool:
@@ -220,6 +234,18 @@ def run_all_tests() -> bool:
 
     return all_success
 
+def main() -> int:
+    """The command-line run (CI): refuse before any suite runs when SUITES does not cover
+    the root test modules -- a green aggregate that silently skipped a suite would claim
+    what it did not check. run_all_tests() itself still runs whatever SUITES says, so a
+    test may run a chosen subset through it."""
+    unlisted, missing = suite_coverage(root_test_modules(), [m for _, m in SUITES])
+    if unlisted or missing:
+        print("\033[1;31m[✗] SUITES does not match the root test_*.py modules: "
+              f"not listed {unlisted}, listed without a file {missing}. Nothing was run.\033[0m")
+        return 1
+    return 0 if run_all_tests() else 1
+
+
 if __name__ == "__main__":
-    success = run_all_tests()
-    sys.exit(0 if success else 1)
+    sys.exit(main())

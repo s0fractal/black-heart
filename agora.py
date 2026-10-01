@@ -65,6 +65,24 @@ class ProposalStatus(str, Enum):
     RATIFIED = "RATIFIED"
     REJECTED = "REJECTED"
     SLASHED = "SLASHED"
+    # The theorem audit could not settle (budget exhausted or evaluation
+    # error): no ratification, no slash, no bounty; the stake is returned.
+    UNVERIFIED = "UNVERIFIED"
+
+
+class TheoremAuditStatus(str, Enum):
+    """Outcome of audit_combinator_theorem.
+
+    SOUND and REFUTED are settled verdicts. UNVERIFIED is a refusal: a
+    budget-suspended reduction proves neither equivalence (two sides can
+    suspend on the same intermediate string) nor divergence (a true one-step
+    identity such as `Y f` vs `f (Y f)` suspends on different strings), and
+    an evaluation error proves nothing either. A consumer must never treat
+    UNVERIFIED as a refutation.
+    """
+    SOUND = "SOUND"
+    REFUTED = "REFUTED"
+    UNVERIFIED = "UNVERIFIED"
 
 @dataclass
 class AgoraProposal:
@@ -350,30 +368,46 @@ def calculate_herfindahl_index(weights: List[int]) -> float:
     hhi = sum(s * s for s in shares)
     return round(float(hhi), 4)
 
-def audit_combinator_theorem(pre_expr: str, post_expr: str, max_atp: int = 5000) -> Tuple[bool, str]:
+def audit_combinator_theorem(pre_expr: str, post_expr: str, max_atp: int = 5000) -> Tuple[TheoremAuditStatus, str]:
     """
     Audits an asserted combinator equivalence T1 == T2 intensionally and extensionally.
-    Returns (is_sound, message).
+    Returns (status, message) with status in TheoremAuditStatus.
+
+    Both sides of the decisive comparison must SETTLE within max_atp. Before
+    this rule the function returned a bool and compared possibly-suspended
+    intermediates: the DOC-F1 pair `I (omega omega)` vs `K (omega omega) I`
+    suspended on the same string and was reported "Sound" (then RATIFIED and
+    rewarded by the engine), while `Y f` vs `f (Y f)` was reported as a
+    "Contradiction" (then SLASHED). Budget exhaustion is UNVERIFIED, not a
+    verdict in either direction.
     """
     try:
         t1 = parse(pre_expr)
         t2 = parse(post_expr)
         res1 = evaluate(t1, max_atp=max_atp)
         res2 = evaluate(t2, max_atp=max_atp)
+        if not res1.is_settled() or not res2.is_settled():
+            return TheoremAuditStatus.UNVERIFIED, (
+                f"Unverified: reduction did not settle within {max_atp} ATP "
+                f"(pre {res1.status.value}, post {res2.status.value}); not a refutation")
         norm1 = str(res1.term)
         norm2 = str(res2.term)
         if norm1 == norm2:
-            return True, f"Sound intensional equivalence: both reduce to '{norm1}'"
+            return TheoremAuditStatus.SOUND, f"Sound intensional equivalence: both reduce to '{norm1}'"
 
         # Extensional test on test variable $x
         ext1 = evaluate(parse(f"({pre_expr}) $x"), max_atp=max_atp)
         ext2 = evaluate(parse(f"({post_expr}) $x"), max_atp=max_atp)
+        if not ext1.is_settled() or not ext2.is_settled():
+            return TheoremAuditStatus.UNVERIFIED, (
+                f"Unverified: extensional test on $x did not settle within {max_atp} ATP "
+                f"(pre {ext1.status.value}, post {ext2.status.value}); not a refutation")
         if str(ext1.term) == str(ext2.term):
-            return True, f"Sound extensional equivalence: applied to $x, both yield '{ext1.term}'"
+            return TheoremAuditStatus.SOUND, f"Sound extensional equivalence: applied to $x, both yield '{ext1.term}'"
 
-        return False, f"Contradiction: '{pre_expr}' -> '{norm1}', but '{post_expr}' -> '{norm2}'"
+        return TheoremAuditStatus.REFUTED, f"Contradiction: '{pre_expr}' -> '{norm1}', but '{post_expr}' -> '{norm2}'"
     except Exception as e:
-        return False, f"Evaluation divergence/error: {e}"
+        return TheoremAuditStatus.UNVERIFIED, f"Unverified: evaluation error: {e}; not a refutation"
 
 # ============================================================================
 # 3. AGORA CONSENSUS ENGINE
@@ -473,8 +507,37 @@ class AgoraConsensusEngine:
         # 1. Epistemic Immune Audit (for THEOREM_CONGRUENCE proposals)
         slashing_receipt = None
         if proposal.proposal_type == ProposalType.THEOREM_CONGRUENCE.value and proposal.pre_term and proposal.post_term:
-            is_sound, msg = audit_combinator_theorem(proposal.pre_term, proposal.post_term)
-            if not is_sound:
+            audit_status, msg = audit_combinator_theorem(proposal.pre_term, proposal.post_term)
+            if audit_status == TheoremAuditStatus.UNVERIFIED:
+                # Budget exhaustion or an evaluation error is not a refutation:
+                # no ratification, no slash, no bounty. The stake is returned
+                # and the receipt records UNVERIFIED with the tallies as cast.
+                proposal.status = ProposalStatus.UNVERIFIED.value
+                self.citizen_balances[proposal.author_public_key] = (
+                    self.citizen_balances.get(proposal.author_public_key, 0) + proposal.stake_atp
+                )
+                receipt = ConsensusSettlementReceipt(
+                    generation=gen,
+                    timestamp_utc=now_utc,
+                    proposal=proposal,
+                    status=ProposalStatus.UNVERIFIED.value,
+                    aye_weight=sum(b.quadratic_weight for b in votes if b.direction == VoteDirection.AYE.value),
+                    nay_weight=sum(b.quadratic_weight for b in votes if b.direction == VoteDirection.NAY.value),
+                    abstain_weight=sum(b.quadratic_weight for b in votes if b.direction == VoteDirection.ABSTAIN.value),
+                    total_atp_voted=sum(b.atp_burned for b in votes),
+                    quorum_reached=False,
+                    supermajority_reached=False,
+                    gini_coefficient=calculate_gini_coefficient(list(self.citizen_balances.values())),
+                    hhi_index=calculate_herfindahl_index([b.quadratic_weight for b in votes]),
+                    slashing_receipt=None,
+                    multi_signatures=[b.signature_hex for b in votes if b.signature_hex],
+                    prev_cid=prev_cid,
+                    receipt_hash=""
+                )
+                receipt.receipt_hash = receipt.compute_hash()
+                self.settlement_history.append(receipt)
+                return receipt
+            if audit_status == TheoremAuditStatus.REFUTED:
                 # SLASHING TRIGGERED! Proposer staked ATP is slashed!
                 slashed_amount = proposal.stake_atp
                 bounty = slashed_amount // 2
@@ -595,6 +658,9 @@ class AgoraPolyglotCompiler:
         elif rec.status == ProposalStatus.SLASHED.value:
             status_r, status_g, status_b = 0.85, 0.15, 0.18  # Crimson
             status_title = "PROPOSAL REFUTED // EPISTEMIC STAKE SLASHED"
+        elif rec.status == ProposalStatus.UNVERIFIED.value:
+            status_r, status_g, status_b = 0.85, 0.60, 0.10  # Amber
+            status_title = "MOTION UNVERIFIED // REDUCTION DID NOT SETTLE; STAKE RETURNED"
         else:
             status_r, status_g, status_b = 0.70, 0.50, 0.20  # Amber
             status_title = "MOTION REJECTED // QUORUM OR SUPERMAJORITY FAILED"

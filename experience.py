@@ -341,7 +341,11 @@ def search(store, task='', component=''):
                 refuse('UNSUPPORTED_STORE_ENTRY', path.name)
             address = path.stem
             _, r = read(store, address)
-            if (task.casefold() in (r['task']['summary'] or '').casefold() and
+            # --task scans the task's summary, context and applicability (not the
+            # component, observations or advice); --component stays an exact
+            # substring filter over the declared component. AND of both.
+            task_text = '\n'.join((r['task'][k] or '') for k in ('summary', 'context', 'applicability'))
+            if (task.casefold() in task_text.casefold() and
                     component.casefold() in (r['task']['component'] or '').casefold()):
                 matches.append({'address': address, 'id': r['id'], 'task': r['task'],
                                 'relations': r['relations']})
@@ -363,8 +367,10 @@ def main(argv=None):
         if name == 'read':
             p.add_argument('--raw', action='store_true', help='exact record bytes on stdout')
     p = sub.add_parser('search')
-    p.add_argument('--task', default='')
-    p.add_argument('--component', default='')
+    p.add_argument('--task', default='',
+                   help='case-insensitive substring of task.summary, task.context or task.applicability')
+    p.add_argument('--component', default='',
+                   help='case-insensitive substring of task.component only (declared components)')
     for p in sub.choices.values():
         p.add_argument('--store', required=True, help='caller-owned local directory')
     args = parser.parse_args(argv)

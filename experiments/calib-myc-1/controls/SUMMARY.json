@@ -1,0 +1,209 @@
+{
+ "pre_revision": "198f9e2b64934f2e67b01df9128d1e57c2079407",
+ "pre_mycelium_sha256": "deb9928e31d3219c59e55edbdacb7223bb4028b1de482bd02dad0c9f0b31d29a",
+ "post82_revision": "4affbf5d7af69e024f269ffe23bd23b1f69201dc",
+ "post82_mycelium_sha256": "5a97132114eca99b81d93d0c61c2d92f390b7eb811a644e12a9ccd293b715cda",
+ "grader_sha256": "739e97032abf98fbe31913a520b57e15e0b940ba53f90425194588be9449aae6",
+ "baseline_test_sha256": "883b7c625fbe3531f4d9302e904f95b6d81359cba46422f38da94af6fbc69a16",
+ "controls": {
+  "C0": {
+   "description": "no change",
+   "predicted": "FAIL",
+   "outcome": "FAIL",
+   "expected_checks": {
+    "H1": false,
+    "H2": false,
+    "H3": false,
+    "H4": false,
+    "H5": true,
+    "H6": false,
+    "H7": true
+   },
+   "checks": {
+    "H1": false,
+    "H2": false,
+    "H3": false,
+    "H4": false,
+    "H5": true,
+    "H6": false,
+    "H7": true
+   },
+   "checks_as_predicted": {
+    "H1": true,
+    "H2": true,
+    "H3": true,
+    "H4": true,
+    "H5": true,
+    "H6": true,
+    "H7": true
+   },
+   "as_predicted": true
+  },
+  "C1": {
+   "description": "verify fixed in both branches, minting untouched",
+   "predicted": "PARTIAL",
+   "outcome": "PARTIAL",
+   "expected_checks": {
+    "H1": true,
+    "H2": true,
+    "H3": true,
+    "H4": true,
+    "H5": true,
+    "H6": false,
+    "H7": true
+   },
+   "checks": {
+    "H1": true,
+    "H2": true,
+    "H3": true,
+    "H4": true,
+    "H5": true,
+    "H6": false,
+    "H7": true
+   },
+   "checks_as_predicted": {
+    "H1": true,
+    "H2": true,
+    "H3": true,
+    "H4": true,
+    "H5": true,
+    "H6": true,
+    "H7": true
+   },
+   "as_predicted": true
+  },
+  "C2": {
+   "description": "applied branch only",
+   "predicted": "PARTIAL",
+   "outcome": "PARTIAL",
+   "expected_checks": {
+    "H1": true,
+    "H2": false,
+    "H3": true,
+    "H4": false,
+    "H5": true,
+    "H6": false,
+    "H7": true
+   },
+   "checks": {
+    "H1": true,
+    "H2": false,
+    "H3": true,
+    "H4": false,
+    "H5": true,
+    "H6": false,
+    "H7": true
+   },
+   "checks_as_predicted": {
+    "H1": true,
+    "H2": true,
+    "H3": true,
+    "H4": true,
+    "H5": true,
+    "H6": true,
+    "H7": true
+   },
+   "as_predicted": true
+  },
+  "C3": {
+   "description": "one-sided settled check (original only) in both branches",
+   "predicted": "PARTIAL",
+   "outcome": "PARTIAL",
+   "expected_checks": {
+    "H1": true,
+    "H2": true,
+    "H3": false,
+    "H4": false,
+    "H5": true,
+    "H6": false,
+    "H7": true
+   },
+   "checks": {
+    "H1": true,
+    "H2": true,
+    "H3": false,
+    "H4": false,
+    "H5": true,
+    "H6": false,
+    "H7": true
+   },
+   "checks_as_predicted": {
+    "H1": true,
+    "H2": true,
+    "H3": true,
+    "H4": true,
+    "H5": true,
+    "H6": true,
+    "H7": true
+   },
+   "as_predicted": true
+  },
+  "C4": {
+   "description": "full repair: mycelium.py from 4affbf5",
+   "predicted": "PASS",
+   "outcome": "PASS",
+   "expected_checks": {
+    "H1": true,
+    "H2": true,
+    "H3": true,
+    "H4": true,
+    "H5": true,
+    "H6": true,
+    "H7": true
+   },
+   "checks": {
+    "H1": true,
+    "H2": true,
+    "H3": true,
+    "H4": true,
+    "H5": true,
+    "H6": true,
+    "H7": true
+   },
+   "checks_as_predicted": {
+    "H1": true,
+    "H2": true,
+    "H3": true,
+    "H4": true,
+    "H5": true,
+    "H6": true,
+    "H7": true
+   },
+   "as_predicted": true
+  },
+  "C5": {
+   "description": "verify() returns False always",
+   "predicted": "FAIL",
+   "outcome": "FAIL",
+   "expected_checks": {
+    "H1": true,
+    "H2": true,
+    "H3": true,
+    "H4": true,
+    "H5": false,
+    "H6": false,
+    "H7": false
+   },
+   "checks": {
+    "H1": true,
+    "H2": true,
+    "H3": true,
+    "H4": true,
+    "H5": false,
+    "H6": false,
+    "H7": false
+   },
+   "checks_as_predicted": {
+    "H1": true,
+    "H2": true,
+    "H3": true,
+    "H4": true,
+    "H5": true,
+    "H6": true,
+    "H7": true
+   },
+   "as_predicted": true
+  }
+ },
+ "all_as_predicted": true
+}

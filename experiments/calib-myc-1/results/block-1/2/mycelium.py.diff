@@ -1,0 +1,66 @@
+diff --git a/mycelium.py b/mycelium.py
+index 91e8413..7b3bfc8 100644
+--- a/mycelium.py
++++ b/mycelium.py
+@@ -572,6 +572,11 @@ class DivergenceRecord:
+                     cand_t = parse(self.candidate_expression)
+                     res_orig = evaluate(orig_t, max_atp=2000)
+                     res_cand = evaluate(cand_t, max_atp=2000)
++                    # CONTRACT: a divergence asserts that both sides reduce to
++                    # normal forms. A suspended (budget-exhausted) reduction is
++                    # not a normal form, so it can never establish divergence.
++                    if not res_orig.is_settled() or not res_cand.is_settled():
++                        return False
+                     orig_nf = str(res_orig.term)
+                     cand_nf = str(res_cand.term)
+                     if orig_nf != self.expected_output or cand_nf != self.actual_output:
+@@ -592,6 +597,12 @@ class DivergenceRecord:
+                     res_orig = evaluate(app_orig, max_atp=2000)
+                     res_cand = evaluate(app_cand, max_atp=2000)
+ 
++                    # CONTRACT: a divergence asserts that both sides reduce to
++                    # normal forms. A suspended (budget-exhausted) reduction is
++                    # not a normal form, so it can never establish divergence.
++                    if not res_orig.is_settled() or not res_cand.is_settled():
++                        return False
++
+                     orig_nf = str(res_orig.term)
+                     cand_nf = str(res_cand.term)
+ 
+@@ -893,17 +904,26 @@ class LocalImmuneEvaluator:
+                     cand_unapplied = evaluate(cand_t, max_atp=chrom.max_atp)
+                     orig_unapplied = evaluate(t, max_atp=chrom.max_atp)
+                     if cand_unapplied.term != orig_unapplied.term or not cand_unapplied.is_settled():
+-                        div = DivergenceRecord.create_and_sign(
+-                            rule_name=warrant.rule_name,
+-                            target_expr=chrom.expression,
+-                            cand_expr=cand_expr,
+-                            counterexample_input="<UNAPPLIED_METABOLISM>",
+-                            expected_out=str(orig_unapplied.term),
+-                            actual_out=str(cand_unapplied.term),
+-                            reporter_sk=sk_bytes
+-                        )
++                        # CONTRACT: a DivergenceRecord may only assert that the
++                        # target and candidate reduce to two different *normal
++                        # forms*. A suspended (budget-exhausted) reduction never
++                        # reached a normal form, so it cannot be used to
++                        # establish that assertion. Only mint a record when both
++                        # sides actually settled with differing normal forms;
++                        # otherwise this is an unresolved viability failure, not
++                        # a proven divergence.
+                         last_rejection_reason = "REJECTED_METABOLIC_VIABILITY_MISMATCH"
+-                        last_divergence = div
++                        if orig_unapplied.is_settled() and cand_unapplied.is_settled():
++                            div = DivergenceRecord.create_and_sign(
++                                rule_name=warrant.rule_name,
++                                target_expr=chrom.expression,
++                                cand_expr=cand_expr,
++                                counterexample_input="<UNAPPLIED_METABOLISM>",
++                                expected_out=str(orig_unapplied.term),
++                                actual_out=str(cand_unapplied.term),
++                                reporter_sk=sk_bytes
++                            )
++                            last_divergence = div
+                         continue
+ 
+                     # External Oracle fixture evaluation

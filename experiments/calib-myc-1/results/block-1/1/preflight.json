@@ -1,0 +1,129 @@
+{
+  "pass": true,
+  "refusals": [],
+  "client": {
+    "client_version": "2.1.272 (Claude Code)",
+    "which": "/opt/homebrew/bin/claude",
+    "resolved": "/opt/homebrew/Caskroom/claude-code@latest/2.1.272/claude",
+    "is_shell_wrapper": false,
+    "claude_binary_sha256": "195e24e8e1f9bf46f1eaee72d434a33e18f9f5796f29a6348a00d16c5f8aee75"
+  },
+  "stale_tmp_inputs": [],
+  "stale_receiver_snapshots": [],
+  "tmp_content_scan": {
+    "pass": true,
+    "roots": [
+      "/private/tmp",
+      "/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T",
+      "/private/var/tmp"
+    ],
+    "markers": [
+      "calib-myc-1",
+      "calibmyc1",
+      "s-verif-7",
+      "rejected_metabolic_viability_unsettled"
+    ],
+    "digests": [
+      "42a76e4ef2383460821711bd2e91ecdadfb11d159751c89f12f0afd9c3fdb1aa",
+      "4f9999f1b8552b9e574c0d41ffbeacc2a4acd2008e4cfe487a8eec639e096d5e",
+      "5a97132114eca99b81d93d0c61c2d92f390b7eb811a644e12a9ccd293b715cda",
+      "74e01522aa2b753613a0370d9716f4b590b8701e6766802bb0b561e66a50775e",
+      "af56fef23d21fee24c62d152a8ae3c410ad3df770c8a23f2d8f5f5e1ca9339aa"
+    ],
+    "excluded_c0_digest": "deb9928e31d3219c59e55edbdacb7223bb4028b1de482bd02dad0c9f0b31d29a",
+    "scan": {
+      "matches": [],
+      "errors": [],
+      "dangling_symlinks": [
+        "/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T/scoped_direEpyST/SingletonCookie",
+        "/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T/com.openai.codex.Hipv6J/SingletonCookie",
+        "/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T/com.openai.codex.VaAO2H/SingletonCookie",
+        "/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T/com.openai.codex.c26qHI/SingletonCookie",
+        "/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T/com.openai.codex.6jQPoi/SingletonCookie",
+        "/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T/com.google.Chrome.O8arlu/SingletonCookie",
+        "/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T/com.openai.codex.bAX08y/SingletonCookie",
+        "/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T/com.openai.codex.6TjoQA/SingletonCookie",
+        "/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T/com.openai.codex.KdO8Bm/SingletonCookie",
+        "/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T/.com.valvesoftware.Steam.4YJVZo/SingletonCookie"
+      ],
+      "files_read": 39227,
+      "denied": 83,
+      "complete": true
+    },
+    "process": {
+      "exit_code": 0,
+      "timed_out": false,
+      "stdout": "{\"matches\": [], \"errors\": [], \"dangling_symlinks\": [\"/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T/scoped_direEpyST/SingletonCookie\", \"/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T/com.openai.codex.Hipv6J/SingletonCookie\", \"/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T/com.openai.codex.VaAO2H/SingletonCookie\", \"/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T/com.openai.codex.c26qHI/SingletonCookie\", \"/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T/com.openai.codex.6jQPoi/SingletonCookie\", \"/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T/com.google.Chrome.O8arlu/SingletonCookie\", \"/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T/com.openai.codex.bAX08y/SingletonCookie\", \"/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T/com.openai.codex.6TjoQA/SingletonCookie\", \"/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T/com.openai.codex.KdO8Bm/SingletonCookie\", \"/private/var/folders/3j/t95dsnsj7wlc35dpwlwpdy8r0000gn/T/.com.valvesoftware.Steam.4YJVZo/SingletonCookie\"], \"files_read\": 39227, \"denied\": 83, \"complete\": true}\n",
+      "stderr": ""
+    }
+  },
+  "store_canary": {
+    "pass": true,
+    "protected": {
+      "~/Projects/black-heart/mycelium.py": "/Users/s0fractal/Projects/black-heart/mycelium.py",
+      "~/Projects/black-heart-experience-store": "/Users/s0fractal/Projects/black-heart-experience-store",
+      "~/Projects/black-heart-experience-records": "/Users/s0fractal/Projects/black-heart-experience-records",
+      "~/.claude/projects": "/Users/s0fractal/.claude/projects",
+      "~/.claude.json": "/Users/s0fractal/.claude.json",
+      "~/transfer1-work": "/Users/s0fractal/transfer1-work",
+      "~/transfer1-runs": "/Users/s0fractal/transfer1-runs",
+      "~/rvb-bh-1a-work": "/Users/s0fractal/rvb-bh-1a-work",
+      "~/rvb-bh-1a-runs": "/Users/s0fractal/rvb-bh-1a-runs",
+      "package:harness/grade_checks.py": "/Users/s0fractal/Projects/black-heart/experiments/calib-myc-1/harness/grade_checks.py",
+      "package:harness/run_controls.py": "/Users/s0fractal/Projects/black-heart/experiments/calib-myc-1/harness/run_controls.py",
+      "package:controls": "/Users/s0fractal/Projects/black-heart/experiments/calib-myc-1/controls",
+      "package:execution": "/Users/s0fractal/Projects/black-heart/experiments/calib-myc-1/execution",
+      "package:inputs": "/Users/s0fractal/Projects/black-heart/experiments/calib-myc-1/inputs",
+      "run_root": "/Users/s0fractal/calib1-runs/c9daa675907b42c9934bb6ed50cc9b43",
+      "sibling_receiver": "/Users/s0fractal/calib1-work/receivers/receiver-canary-35v796w3/canary.txt"
+    },
+    "observed": {
+      "protected": {
+        "~/Projects/black-heart/mycelium.py": "denied",
+        "~/Projects/black-heart-experience-store": "denied",
+        "~/Projects/black-heart-experience-records": "denied",
+        "~/.claude/projects": "denied",
+        "~/.claude.json": "denied",
+        "~/transfer1-work": "denied",
+        "~/transfer1-runs": "denied",
+        "~/rvb-bh-1a-work": "denied",
+        "~/rvb-bh-1a-runs": "denied",
+        "package:harness/grade_checks.py": "denied",
+        "package:harness/run_controls.py": "denied",
+        "package:controls": "denied",
+        "package:execution": "denied",
+        "package:inputs": "denied",
+        "run_root": "denied",
+        "sibling_receiver": "denied"
+      },
+      "workspace": {
+        "write_read": true,
+        "host_python_readable": true
+      },
+      "tools": {
+        "python3": {
+          "exit_code": 0,
+          "output": "Python 3.14.7"
+        },
+        "git": {
+          "exit_code": 0,
+          "output": "git version 2.54.0 (Apple Git-157)"
+        }
+      }
+    },
+    "process": {
+      "exit_code": 0,
+      "timed_out": false,
+      "stdout": "{\"protected\": {\"~/Projects/black-heart/mycelium.py\": \"denied\", \"~/Projects/black-heart-experience-store\": \"denied\", \"~/Projects/black-heart-experience-records\": \"denied\", \"~/.claude/projects\": \"denied\", \"~/.claude.json\": \"denied\", \"~/transfer1-work\": \"denied\", \"~/transfer1-runs\": \"denied\", \"~/rvb-bh-1a-work\": \"denied\", \"~/rvb-bh-1a-runs\": \"denied\", \"package:harness/grade_checks.py\": \"denied\", \"package:harness/run_controls.py\": \"denied\", \"package:controls\": \"denied\", \"package:execution\": \"denied\", \"package:inputs\": \"denied\", \"run_root\": \"denied\", \"sibling_receiver\": \"denied\"}, \"workspace\": {\"write_read\": true, \"host_python_readable\": true}, \"tools\": {\"python3\": {\"exit_code\": 0, \"output\": \"Python 3.14.7\"}, \"git\": {\"exit_code\": 0, \"output\": \"git version 2.54.0 (Apple Git-157)\"}}}\n",
+      "stderr": ""
+    }
+  },
+  "auth": {
+    "expires_at": 1789519405,
+    "seconds_remaining": 26210,
+    "refresh_token_present": true,
+    "service": "Claude Code-credentials",
+    "margin_seconds": 900
+  },
+  "placement": "Slot archives and grade receipts live under ~/calib1-runs (denied); the snapshot is the only readable path under ~/calib1-work; /private/tmp stays readable."
+}

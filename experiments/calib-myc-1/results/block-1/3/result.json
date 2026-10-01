@@ -1,0 +1,114 @@
+{
+  "slot": 3,
+  "condition": "S3",
+  "finished_at": "2026-09-15T17:51:48.256763+00:00",
+  "exit_code": 0,
+  "elapsed_seconds": 415.29901554097887,
+  "timed_out": false,
+  "protected_inputs": {
+    "CONTRACT.md": true,
+    "task.txt": true
+  },
+  "infrastructure_valid": true,
+  "init_errors": [],
+  "classification": "PASS",
+  "grader_outcome": "PASS",
+  "checks": {
+    "H1": true,
+    "H2": true,
+    "H3": true,
+    "H4": true,
+    "H5": true,
+    "H6": true,
+    "H7": true
+  },
+  "omitted_reasoning_events": 0,
+  "malformed_events": 0,
+  "unknown_event_types": [],
+  "tool_uses": 64,
+  "tool_use_names": [
+    "Bash",
+    "Edit",
+    "Grep",
+    "Read"
+  ],
+  "head_after": "d1fb31919f7c77e4094e1d16dea5c5411bccf5fd",
+  "status_after": "M mycelium.py\n M test_mycelium.py",
+  "model_reported": [
+    "claude-sonnet-5"
+  ],
+  "api_key_source": "none",
+  "usage": {
+    "usage": {
+      "input_tokens": 124,
+      "cache_creation_input_tokens": 74215,
+      "cache_read_input_tokens": 3516639,
+      "output_tokens": 24728,
+      "output_tokens_details": {
+        "thinking_tokens": 0
+      },
+      "server_tool_use": {
+        "web_search_requests": 0,
+        "web_fetch_requests": 0
+      },
+      "service_tier": "standard",
+      "cache_creation": {
+        "ephemeral_1h_input_tokens": 74215,
+        "ephemeral_5m_input_tokens": 0
+      },
+      "inference_geo": "not_available",
+      "iterations": [],
+      "speed": "standard"
+    },
+    "modelUsage": {
+      "claude-sonnet-5": {
+        "inputTokens": 124,
+        "outputTokens": 24728,
+        "cacheReadInputTokens": 3516639,
+        "cacheCreationInputTokens": 74215,
+        "webSearchRequests": 0,
+        "costUSD": 1.2477158,
+        "contextWindow": 1000000,
+        "maxOutputTokens": 64000,
+        "thinkingTokens": 0,
+        "canonicalModel": "claude-sonnet-5",
+        "provider": "firstParty",
+        "costBasis": "list"
+      }
+    },
+    "num_turns": 65,
+    "duration_ms": 409105,
+    "duration_api_ms": 395486,
+    "total_cost_usd": 1.2477158,
+    "stop_reason": "end_turn",
+    "subtype": "success",
+    "is_error": false,
+    "permission_denials": [
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01TWBUDJaFTcjwj8cirPCfEr",
+        "tool_input": {
+          "command": "which python3; python3 --version; pip3 list 2>/dev/null | grep -i pytest; ls /Users/s0fractal/calib1-work/receivers/receiver-ul0y8gp_ | grep -i venv"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_012TVHpCKK18uxTsRQ1cJjBN",
+        "tool_input": {
+          "command": "python3 -c \"\nfrom glyph import parse, evaluate, S, K, I, App\n\n# omega-like divergent term using S S S / self application, look for GLYPH chars\nimport glyph\nprint(glyph.GLYPH_S, glyph.GLYPH_K, glyph.GLYPH_I)\n\"\n"
+        }
+      },
+      {
+        "tool_name": "Bash",
+        "tool_use_id": "toolu_01PYEd3a9pjZmqBdCbA8UBgC",
+        "tool_input": {
+          "command": "grep -rl \"from mycelium import\\|import mycelium\" --include=\"*.py\" . 2>/dev/null | grep -v \"^./test_mycelium.py$\\|^./mycelium.py$\""
+        }
+      }
+    ],
+    "terminal_reason": "completed"
+  },
+  "snapshot": "~/calib1-runs/c9daa675907b42c9934bb6ed50cc9b43/3/snapshot",
+  "ephemeral_snapshot": "~/calib1-work/receivers/receiver-ul0y8gp_",
+  "trace_audit": "REQUIRED_BEFORE_NEXT_SLOT"
+}

@@ -1,0 +1,207 @@
+diff --git a/test_mycelium.py b/test_mycelium.py
+index f501e1e..5490cfd 100644
+--- a/test_mycelium.py
++++ b/test_mycelium.py
+@@ -19,9 +19,10 @@ import sys
+ import tempfile
+ import json
+ import time
++from unittest.mock import patch
+ 
+ from crypto import generate_keypair, public_key_from_secret
+-from glyph import parse, evaluate, S, K, I, App
++from glyph import parse, evaluate, S, K, I, App, EvalResult, EvalStatus, term_hash, tree_size
+ from organism import Organism, Chromosome, create_genesis_organism
+ from metamorphosis import (
+     contemplate_and_evolve,
+@@ -46,6 +47,10 @@ from mesh import (
+     sync_epistemic_from_remote_peer
+ )
+ 
++# A term that never settles within any reasonable ATP budget:
++# (S I I)(S I I), the classic omega self-application divergence.
++OMEGA = "(🌿 🤍 🤍)(🌿 🤍 🤍)"
++
+ class TestMycelium(unittest.TestCase):
+ 
+     def setUp(self):
+@@ -331,5 +336,179 @@ class TestMycelium(unittest.TestCase):
+         self.assertEqual(w_trial.epistemic_grade, WarrantEpistemicGrade.PROPOSED.value)
+         self.assertTrue(w_trial.verify())
+ 
++
++# ============================================================================
++# CONTRACT.md REGRESSION: A DivergenceRecord asserts an exact counterexample
++# where BOTH sides settle into DIFFERENT normal forms. A side that merely
++# suspends (runs out of ATP budget without reaching a normal form) does not
++# establish that assertion, and must never produce a record that verifies,
++# nor be accepted/reported by EpistemicRegistry, nor be minted by the
++# mechanisms (LocalImmuneEvaluator) that create these records.
++# ============================================================================
++class TestDivergenceContractCompliance(unittest.TestCase):
++
++    def setUp(self):
++        self.sk_a, self.pk_a = generate_keypair()
++        self.sk_b, self.pk_b = generate_keypair()
++        # Sanity: OMEGA never settles within the record's replay budget.
++        omega_res = evaluate(parse(OMEGA), max_atp=2000)
++        self.assertFalse(omega_res.is_settled())
++
++    def test_verify_rejects_unsettled_candidate_on_applied_counterexample(self):
++        """
++        verify() must not certify a divergence when the candidate side never
++        reaches a normal form under replay, even if the recorded strings
++        happen to match whatever partial thunk replay produced.
++        """
++        target = "🖤"   # K
++        cand = OMEGA    # never settles
++        inp = "🤍"
++
++        # Establish exactly what replay would (dishonestly) reproduce today,
++        # so the record's stored fields are internally "consistent" with a
++        # naive re-run -- the only way this could slip past verify() is if
++        # verify() forgot to check is_settled() on both sides.
++        orig_res = evaluate(App(parse(target), parse(inp)), max_atp=2000)
++        cand_res = evaluate(App(parse(cand), parse(inp)), max_atp=2000)
++        self.assertTrue(orig_res.is_settled())
++        self.assertFalse(cand_res.is_settled())
++
++        div = DivergenceRecord.create_and_sign(
++            rule_name="MUTATION_OPERAND_SWAP",
++            target_expr=target,
++            cand_expr=cand,
++            counterexample_input=inp,
++            expected_out=str(orig_res.term),
++            actual_out=str(cand_res.term),
++            reporter_sk=self.sk_a
++        )
++        self.assertFalse(div.verify(replay_counterexample=True))
++
++    def test_verify_rejects_unsettled_candidate_on_unapplied_metabolism(self):
++        """Same contract requirement, for the <UNAPPLIED_METABOLISM> replay path."""
++        target = "🖤"
++        cand = OMEGA
++
++        orig_res = evaluate(parse(target), max_atp=2000)
++        cand_res = evaluate(parse(cand), max_atp=2000)
++        self.assertTrue(orig_res.is_settled())
++        self.assertFalse(cand_res.is_settled())
++
++        div = DivergenceRecord.create_and_sign(
++            rule_name="MUTATION_CONSTANT_COLLAPSE",
++            target_expr=target,
++            cand_expr=cand,
++            counterexample_input="<UNAPPLIED_METABOLISM>",
++            expected_out=str(orig_res.term),
++            actual_out=str(cand_res.term),
++            reporter_sk=self.sk_a
++        )
++        self.assertFalse(div.verify(replay_counterexample=True))
++
++    def test_verify_rejects_unsettled_target_side_too(self):
++        """The contract requires BOTH sides to settle; an unsettled target is equally invalid."""
++        target = OMEGA
++        cand = "🖤"
++        inp = "🤍"
++
++        orig_res = evaluate(App(parse(target), parse(inp)), max_atp=2000)
++        cand_res = evaluate(App(parse(cand), parse(inp)), max_atp=2000)
++        self.assertFalse(orig_res.is_settled())
++        self.assertTrue(cand_res.is_settled())
++
++        div = DivergenceRecord.create_and_sign(
++            rule_name="MUTATION_OPERAND_SWAP",
++            target_expr=target,
++            cand_expr=cand,
++            counterexample_input=inp,
++            expected_out=str(orig_res.term),
++            actual_out=str(cand_res.term),
++            reporter_sk=self.sk_a
++        )
++        self.assertFalse(div.verify(replay_counterexample=True))
++
++    def test_registry_refuses_to_store_unestablished_divergence(self):
++        """EpistemicRegistry must neither accept nor report an unestablished record."""
++        target = "🖤"
++        cand = OMEGA
++        orig_res = evaluate(parse(target), max_atp=2000)
++        cand_res = evaluate(parse(cand), max_atp=2000)
++
++        div = DivergenceRecord.create_and_sign(
++            rule_name="MUTATION_CONSTANT_COLLAPSE",
++            target_expr=target,
++            cand_expr=cand,
++            counterexample_input="<UNAPPLIED_METABOLISM>",
++            expected_out=str(orig_res.term),
++            actual_out=str(cand_res.term),
++            reporter_sk=self.sk_a
++        )
++        reg = EpistemicRegistry()
++        accepted = reg.add_divergence(div, verify_first=True)
++        self.assertFalse(accepted)
++        self.assertFalse(dict.__contains__(reg.divergences, div.record_id))
++
++    def test_audition_warrant_does_not_mint_divergence_for_unsettled_candidate(self):
++        """
++        LocalImmuneEvaluator (the mechanism that mints DivergenceRecords) must not
++        create a record asserting "two different normal forms" when the candidate
++        rewrite leaves the term suspended rather than settled. It has not
++        established that assertion, so CONTRACT.md forbids minting the record.
++        """
++        p = create_genesis_organism()
++        p.chromosomes = [
++            Chromosome('GENE', 'Settles fine today', '🤍 🖤', '🖤', 200)
++        ]
++        p.organism_hash = p.compute_hash()
++        self.assertTrue(p.verify())
++
++        receipt = MetamorphicTransitionReceipt(
++            parent_hash="0" * 64,
++            successor_hash="1" * 64,
++            gene_id="GENE",
++            site_address=(),
++            rule_name="MUTATION_OPERAND_SWAP",
++            pre_term="🤍 🖤",
++            post_term="🖤 🤍",
++            atp_saved=-1,
++            size_saved=0,
++            fixtures_fingerprint=FrozenEvaluator().fixtures_fingerprint,
++            experiment_id="exp_unsettled"
++        )
++        warrant = export_warrant_from_receipt(receipt, self.sk_b)
++        self.assertTrue(warrant.verify())
++
++        real_evaluate = evaluate
++        cand_expr_str = "🖤 🤍"  # str(replace_subterm_at(...)) for the rewritten gene
++
++        def fake_evaluate(term, max_atp=100_000, raise_on_limit=False):
++            # Force the candidate's metabolic-viability replay to look
++            # suspended (out of budget), regardless of the budget given,
++            # while leaving every other evaluation call (e.g. the parent
++            # organism's own viability check) behaving normally.
++            if str(term) == cand_expr_str:
++                return EvalResult(
++                    term=term,
++                    steps=max_atp,
++                    atp_spent=max_atp,
++                    peak_size=tree_size(term),
++                    hash=term_hash(term),
++                    status=EvalStatus.SUSPENDED
++                )
++            return real_evaluate(term, max_atp=max_atp, raise_on_limit=raise_on_limit)
++
++        immune = LocalImmuneEvaluator()
++        with patch("mycelium.evaluate", side_effect=fake_evaluate):
++            verdict = immune.audition_warrant(p, warrant, self.sk_a)
++
++        self.assertFalse(verdict.adopted)
++        self.assertIsNone(
++            verdict.divergence_record,
++            "An unsettled candidate must not produce a minted DivergenceRecord: "
++            "the 'two different normal forms' assertion was never established."
++        )
++        self.assertEqual(verdict.reason, "REJECTED_METABOLIC_VIABILITY_UNSETTLED")
++
++
+ if __name__ == "__main__":
+     unittest.main()

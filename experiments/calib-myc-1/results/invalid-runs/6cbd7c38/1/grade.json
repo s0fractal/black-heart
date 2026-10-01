@@ -1,0 +1,92 @@
+{
+  "snapshot": "/Users/s0fractal/calib1-runs/6cbd7c38fe7443f791ad2598f3fbde7b/1/snapshot",
+  "checks": {
+    "H1": {
+      "pass": false,
+      "detail": {
+        "orig": "SUSPENDED",
+        "cand": "SUSPENDED",
+        "verify": true,
+        "accepted": true,
+        "known": true
+      }
+    },
+    "H2": {
+      "pass": false,
+      "detail": {
+        "orig": "SUSPENDED",
+        "cand": "SUSPENDED",
+        "verify": true,
+        "accepted": true,
+        "known": true
+      }
+    },
+    "H3": {
+      "pass": false,
+      "detail": {
+        "fwd": {
+          "orig": "SETTLED",
+          "cand": "SUSPENDED",
+          "verify": true,
+          "accepted": true,
+          "known": true
+        },
+        "rev": {
+          "orig": "SUSPENDED",
+          "cand": "SETTLED",
+          "verify": true,
+          "accepted": true,
+          "known": true
+        }
+      }
+    },
+    "H4": {
+      "pass": false,
+      "detail": {
+        "fwd": {
+          "orig": "SETTLED",
+          "cand": "SUSPENDED",
+          "verify": true,
+          "accepted": true,
+          "known": true
+        },
+        "rev": {
+          "orig": "SUSPENDED",
+          "cand": "SETTLED",
+          "verify": true,
+          "accepted": true,
+          "known": true
+        }
+      }
+    },
+    "H5": {
+      "pass": true,
+      "detail": {
+        "orig": "SETTLED",
+        "cand": "SETTLED",
+        "verify": true,
+        "accepted": true,
+        "known": true
+      }
+    },
+    "H6": {
+      "pass": false,
+      "detail": {
+        "adopted": false,
+        "reason": "REJECTED_METABOLIC_VIABILITY_MISMATCH",
+        "divergence_record_is_none": false
+      }
+    },
+    "H7": {
+      "pass": true,
+      "detail": "Ran 8 tests in 0.804s\n\nOK"
+    }
+  },
+  "timeouts": {
+    "check": 120,
+    "h7": 600
+  },
+  "outcome": "FAIL",
+  "baseline_sha256": "883b7c625fbe3531f4d9302e904f95b6d81359cba46422f38da94af6fbc69a16",
+  "grader_sha256": "739e97032abf98fbe31913a520b57e15e0b940ba53f90425194588be9449aae6"
+}

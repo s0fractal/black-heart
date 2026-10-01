@@ -78,8 +78,8 @@ Democracy cannot vote mathematical falsehoods into truth. If a proposal proposes
 1. The engine extracts the LHS and RHS expressions.
 2. Performs intensional normal form evaluation via the `glyph.py` reducer.
 3. Tests extensional equivalence across formal variables (e.g., evaluating both sides applied to free test variable `$x`).
-4. **Mandatory Invariant:** If normal forms do not coincide or exceed monotonic fuel limits, the proposal is marked `REJECTED_AUDIT_FAILED`, regardless of votes.
-5. **Stake Slashing:** The sponsor's pledged ATP is slashed, preventing spam attacks on the assembly.
+4. **Mandatory Invariant:** A verdict needs two **settled** reductions. If both sides settle and the normal forms differ (intensionally and on the test variable), the proposal is `SLASHED`, regardless of votes. If either side does not settle within the budget, or evaluation errors, the audit is `UNVERIFIED`: the proposal is neither ratified nor slashed, no bounty is paid, and the stake is returned. Budget exhaustion is not a refutation (see S-verif-8 in the remediation ledger).
+5. **Stake Slashing:** Only a settled contradiction slashes the sponsor's pledged ATP, preventing spam attacks on the assembly without punishing slow but true theorems.
 
 ---
 
@@ -170,7 +170,7 @@ In decentralized multi-agent federations, governance cannot assume a single flat
   If any pairwise 1-cocycle $(\delta s)_{ij} \ne 0$, the bill is blocked fail-closed with status `REJECTED_COHOMOLOGICAL_FRACTURE`.
 
 * **FSA5 (Fail-Closed Theorem Soundness & Stake Slashing):**  
-  If a motion proposes an algebraic equivalence that reduces to false or diverges under test fixtures, the proposer's pledged stake is slashed: 50% permanently burned, 50% redistributed to Nay voters.
+  If a motion proposes an algebraic equivalence and both sides **settle** within the chamber budget to different normal forms, the proposer's pledged stake is slashed (`SLASHED_AUDIT_FAILED`): 50% permanently burned, 50% redistributed to Nay voters. If either side does not settle within the budget, or evaluation errors, the motion is `UNVERIFIED_AUDIT_BUDGET`: no ratification, no slash, stake untouched. Non-termination within a budget is not divergence; a true one-step identity such as `Y f` vs `f (Y f)` suspends on different intermediate strings and must not be slashed.
 
 * **FSA6 (Dual-Spine ISO 32000 Polyglot HUD):**  
   The parliament compiles into a self-contained ISO 32000 PDF polyglot rendering the chamber simplicial nerve $\mathcal{N}(\mathcal{U})$, quadratic vote distributions, and Lorenz/Gini curves, with an embedded standalone Python CLI auditor (`python3 sheaf_parliament.pdf --audit`).

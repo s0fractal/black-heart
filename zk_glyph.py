@@ -19,7 +19,7 @@ import json
 import time
 import hashlib
 from dataclasses import dataclass
-from typing import Tuple, Optional, Dict, Any
+from typing import Tuple, Optional, Dict, Any, List
 
 from crypto import (
     BASE_POINT, L, Q, Point,

@@ -50,6 +50,32 @@ def _signed_claim(sk_hex, pk_hex, tau="🤍 🤍", term="🤍 🤍"):
         secret_key_hex=sk_hex, public_key_hex=pk_hex)
 
 
+class EnvelopeSyntaxTests(unittest.TestCase):
+    """All public envelope readers reject the same malformed byte streams."""
+
+    def test_syntax_refusals_and_size_priority(self):
+        cases = (
+            (b"\xff", "NOT_JSON", "not UTF-8:"),
+            (b"{", "NOT_JSON", "Expecting property name"),
+            (b"[]", "MALFORMED", "is list, not an object"),
+            (b"null", "MALFORMED", "is NoneType, not an object"),
+            (b'{"x":1,"x":2}', "DUPLICATE_KEYS", "duplicate JSON key: 'x'"),
+            (b'{"body":{"x":1,"x":2}}', "DUPLICATE_KEYS", "duplicate JSON key: 'x'"),
+        )
+        for kind in ("PROPOSAL", "DECISION", "RECEIPT"):
+            verify = getattr(li, "verify_" + kind.lower())
+            for raw, suffix, detail in cases:
+                with self.subTest(kind=kind, raw=raw):
+                    result = verify(raw)
+                    self.assertFalse(result["ok"])
+                    self.assertEqual(result["refusal"], kind + "_" + suffix)
+                    self.assertIn(detail, result["detail"])
+            with self.subTest(kind=kind, oversized=True):
+                limit = getattr(li, "MAX_" + kind + "_BYTES")
+                self.assertEqual(verify(b"\xff" * (limit + 1))["refusal"],
+                                 kind + "_TOO_LARGE")
+
+
 class LI1Base(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()

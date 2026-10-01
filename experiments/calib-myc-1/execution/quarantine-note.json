@@ -1,0 +1,45 @@
+{
+  "written_at": "2026-09-15T14:43:36.318346+00:00",
+  "quarantine": "~/calib1-work/quarantine/20260915T143932Z",
+  "moved": {
+    "tmp-calib-controls": {
+      "count": 24,
+      "names": [
+        "calib-C0-gvv_3y_7",
+        "calib-C0-ixhy_htv",
+        "calib-C0-kml630c_",
+        "calib-C0-q7x47u_9",
+        "calib-C1-d6tvyv9l",
+        "calib-C1-mynsqeo1",
+        "calib-C1-viogw0nl",
+        "calib-C1-zbz5upsr",
+        "calib-C2-1tvnpkdy",
+        "calib-C2-j3ywmtx_",
+        "calib-C2-ll7j2ep9",
+        "calib-C2-uvwv7f8n",
+        "calib-C3-0dbthlzd",
+        "calib-C3-asexkwpa",
+        "calib-C3-bxy47oxe",
+        "calib-C3-gab497kq",
+        "calib-C4-96le_41q",
+        "calib-C4-9r61bf9j",
+        "calib-C4-mkxkmqtj",
+        "calib-C4-zy46krlm",
+        "calib-C5-um98w0a7",
+        "calib-C5-v44s09d4",
+        "calib-C5-wfoa7o_j",
+        "calib-C5-ygsy924r"
+      ],
+      "origin": "<TMPDIR>/calib-C*",
+      "reason": "run_controls.py extracts each control tree with tempfile.mkdtemp and never removes it; four control runs (the original validation and three during package development) left 24 trees with patched mycelium.py readable by a receiver. offline.py now points tempfile at ~/calib1-work for the pinned script."
+    },
+    "scratch/ctl": {
+      "origin": "session scratchpad calib-harness/ctl (a timing re-run of the controls during development)"
+    }
+  },
+  "not_moved": [
+    "<scratchpad>/mycelium.base.py and mycelium.fixed.py (parent session scratch; flagged by the tmp content scan, operator decides)",
+    "/private/tmp/claude-501/bash-edit-diff/*/index (Claude Code edit cache of this development session; regenerates while any Claude Code session edits these files)"
+  ],
+  "method": "moved, never deleted; contents not published"
+}

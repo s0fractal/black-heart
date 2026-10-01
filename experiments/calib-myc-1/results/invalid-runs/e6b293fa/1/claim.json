@@ -1,0 +1,8 @@
+{
+  "claimed_at": "2026-09-15T16:54:38.299301+00:00",
+  "slot": 1,
+  "condition": "S1",
+  "reviewed_head": "fa04c6577c616d97bb1a43f954515a53fd41810b",
+  "freeze_sha256": "0f3675948a63abcc91d505a0f82829bd15986ada57cb929e609d766bac78496f",
+  "expected_init_sha256": "851542abf00f3d120da236aea4beffb2af1a15becfd2d09ac3e36406d94c7848"
+}

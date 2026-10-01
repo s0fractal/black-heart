@@ -10,6 +10,7 @@ import os
 import sys
 import json
 import tempfile
+import shutil
 import unittest
 import subprocess
 
@@ -369,6 +370,164 @@ class TestAutopoiesisEngine(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             evolve_autopoietic_organism(self.pdf_path, tombstone_registry=reg)
         self.assertIn("Palimpsest Autonomic Guard rejected", str(ctx.exception))
+
+
+class TestPalimpsestGuardSettlement(unittest.TestCase):
+    """PAL4 behavioural half (ledger: dead code before this repair).
+
+    The guard's matrix measures one thing: every gene parses and SETTLES
+    within GUARD_ATP. A successor whose gene stops settling is EROSION; a
+    successor whose gene changes meaning but still settles is not.
+    """
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.pdf = os.path.join(self.dir, "guard.pdf")
+        self.org0, _ = init_autopoietic_organism(self.pdf)
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def _successor(self, gene_id, expression):
+        import copy
+        succ = copy.deepcopy(self.org0)
+        succ.generation = self.org0.generation + 1
+        for c in succ.chromosomes:
+            if c.gene_id == gene_id:
+                c.expression = expression
+        succ.organism_hash = succ.compute_hash()
+        return succ
+
+    def test_identity_transition_passes_and_names_what_is_measured(self):
+        from autopoiesis import check_palimpsest_guard
+        ok, msg, tensor = check_palimpsest_guard(self.org0, self.org0)
+        self.assertTrue(ok, msg)
+        self.assertIn("fixture prompts are not evaluated", msg)
+        self.assertIsNotNone(tensor)
+        self.assertEqual(tensor.counterexamples, [])
+
+    def test_gene_that_stops_settling_is_erosion(self):
+        from autopoiesis import check_palimpsest_guard
+        from glyph import parse, evaluate
+        omega = "🌿 🤍 🤍 (🌿 🤍 🤍)"
+        self.assertFalse(evaluate(parse(omega), max_atp=25).is_settled())
+        succ = self._successor("GENE-OPT-04", omega)
+        ok, msg, tensor = check_palimpsest_guard(self.org0, succ)
+        self.assertFalse(ok, msg)
+        self.assertIn("EROSION", msg)
+        self.assertIn("gene settlement", msg)
+        # The returned report carries the measured evidence, not unrun fixture prompts.
+        self.assertEqual(len(tensor.counterexamples), 1)
+        ce = tensor.counterexamples[0]
+        self.assertEqual(ce["measurement"], "gene_settlement")
+        self.assertEqual(ce["budget_atp"], 25)
+        self.assertEqual(ce["gene_id"], "GENE-OPT-04")
+        self.assertEqual(ce["current"]["status"], "SETTLED")
+        self.assertEqual(ce["candidate"]["status"], "SUSPENDED")
+        self.assertEqual(ce["candidate"]["expression"], omega)
+        self.assertTrue(ce["settlement_lost"])
+        self.assertFalse(ce["fixture_prompts_evaluated"])
+        for key in ("fixture_id", "prompt_or_term", "coercion", "expected_behavior"):
+            self.assertNotIn(key, ce)
+        self.assertTrue(all("prompt_or_term" not in c for c in tensor.counterexamples))
+
+    def _slow_finite_term(self):
+        # church_numeral(5) f x: a finite chain that suspends at 25 ATP and settles at 100 (27 steps).
+        from glyph import church_numeral, App, Var, evaluate
+        t = App(App(church_numeral(5), Var("f")), Var("x"))
+        self.assertFalse(evaluate(t, max_atp=25).is_settled())
+        self.assertTrue(evaluate(t, max_atp=100).is_settled())
+        return str(t)
+
+    def test_second_gene_loss_is_not_masked_by_a_first_unsettled_gene(self):
+        """Review of PR #91: an aggregate 'all genes settle' was already false in
+        both generations when one gene did not settle, so a second gene losing
+        settlement passed. The decision must come from per-gene evidence."""
+        from autopoiesis import check_palimpsest_guard
+        slow = self._slow_finite_term()
+        current = self._successor("GENE-OPT-04", slow)          # already does not settle at 25
+        current.generation = self.org0.generation
+        current.organism_hash = current.compute_hash()
+        candidate = self._successor("GENE-OPT-04", slow)
+        for c in candidate.chromosomes:
+            if c.gene_id == "GENE-METAB-02":
+                c.expression = slow                               # a second gene loses settlement
+        candidate.organism_hash = candidate.compute_hash()
+        ok, msg, tensor = check_palimpsest_guard(current, candidate)
+        self.assertFalse(ok, msg)
+        self.assertIn("EROSION", msg)
+        self.assertIn("GENE-METAB-02", msg)
+        self.assertEqual([c["gene_id"] for c in tensor.counterexamples], ["GENE-METAB-02"])
+        self.assertEqual(tensor.counterexamples[0]["current"]["status"], "SETTLED")
+        self.assertEqual(tensor.counterexamples[0]["candidate"]["status"], "SUSPENDED")
+        self.assertEqual(tensor.verdict.value, "EROSION")
+
+    def test_unsettled_gene_kept_unchanged_is_not_a_new_loss(self):
+        from autopoiesis import check_palimpsest_guard
+        slow = self._slow_finite_term()
+        current = self._successor("GENE-OPT-04", slow)
+        current.generation = self.org0.generation
+        current.organism_hash = current.compute_hash()
+        import copy
+        candidate = copy.deepcopy(current)
+        candidate.generation = current.generation + 1
+        candidate.organism_hash = candidate.compute_hash()
+        ok, msg, tensor = check_palimpsest_guard(current, candidate)
+        self.assertTrue(ok, msg)
+        self.assertEqual(tensor.counterexamples, [])
+
+    def test_evaluator_failure_on_a_gene_is_evidence_not_a_crash(self):
+        """Review of PR #91: an evaluator exception for a syntactically valid gene must
+        yield a refusal with ERROR evidence, never an unhandled KeyError."""
+        from unittest import mock
+        import glyph
+        from autopoiesis import check_palimpsest_guard
+        target = "🖤 OtherNutrient EntropyNoise"
+        succ = self._successor("GENE-METAB-02", target)
+        real = glyph.evaluate
+        def failing(term, *a, **k):
+            if str(term) == str(glyph.parse(target)):
+                raise RuntimeError("controlled evaluator failure")
+            return real(term, *a, **k)
+        with mock.patch.object(glyph, "evaluate", failing):
+            ok, msg, tensor = check_palimpsest_guard(self.org0, succ)
+        self.assertFalse(ok, msg)
+        self.assertEqual([c["gene_id"] for c in tensor.counterexamples], ["GENE-METAB-02"])
+        ce = tensor.counterexamples[0]
+        self.assertEqual(ce["current"]["status"], "SETTLED")
+        self.assertEqual(ce["candidate"]["status"], "ERROR")
+        self.assertEqual(ce["candidate"]["error"], "RuntimeError")
+        self.assertIsNone(ce["candidate"]["normal_form_sha256_8"])
+        self.assertTrue(ce["settlement_lost"])
+
+    def test_added_unsettled_gene_is_allowed_and_verdict_agrees(self):
+        """Review of PR #91: a NEW gene that does not settle is not a loss of any existing
+        gene; the guard allows it and the returned verdict must not stay EROSION."""
+        import copy
+        from autopoiesis import check_palimpsest_guard
+        slow = self._slow_finite_term()
+        succ = copy.deepcopy(self.org0)
+        succ.generation = self.org0.generation + 1
+        new_gene = copy.deepcopy(succ.chromosomes[0])
+        new_gene.gene_id = "GENE-NEW-06"
+        new_gene.gene_name = "NewSlowGene"
+        new_gene.expression = slow
+        succ.chromosomes.append(new_gene)
+        succ.organism_hash = succ.compute_hash()
+        ok, msg, tensor = check_palimpsest_guard(self.org0, succ)
+        self.assertTrue(ok, msg)
+        self.assertEqual(tensor.counterexamples, [])
+        self.assertNotEqual(tensor.verdict.value, "EROSION")
+
+    def test_settled_semantic_change_is_not_erosion(self):
+        from autopoiesis import check_palimpsest_guard
+        from glyph import parse, evaluate
+        changed = "🖤 OtherNutrient EntropyNoise"   # K a b -> a, settles in one step
+        self.assertTrue(evaluate(parse(changed), max_atp=25).is_settled())
+        succ = self._successor("GENE-METAB-02", changed)
+        ok, msg, tensor = check_palimpsest_guard(self.org0, succ)
+        self.assertTrue(ok, msg)
+        self.assertEqual(tensor.counterexamples, [])
 
 
 if __name__ == "__main__":

@@ -1,0 +1,112 @@
+{
+ "checks": {
+  "H1": {
+   "pass": true,
+   "detail": {
+    "orig": "SUSPENDED",
+    "cand": "SUSPENDED",
+    "verify": false,
+    "accepted": false,
+    "known": false
+   }
+  },
+  "H2": {
+   "pass": true,
+   "detail": {
+    "orig": "SUSPENDED",
+    "cand": "SUSPENDED",
+    "verify": false,
+    "accepted": false,
+    "known": false
+   }
+  },
+  "H3": {
+   "pass": true,
+   "detail": {
+    "fwd": {
+     "orig": "SETTLED",
+     "cand": "SUSPENDED",
+     "verify": false,
+     "accepted": false,
+     "known": false
+    },
+    "rev": {
+     "orig": "SUSPENDED",
+     "cand": "SETTLED",
+     "verify": false,
+     "accepted": false,
+     "known": false
+    }
+   }
+  },
+  "H4": {
+   "pass": true,
+   "detail": {
+    "fwd": {
+     "orig": "SETTLED",
+     "cand": "SUSPENDED",
+     "verify": false,
+     "accepted": false,
+     "known": false
+    },
+    "rev": {
+     "orig": "SUSPENDED",
+     "cand": "SETTLED",
+     "verify": false,
+     "accepted": false,
+     "known": false
+    }
+   }
+  },
+  "H5": {
+   "pass": true,
+   "detail": {
+    "orig": "SETTLED",
+    "cand": "SETTLED",
+    "verify": true,
+    "accepted": true,
+    "known": true
+   }
+  },
+  "H6": {
+   "pass": true,
+   "detail": {
+    "adopted": false,
+    "reason": "REJECTED_METABOLIC_VIABILITY_UNSETTLED",
+    "divergence_record_is_none": true
+   }
+  },
+  "H7": {
+   "pass": true,
+   "detail": "Ran 8 tests in 0.816s\n\nOK"
+  }
+ },
+ "timeouts": {
+  "check": 120,
+  "h7": 600
+ },
+ "outcome": "PASS",
+ "control": "C4",
+ "description": "full repair: mycelium.py from 4affbf5",
+ "predicted": "PASS",
+ "expected_checks": {
+  "H1": true,
+  "H2": true,
+  "H3": true,
+  "H4": true,
+  "H5": true,
+  "H6": true,
+  "H7": true
+ },
+ "checks_as_predicted": {
+  "H1": true,
+  "H2": true,
+  "H3": true,
+  "H4": true,
+  "H5": true,
+  "H6": true,
+  "H7": true
+ },
+ "as_predicted": true,
+ "patched_mycelium_sha256": "5a97132114eca99b81d93d0c61c2d92f390b7eb811a644e12a9ccd293b715cda"
+}

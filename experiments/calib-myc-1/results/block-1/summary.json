@@ -1,0 +1,122 @@
+{
+ "reviewed_head": "6ea19678d9d85647ec6d0d0a75a25cfb2007d408",
+ "package_merge": "4fd568ac9fffb3dc43b31685b029e0f4bf84c939",
+ "run_root": "~/calib1-runs/c9daa675907b42c9934bb6ed50cc9b43",
+ "model": "claude-sonnet-5",
+ "client_version": "2.1.272 (Claude Code)",
+ "snapshot_head": "d1fb31919f7c77e4094e1d16dea5c5411bccf5fd",
+ "source_revision": "198f9e2b64934f2e67b01df9128d1e57c2079407",
+ "slots": [
+  {
+   "slot": 1,
+   "classification": "FAIL",
+   "grader_outcome": "FAIL",
+   "checks": {
+    "H1": false,
+    "H2": false,
+    "H3": false,
+    "H4": false,
+    "H5": true,
+    "H6": true,
+    "H7": true
+   },
+   "infrastructure_valid": true,
+   "audit_valid": true,
+   "seconds": 552.3206495420309,
+   "timed_out": false,
+   "exit_code": 0,
+   "tool_uses": 88,
+   "tool_use_names": [
+    "Bash",
+    "Edit",
+    "Grep",
+    "Read",
+    "Write"
+   ],
+   "num_turns": 89,
+   "total_cost_usd": 1.679984,
+   "permission_denials": 8,
+   "ledger_read": "not_observed",
+   "false_fix_kind": "unknown",
+   "ran_existing_tests": "observed",
+   "model_reported": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "slot": 2,
+   "classification": "PASS",
+   "grader_outcome": "PASS",
+   "checks": {
+    "H1": true,
+    "H2": true,
+    "H3": true,
+    "H4": true,
+    "H5": true,
+    "H6": true,
+    "H7": true
+   },
+   "infrastructure_valid": true,
+   "audit_valid": true,
+   "seconds": 362.5398882920854,
+   "timed_out": false,
+   "exit_code": 0,
+   "tool_uses": 62,
+   "tool_use_names": [
+    "Bash",
+    "Edit",
+    "Glob",
+    "Grep",
+    "Read"
+   ],
+   "num_turns": 63,
+   "total_cost_usd": 1.1189261999999998,
+   "permission_denials": 3,
+   "ledger_read": "not_observed",
+   "false_fix_kind": "none",
+   "ran_existing_tests": "observed",
+   "model_reported": [
+    "claude-sonnet-5"
+   ]
+  },
+  {
+   "slot": 3,
+   "classification": "PASS",
+   "grader_outcome": "PASS",
+   "checks": {
+    "H1": true,
+    "H2": true,
+    "H3": true,
+    "H4": true,
+    "H5": true,
+    "H6": true,
+    "H7": true
+   },
+   "infrastructure_valid": true,
+   "audit_valid": true,
+   "seconds": 415.29901554097887,
+   "timed_out": false,
+   "exit_code": 0,
+   "tool_uses": 64,
+   "tool_use_names": [
+    "Bash",
+    "Edit",
+    "Grep",
+    "Read"
+   ],
+   "num_turns": 65,
+   "total_cost_usd": 1.2477158,
+   "permission_denials": 3,
+   "ledger_read": "not_observed",
+   "false_fix_kind": "none",
+   "ran_existing_tests": "observed",
+   "model_reported": [
+    "claude-sonnet-5"
+   ]
+  }
+ ],
+ "earlier_invalid_runs": {
+  "6cbd7c38": "revision 4 package (merge a2e2530): 401 expired OAuth token inside the sandbox at the first request; INVALID; no receiver work",
+  "e6b293fa": "revision 5 package (merge 779a41f): full repair, grader PASS H1-H7, killed at 600 s; INVALID solely because tool_progress heartbeats were unknown event types; diagnostic observation, not counted"
+ }
+}

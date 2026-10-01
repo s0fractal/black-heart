@@ -1,0 +1,2 @@
+# PDF xref entries end in a required space; treat these files as binary.
+*.pdf binary

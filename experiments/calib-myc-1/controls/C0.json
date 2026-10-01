@@ -1,0 +1,112 @@
+{
+ "checks": {
+  "H1": {
+   "pass": false,
+   "detail": {
+    "orig": "SUSPENDED",
+    "cand": "SUSPENDED",
+    "verify": true,
+    "accepted": true,
+    "known": true
+   }
+  },
+  "H2": {
+   "pass": false,
+   "detail": {
+    "orig": "SUSPENDED",
+    "cand": "SUSPENDED",
+    "verify": true,
+    "accepted": true,
+    "known": true
+   }
+  },
+  "H3": {
+   "pass": false,
+   "detail": {
+    "fwd": {
+     "orig": "SETTLED",
+     "cand": "SUSPENDED",
+     "verify": true,
+     "accepted": true,
+     "known": true
+    },
+    "rev": {
+     "orig": "SUSPENDED",
+     "cand": "SETTLED",
+     "verify": true,
+     "accepted": true,
+     "known": true
+    }
+   }
+  },
+  "H4": {
+   "pass": false,
+   "detail": {
+    "fwd": {
+     "orig": "SETTLED",
+     "cand": "SUSPENDED",
+     "verify": true,
+     "accepted": true,
+     "known": true
+    },
+    "rev": {
+     "orig": "SUSPENDED",
+     "cand": "SETTLED",
+     "verify": true,
+     "accepted": true,
+     "known": true
+    }
+   }
+  },
+  "H5": {
+   "pass": true,
+   "detail": {
+    "orig": "SETTLED",
+    "cand": "SETTLED",
+    "verify": true,
+    "accepted": true,
+    "known": true
+   }
+  },
+  "H6": {
+   "pass": false,
+   "detail": {
+    "adopted": false,
+    "reason": "REJECTED_METABOLIC_VIABILITY_MISMATCH",
+    "divergence_record_is_none": false
+   }
+  },
+  "H7": {
+   "pass": true,
+   "detail": "Ran 8 tests in 0.798s\n\nOK"
+  }
+ },
+ "timeouts": {
+  "check": 120,
+  "h7": 600
+ },
+ "outcome": "FAIL",
+ "control": "C0",
+ "description": "no change",
+ "predicted": "FAIL",
+ "expected_checks": {
+  "H1": false,
+  "H2": false,
+  "H3": false,
+  "H4": false,
+  "H5": true,
+  "H6": false,
+  "H7": true
+ },
+ "checks_as_predicted": {
+  "H1": true,
+  "H2": true,
+  "H3": true,
+  "H4": true,
+  "H5": true,
+  "H6": true,
+  "H7": true
+ },
+ "as_predicted": true,
+ "patched_mycelium_sha256": "deb9928e31d3219c59e55edbdacb7223bb4028b1de482bd02dad0c9f0b31d29a"
+}

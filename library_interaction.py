@@ -67,6 +67,21 @@ def _no_dupe_pairs(pairs):
     return seen
 
 
+def _decode_envelope(raw: bytes, kind: str):
+    """Decode shared JSON syntax; callers retain schema, signature and pin checks."""
+    try:
+        doc = json.loads(raw.decode("utf-8"), object_pairs_hook=_no_dupe_pairs)
+    except UnicodeDecodeError as e:
+        return None, _refuse(f"{kind}_NOT_JSON", f"not UTF-8: {e}")
+    except ValueError as e:
+        name = (f"{kind}_DUPLICATE_KEYS" if "duplicate JSON key" in str(e)
+                else f"{kind}_NOT_JSON")
+        return None, _refuse(name, str(e))
+    if not isinstance(doc, dict):
+        return None, _refuse(f"{kind}_MALFORMED", f"is {type(doc).__name__}, not an object")
+    return doc, None
+
+
 def _read_file(path: str, limit: int, unreadable: str, too_large: str):
     try:
         size = os.path.getsize(path)
@@ -328,16 +343,9 @@ def verify_proposal(raw: bytes, expect_parent_sha256: Optional[str] = None) -> D
     if len(raw) > MAX_PROPOSAL_BYTES:
         return _refuse("PROPOSAL_TOO_LARGE",
                        f"{len(raw)} bytes exceeds the {MAX_PROPOSAL_BYTES}-byte limit")
-    try:
-        doc = json.loads(raw.decode("utf-8"), object_pairs_hook=_no_dupe_pairs)
-    except UnicodeDecodeError as e:
-        return _refuse("PROPOSAL_NOT_JSON", f"not UTF-8: {e}")
-    except ValueError as e:
-        name = ("PROPOSAL_DUPLICATE_KEYS" if "duplicate JSON key" in str(e)
-                else "PROPOSAL_NOT_JSON")
-        return _refuse(name, str(e))
-    if not isinstance(doc, dict):
-        return _refuse("PROPOSAL_MALFORMED", f"is {type(doc).__name__}, not an object")
+    doc, refusal = _decode_envelope(raw, "PROPOSAL")
+    if refusal is not None:
+        return refusal
     if set(doc.keys()) != {"profile", "body", "proposal_id", "envelope_signature_hex"}:
         return _refuse("PROPOSAL_MALFORMED",
                        f"unexpected top-level fields: {sorted(doc.keys())}")
@@ -703,16 +711,9 @@ def verify_decision(raw: bytes, expect_proposal_id: Optional[str] = None,
     signature and check the caller's pins; never trust the stated fields."""
     if len(raw) > MAX_DECISION_BYTES:
         return _refuse("DECISION_TOO_LARGE", f"{len(raw)} bytes")
-    try:
-        doc = json.loads(raw.decode("utf-8"), object_pairs_hook=_no_dupe_pairs)
-    except UnicodeDecodeError as e:
-        return _refuse("DECISION_NOT_JSON", f"not UTF-8: {e}")
-    except ValueError as e:
-        name = ("DECISION_DUPLICATE_KEYS" if "duplicate JSON key" in str(e)
-                else "DECISION_NOT_JSON")
-        return _refuse(name, str(e))
-    if not isinstance(doc, dict):
-        return _refuse("DECISION_MALFORMED", f"is {type(doc).__name__}, not an object")
+    doc, refusal = _decode_envelope(raw, "DECISION")
+    if refusal is not None:
+        return refusal
     if set(doc.keys()) != {"profile", "body", "decision_id", "decision_signature_hex"}:
         return _refuse("DECISION_MALFORMED", f"unexpected fields: {sorted(doc.keys())}")
     if doc["profile"] != DECISION_PROFILE:
@@ -937,16 +938,9 @@ def verify_receipt(raw: bytes, expect_issuer_pk: Optional[str] = None) -> Dict[s
     that the issuer was not established, exactly as LI-2's decider does."""
     if len(raw) > MAX_RECEIPT_BYTES:
         return _refuse("RECEIPT_TOO_LARGE", f"{len(raw)} bytes")
-    try:
-        doc = json.loads(raw.decode("utf-8"), object_pairs_hook=_no_dupe_pairs)
-    except UnicodeDecodeError as e:
-        return _refuse("RECEIPT_NOT_JSON", f"not UTF-8: {e}")
-    except ValueError as e:
-        name = ("RECEIPT_DUPLICATE_KEYS" if "duplicate JSON key" in str(e)
-                else "RECEIPT_NOT_JSON")
-        return _refuse(name, str(e))
-    if not isinstance(doc, dict):
-        return _refuse("RECEIPT_MALFORMED", f"is {type(doc).__name__}, not an object")
+    doc, refusal = _decode_envelope(raw, "RECEIPT")
+    if refusal is not None:
+        return refusal
     if set(doc.keys()) != {"profile", "body", "receipt_id", "receipt_signature_hex"}:
         return _refuse("RECEIPT_MALFORMED", f"unexpected fields: {sorted(doc.keys())}")
     if doc["profile"] != TRANSITION_PROFILE:

@@ -1,7 +1,7 @@
 # LI-3 — immutable successor and a readable transition
 
-Date: 2026-09-13. Status: **format and write-order specification, before
-implementation** (the order Codex asked for). Brief:
+Contract date: 2026-09-13. Status: **implemented; LI-3 format and write-order
+specification.** Brief:
 [LIVING-LIBRARY-INTERACTION.md](LIVING-LIBRARY-INTERACTION.md) (§ "LI-3").
 Builds on [LI-1](LIBRARY-INTERACTION-LI1.md) and
 [LI-2](LIBRARY-INTERACTION-LI2.md). Source inspected: `8ae60c4`.

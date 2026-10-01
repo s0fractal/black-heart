@@ -39,6 +39,7 @@ import sovereign_continuity as sc
 
 # Engine #35: Federated Sheaf Agora
 import sheaf_agora as ag
+from crypto import generate_keypair
 
 
 class TestSovereignRemediation(unittest.TestCase):
@@ -298,8 +299,11 @@ class TestSovereignRemediation(unittest.TestCase):
             target_nf="I"
         )
         parliament.proposals["prop_nay"] = prop_nay
-        ballot_nay = ag.FederatedBallot.cast("c1", "aa" * 32, "prop_nay", False, 100)
-        c1.ballots[ballot_nay.voter_pk_hex] = ballot_nay
+        # Ballots are admitted through the parliament, signed: since #96 the
+        # chamber re-verifies every stored ballot before it counts, so a fixture
+        # written straight into `c1.ballots` unsigned refuses the tally.
+        sk_nay, pk_nay = generate_keypair()
+        parliament.cast_ballot(ag.FederatedBallot.cast("c1", pk_nay, "prop_nay", False, 100, sk_nay))
 
         r2 = parliament.settle_proposal("prop_nay")
         self.assertEqual(r2.status, ag.RatificationStatus.REJECTED_POLITICAL_VOTE)
@@ -330,10 +334,10 @@ class TestSovereignRemediation(unittest.TestCase):
         parliament.proposals["prop_fracture"] = prop_fracture
 
         # 100% Yeas cast across both chambers
-        b1 = ag.FederatedBallot.cast("c1", "11" * 32, "prop_fracture", True, 100)
-        b2 = ag.FederatedBallot.cast("c2", "22" * 32, "prop_fracture", True, 100)
-        c1.ballots[b1.voter_pk_hex] = b1
-        c2.ballots[b2.voter_pk_hex] = b2
+        sk1, pk1 = generate_keypair()
+        sk2, pk2 = generate_keypair()
+        parliament.cast_ballot(ag.FederatedBallot.cast("c1", pk1, "prop_fracture", True, 100, sk1))
+        parliament.cast_ballot(ag.FederatedBallot.cast("c2", pk2, "prop_fracture", True, 100, sk2))
 
         receipt = parliament.settle_proposal("prop_fracture")
         self.assertEqual(receipt.status, ag.RatificationStatus.REJECTED_COHOMOLOGICAL_FRACTURE)
@@ -362,8 +366,8 @@ class TestSovereignRemediation(unittest.TestCase):
         )
         parliament.proposals["prop_false"] = prop_false
 
-        b = ag.FederatedBallot.cast("c1", "33" * 32, "prop_false", True, 100)
-        c1.ballots[b.voter_pk_hex] = b
+        sk3, pk3 = generate_keypair()
+        parliament.cast_ballot(ag.FederatedBallot.cast("c1", pk3, "prop_false", True, 100, sk3))
 
         receipt = parliament.settle_proposal("prop_false")
         self.assertEqual(receipt.status, ag.RatificationStatus.SLASHED_AUDIT_FAILED)

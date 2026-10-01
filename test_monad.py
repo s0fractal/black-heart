@@ -178,5 +178,55 @@ class TestSelfVerifyingContractPolyglot(unittest.TestCase):
             self.assertIn("$500 USD", res.stdout)
             self.assertIn("⚓ ⟨atp:42", res.stdout)
 
+class TestContractAuditSettlement(unittest.TestCase):
+    """audit_contract_polyglot must not credit a budget-suspended reduction as a normal form.
+
+    Reproduced at 9cecc0a: a clause `Y I == Y I` at atp_budget 1000 audited True and
+    `cli.py verify` exited 0, because both sides suspended on the same intermediate
+    string. The expected side runs at glyph's default budget, so the two suspended
+    strings coincide for periodic terms at any even budget and for `S I I (S I I)`
+    when the clause budget equals the default. Same class as DOC-F1 / S-verif-5.
+    """
+
+    def _compile(self, tmpdir, expression, expected, budget):
+        from monad import audit_contract_polyglot
+        c = SelfVerifyingContractPolyglot(title="SETTLEMENT PROBE", jurisdiction="Test")
+        c.add_party("PROVIDER", "P", "ed25519:p")
+        c.add_party("CLIENT", "C", "ed25519:c")
+        c.monad_state.atp_budget = budget
+        c.add_clause("S-01", "Article 1", "prose", "pred", expression, expected)
+        path = os.path.join(tmpdir, "probe.pdf")
+        c.compile(path)
+        return path, audit_contract_polyglot
+
+    def test_periodic_suspended_clause_is_not_verified(self):
+        with tempfile.TemporaryDirectory() as d:
+            path, audit = self._compile(d, "Y I", "Y I", 1000)
+            self.assertFalse(audit(path))
+
+    def test_suspended_expression_against_settled_expected_is_not_verified(self):
+        with tempfile.TemporaryDirectory() as d:
+            path, audit = self._compile(d, "S I I (S I I)", "x", 200)
+            self.assertFalse(audit(path))
+
+    def test_settled_agreement_still_verifies(self):
+        with tempfile.TemporaryDirectory() as d:
+            path, audit = self._compile(d, "S K K x", "x", 1000)
+            self.assertTrue(audit(path))
+
+    def test_settled_mismatch_still_fails(self):
+        with tempfile.TemporaryDirectory() as d:
+            path, audit = self._compile(d, "K x y", "y", 1000)
+            self.assertFalse(audit(path))
+
+    def test_cli_verify_refuses_periodic_suspended_clause(self):
+        with tempfile.TemporaryDirectory() as d:
+            path, _ = self._compile(d, "Y I", "Y I", 1000)
+            cli = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cli.py")
+            res = subprocess.run([sys.executable, cli, "verify", path],
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            self.assertNotEqual(res.returncode, 0, res.stdout + res.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

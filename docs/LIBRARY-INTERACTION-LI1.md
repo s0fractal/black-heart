@@ -1,6 +1,6 @@
 # LI-1 — proposal intake: schema, CLI contract, and parser inventory
 
-Date: 2026-09-13. Status: **contract for the LI-1 implementation in this PR.**
+Contract date: 2026-09-13. Status: **implemented; LI-1 format and CLI contract.**
 Brief: [LIVING-LIBRARY-INTERACTION.md](LIVING-LIBRARY-INTERACTION.md) (§ "LI-1").
 Source inspected: `91312d9`.
 

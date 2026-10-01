@@ -15,7 +15,6 @@ It analyzes:
 
 Usage:
   python3 tools/sandbox.py <document.pdf>
-  python3 tools/sandbox.py --strict <document.pdf>
 """
 
 from __future__ import annotations
@@ -256,27 +255,15 @@ def audit_polyglot_hermetic(file_path: str) -> PolyglotAuditReport:
         audit_error_count=audit_errors,
     )
 
-def main():
-    if len(sys.argv) < 2:
-        print("Usage: python3 tools/sandbox.py [--strict] <document.pdf>")
-        sys.exit(1)
-
-    args = sys.argv[1:]
-    strict = "--strict" in args
-    files = [a for a in args if not a.startswith("--")]
-
-    if not files:
-        print("Error: No file specified.")
-        sys.exit(1)
-
-    target = files[0]
+def print_audit_header(target):
     print("\033[1;36m" + "=" * 70)
     print("  %🖤 PROJECT BLACK-HEART — HERMETIC NON-EXECUTING STATIC AUDITOR")
     print(f"  Target File: {os.path.basename(target)}")
     print("=" * 70 + "\033[0m\n")
 
-    report = audit_polyglot_hermetic(target)
 
+def print_audit_report(report):
+    """Print the existing scoped report and return its exit status."""
     print(f"[*] File Size:            {report.file_size_bytes} bytes")
     print(f"[*] SHA-256 Digest:       {report.sha256_digest}")
     print(f"[*] PDF header present:    {'Yes' if report.is_valid_iso32000 else 'No'} "
@@ -291,10 +278,27 @@ def main():
     if report.is_sound():
         print("\033[1;32m[✓ SOUND] Recognized elements verified statically without executing host Python.\033[0m")
         print(f"          {report.scope_summary()}")
-        sys.exit(0)
+        return 0
     else:
         print("\033[1;31m[✗ UNSOUND] Document failed static hermetic verification.\033[0m")
-        sys.exit(1)
+        return 1
+
+def main():
+    # One positional path and no options. argparse refuses any unknown
+    # option — long or short, before or after the path — with exit 2 and no
+    # audit output. A former --strict flag was accepted and ignored by this
+    # tool and by `cli.py sandbox`; a hand-written parser that dropped only
+    # `--`-prefixed arguments still swallowed `-s` (review of PR #94).
+    import argparse
+    parser = argparse.ArgumentParser(prog="tools/sandbox.py",
+                                     description="Static, non-executing polyglot auditor.")
+    parser.add_argument("document", help="path to the document to audit")
+    target = parser.parse_args().document
+    print_audit_header(target)
+
+    report = audit_polyglot_hermetic(target)
+
+    sys.exit(print_audit_report(report))
 
 if __name__ == "__main__":
     main()
